@@ -1,27 +1,34 @@
-# 🦞 OpenClaw — Personal AI Assistant
+# 🦞 OpenClaw AI SDK
 
 <p align="center">
-    <picture>
-        <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/openclaw/openclaw/main/docs/assets/openclaw-logo-text-dark.png">
-        <img src="https://raw.githubusercontent.com/openclaw/openclaw/main/docs/assets/openclaw-logo-text.png" alt="OpenClaw" width="500">
-    </picture>
+  <img src="assets/openclaw-ai-sdk-banner.png" alt="OpenClaw + Vercel AI SDK v6" width="100%">
 </p>
 
 <p align="center">
-  <strong>EXFOLIATE! EXFOLIATE!</strong>
+  <strong>Clawdbot's future-compatible fork using Vercel's AI SDK by default</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/openclaw/openclaw/actions/workflows/ci.yml?branch=main"><img src="https://img.shields.io/github/actions/workflow/status/openclaw/openclaw/ci.yml?branch=main&style=for-the-badge" alt="CI status"></a>
-  <a href="https://github.com/openclaw/openclaw/releases"><img src="https://img.shields.io/github/v/release/openclaw/openclaw?include_prereleases&style=for-the-badge" alt="GitHub release"></a>
+  <a href="https://github.com/kumarabhirup/openclaw-ai-sdk/actions/workflows/ci.yml?branch=main"><img src="https://img.shields.io/github/actions/workflow/status/kumarabhirup/openclaw-ai-sdk/ci.yml?branch=main&style=for-the-badge" alt="CI status"></a>
+  <a href="https://github.com/kumarabhirup/openclaw-ai-sdk/releases"><img src="https://img.shields.io/github/v/release/kumarabhirup/openclaw-ai-sdk?include_prereleases&style=for-the-badge" alt="GitHub release"></a>
   <a href="https://discord.gg/clawd"><img src="https://img.shields.io/discord/1456350064065904867?label=Discord&logo=discord&logoColor=white&color=5865F2&style=for-the-badge" alt="Discord"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
+
+> **This is a fork of [OpenClaw](https://github.com/openclaw/openclaw)** that uses **Vercel's AI SDK v6** by default instead of the pi-mono agent. Dual SDK support makes this useful for developers in the Vercel ecosystem using `useChat()` and AI SDK v5/6 primitives.
 
 **OpenClaw** is a _personal AI assistant_ you run on your own devices.
 It answers you on the channels you already use (WhatsApp, Telegram, Slack, Discord, Google Chat, Signal, iMessage, Microsoft Teams, WebChat), plus extension channels like BlueBubbles, Matrix, Zalo, and Zalo Personal. It can speak and listen on macOS/iOS/Android, and can render a live Canvas you control. The Gateway is just the control plane — the product is the assistant.
 
 If you want a personal, single-user assistant that feels local, fast, and always-on, this is it.
+
+## Why This Fork?
+
+| Feature | Original OpenClaw | This Fork (AI SDK) |
+|---------|-------------------|-------------------|
+| LLM Orchestration | pi-mono agent only | **Vercel AI SDK v6** (default) and pi-mono agent |
+| Dual Engine Support | No | **Yes** - switch via config |
+| `useChat()` Compatible | No | **Yes** |
 
 [Website](https://openclaw.ai) · [Docs](https://docs.openclaw.ai) · [DeepWiki](https://deepwiki.com/openclaw/openclaw) · [Getting Started](https://docs.openclaw.ai/start/getting-started) · [Updating](https://docs.openclaw.ai/install/updating) · [Showcase](https://docs.openclaw.ai/start/showcase) · [FAQ](https://docs.openclaw.ai/start/faq) · [Wizard](https://docs.openclaw.ai/start/wizard) · [Nix](https://github.com/openclaw/nix-clawdbot) · [Docker](https://docs.openclaw.ai/install/docker) · [Discord](https://discord.gg/clawd)
 
@@ -45,6 +52,21 @@ Model note: while any model is supported, I strongly recommend **Anthropic Pro/M
 
 Runtime: **Node ≥22**.
 
+### From this fork (AI SDK version)
+
+```bash
+# Clone this fork
+git clone https://github.com/kumarabhirup/openclaw-ai-sdk.git
+cd openclaw-ai-sdk
+
+pnpm install
+pnpm build
+
+pnpm openclaw onboard --install-daemon
+```
+
+### From npm (original OpenClaw)
+
 ```bash
 npm install -g openclaw@latest
 # or: pnpm add -g openclaw@latest
@@ -53,6 +75,45 @@ openclaw onboard --install-daemon
 ```
 
 The wizard installs the Gateway daemon (launchd/systemd user service) so it stays running.
+
+## AI SDK Configuration
+
+This fork defaults to the **AI SDK engine**. You can switch between engines:
+
+```bash
+# During setup, choose your preferred engine
+openclaw configure
+
+# Or set directly in config
+openclaw config set agents.engine aisdk   # Use AI SDK (default)
+openclaw config set agents.engine pi-agent # Use original pi-agent
+```
+
+### Supported Providers (AI SDK)
+
+| Provider | Environment Variable | Models |
+|----------|---------------------|--------|
+| Anthropic | `ANTHROPIC_API_KEY` | Claude 4/3.x, Opus, Sonnet, Haiku |
+| OpenAI | `OPENAI_API_KEY` | GPT-4o, GPT-4, o1, o3 |
+| Google | `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini 2.x, 1.5 Pro |
+| AI Gateway | `AI_GATEWAY_API_KEY` | All providers via Vercel |
+| OpenRouter | `OPENROUTER_API_KEY` | 100+ models |
+| Azure | `AZURE_OPENAI_API_KEY` | Azure OpenAI models |
+| Groq | `GROQ_API_KEY` | Llama, Mixtral |
+| Mistral | `MISTRAL_API_KEY` | Mistral models |
+| xAI | `XAI_API_KEY` | Grok models |
+
+### Anthropic Thinking/Reasoning
+
+This fork fully supports [Anthropic's extended thinking](https://ai-sdk.dev/providers/ai-sdk-providers/anthropic#reasoning):
+
+```bash
+# Set thinking level (maps to AI SDK budgetTokens)
+openclaw agent --message "Complex task" --thinking high
+
+# Thinking levels: off, minimal, low, medium, high, xhigh
+# xhigh uses 32K budget tokens + effort: high for Opus 4.5
+```
 
 ## Quick start (TL;DR)
 
@@ -88,8 +149,8 @@ Details: [Development channels](https://docs.openclaw.ai/install/development-cha
 Prefer `pnpm` for builds from source. Bun is optional for running TypeScript directly.
 
 ```bash
-git clone https://github.com/openclaw/openclaw.git
-cd openclaw
+git clone https://github.com/kumarabhirup/openclaw-ai-sdk.git
+cd openclaw-ai-sdk
 
 pnpm install
 pnpm ui:build # auto-installs UI deps on first run
@@ -102,6 +163,21 @@ pnpm gateway:watch
 ```
 
 Note: `pnpm openclaw ...` runs TypeScript directly (via `tsx`). `pnpm build` produces `dist/` for running via Node / the packaged `openclaw` binary.
+
+### Syncing with upstream OpenClaw
+
+This fork is designed to minimize merge conflicts with upstream:
+
+```bash
+# Add upstream remote (one-time)
+git remote add upstream https://github.com/openclaw/openclaw.git
+
+# Pull latest upstream changes
+git fetch upstream
+git merge upstream/main
+
+# AI SDK code lives in src/agents/aisdk/ - isolated from pi-agent changes
+```
 
 ## Security defaults (DM access)
 
@@ -128,17 +204,15 @@ Run `openclaw doctor` to surface risky/misconfigured DM policies.
 - **[Companion apps](https://docs.openclaw.ai/platforms/macos)** — macOS menu bar app + iOS/Android [nodes](https://docs.openclaw.ai/nodes).
 - **[Onboarding](https://docs.openclaw.ai/start/wizard) + [skills](https://docs.openclaw.ai/tools/skills)** — wizard-driven setup with bundled/managed/workspace skills.
 
-## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=openclaw/openclaw&type=date&legend=top-left)](https://www.star-history.com/#openclaw/openclaw&type=date&legend=top-left)
-
-## Everything we built so far
 
 ### Core platform
 
 - [Gateway WS control plane](https://docs.openclaw.ai/gateway) with sessions, presence, config, cron, webhooks, [Control UI](https://docs.openclaw.ai/web), and [Canvas host](https://docs.openclaw.ai/platforms/mac/canvas#canvas-a2ui).
 - [CLI surface](https://docs.openclaw.ai/tools/agent-send): gateway, agent, send, [wizard](https://docs.openclaw.ai/start/wizard), and [doctor](https://docs.openclaw.ai/gateway/doctor).
-- [Pi agent runtime](https://docs.openclaw.ai/concepts/agent) in RPC mode with tool streaming and block streaming.
+- **Dual LLM Engine** (this fork): AI SDK v6 (default) or Pi agent runtime, switchable via config.
+- **[Vercel AI SDK v6](https://ai-sdk.dev/)** integration: `streamText()`, provider-specific options (thinking, reasoning, effort), AI Gateway support.
+- [Pi agent runtime](https://docs.openclaw.ai/concepts/agent) in RPC mode with tool streaming and block streaming (fallback engine).
 - [Session model](https://docs.openclaw.ai/concepts/session): `main` for direct chats, group isolation, activation modes, queue modes, reply-back. Group rules: [Groups](https://docs.openclaw.ai/concepts/groups).
 - [Media pipeline](https://docs.openclaw.ai/nodes/images): images/audio/video, transcription hooks, size caps, temp file lifecycle. Audio details: [Audio](https://docs.openclaw.ai/nodes/audio).
 
@@ -188,7 +262,7 @@ WhatsApp / Telegram / Slack / Discord / Google Chat / Signal / iMessage / BlueBu
 │     ws://127.0.0.1:18789      │
 └──────────────┬────────────────┘
                │
-               ├─ Pi agent (RPC)
+               ├─ Engine Router // AI SDK v6 & Pi agent
                ├─ CLI (openclaw …)
                ├─ WebChat UI
                ├─ macOS app
@@ -468,6 +542,17 @@ Use these when you’re past the onboarding flow and want the deeper reference.
 
 - [docs.openclaw.ai/gmail-pubsub](https://docs.openclaw.ai/automation/gmail-pubsub)
 
+## About This Fork
+
+This AI SDK fork was created by [Kumar Abhirup](https://github.com/kumarabhirup) to bring Vercel AI SDK compatibility to OpenClaw, making it easier for developers in the Vercel/Next.js ecosystem to integrate and extend.
+
+**Fork features:**
+- Vercel AI SDK v6 as the default LLM orchestration layer
+- Full Anthropic thinking/reasoning support via provider options
+- AI Gateway support for unified provider access
+- Fork-friendly architecture that minimizes upstream merge conflicts
+- Dual engine support (AI SDK + pi-agent) for flexibility
+
 ## Molty
 
 OpenClaw was built for **Molty**, a space lobster AI assistant. 🦞
@@ -486,6 +571,7 @@ AI/vibe-coded PRs welcome! 🤖
 Special thanks to [Mario Zechner](https://mariozechner.at/) for his support and for
 [pi-mono](https://github.com/badlogic/pi-mono).
 Special thanks to Adam Doppelt for lobster.bot.
+Special thanks to [Vercel](https://vercel.com) for the [AI SDK](https://ai-sdk.dev/).
 
 Thanks to all clawtributors:
 
