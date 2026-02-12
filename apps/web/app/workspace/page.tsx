@@ -13,7 +13,7 @@ import { DatabaseViewer } from "../components/workspace/database-viewer";
 import { Breadcrumbs } from "../components/workspace/breadcrumbs";
 import { EmptyState } from "../components/workspace/empty-state";
 import { ReportViewer } from "../components/charts/report-viewer";
-import { ChatPanel } from "../components/chat-panel";
+import { ChatPanel, type ChatPanelHandle } from "../components/chat-panel";
 import { EntryDetailModal } from "../components/workspace/entry-detail-modal";
 import { useSearchIndex } from "@/lib/search-index";
 import { parseWorkspaceLink, isWorkspaceLink } from "@/lib/workspace-links";
@@ -82,7 +82,27 @@ type ContentState =
   | { kind: "report"; reportPath: string; filename: string }
   | { kind: "directory"; node: TreeNode };
 
+type WebSession = {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messageCount: number;
+};
+
 // --- Helpers ---
+
+/** Detect virtual paths (skills, memories) that live outside the dench workspace. */
+function isVirtualPath(path: string): boolean {
+  return path.startsWith("~");
+}
+
+/** Pick the right file API endpoint based on virtual vs real paths. */
+function fileApiUrl(path: string): string {
+  return isVirtualPath(path)
+    ? `/api/workspace/virtual-file?path=${encodeURIComponent(path)}`
+    : `/api/workspace/file?path=${encodeURIComponent(path)}`;
+}
 
 /** Find a node in the tree by exact path. */
 function findNode(
@@ -155,6 +175,9 @@ export default function WorkspacePage() {
   const router = useRouter();
   const initialPathHandled = useRef(false);
 
+  // Chat panel ref for session management
+  const chatRef = useRef<ChatPanelHandle>(null);
+
   // Live-reactive tree via SSE watcher
   const { tree, loading: treeLoading, exists: workspaceExists, refresh: refreshTree } = useWorkspaceWatcher();
 
@@ -165,6 +188,11 @@ export default function WorkspacePage() {
   const [activePath, setActivePath] = useState<string | null>(null);
   const [content, setContent] = useState<ContentState>({ kind: "none" });
   const [showChatSidebar, setShowChatSidebar] = useState(true);
+
+  // Chat session state
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<WebSession[]>([]);
+  const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
 
   // Entry detail modal state
   const [entryModal, setEntryModal] = useState<{
@@ -208,6 +236,25 @@ export default function WorkspacePage() {
     return () => { cancelled = true; };
   }, []);
 
+  // Fetch chat sessions
+  const fetchSessions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/web-sessions");
+      const data = await res.json();
+      setSessions(data.sessions ?? []);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions, sidebarRefreshKey]);
+
+  const refreshSessions = useCallback(() => {
+    setSidebarRefreshKey((k) => k + 1);
+  }, []);
+
   // Load content when path changes
   const loadContent = useCallback(
     async (node: TreeNode) => {
@@ -225,9 +272,8 @@ export default function WorkspacePage() {
           const data: ObjectData = await res.json();
           setContent({ kind: "object", data });
         } else if (node.type === "document") {
-          const res = await fetch(
-            `/api/workspace/file?path=${encodeURIComponent(node.path)}`,
-          );
+          // Use virtual-file API for ~skills/ and ~memories/ paths
+          const res = await fetch(fileApiUrl(node.path));
           if (!res.ok) {
             setContent({ kind: "none" });
             return;
@@ -243,9 +289,7 @@ export default function WorkspacePage() {
         } else if (node.type === "report") {
           setContent({ kind: "report", reportPath: node.path, filename: node.name });
         } else if (node.type === "file") {
-          const res = await fetch(
-            `/api/workspace/file?path=${encodeURIComponent(node.path)}`,
-          );
+          const res = await fetch(fileApiUrl(node.path));
           if (!res.ok) {
             setContent({ kind: "none" });
             return;
@@ -264,10 +308,48 @@ export default function WorkspacePage() {
 
   const handleNodeSelect = useCallback(
     (node: TreeNode) => {
+      // Intercept chat folder item clicks
+      if (node.path.startsWith("~chats/")) {
+        const sessionId = node.path.slice("~chats/".length);
+        setActivePath(null);
+        setContent({ kind: "none" });
+        setActiveSessionId(sessionId);
+        chatRef.current?.loadSession(sessionId);
+        router.replace("/workspace", { scroll: false });
+        return;
+      }
+      // Clicking the Chats folder itself opens a new chat
+      if (node.path === "~chats") {
+        setActivePath(null);
+        setContent({ kind: "none" });
+        chatRef.current?.newSession();
+        router.replace("/workspace", { scroll: false });
+        return;
+      }
       loadContent(node);
     },
-    [loadContent],
+    [loadContent, router],
   );
+
+  // Build the enhanced tree: real tree + Chats virtual folder at the bottom
+  const enhancedTree = useMemo(() => {
+    const chatChildren: TreeNode[] = sessions.map((s) => ({
+      name: s.title || "Untitled chat",
+      path: `~chats/${s.id}`,
+      type: "file" as const,
+      virtual: true,
+    }));
+
+    const chatsFolder: TreeNode = {
+      name: "Chats",
+      path: "~chats",
+      type: "folder",
+      virtual: true,
+      children: chatChildren.length > 0 ? chatChildren : undefined,
+    };
+
+    return [...tree, chatsFolder];
+  }, [tree, sessions]);
 
   // Sync URL bar when activePath changes
   useEffect(() => {
@@ -363,10 +445,6 @@ export default function WorkspacePage() {
   );
 
   /**
-   * Unified navigate handler for editor links.
-   * Handles both file/object paths and @entry/ links.
-   */
-  /**
    * Unified navigate handler for links in the editor and read mode.
    * Handles /workspace?entry=..., /workspace?path=..., and legacy relative paths.
    */
@@ -429,12 +507,15 @@ export default function WorkspacePage() {
     [handleEditorNavigate],
   );
 
+  // Whether to show the main ChatPanel (no file/content selected)
+  const showMainChat = !activePath || content.kind === "none";
+
   return (
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
     <div className="flex h-screen" style={{ background: "var(--color-bg)" }} onClick={handleContainerClick}>
       {/* Sidebar */}
       <WorkspaceSidebar
-        tree={tree}
+        tree={enhancedTree}
         activePath={activePath}
         onSelect={handleNodeSelect}
         onRefresh={refreshTree}
@@ -444,8 +525,8 @@ export default function WorkspacePage() {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top bar with breadcrumbs */}
-        {activePath && (
+        {/* When a file is selected: show top bar with breadcrumbs */}
+        {activePath && content.kind !== "none" && (
           <div
             className="px-6 border-b flex-shrink-0 flex items-center justify-between"
             style={{ borderColor: "var(--color-border)" }}
@@ -454,60 +535,93 @@ export default function WorkspacePage() {
               path={activePath}
               onNavigate={handleBreadcrumbNavigate}
             />
-            {/* Chat sidebar toggle */}
-            <button
-              type="button"
-              onClick={() => setShowChatSidebar((v) => !v)}
-              className="p-1.5 rounded-md transition-colors flex-shrink-0"
-              style={{
-                color: showChatSidebar ? "var(--color-accent)" : "var(--color-text-muted)",
-                background: showChatSidebar ? "rgba(232, 93, 58, 0.1)" : "transparent",
-              }}
-              title={showChatSidebar ? "Hide chat" : "Chat about this file"}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-1">
+              {/* Back to chat button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActivePath(null);
+                  setContent({ kind: "none" });
+                  router.replace("/workspace", { scroll: false });
+                }}
+                className="p-1.5 rounded-md transition-colors flex-shrink-0"
+                style={{ color: "var(--color-text-muted)" }}
+                title="Back to chat"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m12 19-7-7 7-7" /><path d="M19 12H5" />
+                </svg>
+              </button>
+              {/* Chat sidebar toggle */}
+              <button
+                type="button"
+                onClick={() => setShowChatSidebar((v) => !v)}
+                className="p-1.5 rounded-md transition-colors flex-shrink-0"
+                style={{
+                  color: showChatSidebar ? "var(--color-accent)" : "var(--color-text-muted)",
+                  background: showChatSidebar ? "rgba(232, 93, 58, 0.1)" : "transparent",
+                }}
+                title={showChatSidebar ? "Hide chat" : "Chat about this file"}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Content + Chat sidebar row */}
+        {/* Content area */}
         <div className="flex-1 flex min-h-0">
-          {/* Content area */}
-          <div className="flex-1 overflow-y-auto">
-            <ContentRenderer
-              content={content}
-              workspaceExists={workspaceExists}
-              tree={tree}
-              activePath={activePath}
-              members={context?.members}
-              onNodeSelect={handleNodeSelect}
-              onNavigateToObject={handleNavigateToObject}
-              onRefreshObject={refreshCurrentObject}
-              onRefreshTree={refreshTree}
-              onNavigate={handleEditorNavigate}
-              onOpenEntry={handleOpenEntry}
-              searchFn={searchIndex}
-            />
-          </div>
-
-          {/* Chat sidebar (file-scoped) */}
-          {fileContext && showChatSidebar && (
-            <aside
-              className="flex-shrink-0 border-l"
-              style={{
-                width: 380,
-                borderColor: "var(--color-border)",
-                background: "var(--color-bg)",
-              }}
-            >
+          {showMainChat ? (
+            /* Main chat view (default when no file is selected) */
+            <div className="flex-1 flex flex-col min-w-0">
               <ChatPanel
-                compact
-                fileContext={fileContext}
-                onFileChanged={handleFileChanged}
+                ref={chatRef}
+                onActiveSessionChange={(id) => {
+                  setActiveSessionId(id);
+                }}
+                onSessionsChange={refreshSessions}
               />
-            </aside>
+            </div>
+          ) : (
+            <>
+              {/* File content area */}
+              <div className="flex-1 overflow-y-auto">
+                <ContentRenderer
+                  content={content}
+                  workspaceExists={workspaceExists}
+                  tree={tree}
+                  activePath={activePath}
+                  members={context?.members}
+                  onNodeSelect={handleNodeSelect}
+                  onNavigateToObject={handleNavigateToObject}
+                  onRefreshObject={refreshCurrentObject}
+                  onRefreshTree={refreshTree}
+                  onNavigate={handleEditorNavigate}
+                  onOpenEntry={handleOpenEntry}
+                  searchFn={searchIndex}
+                />
+              </div>
+
+              {/* Chat sidebar (file-scoped) */}
+              {fileContext && showChatSidebar && (
+                <aside
+                  className="flex-shrink-0 border-l"
+                  style={{
+                    width: 380,
+                    borderColor: "var(--color-border)",
+                    background: "var(--color-bg)",
+                  }}
+                >
+                  <ChatPanel
+                    compact
+                    fileContext={fileContext}
+                    onFileChanged={handleFileChanged}
+                  />
+                </aside>
+              )}
+            </>
           )}
         </div>
       </main>

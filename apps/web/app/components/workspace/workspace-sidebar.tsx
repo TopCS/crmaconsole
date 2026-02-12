@@ -22,10 +22,11 @@ function WorkspaceLogo() {
   );
 }
 
-function BackIcon() {
+function HomeIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m12 19-7-7 7-7" /><path d="M19 12H5" />
+      <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <polyline points="9 22 9 12 15 12 15 22" />
     </svg>
   );
 }
@@ -73,7 +74,7 @@ export function WorkspaceSidebar({
         Knowledge
       </div>
 
-      {/* Tree */}
+      {/* Tree (includes real files + virtual Skills, Memories, Chats folders) */}
       <div className="flex-1 overflow-y-auto px-1">
         {loading ? (
           <div className="flex items-center justify-center py-12">
@@ -112,8 +113,8 @@ export function WorkspaceSidebar({
             (e.currentTarget as HTMLElement).style.background = "transparent";
           }}
         >
-          <BackIcon />
-          Back to Chat
+          <HomeIcon />
+          Home
         </a>
       </div>
     </aside>

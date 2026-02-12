@@ -279,7 +279,11 @@ export function MarkdownEditor({
       // Prepend preserved frontmatter so it isn't lost on save
       const finalContent = frontmatterRef.current + bodyContent;
 
-      const res = await fetch("/api/workspace/file", {
+      // Virtual paths (~skills/*, ~memories/*) use the virtual-file API
+      const saveEndpoint = filePath.startsWith("~")
+        ? "/api/workspace/virtual-file"
+        : "/api/workspace/file";
+      const res = await fetch(saveEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path: filePath, content: finalContent }),

@@ -26,7 +26,17 @@ export type TreeNode = {
   icon?: string;
   defaultView?: "table" | "kanban";
   children?: TreeNode[];
+  /** When true, the node represents a virtual folder/file outside the real workspace (e.g. Skills, Memories). CRUD ops are disabled. */
+  virtual?: boolean;
 };
+
+/** Folder names reserved for virtual sections -- cannot be created/renamed to. */
+const RESERVED_FOLDER_NAMES = new Set(["Chats", "Skills", "Memories"]);
+
+/** Check if a node (or any of its ancestors) is virtual. Paths starting with ~ are always virtual. */
+function isVirtualNode(node: TreeNode): boolean {
+  return !!node.virtual || node.path.startsWith("~");
+}
 
 type FileManagerTreeProps = {
   tree: TreeNode[];
@@ -113,6 +123,14 @@ function ReportIcon() {
   );
 }
 
+function ChatBubbleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
 function LockBadge() {
   return (
     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}>
@@ -131,6 +149,10 @@ function ChevronIcon({ open }: { open: boolean }) {
 }
 
 function NodeIcon({ node, open }: { node: TreeNode; open?: boolean }) {
+  // Chat items use the chat bubble icon
+  if (node.path.startsWith("~chats/") || node.path === "~chats") {
+    return <ChatBubbleIcon />;
+  }
   switch (node.type) {
     case "object":
       return node.defaultView === "kanban" ? <KanbanIcon /> : <TableIcon />;
@@ -361,18 +383,20 @@ function DraggableNode({
   const isSelected = selectedPath === node.path;
   const isRenaming = renamingPath === node.path;
   const isSysFile = isSystemFile(node.path);
+  const isVirtual = isVirtualNode(node);
+  const isProtected = isSysFile || isVirtual;
   const isDragOver = dragOverPath === node.path && isExpandable;
 
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
     id: `drag-${node.path}`,
     data: { node },
-    disabled: isSysFile,
+    disabled: isProtected,
   });
 
   const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: `drop-${node.path}`,
     data: { node },
-    disabled: !isExpandable,
+    disabled: !isExpandable || isVirtual,
   });
 
   const handleClick = useCallback(() => {
@@ -384,10 +408,10 @@ function DraggableNode({
   }, [node, isExpandable, onSelect, onNodeSelect, onToggleExpand]);
 
   const handleDoubleClick = useCallback(() => {
-    if (!isSysFile) {
+    if (!isProtected) {
       onStartRename(node.path);
     }
-  }, [node.path, isSysFile, onStartRename]);
+  }, [node.path, isProtected, onStartRename]);
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
@@ -468,8 +492,8 @@ function DraggableNode({
           <span className="truncate flex-1">{node.name.replace(/\.md$/, "")}</span>
         )}
 
-        {/* Lock badge for system files */}
-        {isSysFile && !compact && (
+        {/* Lock badge for system/virtual files */}
+        {isProtected && !compact && (
           <span className="flex-shrink-0 ml-1">
             <LockBadge />
           </span>
@@ -684,7 +708,7 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
 
   // Context menu handlers
   const handleContextMenu = useCallback((e: React.MouseEvent, node: TreeNode) => {
-    const isSys = isSystemFile(node.path);
+    const isSys = isSystemFile(node.path) || isVirtualNode(node);
     const isFolder = node.type === "folder" || node.type === "object";
     setCtxMenu({
       x: e.clientX,
@@ -771,6 +795,12 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
   const handleCommitRename = useCallback(
     async (newName: string) => {
       if (!renamingPath) {return;}
+      // Block reserved folder names
+      if (RESERVED_FOLDER_NAMES.has(newName)) {
+        alert(`"${newName}" is a reserved name and cannot be used.`);
+        setRenamingPath(null);
+        return;
+      }
       const result = await apiRename(renamingPath, newName);
       setRenamingPath(null);
       if (result.ok) {onRefresh();}
@@ -794,6 +824,13 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
   const handleNewItemSubmit = useCallback(
     async (name: string) => {
       if (!newItemPrompt || !name) {return;}
+
+      // Block reserved folder names
+      if (RESERVED_FOLDER_NAMES.has(name)) {
+        alert(`"${name}" is a reserved name and cannot be used.`);
+        return;
+      }
+
       const fullPath = newItemPrompt.parentPath ? `${newItemPrompt.parentPath}/${name}` : name;
 
       if (newItemPrompt.kind === "folder") {
@@ -859,7 +896,8 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
         case "Enter": {
           e.preventDefault();
           if (curNode) {
-            if (e.shiftKey || isSystemFile(curNode.path)) {
+            const curProtected = isSystemFile(curNode.path) || isVirtualNode(curNode);
+            if (e.shiftKey || curProtected) {
               onSelect(curNode);
             } else {
               setRenamingPath(curNode.path);
@@ -869,14 +907,14 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
         }
         case "F2": {
           e.preventDefault();
-          if (curNode && !isSystemFile(curNode.path)) {
+          if (curNode && !isSystemFile(curNode.path) && !isVirtualNode(curNode)) {
             setRenamingPath(curNode.path);
           }
           break;
         }
         case "Backspace":
         case "Delete": {
-          if (curNode && !isSystemFile(curNode.path)) {
+          if (curNode && !isSystemFile(curNode.path) && !isVirtualNode(curNode)) {
             e.preventDefault();
             setConfirmDelete(curNode.path);
           }
