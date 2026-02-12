@@ -27,13 +27,13 @@ type MemoryFile = {
 type TreeNode = {
   name: string;
   path: string;
-  type: "object" | "document" | "folder" | "file" | "database";
+  type: "object" | "document" | "folder" | "file" | "database" | "report";
   icon?: string;
   defaultView?: "table" | "kanban";
   children?: TreeNode[];
 };
 
-type SidebarSection = "chats" | "skills" | "memories" | "workspace";
+type SidebarSection = "chats" | "skills" | "memories" | "workspace" | "reports";
 
 type SidebarProps = {
   onSessionSelect?: (sessionId: string) => void;
@@ -233,7 +233,9 @@ function WorkspaceTreeNode({
         ? "#60a5fa"
         : node.type === "database"
           ? "#c084fc"
-          : "var(--color-text-muted)";
+          : node.type === "report"
+            ? "#22c55e"
+            : "var(--color-text-muted)";
 
   return (
     <div>
@@ -243,7 +245,7 @@ function WorkspaceTreeNode({
         onClick={() => {
           if (isExpandable) {onToggle(node.path);}
           // Navigate to workspace page for actionable items
-          if (node.type === "object" || node.type === "document" || node.type === "file" || node.type === "database") {
+          if (node.type === "object" || node.type === "document" || node.type === "file" || node.type === "database" || node.type === "report") {
             window.location.href = `/workspace?path=${encodeURIComponent(node.path)}`;
           }
         }}
@@ -286,6 +288,12 @@ function WorkspaceTreeNode({
               <ellipse cx="12" cy="5" rx="9" ry="3" />
               <path d="M3 5V19A9 3 0 0 0 21 19V5" />
               <path d="M3 12A9 3 0 0 0 21 12" />
+            </svg>
+          ) : node.type === "report" ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" x2="12" y1="20" y2="10" />
+              <line x1="18" x2="18" y1="20" y2="4" />
+              <line x1="6" x2="6" y1="20" y2="14" />
             </svg>
           ) : (
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -377,6 +385,52 @@ function WorkspaceSection({ tree }: { tree: TreeNode[] }) {
         </svg>
         Open full workspace
       </a>
+    </div>
+  );
+}
+
+// --- Reports Section ---
+
+function ReportsSection({ tree }: { tree: TreeNode[] }) {
+  // Collect all report nodes from the tree (recursive)
+  const reports: TreeNode[] = [];
+  function collect(nodes: TreeNode[]) {
+    for (const n of nodes) {
+      if (n.type === "report") {reports.push(n);}
+      if (n.children) {collect(n.children);}
+    }
+  }
+  collect(tree);
+
+  if (reports.length === 0) {
+    return (
+      <p className="text-xs text-[var(--color-text-muted)] px-3 py-1">
+        No reports yet. Ask the agent to create one.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-0.5">
+      {reports.map((report) => (
+        <a
+          key={report.path}
+          href={`/workspace?path=${encodeURIComponent(report.path)}`}
+          className="flex items-center gap-2 mx-2 px-2 py-1.5 rounded-md text-xs transition-colors hover:bg-[var(--color-surface-hover)]"
+          style={{ color: "var(--color-text-muted)" }}
+        >
+          <span className="flex-shrink-0" style={{ color: "#22c55e" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" x2="12" y1="20" y2="10" />
+              <line x1="18" x2="18" y1="20" y2="4" />
+              <line x1="6" x2="6" y1="20" y2="14" />
+            </svg>
+          </span>
+          <span className="truncate flex-1">
+            {report.name.replace(/\.report\.json$/, "")}
+          </span>
+        </a>
+      ))}
     </div>
   );
 }
@@ -474,8 +528,7 @@ export function Sidebar({
       {/* Header with New Chat button */}
       <div className="px-4 py-4 border-b border-[var(--color-border)] flex items-center justify-between">
         <h1 className="text-base font-bold flex items-center gap-2">
-          <span className="text-xl">🦞</span>
-          <span>OpenClaw</span>
+          <span>OpenClaw Dench</span>
         </h1>
         <button
           onClick={onNewSession}
@@ -506,8 +559,23 @@ export function Sidebar({
           </div>
         ) : (
           <>
-            {/* Chats (web sessions) */}
-            <div>
+            {/* Workspace */}
+            {workspaceTree.length > 0 && (
+              <div>
+                <SectionHeader
+                  title="Workspace"
+                  count={workspaceTree.length}
+                  isOpen={openSections.has("workspace")}
+                  onToggle={() => toggleSection("workspace")}
+                />
+                {openSections.has("workspace") && (
+                  <WorkspaceSection tree={workspaceTree} />
+                )}
+              </div>
+            )}
+
+                        {/* Chats (web sessions) */}
+                        <div>
               <SectionHeader
                 title="Chats"
                 count={webSessions.length}
@@ -523,17 +591,16 @@ export function Sidebar({
               )}
             </div>
 
-            {/* Workspace */}
+            {/* Reports */}
             {workspaceTree.length > 0 && (
               <div>
                 <SectionHeader
-                  title="Workspace"
-                  count={workspaceTree.length}
-                  isOpen={openSections.has("workspace")}
-                  onToggle={() => toggleSection("workspace")}
+                  title="Reports"
+                  isOpen={openSections.has("reports")}
+                  onToggle={() => toggleSection("reports")}
                 />
-                {openSections.has("workspace") && (
-                  <WorkspaceSection tree={workspaceTree} />
+                {openSections.has("reports") && (
+                  <ReportsSection tree={workspaceTree} />
                 )}
               </div>
             )}

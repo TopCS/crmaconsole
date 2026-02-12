@@ -5,7 +5,7 @@ import { useState, useCallback } from "react";
 export type TreeNode = {
   name: string;
   path: string;
-  type: "object" | "document" | "folder" | "file" | "database";
+  type: "object" | "document" | "folder" | "file" | "database" | "report";
   icon?: string;
   defaultView?: "table" | "kanban";
   children?: TreeNode[];
@@ -67,6 +67,16 @@ function DatabaseIcon() {
   );
 }
 
+function ReportIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" x2="12" y1="20" y2="10" />
+      <line x1="18" x2="18" y1="20" y2="4" />
+      <line x1="6" x2="6" y1="20" y2="14" />
+    </svg>
+  );
+}
+
 function ChevronIcon({ open }: { open: boolean }) {
   return (
     <svg
@@ -100,6 +110,8 @@ function NodeIcon({ node, open }: { node: TreeNode; open?: boolean }) {
       return <FolderIcon open={open} />;
     case "database":
       return <DatabaseIcon />;
+    case "report":
+      return <ReportIcon />;
     default:
       return <FileIcon />;
   }
@@ -141,7 +153,9 @@ function TreeNodeItem({
         ? "#60a5fa"
         : node.type === "database"
           ? "#c084fc"
-          : "var(--color-text-muted)";
+          : node.type === "report"
+            ? "#22c55e"
+            : "var(--color-text-muted)";
 
   return (
     <div>

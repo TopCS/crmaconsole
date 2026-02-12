@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export type TreeNode = {
   name: string;
   path: string; // relative to dench/
-  type: "object" | "document" | "folder" | "file" | "database";
+  type: "object" | "document" | "folder" | "file" | "database" | "report";
   icon?: string;
   defaultView?: "table" | "kanban";
   children?: TreeNode[];
@@ -117,13 +117,14 @@ function buildTree(
       }
     } else if (entry.isFile()) {
       const ext = entry.name.split(".").pop()?.toLowerCase();
+      const isReport = entry.name.endsWith(".report.json");
       const isDocument = ext === "md" || ext === "mdx";
       const isDatabase = isDatabaseFile(entry.name);
 
       nodes.push({
         name: entry.name,
         path: relPath,
-        type: isDatabase ? "database" : isDocument ? "document" : "file",
+        type: isReport ? "report" : isDatabase ? "database" : isDocument ? "document" : "file",
       });
     }
   }
@@ -133,6 +134,7 @@ function buildTree(
 
 /** Classify a top-level file's type. */
 function classifyFileType(name: string): TreeNode["type"] {
+  if (name.endsWith(".report.json")) {return "report";}
   if (isDatabaseFile(name)) {return "database";}
   const ext = name.split(".").pop()?.toLowerCase();
   if (ext === "md" || ext === "mdx") {return "document";}
@@ -149,11 +151,25 @@ export async function GET() {
   const dbObjects = loadDbObjects();
 
   const knowledgeDir = join(root, "knowledge");
+  const reportsDir = join(root, "reports");
   const tree: TreeNode[] = [];
 
   // Build knowledge tree
   if (existsSync(knowledgeDir)) {
     tree.push(...buildTree(knowledgeDir, "knowledge", dbObjects));
+  }
+
+  // Build reports tree
+  if (existsSync(reportsDir)) {
+    const reportNodes = buildTree(reportsDir, "reports", dbObjects);
+    if (reportNodes.length > 0) {
+      tree.push({
+        name: "reports",
+        path: "reports",
+        type: "folder",
+        children: reportNodes,
+      });
+    }
   }
 
   // Add top-level files (WORKSPACE.md, workspace_context.yaml, workspace.duckdb, etc.)

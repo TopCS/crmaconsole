@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { splitReportBlocks, hasReportBlocks } from "@/lib/report-blocks";
 
 // Load markdown renderer client-only to avoid SSR issues with ESM-only packages
 const MarkdownContent = dynamic(
@@ -14,6 +15,21 @@ const MarkdownContent = dynamic(
         <div className="h-4 rounded" style={{ background: "var(--color-surface)", width: "60%" }} />
         <div className="h-4 rounded" style={{ background: "var(--color-surface)", width: "70%" }} />
       </div>
+    ),
+  },
+);
+
+// Lazy-load ReportCard (uses Recharts which is heavy)
+const ReportCard = dynamic(
+  () =>
+    import("../charts/report-card").then((m) => ({ default: m.ReportCard })),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="h-48 rounded-xl animate-pulse my-4"
+        style={{ background: "var(--color-surface)" }}
+      />
     ),
   },
 );
@@ -33,6 +49,9 @@ export function DocumentView({ content, title }: DocumentViewProps) {
   const markdownBody =
     displayTitle && h1Match ? body.replace(/^#\s+.+\n?/, "") : body;
 
+  // Check if the markdown contains embedded report-json blocks
+  const hasReports = hasReportBlocks(markdownBody);
+
   return (
     <div className="max-w-3xl mx-auto px-6 py-8">
       {displayTitle && (
@@ -44,9 +63,41 @@ export function DocumentView({ content, title }: DocumentViewProps) {
         </h1>
       )}
 
-      <div className="workspace-prose">
-        <MarkdownContent content={markdownBody} />
-      </div>
+      {hasReports ? (
+        <EmbeddedReportContent content={markdownBody} />
+      ) : (
+        <div className="workspace-prose">
+          <MarkdownContent content={markdownBody} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Renders markdown content that contains embedded report-json blocks.
+ * Splits the content into alternating markdown and interactive chart sections.
+ */
+function EmbeddedReportContent({ content }: { content: string }) {
+  const segments = splitReportBlocks(content);
+
+  return (
+    <div className="space-y-4">
+      {segments.map((segment, index) => {
+        if (segment.type === "report-artifact") {
+          return (
+            <div key={index} className="my-6">
+              <ReportCard config={segment.config} />
+            </div>
+          );
+        }
+        // Text segment -- render as markdown
+        return (
+          <div key={index} className="workspace-prose">
+            <MarkdownContent content={segment.text} />
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -1,18 +1,28 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import type { UIMessage } from "ai";
 import { ChainOfThought, type ChainPart } from "./chain-of-thought";
+import { splitReportBlocks, hasReportBlocks } from "@/lib/report-blocks";
+import type { ReportConfig } from "./charts/types";
+
+// Lazy-load ReportCard (uses Recharts which is heavy)
+const ReportCard = dynamic(
+	() => import("./charts/report-card").then((m) => ({ default: m.ReportCard })),
+	{ ssr: false, loading: () => <div className="h-48 rounded-xl animate-pulse" style={{ background: "var(--color-surface)" }} /> },
+);
 
 /* ─── Part grouping ─── */
 
 type MessageSegment =
 	| { type: "text"; text: string }
-	| { type: "chain"; parts: ChainPart[] };
+	| { type: "chain"; parts: ChainPart[] }
+	| { type: "report-artifact"; config: ReportConfig };
 
 /** Map AI SDK tool state string to a simplified status */
 function toolStatus(state: string): "running" | "done" | "error" {
-	if (state === "output-available") return "done";
-	if (state === "error") return "error";
+	if (state === "output-available") {return "done";}
+	if (state === "error") {return "error";}
 	return "running";
 }
 
@@ -34,10 +44,13 @@ function groupParts(parts: UIMessage["parts"]): MessageSegment[] {
 	for (const part of parts) {
 		if (part.type === "text") {
 			flush();
-			segments.push({
-				type: "text",
-				text: (part as { type: "text"; text: string }).text,
-			});
+			const text = (part as { type: "text"; text: string }).text;
+			// Check for report-json fenced blocks in text
+			if (hasReportBlocks(text)) {
+				segments.push(...splitReportBlocks(text) as MessageSegment[]);
+			} else {
+				segments.push({ type: "text", text });
+			}
 		} else if (part.type === "reasoning") {
 			const rp = part as {
 				type: "reasoning";
@@ -99,9 +112,11 @@ function asRecord(
 	val: unknown,
 ): Record<string, unknown> | undefined {
 	if (val && typeof val === "object" && !Array.isArray(val))
-		return val as Record<string, unknown>;
+		{return val as Record<string, unknown>;}
 	return undefined;
 }
+
+// splitReportBlocks and hasReportBlocks imported from @/lib/report-blocks
 
 /* ─── Chat message ─── */
 
@@ -126,21 +141,29 @@ export function ChatMessage({ message }: { message: UIMessage }) {
 						: "bg-[var(--color-surface)] text-[var(--color-text)]"
 				}`}
 			>
-				{segments.map((segment, index) => {
-					if (segment.type === "text") {
-						return (
-							<div
-								key={index}
-								className="whitespace-pre-wrap text-[15px] leading-relaxed"
-							>
-								{segment.text}
-							</div>
-						);
-					}
+			{segments.map((segment, index) => {
+				if (segment.type === "text") {
 					return (
-						<ChainOfThought key={index} parts={segment.parts} />
+						<div
+							key={index}
+							className="whitespace-pre-wrap text-[15px] leading-relaxed"
+						>
+							{segment.text}
+						</div>
 					);
-				})}
+				}
+				if (segment.type === "report-artifact") {
+					return (
+						<ReportCard
+							key={index}
+							config={segment.config}
+						/>
+					);
+				}
+				return (
+					<ChainOfThought key={index} parts={segment.parts} />
+				);
+			})}
 			</div>
 
 			{isUser && (

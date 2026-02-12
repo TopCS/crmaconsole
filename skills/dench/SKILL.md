@@ -613,6 +613,170 @@ You MUST complete ALL steps below after ANY schema mutation (create/update/delet
 
 These steps ensure the filesystem always mirrors DuckDB. The sidebar depends on `.object.yaml` files — if they are missing, objects will not appear.
 
+## Report Generation (Analytics / Charts)
+
+Reports are JSON config files (`.report.json`) that the web app renders as live interactive dashboards using Recharts. The agent creates these files to give the user visual analytics over their CRM data.
+
+### Report file format
+
+Store reports as `.report.json` files in `dench/reports/` (create the directory if needed). The JSON schema:
+
+```json
+{
+  "version": 1,
+  "title": "Report Title",
+  "description": "Brief description of what this report shows",
+  "panels": [
+    {
+      "id": "unique-panel-id",
+      "title": "Panel Title",
+      "type": "bar",
+      "sql": "SELECT ... FROM v_{object} ...",
+      "mapping": { "xAxis": "column_name", "yAxis": ["value_column"] },
+      "size": "half"
+    }
+  ],
+  "filters": [
+    {
+      "id": "filter-id",
+      "type": "dateRange",
+      "label": "Date Range",
+      "column": "created_at"
+    }
+  ]
+}
+```
+
+### Chart types
+
+| Type      | Best for                     | Required mapping                |
+| --------- | ---------------------------- | ------------------------------- |
+| `bar`     | Comparing categories         | `xAxis`, `yAxis`                |
+| `line`    | Trends over time             | `xAxis`, `yAxis`                |
+| `area`    | Volume trends                | `xAxis`, `yAxis`                |
+| `pie`     | Distribution/share           | `nameKey`, `valueKey`           |
+| `donut`   | Distribution (with center)   | `nameKey`, `valueKey`           |
+| `radar`   | Multi-dimensional comparison | `xAxis` (or `nameKey`), `yAxis` |
+| `scatter` | Correlation                  | `xAxis`, `yAxis`                |
+| `funnel`  | Pipeline/conversion          | `nameKey`, `valueKey`           |
+
+### Panel sizes
+
+- `"full"` — spans full width (6 columns)
+- `"half"` — spans half width (3 columns) — **default**
+- `"third"` — spans one third (2 columns)
+
+### Filter types
+
+- `dateRange` — date picker (from/to), filters on `column`
+- `select` — single-select dropdown, needs `sql` to fetch options
+- `multiSelect` — multi-select chips, needs `sql` to fetch options
+- `number` — min/max numeric range
+
+### SQL query rules for reports
+
+- Always use the auto-generated `v_{object}` PIVOT views — never raw EAV queries
+- SQL must be SELECT-only (no INSERT/UPDATE/DELETE)
+- Cast numeric fields: `"Amount"::NUMERIC` or `CAST("Amount" AS NUMERIC)`
+- Use `DATE_TRUNC('month', created_at)` for time-series grouping
+- Always include `ORDER BY` for consistent chart rendering
+- Use aggregate functions: `COUNT(*)`, `SUM(...)`, `AVG(...)`, `MIN(...)`, `MAX(...)`
+
+### Example reports
+
+**Pipeline Funnel:**
+
+```json
+{
+  "version": 1,
+  "title": "Deal Pipeline",
+  "description": "Deal count and value by stage",
+  "panels": [
+    {
+      "id": "deals-by-stage",
+      "title": "Deals by Stage",
+      "type": "funnel",
+      "sql": "SELECT \"Stage\", COUNT(*) as count FROM v_deal GROUP BY \"Stage\" ORDER BY count DESC",
+      "mapping": { "nameKey": "Stage", "valueKey": "count" },
+      "size": "half"
+    },
+    {
+      "id": "revenue-by-stage",
+      "title": "Revenue by Stage",
+      "type": "bar",
+      "sql": "SELECT \"Stage\", SUM(\"Amount\"::NUMERIC) as total FROM v_deal GROUP BY \"Stage\" ORDER BY total DESC",
+      "mapping": { "xAxis": "Stage", "yAxis": ["total"] },
+      "size": "half"
+    }
+  ],
+  "filters": [
+    { "id": "date", "type": "dateRange", "label": "Created", "column": "created_at" },
+    {
+      "id": "assignee",
+      "type": "select",
+      "label": "Assigned To",
+      "sql": "SELECT DISTINCT \"Assigned To\" as value FROM v_deal WHERE \"Assigned To\" IS NOT NULL",
+      "column": "Assigned To"
+    }
+  ]
+}
+```
+
+**Contact Growth:**
+
+```json
+{
+  "version": 1,
+  "title": "Contact Growth",
+  "description": "New contacts over time",
+  "panels": [
+    {
+      "id": "growth-trend",
+      "title": "Contacts Over Time",
+      "type": "area",
+      "sql": "SELECT DATE_TRUNC('month', created_at) as month, COUNT(*) as count FROM v_people GROUP BY month ORDER BY month",
+      "mapping": { "xAxis": "month", "yAxis": ["count"] },
+      "size": "full"
+    }
+  ]
+}
+```
+
+### Inline chat reports
+
+When a user asks for analytics in chat (without explicitly asking to save a report), emit the report JSON inside a fenced code block with language `report-json`. The web UI will render interactive charts inline:
+
+````
+Here's your pipeline analysis:
+
+```report-json
+{"version":1,"title":"Deals by Stage","panels":[{"id":"p1","title":"Deal Count","type":"bar","sql":"SELECT \"Stage\", COUNT(*) as count FROM v_deal GROUP BY \"Stage\" ORDER BY count DESC","mapping":{"xAxis":"Stage","yAxis":["count"]},"size":"full"}]}
+```
+
+Most deals are currently in the Discovery stage.
+````
+
+The user can then "Pin" the inline report to save it as a `.report.json` file.
+
+### Post-report checklist
+
+After creating a `.report.json` file:
+
+- [ ] Verify the report JSON is valid and all SQL queries work: test each panel's SQL individually
+- [ ] Ensure `dench/reports/` directory exists
+- [ ] Write the file: `dench/reports/{slug}.report.json`
+- [ ] Tell the user they can view it in the workspace sidebar under "Reports"
+
+### Choosing the right chart type
+
+- **Comparing categories** (status breakdown, source distribution): `bar` or `pie`
+- **Time series** (growth, trends, revenue over time): `line` or `area`
+- **Pipeline/conversion** (deal stages, lead funnel): `funnel`
+- **Distribution/proportion** (market share, segment split): `pie` or `donut`
+- **Multi-metric comparison** (performance scores): `radar`
+- **Correlation** (price vs. size, score vs. revenue): `scatter`
+- When in doubt, `bar` is the safest default
+
 ## Critical Reminders
 
 - Handle the ENTIRE CRM operation from analysis to SQL execution to filesystem projection to summary
@@ -622,6 +786,8 @@ These steps ensure the filesystem always mirrors DuckDB. The sidebar depends on 
 - Use views (`v_{object}`) for all reads — never write raw PIVOT queries for search
 - Never assume field names — verify with `SELECT * FROM fields WHERE object_id = ?`
 - Extract ALL data from user messages — don't leave information unused
+- **REPORTS vs DOCUMENTS**: When the user asks for "reports", "analytics", "charts", "graphs", "metrics", "insights", or "breakdown" — use `.report.json` format (see Report Generation section above), NOT markdown. Only use markdown `.md` for SOPs, guides, notes, and prose documents. Reports render as interactive Recharts dashboards; markdown does not.
+- **INLINE CHART ARTIFACTS**: When answering analytics questions in chat, ALWAYS emit a `report-json` fenced code block so the UI renders interactive charts inline. Do NOT describe data in plain text when you can show it as a chart.
 - **NOTES**: Always use type "richtext" for Notes fields
 - **USER FIELDS**: Resolve member name to ID from `workspace_context.yaml` BEFORE inserting
 - **ENUM FIELDS**: Use type "enum" with `enum_values` JSON array

@@ -11,6 +11,7 @@ import { FileViewer } from "../components/workspace/file-viewer";
 import { DatabaseViewer } from "../components/workspace/database-viewer";
 import { Breadcrumbs } from "../components/workspace/breadcrumbs";
 import { EmptyState } from "../components/workspace/empty-state";
+import { ReportViewer } from "../components/charts/report-viewer";
 
 // --- Types ---
 
@@ -58,6 +59,7 @@ type ContentState =
   | { kind: "document"; data: FileData; title: string }
   | { kind: "file"; data: FileData; filename: string }
   | { kind: "database"; dbPath: string; filename: string }
+  | { kind: "report"; reportPath: string; filename: string }
   | { kind: "directory"; node: TreeNode };
 
 // --- Helpers ---
@@ -165,6 +167,9 @@ export default function WorkspacePage() {
         } else if (node.type === "database") {
           // Database files are handled entirely by the DatabaseViewer component
           setContent({ kind: "database", dbPath: node.path, filename: node.name });
+        } else if (node.type === "report") {
+          // Report files are handled entirely by the ReportViewer component
+          setContent({ kind: "report", reportPath: node.path, filename: node.name });
         } else if (node.type === "file") {
           const res = await fetch(
             `/api/workspace/file?path=${encodeURIComponent(node.path)}`,
@@ -379,6 +384,13 @@ function ContentRenderer({
         />
       );
 
+    case "report":
+      return (
+        <ReportViewer
+          reportPath={content.reportPath}
+        />
+      );
+
     case "directory":
       return (
         <DirectoryListing
@@ -456,7 +468,9 @@ function DirectoryListing({
                         ? "rgba(96, 165, 250, 0.1)"
                         : child.type === "database"
                           ? "rgba(192, 132, 252, 0.1)"
-                          : "var(--color-surface-hover)",
+                          : child.type === "report"
+                            ? "rgba(34, 197, 94, 0.1)"
+                            : "var(--color-surface-hover)",
                   color:
                     child.type === "object"
                       ? "var(--color-accent)"
@@ -464,7 +478,9 @@ function DirectoryListing({
                         ? "#60a5fa"
                         : child.type === "database"
                           ? "#c084fc"
-                          : "var(--color-text-muted)",
+                          : child.type === "report"
+                            ? "#22c55e"
+                            : "var(--color-text-muted)",
                 }}
               >
                 <NodeTypeIcon type={child.type} />
@@ -663,6 +679,14 @@ function NodeTypeIcon({ type }: { type: string }) {
           <ellipse cx="12" cy="5" rx="9" ry="3" />
           <path d="M3 5V19A9 3 0 0 0 21 19V5" />
           <path d="M3 12A9 3 0 0 0 21 12" />
+        </svg>
+      );
+    case "report":
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" x2="12" y1="20" y2="10" />
+          <line x1="18" x2="18" y1="20" y2="4" />
+          <line x1="6" x2="6" y1="20" y2="14" />
         </svg>
       );
     default:
