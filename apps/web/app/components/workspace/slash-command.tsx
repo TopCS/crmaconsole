@@ -460,7 +460,7 @@ function SlashPopupRenderer({
 }: {
   items: SlashItem[];
   command: (item: SlashItem) => void;
-  clientRect: (() => DOMRect | null) | null;
+  clientRect: (() => DOMRect | null) | null | undefined;
   componentRef: React.RefObject<CommandListRef | null>;
 }) {
   const popupRef = useRef<HTMLDivElement>(null);
@@ -497,7 +497,7 @@ function createSuggestionRenderer() {
       onStart: (props: {
         items: SlashItem[];
         command: (item: SlashItem) => void;
-        clientRect: (() => DOMRect | null) | null;
+        clientRect?: (() => DOMRect | null) | null;
       }) => {
         container = document.createElement("div");
         document.body.appendChild(container);
@@ -517,7 +517,7 @@ function createSuggestionRenderer() {
       onUpdate: (props: {
         items: SlashItem[];
         command: (item: SlashItem) => void;
-        clientRect: (() => DOMRect | null) | null;
+        clientRect?: (() => DOMRect | null) | null;
       }) => {
         root?.render(
           <SlashPopupRenderer

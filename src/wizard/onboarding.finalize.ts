@@ -33,6 +33,7 @@ import {
 } from "../commands/onboard-helpers.js";
 import { resolveGatewayService } from "../daemon/service.js";
 import { isSystemdUserServiceAvailable } from "../daemon/systemd.js";
+import { DEFAULT_WEB_APP_PORT } from "../gateway/server-web-app.js";
 import { ensureControlUiAssetsBuilt } from "../infra/control-ui-assets.js";
 import { restoreTerminalState } from "../terminal/restore.js";
 import { runTui } from "../tui/tui.js";
@@ -345,34 +346,23 @@ export async function finalizeOnboardingWizard(
       });
       launchedTui = true;
     } else if (hatchChoice === "web") {
+      const webAppPort = nextConfig.gateway?.webApp?.port ?? DEFAULT_WEB_APP_PORT;
+      const webAppUrl = `http://localhost:${webAppPort}`;
       const browserSupport = await detectBrowserOpenSupport();
       if (browserSupport.ok) {
-        controlUiOpened = await openUrl(authedUrl);
-        if (!controlUiOpened) {
-          controlUiOpenHint = formatControlUiSshHint({
-            port: settings.port,
-            basePath: controlUiBasePath,
-            token: settings.authMode === "token" ? settings.gatewayToken : undefined,
-          });
-        }
-      } else {
-        controlUiOpenHint = formatControlUiSshHint({
-          port: settings.port,
-          basePath: controlUiBasePath,
-          token: settings.authMode === "token" ? settings.gatewayToken : undefined,
-        });
+        controlUiOpened = await openUrl(webAppUrl);
       }
       await prompter.note(
         [
-          `Dashboard link (with token): ${authedUrl}`,
+          `Ironclaw Web UI: ${webAppUrl}`,
           controlUiOpened
-            ? "Opened in your browser. Keep that tab to control Ironclaw."
-            : "Copy/paste this URL in a browser on this machine to control Ironclaw.",
-          controlUiOpenHint,
+            ? "Opened in your browser."
+            : "Copy/paste this URL in a browser on this machine.",
+          `Dashboard (control UI): ${authedUrl}`,
         ]
           .filter(Boolean)
           .join("\n"),
-        "Dashboard ready",
+        "Web UI ready",
       );
     } else {
       await prompter.note(
@@ -515,10 +505,10 @@ export async function finalizeOnboardingWizard(
 
   await prompter.outro(
     controlUiOpened
-      ? "Onboarding complete. Dashboard opened; keep that tab to control Ironclaw."
+      ? "Onboarding complete. Web UI opened; keep that tab to control Ironclaw."
       : seededInBackground
-        ? "Onboarding complete. Web UI seeded in the background; open it anytime with the dashboard link above."
-        : "Onboarding complete. Use the dashboard link above to control Ironclaw.",
+        ? "Onboarding complete. Web UI seeded in the background; open it anytime with the link above."
+        : "Onboarding complete. Use the links above to control Ironclaw.",
   );
 
   return { launchedTui };

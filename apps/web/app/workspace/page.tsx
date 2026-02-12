@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { Suspense, useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { WorkspaceSidebar } from "../components/workspace/workspace-sidebar";
 import { type TreeNode } from "../components/workspace/file-manager-tree";
@@ -171,6 +171,18 @@ function resolveNode(
 // --- Main Page ---
 
 export default function WorkspacePage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen items-center justify-center" style={{ background: "var(--color-bg)" }}>
+        <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "var(--color-border)", borderTopColor: "var(--color-accent)" }} />
+      </div>
+    }>
+      <WorkspacePageInner />
+    </Suspense>
+  );
+}
+
+function WorkspacePageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const initialPathHandled = useRef(false);

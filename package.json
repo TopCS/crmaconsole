@@ -1,6 +1,6 @@
 {
   "name": "ironclaw",
-  "version": "2026.2.6-3",
+  "version": "2026.2.6-3.4",
   "description": "AI-powered CRM platform with multi-channel agent gateway, DuckDB workspace, and knowledge management",
   "keywords": [],
   "license": "MIT",
@@ -9,6 +9,11 @@
     "ironclaw": "openclaw.mjs"
   },
   "files": [
+    "apps/web/.next/standalone/",
+    "apps/web/.next/static/",
+    "apps/web/public/",
+    "apps/web/package.json",
+    "apps/web/next.config.ts",
     "assets/",
     "CHANGELOG.md",
     "dist/",

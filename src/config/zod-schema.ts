@@ -508,6 +508,14 @@ export const OpenClawSchema = z
           })
           .strict()
           .optional(),
+        webApp: z
+          .object({
+            enabled: z.boolean().optional(),
+            port: z.number().int().positive().optional(),
+            dev: z.boolean().optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),

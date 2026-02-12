@@ -3,26 +3,9 @@
  * Extracted from chat-message.tsx for testability.
  */
 
-export type ReportConfig = {
-  version: number;
-  title: string;
-  description?: string;
-  panels: Array<{
-    id: string;
-    title: string;
-    type: string;
-    sql: string;
-    mapping: Record<string, unknown>;
-    size?: string;
-  }>;
-  filters?: Array<{
-    id: string;
-    type: string;
-    label: string;
-    column: string;
-    sql?: string;
-  }>;
-};
+import type { ReportConfig } from "../app/components/charts/types";
+
+export type { ReportConfig };
 
 export type ParsedSegment =
   | { type: "text"; text: string }

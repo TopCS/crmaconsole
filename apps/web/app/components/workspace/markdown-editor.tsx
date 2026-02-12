@@ -399,7 +399,7 @@ export function MarkdownEditor({
       <EditorToolbar editor={editor} onUploadImages={insertUploadedImages} />
 
       {/* Bubble menu for text selection */}
-      <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
+      <BubbleMenu editor={editor}>
         <div className="bubble-menu">
           <BubbleButton
             active={editor.isActive("bold")}

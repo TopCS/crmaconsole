@@ -1,7 +1,7 @@
 "use client";
 
 import { Node, mergeAttributes } from "@tiptap/core";
-import { ReactNodeViewRenderer, NodeViewWrapper } from "@tiptap/react";
+import { ReactNodeViewRenderer, NodeViewWrapper, type ReactNodeViewProps } from "@tiptap/react";
 import { useState, useCallback } from "react";
 import type { ReportConfig } from "../../components/charts/types";
 
@@ -30,20 +30,16 @@ function ReportBlockView({
   updateAttributes,
   deleteNode,
   selected,
-}: {
-  node: { attrs: { config: string } };
-  updateAttributes: (attrs: Record<string, unknown>) => void;
-  deleteNode: () => void;
-  selected: boolean;
-}) {
+}: ReactNodeViewProps) {
+  const configAttr = node.attrs.config as string;
   const [showSource, setShowSource] = useState(false);
-  const [editValue, setEditValue] = useState(node.attrs.config);
+  const [editValue, setEditValue] = useState(configAttr);
 
   let parsedConfig: ReportConfig | null = null;
   let parseError: string | null = null;
 
   try {
-    const parsed = JSON.parse(node.attrs.config);
+    const parsed = JSON.parse(configAttr);
     if (parsed?.panels && Array.isArray(parsed.panels)) {
       parsedConfig = parsed as ReportConfig;
     } else {
@@ -76,7 +72,7 @@ function ReportBlockView({
             if (showSource) {
               handleSaveSource();
             } else {
-              setEditValue(node.attrs.config);
+              setEditValue(configAttr);
               setShowSource(true);
             }
           }}
@@ -128,7 +124,7 @@ function ReportBlockView({
           <button
             type="button"
             onClick={() => {
-              setEditValue(node.attrs.config);
+              setEditValue(configAttr);
               setShowSource(true);
             }}
             className="report-block-btn"
