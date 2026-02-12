@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 export type TreeNode = {
   name: string;
-  path: string; // relative to dench/ (or ~skills/, ~memories/ for virtual nodes)
+  path: string; // relative to dench/ (or ~skills/, ~memories/, ~workspace/ for virtual nodes)
   type: "object" | "document" | "folder" | "file" | "database" | "report";
   icon?: string;
   defaultView?: "table" | "kanban";
@@ -214,6 +214,47 @@ function buildSkillsVirtualFolder(): TreeNode | null {
   };
 }
 
+/**
+ * Build top-level workspace root file nodes (USER.md, SOUL.md, TOOLS.md, etc.).
+ * These live directly in ~/.openclaw/workspace/ but outside the dench/ subdirectory.
+ * They are virtual (not movable/renamable/deletable) but editable.
+ */
+function buildWorkspaceRootFiles(): TreeNode[] {
+  const workspaceDir = join(homedir(), ".openclaw", "workspace");
+  if (!existsSync(workspaceDir)) {return [];}
+
+  // Files already handled by the Memories virtual folder
+  const SKIP_FILES = new Set(["MEMORY.md", "memory.md"]);
+
+  const nodes: TreeNode[] = [];
+
+  try {
+    const entries = readdirSync(workspaceDir, { withFileTypes: true });
+    for (const entry of entries) {
+      // Skip subdirectories (handled elsewhere) and hidden files
+      if (entry.isDirectory()) {continue;}
+      if (entry.name.startsWith(".")) {continue;}
+      if (SKIP_FILES.has(entry.name)) {continue;}
+
+      const ext = entry.name.split(".").pop()?.toLowerCase();
+      const isDocument = ext === "md" || ext === "mdx";
+
+      nodes.push({
+        name: entry.name,
+        path: `~workspace/${entry.name}`,
+        type: isDocument ? "document" : "file",
+        virtual: true,
+      });
+    }
+  } catch {
+    // dir unreadable
+  }
+
+  // Sort alphabetically
+  nodes.sort((a, b) => a.name.localeCompare(b.name));
+  return nodes;
+}
+
 /** Build a virtual "Memories" folder from ~/.openclaw/workspace/. */
 function buildMemoriesVirtualFolder(): TreeNode | null {
   const workspaceDir = join(homedir(), ".openclaw", "workspace");
@@ -274,6 +315,7 @@ export async function GET() {
   if (!root) {
     // Even without a dench workspace, return virtual folders if they exist
     const tree: TreeNode[] = [];
+    tree.push(...buildWorkspaceRootFiles());
     const skillsFolder = buildSkillsVirtualFolder();
     if (skillsFolder) {tree.push(skillsFolder);}
     const memoriesFolder = buildMemoriesVirtualFolder();
@@ -322,6 +364,10 @@ export async function GET() {
   } catch {
     // skip if root unreadable
   }
+
+  // Workspace root files (USER.md, SOUL.md, etc.) -- editable but reserved
+  const workspaceRootFiles = buildWorkspaceRootFiles();
+  if (workspaceRootFiles.length > 0) {tree.push(...workspaceRootFiles);}
 
   // Virtual folders go after all real files/folders
   const skillsFolder = buildSkillsVirtualFolder();

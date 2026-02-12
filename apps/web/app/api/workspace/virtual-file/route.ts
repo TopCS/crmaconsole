@@ -68,6 +68,15 @@ function resolveVirtualPath(virtualPath: string): string | null {
     return join(workspaceDir, "memory", rest);
   }
 
+  if (virtualPath.startsWith("~workspace/")) {
+    const rest = virtualPath.slice("~workspace/".length);
+    // Only allow direct filenames (no subdirectories, no traversal)
+    if (!rest || rest.includes("..") || rest.includes("/")) {
+      return null;
+    }
+    return join(home, ".openclaw", "workspace", rest);
+  }
+
   return null;
 }
 

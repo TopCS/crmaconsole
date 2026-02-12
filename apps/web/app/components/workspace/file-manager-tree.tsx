@@ -618,11 +618,14 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-expand first level on mount
+  // Auto-expand first level on mount.
+  // Keep ~skills and ~memories collapsed by default; always expand ~chats.
+  const collapsedByDefault = new Set(["~skills", "~memories"]);
   useEffect(() => {
     if (tree.length > 0 && expandedPaths.size === 0) {
       const initial = new Set<string>();
       for (const node of tree) {
+        if (collapsedByDefault.has(node.path)) {continue;}
         if (node.children && node.children.length > 0) {
           initial.add(node.path);
         }

@@ -93,7 +93,6 @@ export function DocumentView({
           tree={tree ?? []}
           onSave={onSave}
           onNavigate={onNavigate}
-          onSwitchToRead={() => setEditMode(false)}
           searchFn={searchFn}
         />
       </div>
