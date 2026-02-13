@@ -1,25 +1,22 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const nextConfig: NextConfig = {
+  // Produce a self-contained standalone build so npm global installs
+  // can run the web app with `node server.js` — no npm install or
+  // next build required at runtime.
+  output: "standalone",
+
+  // Required for pnpm monorepos: trace dependencies from the workspace
+  // root so the standalone build bundles its own node_modules correctly
+  // instead of resolving through pnpm's virtual store symlinks.
+  outputFileTracingRoot: path.join(import.meta.dirname, "..", ".."),
+
   // Allow long-running API routes for agent streaming
   serverExternalPackages: [],
 
   // Transpile ESM-only packages so webpack can bundle them
   transpilePackages: ["react-markdown", "remark-gfm"],
-
-  // Ensure Node.js built-ins work correctly
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      // Don't attempt to bundle Node.js built-ins
-      config.externals = config.externals || [];
-      config.externals.push({
-        "node:child_process": "commonjs node:child_process",
-        "node:path": "commonjs node:path",
-        "node:readline": "commonjs node:readline",
-      });
-    }
-    return config;
-  },
 };
 
 export default nextConfig;

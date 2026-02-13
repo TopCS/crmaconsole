@@ -18,13 +18,17 @@ export type WebAppHandle = {
  * Resolve the `apps/web` directory relative to the package root.
  * Walks up from the current module until we find `apps/web/package.json`.
  */
-function resolveWebAppDir(): string | null {
+export function resolveWebAppDir(): string | null {
   const __filename = fileURLToPath(import.meta.url);
   let dir = path.dirname(__filename);
   for (let i = 0; i < 10; i++) {
-    const candidate = path.join(dir, "apps", "web", "package.json");
-    if (fs.existsSync(candidate)) {
-      return path.join(dir, "apps", "web");
+    const candidate = path.join(dir, "apps", "web");
+    // Accept either package.json (dev workspace) or .next/standalone (production).
+    if (
+      fs.existsSync(path.join(candidate, "package.json")) ||
+      fs.existsSync(path.join(candidate, ".next", "standalone"))
+    ) {
+      return candidate;
     }
     const parent = path.dirname(dir);
     if (parent === dir) {
@@ -35,9 +39,46 @@ function resolveWebAppDir(): string | null {
   return null;
 }
 
-/** Check whether a Next.js production build exists. */
-function hasNextBuild(webAppDir: string): boolean {
+/**
+ * Check whether a pre-built Next.js standalone server exists.
+ *
+ * The standalone build is produced by `next build` with `output: "standalone"`
+ * in `next.config.ts` and ships with the npm package. It includes a
+ * self-contained `server.js` that can run without `node_modules` or `next`.
+ */
+export function hasStandaloneBuild(webAppDir: string): boolean {
+  return fs.existsSync(resolveStandaloneServerJs(webAppDir));
+}
+
+/**
+ * Resolve the standalone server.js path for the web app.
+ *
+ * With `outputFileTracingRoot` set to the monorepo root (required for
+ * pnpm), the standalone output mirrors the repo directory structure.
+ * `server.js` lives at `.next/standalone/apps/web/server.js`.
+ */
+export function resolveStandaloneServerJs(webAppDir: string): string {
+  return path.join(webAppDir, ".next", "standalone", "apps", "web", "server.js");
+}
+
+/**
+ * Check whether a classic Next.js production build exists (legacy).
+ * Kept for backward compatibility with dev-workspace builds that haven't
+ * switched to standalone yet.
+ */
+export function hasLegacyNextBuild(webAppDir: string): boolean {
   return fs.existsSync(path.join(webAppDir, ".next", "BUILD_ID"));
+}
+
+/**
+ * Detect whether we're running inside a pnpm workspace (dev checkout)
+ * vs. a standalone npm/global install. In a workspace, building at
+ * runtime is safe because all deps are available. In a global install,
+ * runtime builds are fragile and should not be attempted.
+ */
+export function isInWorkspace(webAppDir: string): boolean {
+  const rootDir = path.resolve(webAppDir, "..", "..");
+  return fs.existsSync(path.join(rootDir, "pnpm-workspace.yaml"));
 }
 
 // ── pre-build ────────────────────────────────────────────────────────────────
@@ -49,12 +90,18 @@ export type EnsureWebAppBuiltResult = {
 };
 
 /**
- * Pre-build the Next.js web app so the gateway can start it immediately.
+ * Verify the Next.js web app is ready to serve.
  *
- * Call this before installing/starting the gateway daemon so the first
- * gateway boot doesn't block on `next build`.  Skips silently when the
- * web app feature is disabled, already built, or not applicable (e.g.
- * global npm install without `apps/web`).
+ * For production (npm global install): checks that the pre-built standalone
+ * server exists. No runtime `npm install` or `next build` is performed —
+ * the standalone build ships with the npm package via `prepack`.
+ *
+ * For dev workspaces: builds the web app if no build exists (safe because
+ * all deps are available via the workspace). `next dev` compiles on-the-fly,
+ * so no pre-build is needed when `dev` mode is enabled.
+ *
+ * Skips silently when the web app feature is disabled or `apps/web` is
+ * not present.
  */
 export async function ensureWebAppBuilt(
   runtime: RuntimeEnv = defaultRuntime,
@@ -73,53 +120,74 @@ export async function ensureWebAppBuilt(
 
   const webAppDir = resolveWebAppDir();
   if (!webAppDir) {
-    // No apps/web directory (e.g. global install) — nothing to build.
+    // No apps/web directory — nothing to verify.
     return { ok: true, built: false };
   }
 
-  if (hasNextBuild(webAppDir)) {
+  // Standalone build ships with the npm package; just verify it exists.
+  if (hasStandaloneBuild(webAppDir)) {
     return { ok: true, built: false };
   }
 
-  const log = {
-    info: (msg: string) => runtime.log(msg),
-    warn: (msg: string) => runtime.error(msg),
-  };
+  // Legacy: accept a classic .next/BUILD_ID build (dev workspace that
+  // hasn't been rebuilt with standalone yet).
+  if (hasLegacyNextBuild(webAppDir)) {
+    return { ok: true, built: false };
+  }
 
-  try {
-    await ensureDepsInstalled(webAppDir, log);
-    runtime.log("Web app not built; building for production (next build)…");
-    await runCommand("node", [resolveNextBin(webAppDir), "build"], webAppDir, log);
-  } catch (err) {
+  // In a pnpm workspace, attempt to build — all deps are available.
+  if (isInWorkspace(webAppDir)) {
+    const log = {
+      info: (msg: string) => runtime.log(msg),
+      warn: (msg: string) => runtime.error(msg),
+    };
+    try {
+      await ensureDevDepsInstalled(webAppDir, log);
+      runtime.log("Web app not built; building for production (next build)…");
+      await runCommand("node", [resolveNextBin(webAppDir), "build"], webAppDir, log);
+    } catch (err) {
+      return {
+        ok: false,
+        built: false,
+        message: `Web app build failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+
+    if (hasStandaloneBuild(webAppDir) || hasLegacyNextBuild(webAppDir)) {
+      return { ok: true, built: true };
+    }
     return {
       ok: false,
       built: false,
-      message: `Web app pre-build failed: ${err instanceof Error ? err.message : String(err)}`,
+      message: "Web app build completed but no build output found.",
     };
   }
 
-  if (!hasNextBuild(webAppDir)) {
-    return {
-      ok: false,
-      built: true,
-      message: "Web app build completed but .next/BUILD_ID is still missing.",
-    };
-  }
-
-  return { ok: true, built: true };
+  // Global npm install without a pre-built standalone — nothing we can do.
+  return {
+    ok: false,
+    built: false,
+    message:
+      "Web app standalone build not found. " +
+      "Reinstall the package to get the pre-built web app.",
+  };
 }
 
 /**
  * Start the Ironclaw Next.js web app as a child process.
  *
- * - Installs dependencies (`npm install`) if `node_modules/` is missing.
- * - Builds (`next build`) on first start when no `.next/BUILD_ID` exists.
- * - On subsequent gateway starts/restarts, reuses the existing build.
- * - Returns a handle whose `stop()` kills the running server.
+ * Production mode (default):
+ *   Uses the pre-built standalone server (`node server.js`). No runtime
+ *   `npm install` or `next build` is needed — the standalone output ships
+ *   with the npm package.
  *
- * Child processes (dep install, build, server) inherit the gateway's
- * process group, so they are also terminated when the gateway exits
- * (e.g. Ctrl-C).
+ *   In a dev workspace without a standalone build, falls back to a classic
+ *   `next start` (with legacy BUILD_ID) or builds on-the-fly.
+ *
+ * Dev mode (`gateway.webApp.dev: true`):
+ *   Runs `next dev` from the workspace, installing deps if needed.
+ *
+ * Returns a handle whose `stop()` kills the running server.
  */
 export async function startWebAppIfEnabled(
   cfg: GatewayWebAppConfig | undefined,
@@ -145,7 +213,7 @@ export async function startWebAppIfEnabled(
 
   if (devMode) {
     // Dev mode: ensure deps, then `next dev`.
-    await ensureDepsInstalled(webAppDir, log);
+    await ensureDevDepsInstalled(webAppDir, log);
     log.info(`starting web app (dev) on port ${port}…`);
     child = spawn("node", [resolveNextBin(webAppDir), "dev", "--port", String(port)], {
       cwd: webAppDir,
@@ -153,22 +221,55 @@ export async function startWebAppIfEnabled(
       env: { ...process.env, PORT: String(port) },
     });
   } else {
-    // Production: install deps if needed, build if needed, then start.
-    await ensureDepsInstalled(webAppDir, log);
+    // Production: prefer standalone, fall back to legacy, then workspace build.
+    const serverJs = resolveStandaloneServerJs(webAppDir);
 
-    if (!hasNextBuild(webAppDir)) {
-      log.info("building web app for production (first run)…");
+    if (fs.existsSync(serverJs)) {
+      // Standalone build found — just run it (npm global install or post-build).
+      log.info(`starting web app (standalone) on port ${port}…`);
+      child = spawn("node", [serverJs], {
+        cwd: path.dirname(serverJs),
+        stdio: "pipe",
+        env: { ...process.env, PORT: String(port), HOSTNAME: "0.0.0.0" },
+      });
+    } else if (hasLegacyNextBuild(webAppDir)) {
+      // Legacy build — use `next start` (dev workspace that hasn't rebuilt).
+      log.warn("standalone build not found — falling back to legacy next start");
+      await ensureDevDepsInstalled(webAppDir, log);
+      child = spawn("node", [resolveNextBin(webAppDir), "start", "--port", String(port)], {
+        cwd: webAppDir,
+        stdio: "pipe",
+        env: { ...process.env, PORT: String(port) },
+      });
+    } else if (isInWorkspace(webAppDir)) {
+      // Dev workspace with no build at all — build first, then start.
+      log.info("no web app build found — building in workspace…");
+      await ensureDevDepsInstalled(webAppDir, log);
       await runCommand("node", [resolveNextBin(webAppDir), "build"], webAppDir, log);
-    } else {
-      log.info("existing web app build found — skipping build");
-    }
 
-    log.info(`starting web app (production) on port ${port}…`);
-    child = spawn("node", [resolveNextBin(webAppDir), "start", "--port", String(port)], {
-      cwd: webAppDir,
-      stdio: "pipe",
-      env: { ...process.env, PORT: String(port) },
-    });
+      // After building, prefer standalone if the config produced it.
+      if (fs.existsSync(serverJs)) {
+        log.info(`starting web app (standalone) on port ${port}…`);
+        child = spawn("node", [serverJs], {
+          cwd: path.dirname(serverJs),
+          stdio: "pipe",
+          env: { ...process.env, PORT: String(port), HOSTNAME: "0.0.0.0" },
+        });
+      } else {
+        log.info(`starting web app (production) on port ${port}…`);
+        child = spawn("node", [resolveNextBin(webAppDir), "start", "--port", String(port)], {
+          cwd: webAppDir,
+          stdio: "pipe",
+          env: { ...process.env, PORT: String(port) },
+        });
+      }
+    } else {
+      // Global install with no standalone build — nothing we can safely do.
+      log.error(
+        "web app standalone build not found — reinstall the package to get the pre-built web app",
+      );
+      return null;
+    }
   }
 
   // Forward child stdout/stderr to the gateway log.
@@ -223,29 +324,26 @@ export async function startWebAppIfEnabled(
 
 /**
  * Resolve the local `next` CLI entry script from apps/web/node_modules.
- *
- * Using `npx next` is fragile in global installs (pnpm, npm) because npx
- * walks up the node_modules tree and may hit a broken pnpm virtual-store
- * symlink in the parent package. Resolving the local binary directly avoids
- * this issue entirely.
+ * Only used in dev/workspace mode — production uses the standalone server.js.
  */
 function resolveNextBin(webAppDir: string): string {
   return path.join(webAppDir, "node_modules", "next", "dist", "bin", "next");
 }
 
-async function ensureDepsInstalled(
+/**
+ * Install web app dependencies if needed (dev/workspace mode only).
+ * Production standalone builds are self-contained and don't need this.
+ */
+async function ensureDevDepsInstalled(
   webAppDir: string,
   log: { info: (msg: string) => void },
 ): Promise<void> {
-  // Use `next` as a sentinel — the mere existence of `node_modules/` is not
-  // enough (a pnpm workspace may create the directory without all packages).
   const nextPkg = path.join(webAppDir, "node_modules", "next", "package.json");
   if (fs.existsSync(nextPkg)) {
     return;
   }
 
-  // In a pnpm workspace, run `pnpm install` at the workspace root so hoisted
-  // deps resolve correctly. Outside a workspace (npm global install), use npm.
+  // In a pnpm workspace, run `pnpm install` at the workspace root.
   const rootDir = path.resolve(webAppDir, "..", "..");
   const inWorkspace = fs.existsSync(path.join(rootDir, "pnpm-workspace.yaml"));
 

@@ -164,7 +164,7 @@ export function WorkspaceSidebar({
 							color: "var(--color-text-muted)",
 						}}
 					>
-						Dench CRM
+						Ironclaw
 					</div>
 				</div>
 			</div>
