@@ -125,8 +125,8 @@ const UPDATE_QUIPS = [
 ];
 
 const MAX_LOG_CHARS = 8000;
-const DEFAULT_PACKAGE_NAME = "openclaw";
-const CORE_PACKAGE_NAMES = new Set([DEFAULT_PACKAGE_NAME, "ironclaw"]);
+const DEFAULT_PACKAGE_NAME = "ironclaw";
+const CORE_PACKAGE_NAMES = new Set([DEFAULT_PACKAGE_NAME, "openclaw"]);
 const CLI_NAME = resolveCliName();
 const OPENCLAW_REPO_URL = "https://github.com/openclaw/openclaw.git";
 
@@ -1104,7 +1104,7 @@ export async function updateCommand(opts: UpdateCommandOptions): Promise<void> {
 export async function updateWizardCommand(opts: UpdateWizardOptions = {}): Promise<void> {
   if (!process.stdin.isTTY) {
     defaultRuntime.error(
-      "Update wizard requires a TTY. Use `openclaw update --channel <stable|beta|dev>` instead.",
+      `Update wizard requires a TTY. Use \`${CLI_NAME} update --channel <stable|beta|dev>\` instead.`,
     );
     defaultRuntime.exit(1);
     return;
@@ -1260,7 +1260,10 @@ export function registerUpdateCli(program: Command) {
         ["openclaw --update", "Shorthand for openclaw update"],
       ] as const;
       const fmtExamples = examples
-        .map(([cmd, desc]) => `  ${theme.command(cmd)} ${theme.muted(`# ${desc}`)}`)
+        .map(
+          ([cmd, desc]) =>
+            `  ${theme.command(replaceCliName(cmd, CLI_NAME))} ${theme.muted(`# ${desc}`)}`,
+        )
         .join("\n");
       return `
 ${theme.heading("What this does:")}
@@ -1269,7 +1272,7 @@ ${theme.heading("What this does:")}
 
 ${theme.heading("Switch channels:")}
   - Use --channel stable|beta|dev to persist the update channel in config
-  - Run openclaw update status to see the active channel and source
+  - Run ${CLI_NAME} update status to see the active channel and source
   - Use --tag <dist-tag|version> for a one-off npm update without persisting
 
 ${theme.heading("Non-interactive:")}
@@ -1331,9 +1334,9 @@ ${theme.muted("Docs:")} ${formatDocsLink("/cli/update", "docs.openclaw.ai/cli/up
       "after",
       () =>
         `\n${theme.heading("Examples:")}\n${formatHelpExamples([
-          ["openclaw update status", "Show channel + version status."],
-          ["openclaw update status --json", "JSON output."],
-          ["openclaw update status --timeout 10", "Custom timeout."],
+          [`${CLI_NAME} update status`, "Show channel + version status."],
+          [`${CLI_NAME} update status --json`, "JSON output."],
+          [`${CLI_NAME} update status --timeout 10`, "Custom timeout."],
         ])}\n\n${theme.heading("Notes:")}\n${theme.muted(
           "- Shows current update channel (stable/beta/dev) and source",
         )}\n${theme.muted("- Includes git tag/branch/SHA for source checkouts")}\n\n${theme.muted(

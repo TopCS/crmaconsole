@@ -3,6 +3,7 @@ import type { MemoryCitationsMode } from "../config/types.memory.js";
 import type { ResolvedTimeFormat } from "./date-time.js";
 import type { EmbeddedContextFile } from "./pi-embedded-helpers.js";
 import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
+import { DEFAULT_CLI_NAME } from "../cli/cli-name.js";
 import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 
 /**
@@ -143,7 +144,12 @@ function buildVoiceSection(params: { isMinimal: boolean; ttsHint?: string }) {
   return ["## Voice (TTS)", hint, ""];
 }
 
-function buildDocsSection(params: { docsPath?: string; isMinimal: boolean; readToolName: string }) {
+function buildDocsSection(params: {
+  docsPath?: string;
+  isMinimal: boolean;
+  readToolName: string;
+  cliName: string;
+}) {
   const docsPath = params.docsPath?.trim();
   if (!docsPath || params.isMinimal) {
     return [];
@@ -156,7 +162,7 @@ function buildDocsSection(params: { docsPath?: string; isMinimal: boolean; readT
     "Community: https://discord.com/invite/clawd",
     "Find new skills: https://clawhub.com",
     "For OpenClaw behavior, commands, config, or architecture: consult local docs first.",
-    "When diagnosing issues, run `openclaw status` yourself when possible; only ask the user if you lack access (e.g., sandboxed).",
+    `When diagnosing issues, run \`${params.cliName} status\` yourself when possible; only ask the user if you lack access (e.g., sandboxed).`,
     "",
   ];
 }
@@ -215,7 +221,10 @@ export function buildAgentSystemPrompt(params: {
     channel: string;
   };
   memoryCitationsMode?: MemoryCitationsMode;
+  /** CLI binary name (e.g. "ironclaw" or "openclaw"). Defaults to DEFAULT_CLI_NAME. */
+  cliName?: string;
 }) {
+  const cli = params.cliName?.trim() || DEFAULT_CLI_NAME;
   const coreToolSummaries: Record<string, string> = {
     read: "Read file contents",
     write: "Create or overwrite files",
@@ -369,6 +378,7 @@ export function buildAgentSystemPrompt(params: {
     docsPath: params.docsPath,
     isMinimal,
     readToolName,
+    cliName: cli,
   });
   const workspaceNotes = (params.workspaceNotes ?? []).map((note) => note.trim()).filter(Boolean);
 
@@ -415,11 +425,11 @@ export function buildAgentSystemPrompt(params: {
     "## OpenClaw CLI Quick Reference",
     "OpenClaw is controlled via subcommands. Do not invent commands.",
     "To manage the Gateway daemon service (start/stop/restart):",
-    "- openclaw gateway status",
-    "- openclaw gateway start",
-    "- openclaw gateway stop",
-    "- openclaw gateway restart",
-    "If unsure, ask the user to run `openclaw help` (or `openclaw gateway --help`) and paste the output.",
+    `- ${cli} gateway status`,
+    `- ${cli} gateway start`,
+    `- ${cli} gateway stop`,
+    `- ${cli} gateway restart`,
+    `If unsure, ask the user to run \`${cli} help\` (or \`${cli} gateway --help\`) and paste the output.`,
     "",
     ...skillsSection,
     ...memorySection,

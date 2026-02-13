@@ -40,8 +40,8 @@ ironclaw onboard --install-daemon
 ### From source
 
 ```bash
-git clone https://github.com/kumarabhirup/openclaw-ai-sdk.git
-cd openclaw-ai-sdk
+git clone https://github.com/kumarabhirup/ironclaw.git
+cd ironclaw
 
 pnpm install
 pnpm build
