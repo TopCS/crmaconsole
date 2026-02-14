@@ -36,20 +36,23 @@ export type SseEvent = Record<string, unknown> & { type: string };
 /** Subscriber callback. Receives SSE events, or `null` when the run completes. */
 export type RunSubscriber = (event: SseEvent | null) => void;
 
+type AccumulatedPart =
+	| { type: "reasoning"; text: string }
+	| {
+			type: "tool-invocation";
+			toolCallId: string;
+			toolName: string;
+			args: Record<string, unknown>;
+			result?: Record<string, unknown>;
+			errorText?: string;
+		}
+	| { type: "text"; text: string };
+
 type AccumulatedMessage = {
 	id: string;
 	role: "assistant";
-	textParts: string[];
-	reasoningParts: string[];
-	toolCalls: Map<
-		string,
-		{
-			toolName: string;
-			args: Record<string, unknown>;
-			output?: Record<string, unknown>;
-			errorText?: string;
-		}
-	>;
+	/** Ordered parts preserving the interleaving of reasoning, tools, and text. */
+	parts: AccumulatedPart[];
 };
 
 export type ActiveRun = {
@@ -177,9 +180,7 @@ export function startRun(params: {
 		accumulated: {
 			id: `assistant-${sessionId}-${Date.now()}`,
 			role: "assistant",
-			textParts: [],
-			reasoningParts: [],
-			toolCalls: new Map(),
+			parts: [],
 		},
 		status: "running",
 		startedAt: Date.now(),
@@ -293,6 +294,29 @@ function wireChildProcess(run: ActiveRun): void {
 	let agentErrorReported = false;
 	const stderrChunks: string[] = [];
 
+	// ── Ordered accumulation tracking (preserves interleaving for persistence) ──
+	let accTextIdx = -1;
+	let accReasoningIdx = -1;
+	const accToolMap = new Map<string, number>();
+
+	const accAppendReasoning = (delta: string) => {
+		if (accReasoningIdx < 0) {
+			run.accumulated.parts.push({ type: "reasoning", text: delta });
+			accReasoningIdx = run.accumulated.parts.length - 1;
+		} else {
+			(run.accumulated.parts[accReasoningIdx] as { type: "reasoning"; text: string }).text += delta;
+		}
+	};
+
+	const accAppendText = (delta: string) => {
+		if (accTextIdx < 0) {
+			run.accumulated.parts.push({ type: "text", text: delta });
+			accTextIdx = run.accumulated.parts.length - 1;
+		} else {
+			(run.accumulated.parts[accTextIdx] as { type: "text"; text: string }).text += delta;
+		}
+	};
+
 	/** Emit an SSE event: push to buffer + notify all subscribers. */
 	const emit = (event: SseEvent) => {
 		run.eventBuffer.push(event);
@@ -312,6 +336,7 @@ function wireChildProcess(run: ActiveRun): void {
 			reasoningStarted = false;
 			statusReasoningActive = false;
 		}
+		accReasoningIdx = -1;
 	};
 
 	const closeText = () => {
@@ -319,6 +344,7 @@ function wireChildProcess(run: ActiveRun): void {
 			emit({ type: "text-end", id: currentTextId });
 			textStarted = false;
 		}
+		accTextIdx = -1;
 	};
 
 	const openStatusReasoning = (label: string) => {
@@ -333,6 +359,7 @@ function wireChildProcess(run: ActiveRun): void {
 		});
 		reasoningStarted = true;
 		statusReasoningActive = true;
+		accAppendReasoning(label);
 	};
 
 	const emitError = (message: string) => {
@@ -342,7 +369,8 @@ function wireChildProcess(run: ActiveRun): void {
 		emit({ type: "text-start", id: tid });
 		emit({ type: "text-delta", id: tid, delta: `[error] ${message}` });
 		emit({ type: "text-end", id: tid });
-		run.accumulated.textParts.push(`[error] ${message}`);
+		accAppendText(`[error] ${message}`);
+		accTextIdx = -1; // error text is self-contained
 		everSentText = true;
 	};
 
@@ -400,7 +428,7 @@ function wireChildProcess(run: ActiveRun): void {
 					id: currentReasoningId,
 					delta,
 				});
-				run.accumulated.reasoningParts.push(delta);
+				accAppendReasoning(delta);
 			}
 		}
 
@@ -419,7 +447,7 @@ function wireChildProcess(run: ActiveRun): void {
 				}
 				everSentText = true;
 				emit({ type: "text-delta", id: currentTextId, delta });
-				run.accumulated.textParts.push(delta);
+				accAppendText(delta);
 			}
 			// Media URLs
 			const mediaUrls = ev.data?.mediaUrls;
@@ -442,7 +470,7 @@ function wireChildProcess(run: ActiveRun): void {
 							id: currentTextId,
 							delta: md,
 						});
-						run.accumulated.textParts.push(md);
+						accAppendText(md);
 					}
 				}
 			}
@@ -485,10 +513,14 @@ function wireChildProcess(run: ActiveRun): void {
 					toolName,
 					input: args,
 				});
-				run.accumulated.toolCalls.set(toolCallId, {
+				// Accumulate tool start in ordered parts
+				run.accumulated.parts.push({
+					type: "tool-invocation",
+					toolCallId,
 					toolName,
 					args,
 				});
+				accToolMap.set(toolCallId, run.accumulated.parts.length - 1);
 			} else if (phase === "result") {
 				const isError = ev.data?.isError === true;
 				const result = extractToolResult(ev.data?.result);
@@ -502,8 +534,14 @@ function wireChildProcess(run: ActiveRun): void {
 						toolCallId,
 						errorText,
 					});
-					const tc = run.accumulated.toolCalls.get(toolCallId);
-					if (tc) {tc.errorText = errorText;}
+					// Update the accumulated tool part
+					const idx = accToolMap.get(toolCallId);
+					if (idx !== undefined) {
+						const part = run.accumulated.parts[idx];
+						if (part.type === "tool-invocation") {
+							part.errorText = errorText;
+						}
+					}
 				} else {
 					const output = buildToolOutput(result);
 					emit({
@@ -511,8 +549,14 @@ function wireChildProcess(run: ActiveRun): void {
 						toolCallId,
 						output,
 					});
-					const tc = run.accumulated.toolCalls.get(toolCallId);
-					if (tc) {tc.output = output;}
+					// Update the accumulated tool part
+					const idx = accToolMap.get(toolCallId);
+					if (idx !== undefined) {
+						const part = run.accumulated.parts[idx];
+						if (part.type === "tool-invocation") {
+							part.result = output;
+						}
+					}
 				}
 			}
 		}
@@ -528,11 +572,13 @@ function wireChildProcess(run: ActiveRun): void {
 			} else if (phase === "end") {
 				if (statusReasoningActive) {
 					if (ev.data?.willRetry === true) {
+						const retryDelta = "\nRetrying with compacted context...";
 						emit({
 							type: "reasoning-delta",
 							id: currentReasoningId,
-							delta: "\nRetrying with compacted context...",
+							delta: retryDelta,
 						});
+						accAppendReasoning(retryDelta);
 					} else {
 						closeReasoning();
 					}
@@ -599,7 +645,7 @@ function wireChildProcess(run: ActiveRun): void {
 					: "[error] No response from agent.";
 			emit({ type: "text-delta", id: tid, delta: errMsg });
 			emit({ type: "text-end", id: tid });
-			run.accumulated.textParts.push(errMsg);
+			accAppendText(errMsg);
 		} else {
 			closeText();
 		}
@@ -667,46 +713,24 @@ function flushPersistence(run: ActiveRun) {
 	}
 	run._lastPersistedAt = Date.now();
 
-	const text = run.accumulated.textParts.join("");
-	if (
-		!text &&
-		run.accumulated.toolCalls.size === 0 &&
-		run.accumulated.reasoningParts.length === 0
-	) {
+	const parts = run.accumulated.parts;
+	if (parts.length === 0) {
 		return; // Nothing to persist yet.
 	}
 
-	// Build parts array matching the UIMessage format the frontend expects.
-	const parts: Array<Record<string, unknown>> = [];
-
-	if (run.accumulated.reasoningParts.length > 0) {
-		parts.push({
-			type: "reasoning",
-			text: run.accumulated.reasoningParts.join(""),
-		});
-	}
-
-	for (const [toolCallId, tc] of run.accumulated.toolCalls) {
-		parts.push({
-			type: "tool-invocation",
-			toolCallId,
-			toolName: tc.toolName,
-			args: tc.args,
-			...(tc.output ? { result: tc.output } : {}),
-			...(tc.errorText ? { errorText: tc.errorText } : {}),
-		});
-	}
-
-	if (text) {
-		parts.push({ type: "text", text });
-	}
+	// Build content text from text parts for the backwards-compatible
+	// content field (used when parts are not available).
+	const text = parts
+		.filter((p): p is { type: "text"; text: string } => p.type === "text")
+		.map((p) => p.text)
+		.join("");
 
 	const isStillRunning = run.status === "running";
 	const message: Record<string, unknown> = {
 		id: run.accumulated.id,
 		role: "assistant",
 		content: text,
-		parts,
+		parts, // Ordered parts — preserves interleaving of reasoning, tools, text
 		timestamp: new Date().toISOString(),
 	};
 	if (isStillRunning) {

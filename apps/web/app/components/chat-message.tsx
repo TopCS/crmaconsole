@@ -153,10 +153,10 @@ function groupParts(parts: UIMessage["parts"]): MessageSegment[] {
 				errorText?: string;
 			};
 			// Persisted tool-invocation parts have no state field but
-			// include result/errorText to indicate completion.
+			// include result/output/errorText to indicate completion.
 			const resolvedState =
 				tp.state ??
-				(tp.errorText ? "error" : "result" in tp ? "output-available" : "input-available");
+				(tp.errorText ? "error" : ("result" in tp || "output" in tp) ? "output-available" : "input-available");
 			chain.push({
 				kind: "tool",
 				toolName:

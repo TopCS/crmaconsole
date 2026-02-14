@@ -194,6 +194,9 @@ export function spawnAgentProcess(
 /**
  * Build a flat output object from the agent's tool result so the frontend
  * can render tool output text, exit codes, etc.
+ *
+ * Passes through ALL details fields — no whitelist filtering so the UI gets
+ * the full picture (exit codes, file paths, search results, diffs, etc.).
  */
 export function buildToolOutput(
 	result?: ToolResult,
@@ -202,26 +205,9 @@ export function buildToolOutput(
 	const out: Record<string, unknown> = {};
 	if (result.text) {out.text = result.text;}
 	if (result.details) {
-		for (const key of [
-			"exitCode",
-			"status",
-			"durationMs",
-			"cwd",
-			"error",
-			"reason",
-			// Web tool fields — pass through so the UI can show favicons / domains
-			"url",
-			"finalUrl",
-			"targetUrl",
-			"query",
-			"results",
-			"citations",
-			// Edit tool fields — pass through so the UI can render inline diffs
-			"diff",
-			"firstChangedLine",
-		]) {
-			if (result.details[key] !== undefined)
-				{out[key] = result.details[key];}
+		// Pass through all details keys — don't filter so nothing is lost
+		for (const [key, value] of Object.entries(result.details)) {
+			if (value !== undefined) {out[key] = value;}
 		}
 	}
 	// If we have details but no text, synthesize a text field from the JSON so
@@ -229,7 +215,7 @@ export function buildToolOutput(
 	if (!out.text && result.details) {
 		try {
 			const json = JSON.stringify(result.details);
-			if (json.length <= 12000) {
+			if (json.length <= 50_000) {
 				out.text = json;
 			}
 		} catch {

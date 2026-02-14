@@ -205,6 +205,23 @@ function faviconUrl(domain: string): string {
 	return `https://www.google.com/s2/favicons?sz=64&domain_url=${encodeURIComponent(domain)}`;
 }
 
+/* ─── Format tool args for display ─── */
+
+/** Render tool arguments as a compact readable string. */
+function formatArgs(args: Record<string, unknown>): string {
+	const lines: string[] = [];
+	for (const [key, value] of Object.entries(args)) {
+		if (value === undefined || value === null) {continue;}
+		const str =
+			typeof value === "string"
+				? value
+				: JSON.stringify(value, null, 2);
+		lines.push(`${key}: ${str}`);
+	}
+	const joined = lines.join("\n");
+	return joined.length > 2000 ? joined.slice(0, 2000) + "\n..." : joined;
+}
+
 /* ─── Classify tool steps ─── */
 
 type StepKind =
@@ -311,9 +328,7 @@ function buildStepLabel(
 				strVal("search_query") ??
 				strVal("search") ??
 				strVal("q");
-			return q
-				? `Searching for ${q.length > 60 ? q.slice(0, 60) + "..." : q}`
-				: "Searching...";
+			return q ? `Searching for ${q}` : "Searching...";
 		}
 		case "fetch": {
 			const u =
@@ -325,7 +340,7 @@ function buildStepLabel(
 				try {
 					return `Fetching ${new URL(u).hostname}`;
 				} catch {
-					return `Fetching ${u.length > 50 ? u.slice(0, 50) + "..." : u}`;
+					return `Fetching ${u}`;
 				}
 			}
 			// Fallback: check output for the URL (web_fetch results include url/finalUrl)
@@ -336,7 +351,7 @@ function buildStepLabel(
 				try {
 					return `Fetched ${new URL(outUrl).hostname}`;
 				} catch {
-					return `Fetched ${outUrl.length > 50 ? outUrl.slice(0, 50) + "..." : outUrl}`;
+					return `Fetched ${outUrl}`;
 				}
 			}
 			return "Fetching page";
@@ -346,18 +361,14 @@ function buildStepLabel(
 			if (p) {
 				const short = p.split("/").pop() ?? p;
 				return short.startsWith("http")
-					? `Fetching ${short.slice(0, 50)}`
+					? `Fetching ${short}`
 					: `Reading ${short}`;
 			}
 			return "Reading file";
 		}
 		case "exec": {
 			const cmd = strVal("command") ?? strVal("cmd");
-			if (cmd) {
-				const short =
-					cmd.length > 60 ? cmd.slice(0, 60) + "..." : cmd;
-				return `Running: ${short}`;
-			}
+			if (cmd) {return `Running: ${cmd}`;}
 			return "Running command";
 		}
 		case "write": {
@@ -370,13 +381,30 @@ function buildStepLabel(
 		}
 		case "image":
 			return strVal("description")
-				? `Generating image: ${strVal("description")!.slice(0, 50)}`
+				? `Generating image: ${strVal("description")!}`
 				: "Generating image";
-		default:
-			return toolName
+		default: {
+			// For generic/unknown tools, build a descriptive label from args
+			const name = toolName
 				.replace(/_/g, " ")
 				.replace(/\b\w/g, (c) => c.toUpperCase())
 				.trim();
+			if (args) {
+				// Try common arg patterns for a meaningful summary
+				const desc =
+					strVal("command") ??
+					strVal("cmd") ??
+					strVal("query") ??
+					strVal("path") ??
+					strVal("url") ??
+					strVal("message") ??
+					strVal("description") ??
+					strVal("input") ??
+					strVal("text");
+				if (desc) {return `${name}: ${desc}`;}
+			}
+			return name || "Tool";
+		}
 	}
 }
 
@@ -1086,10 +1114,12 @@ function ToolStep({
 	output?: Record<string, unknown>;
 	errorText?: string;
 }) {
-	const [showOutput, setShowOutput] = useState(false);
+	const kind = classifyTool(toolName, args);
+	// Show output by default for exec/command tools — these are the most
+	// useful to see inline.  Other tools default to collapsed.
+	const [showOutput, setShowOutput] = useState(kind === "exec" || kind === "generic");
 	// Auto-expand diffs for write tool steps
 	const [showDiff, setShowDiff] = useState(true);
-	const kind = classifyTool(toolName, args);
 	const label = buildStepLabel(kind, toolName, args, output);
 	const domains =
 		kind === "search"
@@ -1149,7 +1179,7 @@ function ToolStep({
 
 			<div className="flex-1 min-w-0">
 				<div
-					className="text-[13px] leading-snug"
+					className="text-[13px] leading-snug flex items-start gap-2 flex-wrap"
 					style={{
 						color:
 							status === "running"
@@ -1157,7 +1187,23 @@ function ToolStep({
 								: "var(--color-text-secondary)",
 					}}
 				>
-					{label}
+					<span className="break-all">{label}</span>
+					{/* Exit code badge for exec tools */}
+					{kind === "exec" && status === "done" && output?.exitCode !== undefined && (
+						<span
+							className="text-[11px] font-mono px-1.5 py-0.5 rounded"
+							style={{
+								background: output.exitCode === 0
+									? "color-mix(in srgb, var(--color-success, #22c55e) 12%, transparent)"
+									: "color-mix(in srgb, var(--color-error) 12%, transparent)",
+								color: output.exitCode === 0
+									? "var(--color-success, #22c55e)"
+									: "var(--color-error)",
+							}}
+						>
+							exit {String(output.exitCode)}
+						</span>
+					)}
 				</div>
 
 				{/* Inline diff for edit/write tool steps */}
@@ -1315,10 +1361,27 @@ function ToolStep({
 					</div>
 				)}
 
-				{/* Output toggle — skip for media files, search, and diffs */}
+				{/* Args summary — show for tools with no output/diff so they're never opaque */}
+				{!outputText &&
+					!diffText &&
+					!isSingleMedia &&
+					status === "done" &&
+					args &&
+					Object.keys(args).length > 0 && (
+						<pre
+							className="mt-1 text-[11px] font-mono rounded-lg px-2.5 py-1.5 whitespace-pre-wrap break-all max-h-48 overflow-y-auto leading-relaxed"
+							style={{
+								color: "var(--color-text-muted)",
+								background: "var(--color-bg)",
+							}}
+						>
+							{formatArgs(args)}
+						</pre>
+					)}
+
+				{/* Output toggle — skip for media files and diffs only */}
 				{outputText &&
 					status === "done" &&
-					kind !== "search" &&
 					!isSingleMedia &&
 					!diffText && (
 						<div className="mt-1">
@@ -1338,15 +1401,15 @@ function ToolStep({
 							</button>
 							{showOutput && (
 								<pre
-									className="mt-1 text-[11px] font-mono rounded-lg px-2.5 py-2 overflow-x-auto whitespace-pre-wrap break-all max-h-48 overflow-y-auto leading-relaxed"
+									className="mt-1 text-[11px] font-mono rounded-lg px-2.5 py-2 overflow-x-auto whitespace-pre-wrap break-all max-h-96 overflow-y-auto leading-relaxed"
 									style={{
 										color: "var(--color-text-muted)",
 										background: "var(--color-bg)",
 									}}
 								>
-									{outputText.length > 2000
-										? outputText.slice(0, 2000) +
-											"\n..."
+									{outputText.length > 10000
+										? outputText.slice(0, 10000) +
+											"\n... (truncated)"
 										: outputText}
 								</pre>
 							)}
