@@ -50,6 +50,8 @@ type FileManagerTreeProps = {
   onNavigateUp?: () => void;
   /** Current browse directory (absolute path), or null when in workspace mode. */
   browseDir?: string | null;
+  /** Absolute path of the workspace root. Nodes matching this path are rendered as a special non-collapsible workspace entry point. */
+  workspaceRoot?: string | null;
 };
 
 // --- System file detection (client-side mirror) ---
@@ -150,6 +152,17 @@ function ChevronIcon({ open }: { open: boolean }) {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
       style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 150ms ease" }}>
       <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
+function WorkspaceGridIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="7" height="7" x="3" y="3" rx="1" />
+      <rect width="7" height="7" x="14" y="3" rx="1" />
+      <rect width="7" height="7" x="14" y="14" rx="1" />
+      <rect width="7" height="7" x="3" y="14" rx="1" />
     </svg>
   );
 }
@@ -365,6 +378,7 @@ function DraggableNode({
   onContextMenu,
   compact,
   dragOverPath,
+  workspaceRoot,
 }: {
   node: TreeNode;
   depth: number;
@@ -381,16 +395,19 @@ function DraggableNode({
   onContextMenu: (e: React.MouseEvent, node: TreeNode) => void;
   compact?: boolean;
   dragOverPath: string | null;
+  workspaceRoot?: string | null;
 }) {
+  // Workspace root in browse mode: non-expandable entry point back to workspace
+  const isWorkspaceRoot = !!workspaceRoot && node.path === workspaceRoot;
   const hasChildren = node.children && node.children.length > 0;
-  const isExpandable = hasChildren || node.type === "folder" || node.type === "object";
-  const isExpanded = expandedPaths.has(node.path);
+  const isExpandable = isWorkspaceRoot ? false : (hasChildren || node.type === "folder" || node.type === "object");
+  const isExpanded = isWorkspaceRoot ? false : expandedPaths.has(node.path);
   const isActive = activePath === node.path;
   const isSelected = selectedPath === node.path;
   const isRenaming = renamingPath === node.path;
   const isSysFile = isSystemFile(node.path);
   const isVirtual = isVirtualNode(node);
-  const isProtected = isSysFile || isVirtual;
+  const isProtected = isSysFile || isVirtual || isWorkspaceRoot;
   const isDragOver = dragOverPath === node.path && isExpandable;
 
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
@@ -465,37 +482,53 @@ function DraggableNode({
         className="w-full flex items-center gap-1.5 py-1 px-2 rounded-md text-left text-sm transition-colors duration-100 cursor-pointer select-none"
         style={{
           paddingLeft: `${depth * 16 + 8}px`,
-          background: showDropHighlight
+          background: isWorkspaceRoot
             ? "var(--color-accent-light)"
-            : isSelected
-              ? "var(--color-surface-hover)"
-              : isActive
+            : showDropHighlight
+              ? "var(--color-accent-light)"
+              : isSelected
                 ? "var(--color-surface-hover)"
-                : "transparent",
-          color: isActive || isSelected ? "var(--color-text)" : "var(--color-text-muted)",
-          outline: showDropHighlight ? "1px dashed var(--color-accent)" : "none",
+                : isActive
+                  ? "var(--color-surface-hover)"
+                  : "transparent",
+          color: isWorkspaceRoot
+            ? "var(--color-accent)"
+            : isActive || isSelected ? "var(--color-text)" : "var(--color-text-muted)",
+          outline: isWorkspaceRoot
+            ? "1.5px solid var(--color-accent)"
+            : showDropHighlight ? "1px dashed var(--color-accent)" : "none",
           outlineOffset: "-1px",
-          borderRadius: "6px",
+          borderRadius: isWorkspaceRoot ? "8px" : "6px",
+          marginTop: isWorkspaceRoot ? "2px" : undefined,
+          marginBottom: isWorkspaceRoot ? "2px" : undefined,
         }}
         onMouseEnter={(e) => {
-          if (!isActive && !isSelected && !showDropHighlight) {
+          if (isWorkspaceRoot) {
+            (e.currentTarget as HTMLElement).style.opacity = "0.8";
+          } else if (!isActive && !isSelected && !showDropHighlight) {
             (e.currentTarget as HTMLElement).style.background = "var(--color-surface-hover)";
           }
         }}
         onMouseLeave={(e) => {
-          if (!isActive && !isSelected && !showDropHighlight) {
+          if (isWorkspaceRoot) {
+            (e.currentTarget as HTMLElement).style.opacity = "1";
+          } else if (!isActive && !isSelected && !showDropHighlight) {
             (e.currentTarget as HTMLElement).style.background = "transparent";
           }
         }}
       >
-        {/* Expand/collapse chevron */}
-        <span className="flex-shrink-0 w-4 h-4 flex items-center justify-center" style={{ opacity: isExpandable ? 1 : 0 }}>
+        {/* Expand/collapse chevron – intercept click so it only toggles without navigating */}
+        <span
+          className="flex-shrink-0 w-4 h-4 flex items-center justify-center"
+          style={{ opacity: isExpandable ? 1 : 0, cursor: isExpandable ? "pointer" : undefined }}
+          onClick={isExpandable ? (e) => { e.stopPropagation(); onToggleExpand(node.path); } : undefined}
+        >
           {isExpandable && <ChevronIcon open={isExpanded} />}
         </span>
 
         {/* Icon */}
-        <span className="flex-shrink-0 flex items-center" style={{ color: typeColor(node) }}>
-          <NodeIcon node={node} open={isExpanded} />
+        <span className="flex-shrink-0 flex items-center" style={{ color: isWorkspaceRoot ? "var(--color-accent)" : typeColor(node) }}>
+          {isWorkspaceRoot ? <WorkspaceGridIcon /> : <NodeIcon node={node} open={isExpanded} />}
         </span>
 
         {/* Label or rename input */}
@@ -509,8 +542,16 @@ function DraggableNode({
           <span className="truncate flex-1">{node.name.replace(/\.md$/, "")}</span>
         )}
 
-        {/* Lock badge for system/virtual files */}
-        {isProtected && !compact && (
+        {/* Workspace badge for the workspace root entry point */}
+        {isWorkspaceRoot && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 font-medium"
+            style={{ background: "var(--color-accent)", color: "white" }}>
+            workspace
+          </span>
+        )}
+
+        {/* Lock badge for system/virtual files (skip for workspace root -- it has its own badge) */}
+        {isProtected && !isWorkspaceRoot && !compact && (
           <span className="flex-shrink-0 ml-1">
             <LockBadge />
           </span>
@@ -549,6 +590,7 @@ function DraggableNode({
               onContextMenu={onContextMenu}
               compact={compact}
               dragOverPath={dragOverPath}
+              workspaceRoot={workspaceRoot}
             />
           ))}
         </div>
@@ -617,7 +659,7 @@ function flattenVisible(tree: TreeNode[], expanded: Set<string>): TreeNode[] {
 
 // --- Main Exported Component ---
 
-export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact, parentDir, onNavigateUp, browseDir: _browseDir }: FileManagerTreeProps) {
+export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact, parentDir, onNavigateUp, browseDir: _browseDir, workspaceRoot }: FileManagerTreeProps) {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set());
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
@@ -1064,6 +1106,7 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
             onContextMenu={handleContextMenu}
             compact={compact}
             dragOverPath={dragOverPath}
+            workspaceRoot={workspaceRoot}
           />
         ))}
       </div>

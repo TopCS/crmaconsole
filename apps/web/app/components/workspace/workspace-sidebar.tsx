@@ -27,6 +27,8 @@ type WorkspaceSidebarProps = {
 	onGoHome?: () => void;
 	/** Called when a file/folder is selected from the search dropdown. */
 	onFileSearchSelect?: (item: SuggestItem) => void;
+	/** Absolute path of the workspace root folder, used to render it as a special entry in browse mode. */
+	workspaceRoot?: string | null;
 };
 
 function WorkspaceLogo() {
@@ -398,6 +400,7 @@ export function WorkspaceSidebar({
 	onNavigateUp,
 	onGoHome,
 	onFileSearchSelect,
+	workspaceRoot,
 }: WorkspaceSidebarProps) {
 	const isBrowsing = browseDir != null;
 
@@ -507,15 +510,16 @@ export function WorkspaceSidebar({
 						/>
 					</div>
 				) : (
-					<FileManagerTree
-						tree={tree}
-						activePath={activePath}
-						onSelect={onSelect}
-						onRefresh={onRefresh}
-						parentDir={parentDir}
-						onNavigateUp={onNavigateUp}
-						browseDir={browseDir}
-					/>
+				<FileManagerTree
+					tree={tree}
+					activePath={activePath}
+					onSelect={onSelect}
+					onRefresh={onRefresh}
+					parentDir={parentDir}
+					onNavigateUp={onNavigateUp}
+					browseDir={browseDir}
+					workspaceRoot={workspaceRoot}
+				/>
 				)}
 			</div>
 
@@ -525,12 +529,13 @@ export function WorkspaceSidebar({
 				style={{ borderColor: "var(--color-border)" }}
 			>
 				<a
-					href="/"
+					href="https://ironclaw.sh"
+					target="_blank"
+					rel="noopener noreferrer"
 					className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm"
 					style={{ color: "var(--color-text-muted)" }}
 				>
-					<HomeIcon />
-					Home
+					ironclaw.sh
 				</a>
 				<ThemeToggle />
 			</div>

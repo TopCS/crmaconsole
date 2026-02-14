@@ -7,10 +7,11 @@ import {
 	useRef,
 } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
+import type { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Suggestion from "@tiptap/suggestion";
-import { Extension, type Editor } from "@tiptap/core";
+import { Extension } from "@tiptap/core";
 import { FileMentionNode, chatFileMentionPluginKey } from "./file-mention-extension";
 import {
 	createFileMentionRenderer,
@@ -193,6 +194,10 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(
 		const submitRef = useRef(onSubmit);
 		submitRef.current = onSubmit;
 
+		// Ref to access the TipTap editor from within ProseMirror's handleDOMEvents
+		// (the handlers are defined at useEditor() call time, before the editor exists).
+		const editorRefInternal = useRef<Editor | null>(null);
+
 		const editor = useEditor({
 			immediatelyRender: false,
 			extensions: [
@@ -225,11 +230,60 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(
 					}
 					return false;
 				},
+				// Handle drag-and-drop of files from the sidebar.
+				// Using handleDOMEvents ensures our handler runs BEFORE
+				// ProseMirror's built-in drop processing, which would
+				// otherwise consume the event or insert the text/plain
+				// fallback data as raw text.
+				handleDOMEvents: {
+					dragover: (_view, event) => {
+						const de = event;
+						if (de.dataTransfer?.types.includes("application/x-file-mention")) {
+							de.preventDefault();
+							de.dataTransfer.dropEffect = "copy";
+							return true;
+						}
+						return false;
+					},
+					drop: (_view, event) => {
+						const de = event;
+						const data = de.dataTransfer?.getData("application/x-file-mention");
+						if (!data) {return false;}
+
+						de.preventDefault();
+						de.stopPropagation();
+
+						try {
+							const { name, path } = JSON.parse(data) as { name: string; path: string };
+							if (name && path) {
+								editorRefInternal.current
+									?.chain()
+									.focus()
+									.insertContent([
+										{
+											type: "chatFileMention",
+											attrs: { label: name, path },
+										},
+										{ type: "text", text: " " },
+									])
+									.run();
+							}
+						} catch {
+							// ignore malformed data
+						}
+						return true;
+					},
+				},
 			},
 			onUpdate: ({ editor: ed }) => {
 				onChange?.(ed.isEmpty);
 			},
 		});
+
+		// Keep internal ref in sync so handleDOMEvents handlers can access the editor
+		useEffect(() => {
+			editorRefInternal.current = editor ?? null;
+		}, [editor]);
 
 		// Handle Enter-to-submit via a keydown listener on the editor DOM
 		useEffect(() => {
@@ -253,53 +307,6 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(
 			const el = editor.view.dom;
 			el.addEventListener("keydown", handleKeyDown);
 			return () => el.removeEventListener("keydown", handleKeyDown);
-		}, [editor]);
-
-		// Handle drag-and-drop of files from the sidebar
-		useEffect(() => {
-			if (!editor) {return;}
-			const el = editor.view.dom;
-
-			const handleDragOver = (e: DragEvent) => {
-				if (e.dataTransfer?.types.includes("application/x-file-mention")) {
-					e.preventDefault();
-					e.dataTransfer.dropEffect = "copy";
-				}
-			};
-
-			const handleDrop = (e: DragEvent) => {
-				const data = e.dataTransfer?.getData("application/x-file-mention");
-				if (!data) {return;}
-
-				e.preventDefault();
-				e.stopPropagation();
-
-				try {
-					const { name, path } = JSON.parse(data);
-					if (name && path) {
-						editor
-							.chain()
-							.focus()
-							.insertContent([
-								{
-									type: "chatFileMention",
-									attrs: { label: name, path },
-								},
-								{ type: "text", text: " " },
-							])
-							.run();
-					}
-				} catch {
-					// ignore malformed data
-				}
-			};
-
-			el.addEventListener("dragover", handleDragOver);
-			el.addEventListener("drop", handleDrop);
-			return () => {
-				el.removeEventListener("dragover", handleDragOver);
-				el.removeEventListener("drop", handleDrop);
-			};
 		}, [editor]);
 
 		// Disable/enable editor

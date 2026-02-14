@@ -6,6 +6,7 @@ type BreadcrumbsProps = {
 };
 
 export function Breadcrumbs({ path, onNavigate }: BreadcrumbsProps) {
+  const isAbsolute = path.startsWith("/");
   const segments = path.split("/").filter(Boolean);
 
   return (
@@ -30,7 +31,7 @@ export function Breadcrumbs({ path, onNavigate }: BreadcrumbsProps) {
       </button>
 
       {segments.map((segment, idx) => {
-        const partialPath = segments.slice(0, idx + 1).join("/");
+        const partialPath = (isAbsolute ? "/" : "") + segments.slice(0, idx + 1).join("/");
         const isLast = idx === segments.length - 1;
 
         return (

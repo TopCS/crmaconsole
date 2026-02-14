@@ -443,6 +443,8 @@ type ChatPanelProps = {
 	fileContext?: FileContext;
 	/** Compact mode for workspace sidebar (smaller UI, built-in session tabs). */
 	compact?: boolean;
+	/** Override the header title when a session is active (e.g. show the session's actual title). */
+	sessionTitle?: string;
 	/** Called when file content may have changed after agent edits. */
 	onFileChanged?: (newContent: string) => void;
 	/** Called when active session changes (for external sidebar highlighting). */
@@ -456,6 +458,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 		{
 			fileContext,
 			compact,
+			sessionTitle,
 			onFileChanged,
 			onActiveSessionChange,
 			onSessionsChange,
@@ -1155,7 +1158,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 									}}
 								>
 									{currentSessionId
-										? "Chat Session"
+										? (sessionTitle || "Chat Session")
 										: "New Chat"}
 								</h2>
 								<p
@@ -1383,6 +1386,26 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 								background:
 									"var(--color-chat-input-bg)",
 								border: "1px solid var(--color-border)",
+							}}
+							onDragOver={(e) => {
+								if (e.dataTransfer?.types.includes("application/x-file-mention")) {
+									e.preventDefault();
+									e.dataTransfer.dropEffect = "copy";
+								}
+							}}
+							onDrop={(e) => {
+								const data = e.dataTransfer?.getData("application/x-file-mention");
+								if (!data) {return;}
+								e.preventDefault();
+								e.stopPropagation();
+								try {
+									const { name, path } = JSON.parse(data) as { name: string; path: string };
+									if (name && path) {
+										editorRef.current?.insertFileMention(name, path);
+									}
+								} catch {
+									// ignore malformed data
+								}
 							}}
 						>
 							<ChatEditor

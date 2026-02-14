@@ -13,6 +13,7 @@ import { CodeViewer } from "../components/workspace/code-viewer";
 import { MediaViewer, detectMediaType, type MediaType } from "../components/workspace/media-viewer";
 import { DatabaseViewer } from "../components/workspace/database-viewer";
 import { Breadcrumbs } from "../components/workspace/breadcrumbs";
+import { ChatSessionsSidebar } from "../components/workspace/chat-sessions-sidebar";
 import { EmptyState } from "../components/workspace/empty-state";
 import { ReportViewer } from "../components/charts/report-viewer";
 import { ChatPanel, type ChatPanelHandle } from "../components/chat-panel";
@@ -466,27 +467,13 @@ function WorkspacePageInner() {
     [loadContent, router, cronJobs, browseDir, workspaceRoot, openclawDir, setBrowseDir],
   );
 
-  // Build the enhanced tree: real tree + Chats + Cron virtual folders at the bottom
+  // Build the enhanced tree: real tree + Cron virtual folder at the bottom
+  // (Chat sessions live in the right sidebar, not in the tree.)
   // In browse mode, skip virtual folders (they only apply to workspace mode)
   const enhancedTree = useMemo(() => {
     if (browseDir) {
       return tree;
     }
-
-    const chatChildren: TreeNode[] = sessions.map((s) => ({
-      name: s.title || "Untitled chat",
-      path: `~chats/${s.id}`,
-      type: "file" as const,
-      virtual: true,
-    }));
-
-    const chatsFolder: TreeNode = {
-      name: "Chats",
-      path: "~chats",
-      type: "folder",
-      virtual: true,
-      children: chatChildren.length > 0 ? chatChildren : undefined,
-    };
 
     const cronStatusIcon = (job: CronJob) => {
       if (!job.enabled) {return "\u25CB";} // circle outline
@@ -511,8 +498,8 @@ function WorkspacePageInner() {
       children: cronChildren.length > 0 ? cronChildren : undefined,
     };
 
-    return [...tree, chatsFolder, cronFolder];
-  }, [tree, sessions, cronJobs, browseDir]);
+    return [...tree, cronFolder];
+  }, [tree, cronJobs, browseDir]);
 
   // Compute the effective parentDir for ".." navigation.
   // In browse mode: use browseParentDir from the API.
@@ -650,12 +637,26 @@ function WorkspacePageInner() {
         setContent({ kind: "none" });
         return;
       }
+
+      // Absolute paths (browse mode): navigate the sidebar directly.
+      // Intermediate parent folders aren't in the browse-mode tree, so
+      // resolveNode would fail — call setBrowseDir to update the sidebar.
+      if (isAbsolutePath(path)) {
+        const name = path.split("/").pop() || path;
+        setBrowseDir(path);
+        setActivePath(path);
+        setContent({ kind: "directory", node: { name, path, type: "folder" } });
+        return;
+      }
+
+      // Relative paths (workspace mode): resolve and navigate via handleNodeSelect
+      // so virtual paths, chat context, etc. are all handled properly.
       const node = resolveNode(tree, path);
       if (node) {
-        void loadContent(node);
+        handleNodeSelect(node);
       }
     },
-    [tree, loadContent],
+    [tree, handleNodeSelect, setBrowseDir],
   );
 
   // Navigate to an object by name (used by relation links)
@@ -758,6 +759,13 @@ function WorkspacePageInner() {
     router.replace("/workspace", { scroll: false });
   }, [router]);
 
+  // Derive the active session's title for the header / right sidebar
+  const activeSessionTitle = useMemo(() => {
+    if (!activeSessionId) {return undefined;}
+    const s = sessions.find((s) => s.id === activeSessionId);
+    return s?.title || undefined;
+  }, [activeSessionId, sessions]);
+
   // Whether to show the main ChatPanel (no file/content selected)
   const showMainChat = !activePath || content.kind === "none";
 
@@ -777,6 +785,7 @@ function WorkspacePageInner() {
         onNavigateUp={handleNavigateUp}
         onGoHome={handleGoHome}
         onFileSearchSelect={handleFileSearchSelect}
+        workspaceRoot={workspaceRoot}
       />
 
       {/* Main content */}
@@ -833,15 +842,32 @@ function WorkspacePageInner() {
         <div className="flex-1 flex min-h-0">
           {showMainChat ? (
             /* Main chat view (default when no file is selected) */
-            <div className="flex-1 flex flex-col min-w-0">
-              <ChatPanel
-                ref={chatRef}
-                onActiveSessionChange={(id) => {
-                  setActiveSessionId(id);
+            <>
+              <div className="flex-1 flex flex-col min-w-0">
+                <ChatPanel
+                  ref={chatRef}
+                  sessionTitle={activeSessionTitle}
+                  onActiveSessionChange={(id) => {
+                    setActiveSessionId(id);
+                  }}
+                  onSessionsChange={refreshSessions}
+                />
+              </div>
+              <ChatSessionsSidebar
+                sessions={sessions}
+                activeSessionId={activeSessionId}
+                activeSessionTitle={activeSessionTitle}
+                onSelectSession={(sessionId) => {
+                  setActiveSessionId(sessionId);
+                  void chatRef.current?.loadSession(sessionId);
                 }}
-                onSessionsChange={refreshSessions}
+                onNewSession={() => {
+                  setActiveSessionId(null);
+                  void chatRef.current?.newSession();
+                  router.replace("/workspace", { scroll: false });
+                }}
               />
-            </div>
+            </>
           ) : (
             <>
               {/* File content area */}
