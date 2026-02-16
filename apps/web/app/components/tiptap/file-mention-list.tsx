@@ -531,7 +531,16 @@ export function createFileMentionRenderer() {
 					root = null;
 					return true;
 				}
-				return componentRef.current?.onKeyDown(props) ?? false;
+				const handled = componentRef.current?.onKeyDown(props) ?? false;
+				if (handled) {
+					// Stop the chat-editor's DOM keydown listener from
+					// also firing and submitting the message. By the time
+					// that listener runs, the suggestion command has already
+					// executed and the plugin state is inactive, so the
+					// `suggestState.active` guard would not catch it.
+					props.event.stopImmediatePropagation();
+				}
+				return handled;
 			},
 
 			onExit: () => {

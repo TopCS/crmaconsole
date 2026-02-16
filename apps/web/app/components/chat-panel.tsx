@@ -485,7 +485,6 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 			string | null
 		>(null);
 		const [loadingSession, setLoadingSession] = useState(false);
-		const [startingNewSession, setStartingNewSession] = useState(false);
 		const messagesEndRef = useRef<HTMLDivElement>(null);
 
 		// ── Attachment state ──
@@ -1116,7 +1115,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 			],
 		);
 
-	const handleNewSession = useCallback(async () => {
+	const handleNewSession = useCallback(() => {
 		reconnectAbortRef.current?.abort();
 		void stop();
 			setIsReconnecting(false);
@@ -1128,20 +1127,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 			isFirstFileMessageRef.current = true;
 			newSessionPendingRef.current = false;
 			setQueuedMessages([]);
-
-			if (!filePath) {
-				setStartingNewSession(true);
-				try {
-					await fetch("/api/new-session", {
-						method: "POST",
-					});
-				} catch (err) {
-					console.error("Failed to send /new:", err);
-				} finally {
-					setStartingNewSession(false);
-				}
-			}
-		}, [setMessages, onActiveSessionChange, filePath, stop]);
+		}, [setMessages, onActiveSessionChange, stop]);
 
 		// Keep the ref in sync so handleEditorSubmit can call it
 		handleNewSessionRef.current = handleNewSession;
@@ -1247,11 +1233,9 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 
 		// ── Status label ──
 
-		const statusLabel = startingNewSession
-			? "Starting new session..."
-			: loadingSession
-				? "Loading session..."
-				: isReconnecting
+		const statusLabel = loadingSession
+			? "Loading session..."
+			: isReconnecting
 					? "Resuming stream..."
 					: status === "ready"
 						? "Ready"
@@ -1625,10 +1609,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 											? "Add a message or send files..."
 											: "Type @ to mention files..."
 								}
-								disabled={
-									loadingSession ||
-									startingNewSession
-								}
+								disabled={loadingSession}
 								compact={compact}
 							/>
 
@@ -1710,8 +1691,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 										(editorEmpty &&
 											attachedFiles.length ===
 												0) ||
-										loadingSession ||
-										startingNewSession
+										loadingSession
 									}
 									className={`${compact ? "w-6 h-6" : "w-7 h-7"} rounded-full flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed`}
 									style={{

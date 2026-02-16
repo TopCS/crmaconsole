@@ -710,12 +710,14 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
   const [activeNode, setActiveNode] = useState<TreeNode | null>(null);
 
   // Track pointer position during @dnd-kit drags for cross-component drops.
-  // Capture-phase listener on window works even when @dnd-kit has pointer capture.
+  // Installed synchronously in handleDragStart (not useEffect) to avoid
+  // missing early pointer moves. Capture-phase on window fires before
+  // @dnd-kit's own document-level listener.
   const pointerPosRef = useRef({ x: 0, y: 0 });
-  useEffect(() => {
-    if (!activeNode) {return;}
+  const pointerListenerRef = useRef<((e: PointerEvent) => void) | null>(null);
 
-    const onPointerMove = (e: PointerEvent) => {
+  const installPointerTracker = useCallback(() => {
+    const handler = (e: PointerEvent) => {
       pointerPosRef.current = { x: e.clientX, y: e.clientY };
 
       // Toggle visual drop indicator on external chat drop target
@@ -729,14 +731,20 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
         prev.removeAttribute("data-drag-hover");
       }
     };
+    pointerListenerRef.current = handler;
+    window.addEventListener("pointermove", handler, true);
+  }, []);
 
-    window.addEventListener("pointermove", onPointerMove, true);
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove, true);
-      // Clean up any lingering highlight
-      document.querySelector("[data-drag-hover]")?.removeAttribute("data-drag-hover");
-    };
-  }, [activeNode]);
+  const removePointerTracker = useCallback(() => {
+    if (pointerListenerRef.current) {
+      window.removeEventListener("pointermove", pointerListenerRef.current, true);
+      pointerListenerRef.current = null;
+    }
+    document.querySelector("[data-drag-hover]")?.removeAttribute("data-drag-hover");
+  }, []);
+
+  // Clean up on unmount
+  useEffect(() => removePointerTracker, [removePointerTracker]);
 
   // Context menu state
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; target: ContextMenuTarget } | null>(null);
@@ -781,8 +789,11 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const data = event.active.data.current as { node: TreeNode } | undefined;
-    if (data?.node) {setActiveNode(data.node);}
-  }, []);
+    if (data?.node) {
+      setActiveNode(data.node);
+      installPointerTracker();
+    }
+  }, [installPointerTracker]);
 
   const handleDragOver = useCallback((event: DragOverEvent) => {
     const overData = event.over?.data.current as { node?: TreeNode; rootDrop?: boolean } | undefined;
@@ -811,13 +822,27 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
     async (event: DragEndEvent) => {
       setActiveNode(null);
       setDragOverPath(null);
+      removePointerTracker();
 
       const activeData = event.active.data.current as { node: TreeNode } | undefined;
-      const overData = event.over?.data.current as { node?: TreeNode; rootDrop?: boolean } | undefined;
 
       if (!activeData?.node) {return;}
 
       const source = activeData.node;
+
+      // Check for external drop targets FIRST (e.g. chat input).
+      // closestCenter always returns a droppable even when the pointer is
+      // far outside the tree, so we can't rely on `event.over === null`.
+      if (onExternalDrop) {
+        const { x, y } = pointerPosRef.current;
+        const el = document.elementFromPoint(x, y);
+        if (el?.closest("[data-chat-drop-target]")) {
+          onExternalDrop(source);
+          return;
+        }
+      }
+
+      const overData = event.over?.data.current as { node?: TreeNode; rootDrop?: boolean } | undefined;
 
       // Drop onto root level
       if (overData?.rootDrop) {
@@ -830,17 +855,7 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
         return;
       }
 
-      // No @dnd-kit droppable: check for external drop targets (e.g. chat input)
-      if (!overData?.node) {
-        if (onExternalDrop) {
-          const { x, y } = pointerPosRef.current;
-          const el = document.elementFromPoint(x, y);
-          if (el?.closest("[data-chat-drop-target]")) {
-            onExternalDrop(source);
-          }
-        }
-        return;
-      }
+      if (!overData?.node) {return;}
 
       const target = overData.node;
 
@@ -858,14 +873,14 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
         onRefresh();
       }
     },
-    [onRefresh, onExternalDrop],
+    [onRefresh, onExternalDrop, removePointerTracker],
   );
 
   const handleDragCancel = useCallback(() => {
     setActiveNode(null);
     setDragOverPath(null);
-    document.querySelector("[data-drag-hover]")?.removeAttribute("data-drag-hover");
-  }, []);
+    removePointerTracker();
+  }, [removePointerTracker]);
 
   // Context menu handlers
   const handleContextMenu = useCallback((e: React.MouseEvent, node: TreeNode) => {
@@ -1212,8 +1227,8 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
         <RootDropZone isDragging={!!activeNode} />
       </div>
 
-      {/* Drag overlay (ghost) */}
-      <DragOverlay dropAnimation={null}>
+      {/* Drag overlay (ghost) — pointer-events:none so elementFromPoint sees through it */}
+      <DragOverlay dropAnimation={null} style={{ pointerEvents: "none" }}>
         {activeNode ? <DragOverlayContent node={activeNode} /> : null}
       </DragOverlay>
 
