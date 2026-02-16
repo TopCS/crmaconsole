@@ -1298,6 +1298,8 @@ function ObjectView({
           statuses={data.statuses}
           members={members}
           relationLabels={data.relationLabels}
+          onEntryClick={onOpenEntry ? (entryId) => onOpenEntry(data.object.name, entryId) : undefined}
+          onRefresh={onRefreshObject}
         />
       ) : (
         <ObjectTable
