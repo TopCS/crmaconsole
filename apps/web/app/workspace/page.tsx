@@ -91,7 +91,8 @@ type ContentState =
   | { kind: "report"; reportPath: string; filename: string }
   | { kind: "directory"; node: TreeNode }
   | { kind: "cron-dashboard" }
-  | { kind: "cron-job"; jobId: string; job: CronJob };
+  | { kind: "cron-job"; jobId: string; job: CronJob }
+  | { kind: "duckdb-missing" };
 
 type WebSession = {
   id: string;
@@ -331,6 +332,11 @@ function WorkspacePageInner() {
           const name = objectNameFromPath(node.path);
           const res = await fetch(`/api/workspace/objects/${encodeURIComponent(name)}`);
           if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            if (errData.code === "DUCKDB_NOT_INSTALLED") {
+              setContent({ kind: "duckdb-missing" });
+              return;
+            }
             setContent({ kind: "none" });
             return;
           }
@@ -629,6 +635,25 @@ function WorkspacePageInner() {
       }
     }
   }, [tree, treeLoading, searchParams, loadContent]);
+
+  // Handle ?send= URL parameter: open a new chat session and auto-send the message.
+  // Used by the "Install DuckDB" button and similar in-app triggers.
+  useEffect(() => {
+    const sendParam = searchParams.get("send");
+    if (!sendParam) {return;}
+
+    // Clear the send param from the URL immediately
+    router.replace("/workspace", { scroll: false });
+
+    // Show the main chat (clear any active file/content)
+    setActivePath(null);
+    setContent({ kind: "none" });
+
+    // Give ChatPanel a frame to mount, then send the message
+    requestAnimationFrame(() => {
+      void chatRef.current?.sendNewMessage(sendParam);
+    });
+  }, [searchParams, router]);
 
   const handleBreadcrumbNavigate = useCallback(
     (path: string) => {
@@ -1095,6 +1120,9 @@ function ContentRenderer({
           onBack={onBackToCronDashboard}
         />
       );
+
+    case "duckdb-missing":
+      return <DuckDBMissing />;
 
     case "none":
     default:
