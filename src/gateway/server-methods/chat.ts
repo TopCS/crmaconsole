@@ -16,6 +16,8 @@ import { INTERNAL_MESSAGE_CHANNEL } from "../../utils/message-channel.js";
 import {
   abortChatRunById,
   abortChatRunsForSessionKey,
+  type ChatAbortControllerEntry,
+  type ChatAbortOps,
   isChatStopCommandText,
   resolveChatRunExpiresAtMs,
 } from "../chat-abort.js";
@@ -50,6 +52,14 @@ type TranscriptAppendResult = {
 };
 
 type AppendMessageArg = Parameters<SessionManager["appendMessage"]>[0];
+type AbortOrigin = "rpc" | "stop-command";
+
+type AbortedPartialSnapshot = {
+  runId: string;
+  sessionId: string;
+  text: string;
+  abortOrigin: AbortOrigin;
+};
 
 function stripDisallowedChatControlChars(message: string): string {
   let output = "";
@@ -117,6 +127,24 @@ function ensureTranscriptFile(params: { transcriptPath: string; sessionId: strin
   }
 }
 
+function transcriptHasIdempotencyKey(transcriptPath: string, idempotencyKey: string): boolean {
+  try {
+    const lines = fs.readFileSync(transcriptPath, "utf-8").split(/\r?\n/);
+    for (const line of lines) {
+      if (!line.trim()) {
+        continue;
+      }
+      const parsed = JSON.parse(line) as { message?: { idempotencyKey?: unknown } };
+      if (parsed?.message?.idempotencyKey === idempotencyKey) {
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function appendAssistantTranscriptMessage(params: {
   message: string;
   label?: string;
@@ -125,6 +153,12 @@ function appendAssistantTranscriptMessage(params: {
   sessionFile?: string;
   agentId?: string;
   createIfMissing?: boolean;
+  idempotencyKey?: string;
+  abortMeta?: {
+    aborted: true;
+    origin: AbortOrigin;
+    runId: string;
+  };
 }): TranscriptAppendResult {
   const transcriptPath = resolveTranscriptPath({
     sessionId: params.sessionId,
@@ -147,6 +181,10 @@ function appendAssistantTranscriptMessage(params: {
     if (!ensured.ok) {
       return { ok: false, error: ensured.error ?? "failed to create transcript file" };
     }
+  }
+
+  if (params.idempotencyKey && transcriptHasIdempotencyKey(transcriptPath, params.idempotencyKey)) {
+    return { ok: true };
   }
 
   const now = Date.now();
@@ -177,6 +215,16 @@ function appendAssistantTranscriptMessage(params: {
     api: "openai-responses",
     provider: "openclaw",
     model: "gateway-injected",
+    ...(params.idempotencyKey ? { idempotencyKey: params.idempotencyKey } : {}),
+    ...(params.abortMeta
+      ? {
+          openclawAbort: {
+            aborted: true,
+            origin: params.abortMeta.origin,
+            runId: params.abortMeta.runId,
+          },
+        }
+      : {}),
   };
 
   try {
@@ -367,25 +415,19 @@ export const chatHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const { sessionKey, runId } = params as {
+    const { sessionKey: rawSessionKey, runId } = params as {
       sessionKey: string;
       runId?: string;
     };
 
-    const ops = {
-      chatAbortControllers: context.chatAbortControllers,
-      chatRunBuffers: context.chatRunBuffers,
-      chatDeltaSentAt: context.chatDeltaSentAt,
-      chatAbortedRuns: context.chatAbortedRuns,
-      removeChatRun: context.removeChatRun,
-      agentRunSeq: context.agentRunSeq,
-      broadcast: context.broadcast,
-      nodeSendToSession: context.nodeSendToSession,
-    };
+    const ops = createChatAbortOps(context);
 
     if (!runId) {
-      const res = abortChatRunsForSessionKey(ops, {
-        sessionKey,
+      const res = abortChatRunsForSessionKeyWithPartials({
+        context,
+        ops,
+        sessionKey: rawSessionKey,
+        abortOrigin: "rpc",
         stopReason: "rpc",
       });
       respond(true, { ok: true, aborted: res.aborted, runIds: res.runIds });
@@ -397,7 +439,7 @@ export const chatHandlers: GatewayRequestHandlers = {
       respond(true, { ok: true, aborted: false, runIds: [] });
       return;
     }
-    if (active.sessionKey !== sessionKey) {
+    if (active.sessionKey !== rawSessionKey) {
       respond(
         false,
         undefined,
@@ -406,11 +448,26 @@ export const chatHandlers: GatewayRequestHandlers = {
       return;
     }
 
+    const partialText = context.chatRunBuffers.get(runId);
     const res = abortChatRunById(ops, {
       runId,
-      sessionKey,
+      sessionKey: rawSessionKey,
       stopReason: "rpc",
     });
+    if (res.aborted && partialText && partialText.trim()) {
+      persistAbortedPartials({
+        context,
+        sessionKey: rawSessionKey,
+        snapshots: [
+          {
+            runId,
+            sessionId: active.sessionId,
+            text: partialText,
+            abortOrigin: "rpc",
+          },
+        ],
+      });
+    }
     respond(true, {
       ok: true,
       aborted: res.aborted,
@@ -505,19 +562,13 @@ export const chatHandlers: GatewayRequestHandlers = {
     }
 
     if (stopCommand) {
-      const res = abortChatRunsForSessionKey(
-        {
-          chatAbortControllers: context.chatAbortControllers,
-          chatRunBuffers: context.chatRunBuffers,
-          chatDeltaSentAt: context.chatDeltaSentAt,
-          chatAbortedRuns: context.chatAbortedRuns,
-          removeChatRun: context.removeChatRun,
-          agentRunSeq: context.agentRunSeq,
-          broadcast: context.broadcast,
-          nodeSendToSession: context.nodeSendToSession,
-        },
-        { sessionKey: rawSessionKey, stopReason: "stop" },
-      );
+      const res = abortChatRunsForSessionKeyWithPartials({
+        context,
+        ops: createChatAbortOps(context),
+        sessionKey: rawSessionKey,
+        abortOrigin: "stop-command",
+        stopReason: "stop",
+      });
       respond(true, { ok: true, aborted: res.aborted, runIds: res.runIds });
       return;
     }
