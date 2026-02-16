@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { safeResolvePath, resolveDenchRoot } from "@/lib/workspace";
+import { safeResolvePath, resolveWorkspaceRoot } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -57,7 +57,7 @@ function resolveFile(path: string): string | null {
 	if (resolved) {return resolved;}
 
 	// 3. Try common subdirectories in case the path is a bare filename
-	const root = resolveDenchRoot();
+	const root = resolveWorkspaceRoot();
 	if (!root) {return null;}
 	const rootAbs = resolve(root);
 	const basename = path.split("/").pop() ?? path;

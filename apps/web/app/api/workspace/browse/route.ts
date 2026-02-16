@@ -1,6 +1,6 @@
 import { readdirSync, type Dirent } from "node:fs";
 import { join, dirname, resolve } from "node:path";
-import { resolveDenchRoot } from "@/lib/workspace";
+import { resolveWorkspaceRoot } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -72,9 +72,9 @@ export async function GET(req: Request) {
 	const url = new URL(req.url);
 	let dir = url.searchParams.get("dir");
 
-	// Default to the dench workspace root
+	// Default to the workspace root
 	if (!dir) {
-		dir = resolveDenchRoot();
+		dir = resolveWorkspaceRoot();
 	}
 
 	if (!dir) {

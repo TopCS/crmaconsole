@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { resolveDenchRoot } from "@/lib/workspace";
+import { resolveWorkspaceRoot } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,7 +27,7 @@ export type WorkspaceContext = {
 
 /**
  * Parse workspace_context.yaml with basic YAML extraction.
- * Handles the specific structure defined by the Dench skill.
+ * Handles the specific structure defined by the workspace skill.
  */
 function parseWorkspaceContext(content: string): WorkspaceContext {
   const ctx: WorkspaceContext = { exists: true };
@@ -96,7 +96,7 @@ function parseWorkspaceContext(content: string): WorkspaceContext {
 }
 
 export async function GET() {
-  const root = resolveDenchRoot();
+  const root = resolveWorkspaceRoot();
   if (!root) {
     return Response.json({ exists: false } satisfies WorkspaceContext);
   }

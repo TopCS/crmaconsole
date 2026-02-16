@@ -31,7 +31,7 @@ export async function GET(req: Request) {
  * POST /api/workspace/file
  * Body: { path: string, content: string }
  *
- * Writes a file to the dench workspace. Creates parent directories as needed.
+ * Writes a file to the workspace. Creates parent directories as needed.
  */
 export async function POST(req: Request) {
   let body: { path?: string; content?: string };
@@ -74,7 +74,7 @@ export async function POST(req: Request) {
  * DELETE /api/workspace/file
  * Body: { path: string }
  *
- * Deletes a file or folder from the dench workspace.
+ * Deletes a file or folder from the workspace.
  * System files (.object.yaml, workspace.duckdb, etc.) are protected.
  */
 export async function DELETE(req: Request) {

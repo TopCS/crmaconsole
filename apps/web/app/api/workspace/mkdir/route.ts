@@ -8,7 +8,7 @@ export const runtime = "nodejs";
  * POST /api/workspace/mkdir
  * Body: { path: string }
  *
- * Creates a new directory in the dench workspace.
+ * Creates a new directory in the workspace.
  */
 export async function POST(req: Request) {
   let body: { path?: string };

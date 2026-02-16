@@ -1,4 +1,4 @@
-import { safeResolvePath, duckdbQueryOnFile } from "@/lib/workspace";
+import { safeResolvePath, duckdbQueryOnFile, resolveDuckdbBin } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -37,6 +37,11 @@ export async function GET(request: Request) {
       { error: "File not found or path traversal rejected" },
       { status: 404 },
     );
+  }
+
+  // Check if DuckDB CLI binary is available
+  if (!resolveDuckdbBin()) {
+    return Response.json({ tables: [], path: relPath, duckdb_available: false });
   }
 
   // Get all user tables (skip internal DuckDB catalogs)

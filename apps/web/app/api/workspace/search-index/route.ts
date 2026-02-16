@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, existsSync, type Dirent } from "node:fs";
 import { join } from "node:path";
 import {
-  resolveDenchRoot,
+  resolveWorkspaceRoot,
   parseSimpleYaml,
   duckdbQuery,
   duckdbPath,
@@ -243,7 +243,7 @@ export async function GET() {
   const items: SearchIndexItem[] = [];
 
   // 1. Files + objects from tree
-  const root = resolveDenchRoot();
+  const root = resolveWorkspaceRoot();
   if (root) {
     const dbObjects = new Map<string, ObjectRow>();
     if (duckdbPath()) {
@@ -253,7 +253,7 @@ export async function GET() {
       for (const o of objs) {dbObjects.set(o.name, o);}
     }
 
-    // Scan entire dench root (the dench folder IS the knowledge base)
+    // Scan workspace root (the workspace folder IS the knowledge base)
     flattenTree(root, "", dbObjects, items);
   }
 

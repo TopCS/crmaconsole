@@ -11,7 +11,7 @@ import { DocumentView } from "../components/workspace/document-view";
 import { FileViewer } from "../components/workspace/file-viewer";
 import { CodeViewer } from "../components/workspace/code-viewer";
 import { MediaViewer, detectMediaType, type MediaType } from "../components/workspace/media-viewer";
-import { DatabaseViewer } from "../components/workspace/database-viewer";
+import { DatabaseViewer, DuckDBMissing } from "../components/workspace/database-viewer";
 import { Breadcrumbs } from "../components/workspace/breadcrumbs";
 import { ChatSessionsSidebar } from "../components/workspace/chat-sessions-sidebar";
 import { EmptyState } from "../components/workspace/empty-state";
@@ -103,7 +103,7 @@ type WebSession = {
 
 // --- Helpers ---
 
-/** Detect virtual paths (skills, memories) that live outside the dench workspace. */
+/** Detect virtual paths (skills, memories) that live outside the main workspace. */
 function isVirtualPath(path: string): boolean {
   return path.startsWith("~");
 }
@@ -337,7 +337,7 @@ function WorkspacePageInner() {
           const data: ObjectData = await res.json();
           setContent({ kind: "object", data });
         } else if (node.type === "document") {
-          // Use virtual-file API for ~skills/ and ~memories/ paths
+          // Use virtual-file API for ~skills/ paths
           const res = await fetch(fileApiUrl(node.path));
           if (!res.ok) {
             setContent({ kind: "none" });
@@ -391,7 +391,7 @@ function WorkspacePageInner() {
       // filesystem, switch back to workspace mode or show the appropriate
       // dashboard instead of showing raw files.
       if (browseDir && isAbsolutePath(node.path)) {
-        // Clicking the dench workspace root → restore full workspace mode
+        // Clicking the workspace root → restore full workspace mode
         if (workspaceRoot && node.path === workspaceRoot) {
           setBrowseDir(null);
           return;

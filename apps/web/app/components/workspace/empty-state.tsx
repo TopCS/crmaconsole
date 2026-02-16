@@ -69,22 +69,22 @@ export function EmptyState({
 					className="text-sm leading-relaxed"
 					style={{ color: "var(--color-text-muted)" }}
 				>
-					{workspaceExists ? (
-						<>
-							The Dench workspace exists but has no
-							knowledge tree yet. Ask the CRM agent to
-							create objects and documents to populate
-							it.
-						</>
-					) : (
-						<>
-							The Dench workspace directory was not
-							found. To initialize it, start a
-							conversation with the CRM agent and it
-							will create the workspace structure
-							automatically.
-						</>
-					)}
+				{workspaceExists ? (
+					<>
+						The workspace exists but has no
+						knowledge tree yet. Ask the CRM agent to
+						create objects and documents to populate
+						it.
+					</>
+				) : (
+					<>
+						The workspace directory was not
+						found. To initialize it, start a
+						conversation with the CRM agent and it
+						will create the workspace structure
+						automatically.
+					</>
+				)}
 				</p>
 			</div>
 
@@ -125,7 +125,7 @@ export function EmptyState({
 							border: "1px solid var(--color-border)",
 						}}
 					>
-						~/.openclaw/workspace/dench/
+						~/.openclaw/workspace
 					</code>
 				</span>
 			</div>

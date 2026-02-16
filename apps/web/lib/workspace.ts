@@ -4,16 +4,14 @@ import { join, resolve, normalize, relative } from "node:path";
 import { homedir } from "node:os";
 
 /**
- * Resolve the dench workspace directory, checking in order:
- * 1. DENCH_WORKSPACE env var
- * 2. ~/.openclaw/workspace/dench/
- * 3. ./dench/ (relative to process cwd)
+ * Resolve the workspace directory, checking in order:
+ * 1. OPENCLAW_WORKSPACE env var
+ * 2. ~/.openclaw/workspace/
  */
-export function resolveDenchRoot(): string | null {
+export function resolveWorkspaceRoot(): string | null {
   const candidates = [
-    process.env.DENCH_WORKSPACE,
-    join(homedir(), ".openclaw", "workspace", "dench"),
-    join(process.cwd(), "dench"),
+    process.env.OPENCLAW_WORKSPACE,
+    join(homedir(), ".openclaw", "workspace"),
   ].filter(Boolean) as string[];
 
   for (const dir of candidates) {
@@ -22,28 +20,36 @@ export function resolveDenchRoot(): string | null {
   return null;
 }
 
+/** @deprecated Use `resolveWorkspaceRoot` instead. */
+export const resolveDenchRoot = resolveWorkspaceRoot;
+
 /**
- * Return the workspace path prefix relative to the repo root (agent's cwd).
- * Tree paths are relative to the dench workspace root (e.g. "knowledge/leads/foo.md"),
- * but the agent runs from the repo root, so it needs "dench/knowledge/leads/foo.md".
- * Returns e.g. "dench", or null if the workspace isn't found.
+ * Return the workspace path prefix for the agent.
+ * Returns the absolute workspace path (e.g. ~/.openclaw/workspace),
+ * or a relative path from the repo root if the workspace is inside it.
  */
 export function resolveAgentWorkspacePrefix(): string | null {
-  const root = resolveDenchRoot();
+  const root = resolveWorkspaceRoot();
   if (!root) {return null;}
 
-  const cwd = process.cwd();
-  const repoRoot = cwd.endsWith(join("apps", "web"))
-    ? resolve(cwd, "..", "..")
-    : cwd;
+  // If the workspace is an absolute path outside the repo, return it as-is
+  if (root.startsWith("/")) {
+    const cwd = process.cwd();
+    const repoRoot = cwd.endsWith(join("apps", "web"))
+      ? resolve(cwd, "..", "..")
+      : cwd;
+    const rel = relative(repoRoot, root);
+    // If the relative path starts with "..", it's outside the repo — use absolute
+    if (rel.startsWith("..")) {return root;}
+    return rel || root;
+  }
 
-  const rel = relative(repoRoot, root);
-  return rel || null;
+  return root;
 }
 
 /** Path to the DuckDB database file, or null if workspace doesn't exist. */
 export function duckdbPath(): string | null {
-  const root = resolveDenchRoot();
+  const root = resolveWorkspaceRoot();
   if (!root) {return null;}
   const dbPath = join(root, "workspace.duckdb");
   return existsSync(dbPath) ? dbPath : null;
@@ -53,7 +59,7 @@ export function duckdbPath(): string | null {
  * Resolve the duckdb CLI binary path.
  * Checks common locations since the Next.js server may have a minimal PATH.
  */
-function resolveDuckdbBin(): string | null {
+export function resolveDuckdbBin(): string | null {
   const home = homedir();
   const candidates = [
     // User-local installs
@@ -200,14 +206,14 @@ export function duckdbQueryOnFile<T = Record<string, unknown>>(
 }
 
 /**
- * Validate and resolve a path within the dench workspace.
+ * Validate and resolve a path within the workspace.
  * Prevents path traversal by ensuring the resolved path stays within root.
  * Returns the absolute path or null if invalid/nonexistent.
  */
 export function safeResolvePath(
   relativePath: string,
 ): string | null {
-  const root = resolveDenchRoot();
+  const root = resolveWorkspaceRoot();
   if (!root) {return null;}
 
   // Reject obvious traversal attempts
@@ -250,7 +256,7 @@ export function parseSimpleYaml(
         ((value.startsWith('"') && value.endsWith('"')) ||
           (value.startsWith("'") && value.endsWith("'")))
       ) {
-        value = (value as string).slice(1, -1);
+        value = (value).slice(1, -1);
       }
 
       // Parse booleans and numbers
@@ -293,7 +299,7 @@ export function isSystemFile(relativePath: string): boolean {
  * Still prevents path traversal.
  */
 export function safeResolveNewPath(relativePath: string): string | null {
-  const root = resolveDenchRoot();
+  const root = resolveWorkspaceRoot();
   if (!root) {return null;}
 
   const normalized = normalize(relativePath);

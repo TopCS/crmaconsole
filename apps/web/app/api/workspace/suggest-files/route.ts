@@ -1,7 +1,7 @@
 import { readdirSync, type Dirent } from "node:fs";
 import { join, dirname, resolve, basename } from "node:path";
 import { homedir } from "node:os";
-import { resolveDenchRoot } from "@/lib/workspace";
+import { resolveWorkspaceRoot } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -186,7 +186,7 @@ export async function GET(req: Request) {
 	const url = new URL(req.url);
 	const pathQuery = url.searchParams.get("path");
 	const searchQuery = url.searchParams.get("q");
-	const workspaceRoot = resolveDenchRoot() ?? homedir();
+	const workspaceRoot = resolveWorkspaceRoot() ?? homedir();
 
 	// Search mode: find files by name
 	if (searchQuery) {

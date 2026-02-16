@@ -419,6 +419,8 @@ function createStreamParser() {
 export type ChatPanelHandle = {
 	loadSession: (sessionId: string) => Promise<void>;
 	newSession: () => Promise<void>;
+	/** Create a new session and immediately send a message. */
+	sendNewMessage: (text: string) => Promise<void>;
 	/** Insert a file mention into the chat editor (e.g. from sidebar drag). */
 	insertFileMention?: (name: string, path: string) => void;
 };
@@ -1071,11 +1073,23 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 			() => ({
 				loadSession: handleSessionSelect,
 				newSession: handleNewSession,
+				sendNewMessage: async (text: string) => {
+					await handleNewSession();
+					const title =
+						text.length > 60 ? text.slice(0, 60) + "..." : text;
+					const sessionId = await createSession(title);
+					setCurrentSessionId(sessionId);
+					sessionIdRef.current = sessionId;
+					onActiveSessionChange?.(sessionId);
+					onSessionsChange?.();
+					userScrolledAwayRef.current = false;
+					void sendMessage({ text });
+				},
 				insertFileMention: (name: string, path: string) => {
 					editorRef.current?.insertFileMention(name, path);
 				},
 			}),
-			[handleSessionSelect, handleNewSession],
+			[handleSessionSelect, handleNewSession, createSession, onActiveSessionChange, onSessionsChange, sendMessage],
 		);
 
 		// ── Stop handler (aborts server-side run + client-side stream) ──

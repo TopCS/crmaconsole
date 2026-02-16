@@ -23,7 +23,7 @@ type SortState = {
 } | null;
 
 type DatabaseViewerProps = {
-  /** Relative path to the database file within the dench workspace */
+	/** Relative path to the database file within the workspace */
   dbPath: string;
   filename: string;
 };
@@ -127,12 +127,66 @@ function typeDisplay(dtype: string): { label: string; color: string } {
   return { label: dtype.toLowerCase(), color: "var(--color-text-muted)" };
 }
 
+// --- DuckDB Not Installed Panel ---
+
+/** Shown when the DuckDB CLI binary cannot be found on the system. */
+export function DuckDBMissing() {
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-5 p-8">
+      <div
+        className="w-16 h-16 rounded-2xl flex items-center justify-center"
+        style={{
+          background: "var(--color-surface)",
+          border: "1px solid var(--color-border)",
+          boxShadow: "var(--shadow-sm)",
+        }}
+      >
+        <DatabaseIcon size={32} />
+      </div>
+      <div className="text-center max-w-sm">
+        <h3
+          className="text-sm font-medium mb-1"
+          style={{ color: "var(--color-text)" }}
+        >
+          DuckDB is not installed
+        </h3>
+        <p
+          className="text-xs leading-relaxed"
+          style={{ color: "var(--color-text-muted)" }}
+        >
+          The DuckDB CLI is required to view database files and workspace data.
+          Click below to install it automatically.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          window.location.href = "/workspace?send=" + encodeURIComponent("install duckdb");
+        }}
+        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+        style={{
+          background: "var(--color-accent)",
+          color: "white",
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" x2="12" y1="15" y2="3" />
+        </svg>
+        Install DuckDB
+      </button>
+    </div>
+  );
+}
+
 // --- Main Component ---
 
 export function DatabaseViewer({ dbPath, filename }: DatabaseViewerProps) {
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [duckdbAvailable, setDuckdbAvailable] = useState(true);
 
   // Selected table
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
@@ -173,10 +227,14 @@ export function DatabaseViewer({ dbPath, filename }: DatabaseViewerProps) {
         }
         const data = await res.json();
         if (!cancelled) {
-          setTables(data.tables ?? []);
-          // Auto-select first table
-          if (data.tables?.length > 0) {
-            setSelectedTable(data.tables[0].table_name);
+          if (data.duckdb_available === false) {
+            setDuckdbAvailable(false);
+          } else {
+            setTables(data.tables ?? []);
+            // Auto-select first table
+            if (data.tables?.length > 0) {
+              setSelectedTable(data.tables[0].table_name);
+            }
           }
         }
       } catch (err) {
@@ -328,6 +386,11 @@ export function DatabaseViewer({ dbPath, filename }: DatabaseViewerProps) {
         </p>
       </div>
     );
+  }
+
+  // --- DuckDB not installed ---
+  if (!duckdbAvailable) {
+    return <DuckDBMissing />;
   }
 
   return (

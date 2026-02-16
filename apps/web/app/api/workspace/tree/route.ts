@@ -1,19 +1,19 @@
 import { readdirSync, readFileSync, existsSync, type Dirent } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { resolveDenchRoot, parseSimpleYaml, duckdbQuery, isDatabaseFile } from "@/lib/workspace";
+import { resolveWorkspaceRoot, parseSimpleYaml, duckdbQuery, isDatabaseFile } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export type TreeNode = {
   name: string;
-  path: string; // relative to dench/ (or ~skills/, ~memories/, ~workspace/ for virtual nodes)
+  path: string; // relative to workspace root (or ~skills/ for virtual nodes)
   type: "object" | "document" | "folder" | "file" | "database" | "report";
   icon?: string;
   defaultView?: "table" | "kanban";
   children?: TreeNode[];
-  /** Virtual nodes live outside the dench workspace (e.g. Skills, Memories). */
+  /** Virtual nodes live outside the main workspace (e.g. Skills, Memories). */
   virtual?: boolean;
 };
 
@@ -150,12 +150,11 @@ function parseSkillFrontmatter(content: string): { name?: string; emoji?: string
   return { name: result.name, emoji: result.emoji };
 }
 
-/** Build a virtual "Skills" folder from ~/.openclaw/skills/ and ~/.openclaw/workspace/skills/. */
+/** Build a virtual "Skills" folder from ~/.openclaw/skills/. */
 function buildSkillsVirtualFolder(): TreeNode | null {
   const home = homedir();
   const dirs = [
     join(home, ".openclaw", "skills"),
-    join(home, ".openclaw", "workspace", "skills"),
   ];
 
   const children: TreeNode[] = [];
@@ -205,134 +204,30 @@ function buildSkillsVirtualFolder(): TreeNode | null {
   };
 }
 
-/**
- * Build top-level workspace root file nodes (USER.md, SOUL.md, TOOLS.md, etc.).
- * These live directly in ~/.openclaw/workspace/ but outside the dench/ subdirectory.
- * They are virtual (not movable/renamable/deletable) but editable.
- */
-function buildWorkspaceRootFiles(): TreeNode[] {
-  const workspaceDir = join(homedir(), ".openclaw", "workspace");
-  if (!existsSync(workspaceDir)) {return [];}
-
-  // Files already handled by the Memories virtual folder
-  const SKIP_FILES = new Set(["MEMORY.md", "memory.md"]);
-
-  const nodes: TreeNode[] = [];
-
-  try {
-    const entries = readdirSync(workspaceDir, { withFileTypes: true });
-    for (const entry of entries) {
-      // Skip subdirectories (handled elsewhere) and hidden files
-      if (entry.isDirectory()) {continue;}
-      if (entry.name.startsWith(".")) {continue;}
-      if (SKIP_FILES.has(entry.name)) {continue;}
-
-      const ext = entry.name.split(".").pop()?.toLowerCase();
-      const isDocument = ext === "md" || ext === "mdx";
-
-      nodes.push({
-        name: entry.name,
-        path: `~workspace/${entry.name}`,
-        type: isDocument ? "document" : "file",
-        virtual: true,
-      });
-    }
-  } catch {
-    // dir unreadable
-  }
-
-  // Sort alphabetically
-  nodes.sort((a, b) => a.name.localeCompare(b.name));
-  return nodes;
-}
-
-/** Build a virtual "Memories" folder from ~/.openclaw/workspace/. */
-function buildMemoriesVirtualFolder(): TreeNode | null {
-  const workspaceDir = join(homedir(), ".openclaw", "workspace");
-  const children: TreeNode[] = [];
-
-  // MEMORY.md
-  for (const filename of ["MEMORY.md", "memory.md"]) {
-    const memPath = join(workspaceDir, filename);
-    if (existsSync(memPath)) {
-      children.push({
-        name: "MEMORY.md",
-        path: `~memories/MEMORY.md`,
-        type: "document",
-        virtual: true,
-      });
-      break;
-    }
-  }
-
-  // Daily logs from memory/
-  const memoryDir = join(workspaceDir, "memory");
-  if (existsSync(memoryDir)) {
-    try {
-      const entries = readdirSync(memoryDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isFile() || !entry.name.endsWith(".md")) {continue;}
-        children.push({
-          name: entry.name,
-          path: `~memories/${entry.name}`,
-          type: "document",
-          virtual: true,
-        });
-      }
-    } catch {
-      // dir unreadable
-    }
-  }
-
-  if (children.length === 0) {return null;}
-  // Sort: MEMORY.md first, then reverse chronological for daily logs
-  children.sort((a, b) => {
-    if (a.name === "MEMORY.md") {return -1;}
-    if (b.name === "MEMORY.md") {return 1;}
-    return b.name.localeCompare(a.name);
-  });
-
-  return {
-    name: "Memories",
-    path: "~memories",
-    type: "folder",
-    virtual: true,
-    children,
-  };
-}
 
 export async function GET() {
   const home = homedir();
   const openclawDir = join(home, ".openclaw");
-  const root = resolveDenchRoot();
+  const root = resolveWorkspaceRoot();
   if (!root) {
-    // Even without a dench workspace, return virtual folders if they exist
+    // Even without a workspace, return virtual folders if they exist
     const tree: TreeNode[] = [];
-    tree.push(...buildWorkspaceRootFiles());
     const skillsFolder = buildSkillsVirtualFolder();
     if (skillsFolder) {tree.push(skillsFolder);}
-    const memoriesFolder = buildMemoriesVirtualFolder();
-    if (memoriesFolder) {tree.push(memoriesFolder);}
     return Response.json({ tree, exists: false, workspaceRoot: null, openclawDir });
   }
 
   // Load objects from DuckDB for smart directory detection
   const dbObjects = loadDbObjects();
 
-  // Scan the entire dench root -- the dench folder IS the knowledge base.
-  // All top-level directories (manufacturing, knowledge, reports, etc.)
-  // and files are visible in the sidebar.
+  // Scan the workspace root — it IS the knowledge base.
+  // All top-level directories, files, objects, and documents are visible
+  // in the sidebar (USER.md, SOUL.md, memory/, etc. are all part of the tree).
   const tree = buildTree(root, "", dbObjects);
-
-  // Workspace root files (USER.md, SOUL.md, etc.) -- editable but reserved
-  const workspaceRootFiles = buildWorkspaceRootFiles();
-  if (workspaceRootFiles.length > 0) {tree.push(...workspaceRootFiles);}
 
   // Virtual folders go after all real files/folders
   const skillsFolder = buildSkillsVirtualFolder();
   if (skillsFolder) {tree.push(skillsFolder);}
-  const memoriesFolder = buildMemoriesVirtualFolder();
-  if (memoriesFolder) {tree.push(memoriesFolder);}
 
   return Response.json({ tree, exists: true, workspaceRoot: root, openclawDir });
 }

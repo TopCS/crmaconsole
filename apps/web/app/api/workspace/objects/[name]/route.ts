@@ -1,4 +1,4 @@
-import { duckdbQuery, duckdbPath, duckdbExec, parseRelationValue } from "@/lib/workspace";
+import { duckdbQuery, duckdbPath, duckdbExec, parseRelationValue, resolveDuckdbBin } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -314,6 +314,13 @@ export async function GET(
   { params }: { params: Promise<{ name: string }> },
 ) {
   const { name } = await params;
+
+  if (!resolveDuckdbBin()) {
+    return Response.json(
+      { error: "DuckDB CLI is not installed", code: "DUCKDB_NOT_INSTALLED" },
+      { status: 503 },
+    );
+  }
 
   if (!duckdbPath()) {
     return Response.json(

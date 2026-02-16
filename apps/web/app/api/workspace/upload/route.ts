@@ -1,6 +1,6 @@
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname, extname } from "node:path";
-import { resolveDenchRoot, safeResolveNewPath } from "@/lib/workspace";
+import { resolveWorkspaceRoot, safeResolveNewPath } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,7 +18,7 @@ const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
  * Returns { ok, path } where path is workspace-relative.
  */
 export async function POST(req: Request) {
-  const root = resolveDenchRoot();
+  const root = resolveWorkspaceRoot();
   if (!root) {
     return Response.json(
       { error: "Workspace not found" },

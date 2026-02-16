@@ -1,4 +1,4 @@
-import { resolveDenchRoot } from "@/lib/workspace";
+import { resolveWorkspaceRoot } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -6,12 +6,12 @@ export const runtime = "nodejs";
 /**
  * GET /api/workspace/watch
  *
- * Server-Sent Events endpoint that watches the dench workspace for file changes.
+ * Server-Sent Events endpoint that watches the workspace for file changes.
  * Sends events: { type: "add"|"change"|"unlink"|"addDir"|"unlinkDir", path: string }
  * Falls back gracefully if chokidar is unavailable.
  */
 export async function GET() {
-  const root = resolveDenchRoot();
+  const root = resolveWorkspaceRoot();
   if (!root) {
     return new Response("Workspace not found", { status: 404 });
   }

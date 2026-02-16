@@ -276,7 +276,7 @@ export function MarkdownEditor({
       // Prepend preserved frontmatter so it isn't lost on save
       const finalContent = frontmatterRef.current + bodyContent;
 
-      // Virtual paths (~skills/*, ~memories/*) use the virtual-file API
+      // Virtual paths (~skills/*) use the virtual-file API
       const saveEndpoint = filePath.startsWith("~")
         ? "/api/workspace/virtual-file"
         : "/api/workspace/file";
