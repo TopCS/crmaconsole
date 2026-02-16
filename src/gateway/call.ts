@@ -46,6 +46,14 @@ export type CallGatewayOptions = {
   onEvent?: (evt: { event: string; payload?: unknown; seq?: number }) => void;
   /** Client capabilities to advertise during the WebSocket handshake (e.g. "tool-events"). */
   caps?: string[];
+  /** When aborted, triggers {@link onAbort} then rejects the call with an AbortError. */
+  signal?: AbortSignal;
+  /**
+   * Called with the live GatewayClient when {@link signal} fires.
+   * Use this to send a best-effort cleanup request (e.g. `chat.abort`)
+   * before the connection is torn down.
+   */
+  onAbort?: (client: GatewayClient) => Promise<void>;
 };
 
 export type GatewayConnectionDetails = {
@@ -248,7 +256,7 @@ export async function callGateway<T = Record<string, unknown>>(
   return await new Promise<T>((resolve, reject) => {
     let settled = false;
     let ignoreClose = false;
-    const stop = (err?: Error, value?: T) => {
+    let stop = (err?: Error, value?: T) => {
       if (settled) {
         return;
       }
@@ -310,6 +318,39 @@ export async function callGateway<T = Record<string, unknown>>(
       client.stop();
       stop(new Error(formatTimeoutError()));
     }, safeTimerTimeoutMs);
+
+    // Wire up external abort signal → best-effort onAbort callback, then tear down.
+    if (opts.signal) {
+      const handleAbort = () => {
+        if (settled) {
+          return;
+        }
+        const doAbort = async () => {
+          if (opts.onAbort) {
+            try {
+              await opts.onAbort(client);
+            } catch {
+              // best-effort; swallow errors
+            }
+          }
+          ignoreClose = true;
+          client.stop();
+          stop(new DOMException("The operation was aborted", "AbortError"));
+        };
+        void doAbort();
+      };
+      if (opts.signal.aborted) {
+        handleAbort();
+      } else {
+        opts.signal.addEventListener("abort", handleAbort, { once: true });
+        // Clean up the listener if the call settles normally before abort fires.
+        const origStop = stop;
+        stop = (err?: Error, value?: T) => {
+          opts.signal!.removeEventListener("abort", handleAbort);
+          origStop(err, value);
+        };
+      }
+    }
 
     client.start();
   });

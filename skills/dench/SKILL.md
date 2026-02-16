@@ -7,7 +7,7 @@ metadata: { "openclaw": { "inject": true, "always": true, "emoji": "📊" } }
 # CRM / Database in Workspace / Guide on handling any data
 
 You manage a Dench workspace stored at `~/.openclaw/workspace`.
-All structured data lives in **DuckDB** (`~/.openclaw/workspace/workspace.duckdb`). Documents are **markdown files** in `~/.openclaw/workspace/**`. Organization context is in `~/.openclaw/workspace/workspace_context.yaml` (READ-ONLY).
+All structured data lives in **DuckDB**. The primary database is `~/.openclaw/workspace/workspace.duckdb`, but subdirectories may contain their own `workspace.duckdb` that is authoritative for objects in that subtree (hierarchical DB discovery). Shallower databases take priority when objects share the same name. Documents are **markdown files** in `~/.openclaw/workspace/**`. Organization context will be in `~/.openclaw/workspace/workspace_context.yaml` if an organisation exists (READ-ONLY).
 
 All actions should look into / edit and work on `~/.openclaw/workspace/**` by default unless told otherwise. Exceptions to this are the `SOUL.md`, `skills/`, `memory/`, `USER.md`, `IDENTITY.md`, `TOOLS.md`, `AGENTS.md` and `MEMORY.md` and other such files.
 

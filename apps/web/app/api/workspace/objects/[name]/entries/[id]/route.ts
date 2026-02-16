@@ -1,7 +1,8 @@
 import {
-	duckdbQuery,
-	duckdbExec,
-	duckdbPath,
+	duckdbQueryOnFile,
+	duckdbExecOnFile,
+	findDuckDBForObject,
+	discoverDuckDBPaths,
 	parseRelationValue,
 } from "@/lib/workspace";
 
@@ -71,6 +72,11 @@ function resolveDisplayField(
 	return fields[0]?.name ?? "id";
 }
 
+/** Scoped query shorthand. */
+function q<T = Record<string, unknown>>(db: string, sql: string): T[] {
+	return duckdbQueryOnFile<T>(db, sql);
+}
+
 // --- Route handlers ---
 
 /**
@@ -82,13 +88,6 @@ export async function GET(
 	{ params }: { params: Promise<{ name: string; id: string }> },
 ) {
 	const { name, id } = await params;
-
-	if (!duckdbPath()) {
-		return Response.json(
-			{ error: "DuckDB not found" },
-			{ status: 404 },
-		);
-	}
 
 	if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
 		return Response.json(
@@ -103,8 +102,16 @@ export async function GET(
 		);
 	}
 
+	const dbFile = findDuckDBForObject(name);
+	if (!dbFile) {
+		return Response.json(
+			{ error: "DuckDB not found" },
+			{ status: 404 },
+		);
+	}
+
 	// Fetch object
-	const objects = duckdbQuery<ObjectRow>(
+	const objects = q<ObjectRow>(dbFile,
 		`SELECT * FROM objects WHERE name = '${sqlEscape(name)}' LIMIT 1`,
 	);
 	if (objects.length === 0) {
@@ -116,18 +123,18 @@ export async function GET(
 	const obj = objects[0];
 
 	// Fetch fields
-	const fields = duckdbQuery<FieldRow>(
+	const fields = q<FieldRow>(dbFile,
 		`SELECT * FROM fields WHERE object_id = '${sqlEscape(obj.id)}' ORDER BY sort_order`,
 	);
 
 	// Fetch entry field values
-	const entryRows = duckdbQuery<{
+	const entryRows = q<{
 		entry_id: string;
 		created_at: string;
 		updated_at: string;
 		field_name: string;
 		value: string | null;
-	}>(
+	}>(dbFile,
 		`SELECT e.id as entry_id, e.created_at, e.updated_at,
             f.name as field_name, ef.value
      FROM entries e
@@ -138,7 +145,7 @@ export async function GET(
 	);
 
 	if (entryRows.length === 0) {
-		const exists = duckdbQuery<{ cnt: number }>(
+		const exists = q<{ cnt: number }>(dbFile,
 			`SELECT COUNT(*) as cnt FROM entries WHERE id = '${sqlEscape(id)}' AND object_id = '${sqlEscape(obj.id)}'`,
 		);
 		if (!exists[0] || exists[0].cnt === 0) {
@@ -171,8 +178,7 @@ export async function GET(
 	}));
 
 	// Resolve relation labels for this entry
-	const relationLabels: Record<string, Record<string, string>> =
-		{};
+	const relationLabels: Record<string, Record<string, string>> = {};
 	const relatedObjectNames: Record<string, string> = {};
 
 	const relationFields = fields.filter(
@@ -180,7 +186,7 @@ export async function GET(
 	);
 
 	for (const rf of relationFields) {
-		const relatedObjs = duckdbQuery<ObjectRow>(
+		const relatedObjs = q<ObjectRow>(dbFile,
 			`SELECT * FROM objects WHERE id = '${sqlEscape(rf.related_object_id!)}' LIMIT 1`,
 		);
 		if (relatedObjs.length === 0) {
@@ -201,21 +207,15 @@ export async function GET(
 			continue;
 		}
 
-		const relFields = duckdbQuery<FieldRow>(
+		const relFields = q<FieldRow>(dbFile,
 			`SELECT * FROM fields WHERE object_id = '${sqlEscape(relObj.id)}' ORDER BY sort_order`,
 		);
-		const displayFieldName = resolveDisplayField(
-			relObj,
-			relFields,
-		);
+		const displayFieldName = resolveDisplayField(relObj, relFields);
 
 		const idList = ids
 			.map((i) => `'${sqlEscape(i)}'`)
 			.join(",");
-		const displayRows = duckdbQuery<{
-			entry_id: string;
-			value: string;
-		}>(
+		const displayRows = q<{ entry_id: string; value: string }>(dbFile,
 			`SELECT e.id as entry_id, ef.value
        FROM entries e
        JOIN entry_fields ef ON ef.entry_id = e.id
@@ -246,11 +246,8 @@ export async function GET(
 				: undefined,
 	}));
 
-	// Find reverse relations for this entry
-	const reverseRelations = findReverseRelationsForEntry(
-		obj.id,
-		id,
-	);
+	// Find reverse relations for this entry (search across all DBs)
+	const reverseRelations = findReverseRelationsForEntry(obj.id, id);
 
 	const effectiveDisplayField = resolveDisplayField(obj, fields);
 
@@ -275,12 +272,6 @@ export async function PATCH(
 ) {
 	const { name, id } = await params;
 
-	if (!duckdbPath()) {
-		return Response.json(
-			{ error: "DuckDB not found" },
-			{ status: 404 },
-		);
-	}
 	if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
 		return Response.json(
 			{ error: "Invalid object name" },
@@ -288,8 +279,16 @@ export async function PATCH(
 		);
 	}
 
+	const dbFile = findDuckDBForObject(name);
+	if (!dbFile) {
+		return Response.json(
+			{ error: "DuckDB not found" },
+			{ status: 404 },
+		);
+	}
+
 	// Find object
-	const objects = duckdbQuery<{ id: string }>(
+	const objects = q<{ id: string }>(dbFile,
 		`SELECT id FROM objects WHERE name = '${sqlEscape(name)}' LIMIT 1`,
 	);
 	if (objects.length === 0) {
@@ -301,7 +300,7 @@ export async function PATCH(
 	const objectId = objects[0].id;
 
 	// Verify entry exists
-	const exists = duckdbQuery<{ cnt: number }>(
+	const exists = q<{ cnt: number }>(dbFile,
 		`SELECT COUNT(*) as cnt FROM entries WHERE id = '${sqlEscape(id)}' AND object_id = '${sqlEscape(objectId)}'`,
 	);
 	if (!exists[0] || exists[0].cnt === 0) {
@@ -312,11 +311,10 @@ export async function PATCH(
 	}
 
 	const body = await req.json();
-	const fieldUpdates: Record<string, string> =
-		body.fields ?? {};
+	const fieldUpdates: Record<string, string> = body.fields ?? {};
 
 	// Get field IDs by name
-	const dbFields = duckdbQuery<{ id: string; name: string }>(
+	const dbFields = q<{ id: string; name: string }>(dbFile,
 		`SELECT id, name FROM fields WHERE object_id = '${sqlEscape(objectId)}'`,
 	);
 	const fieldMap = new Map(dbFields.map((f) => [f.name, f.id]));
@@ -330,16 +328,16 @@ export async function PATCH(
 			value == null ? "NULL" : `'${sqlEscape(String(value))}'`;
 
 		// Try update first, then insert if no rows affected
-		const existingRows = duckdbQuery<{ cnt: number }>(
+		const existingRows = q<{ cnt: number }>(dbFile,
 			`SELECT COUNT(*) as cnt FROM entry_fields WHERE entry_id = '${sqlEscape(id)}' AND field_id = '${sqlEscape(fieldId)}'`,
 		);
 
 		if (existingRows[0]?.cnt > 0) {
-			duckdbExec(
+			duckdbExecOnFile(dbFile,
 				`UPDATE entry_fields SET value = ${escapedValue} WHERE entry_id = '${sqlEscape(id)}' AND field_id = '${sqlEscape(fieldId)}'`,
 			);
 		} else {
-			duckdbExec(
+			duckdbExecOnFile(dbFile,
 				`INSERT INTO entry_fields (entry_id, field_id, value) VALUES ('${sqlEscape(id)}', '${sqlEscape(fieldId)}', ${escapedValue})`,
 			);
 		}
@@ -348,7 +346,7 @@ export async function PATCH(
 
 	// Touch updated_at on the entry
 	const now = new Date().toISOString();
-	duckdbExec(
+	duckdbExecOnFile(dbFile,
 		`UPDATE entries SET updated_at = '${now}' WHERE id = '${sqlEscape(id)}'`,
 	);
 
@@ -365,12 +363,6 @@ export async function DELETE(
 ) {
 	const { name, id } = await params;
 
-	if (!duckdbPath()) {
-		return Response.json(
-			{ error: "DuckDB not found" },
-			{ status: 404 },
-		);
-	}
 	if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
 		return Response.json(
 			{ error: "Invalid object name" },
@@ -378,8 +370,16 @@ export async function DELETE(
 		);
 	}
 
+	const dbFile = findDuckDBForObject(name);
+	if (!dbFile) {
+		return Response.json(
+			{ error: "DuckDB not found" },
+			{ status: 404 },
+		);
+	}
+
 	// Find object
-	const objects = duckdbQuery<{ id: string }>(
+	const objects = q<{ id: string }>(dbFile,
 		`SELECT id FROM objects WHERE name = '${sqlEscape(name)}' LIMIT 1`,
 	);
 	if (objects.length === 0) {
@@ -391,10 +391,10 @@ export async function DELETE(
 	const objectId = objects[0].id;
 
 	// Delete field values first, then entry
-	duckdbExec(
+	duckdbExecOnFile(dbFile,
 		`DELETE FROM entry_fields WHERE entry_id = '${sqlEscape(id)}'`,
 	);
-	duckdbExec(
+	duckdbExecOnFile(dbFile,
 		`DELETE FROM entries WHERE id = '${sqlEscape(id)}' AND object_id = '${sqlEscape(objectId)}'`,
 	);
 
@@ -411,100 +411,96 @@ type ReverseRelation = {
 	links: Array<{ id: string; label: string }>;
 };
 
+/**
+ * Find reverse relations for a single entry, searching across ALL discovered databases.
+ */
 function findReverseRelationsForEntry(
 	objectId: string,
 	entryId: string,
 ): ReverseRelation[] {
-	const reverseFields = duckdbQuery<{
-		id: string;
-		name: string;
-		object_id: string;
-		source_object_name: string;
-	}>(
-		`SELECT f.id, f.name, f.object_id, o.name as source_object_name
-     FROM fields f
-     JOIN objects o ON o.id = f.object_id
-     WHERE f.type = 'relation'
-     AND f.related_object_id = '${sqlEscape(objectId)}'`,
-	);
-
-	if (reverseFields.length === 0) {
-		return [];
-	}
-
+	const dbPaths = discoverDuckDBPaths();
 	const result: ReverseRelation[] = [];
 
-	for (const rrf of reverseFields) {
-		const refRows = duckdbQuery<{
-			source_entry_id: string;
-			target_value: string;
-		}>(
-			`SELECT ef.entry_id as source_entry_id, ef.value as target_value
-       FROM entry_fields ef
-       WHERE ef.field_id = '${sqlEscape(rrf.id)}'
-       AND ef.value IS NOT NULL
-       AND ef.value != ''`,
+	for (const db of dbPaths) {
+		const reverseFields = q<{
+			id: string;
+			name: string;
+			object_id: string;
+			source_object_name: string;
+		}>(db,
+			`SELECT f.id, f.name, f.object_id, o.name as source_object_name
+       FROM fields f
+       JOIN objects o ON o.id = f.object_id
+       WHERE f.type = 'relation'
+       AND f.related_object_id = '${sqlEscape(objectId)}'`,
 		);
 
-		const matchingSourceIds: string[] = [];
-		for (const row of refRows) {
-			const targetIds = parseRelationValue(row.target_value);
-			if (targetIds.includes(entryId)) {
-				matchingSourceIds.push(row.source_entry_id);
+		for (const rrf of reverseFields) {
+			const refRows = q<{
+				source_entry_id: string;
+				target_value: string;
+			}>(db,
+				`SELECT ef.entry_id as source_entry_id, ef.value as target_value
+         FROM entry_fields ef
+         WHERE ef.field_id = '${sqlEscape(rrf.id)}'
+         AND ef.value IS NOT NULL
+         AND ef.value != ''`,
+			);
+
+			const matchingSourceIds: string[] = [];
+			for (const row of refRows) {
+				const targetIds = parseRelationValue(row.target_value);
+				if (targetIds.includes(entryId)) {
+					matchingSourceIds.push(row.source_entry_id);
+				}
 			}
+
+			if (matchingSourceIds.length === 0) {
+				continue;
+			}
+
+			const sourceObj = q<ObjectRow>(db,
+				`SELECT * FROM objects WHERE id = '${sqlEscape(rrf.object_id)}' LIMIT 1`,
+			);
+			if (sourceObj.length === 0) {
+				continue;
+			}
+
+			const sourceFields = q<FieldRow>(db,
+				`SELECT * FROM fields WHERE object_id = '${sqlEscape(rrf.object_id)}' ORDER BY sort_order`,
+			);
+			const displayFieldName = resolveDisplayField(sourceObj[0], sourceFields);
+
+			const idList = matchingSourceIds
+				.map((i) => `'${sqlEscape(i)}'`)
+				.join(",");
+			const displayRows = q<{ entry_id: string; value: string }>(db,
+				`SELECT ef.entry_id, ef.value
+         FROM entry_fields ef
+         JOIN fields f ON f.id = ef.field_id
+         WHERE ef.entry_id IN (${idList})
+         AND f.name = '${sqlEscape(displayFieldName)}'
+         AND f.object_id = '${sqlEscape(rrf.object_id)}'`,
+			);
+
+			const displayMap: Record<string, string> = {};
+			for (const row of displayRows) {
+				displayMap[row.entry_id] = row.value || row.entry_id;
+			}
+
+			const links = matchingSourceIds.map((sid) => ({
+				id: sid,
+				label: displayMap[sid] || sid,
+			}));
+
+			result.push({
+				fieldName: rrf.name,
+				sourceObjectName: rrf.source_object_name,
+				sourceObjectId: rrf.object_id,
+				displayField: displayFieldName,
+				links,
+			});
 		}
-
-		if (matchingSourceIds.length === 0) {
-			continue;
-		}
-
-		const sourceObj = duckdbQuery<ObjectRow>(
-			`SELECT * FROM objects WHERE id = '${sqlEscape(rrf.object_id)}' LIMIT 1`,
-		);
-		if (sourceObj.length === 0) {
-			continue;
-		}
-
-		const sourceFields = duckdbQuery<FieldRow>(
-			`SELECT * FROM fields WHERE object_id = '${sqlEscape(rrf.object_id)}' ORDER BY sort_order`,
-		);
-		const displayFieldName = resolveDisplayField(
-			sourceObj[0],
-			sourceFields,
-		);
-
-		const idList = matchingSourceIds
-			.map((i) => `'${sqlEscape(i)}'`)
-			.join(",");
-		const displayRows = duckdbQuery<{
-			entry_id: string;
-			value: string;
-		}>(
-			`SELECT ef.entry_id, ef.value
-       FROM entry_fields ef
-       JOIN fields f ON f.id = ef.field_id
-       WHERE ef.entry_id IN (${idList})
-       AND f.name = '${sqlEscape(displayFieldName)}'
-       AND f.object_id = '${sqlEscape(rrf.object_id)}'`,
-		);
-
-		const displayMap: Record<string, string> = {};
-		for (const row of displayRows) {
-			displayMap[row.entry_id] = row.value || row.entry_id;
-		}
-
-		const links = matchingSourceIds.map((sid) => ({
-			id: sid,
-			label: displayMap[sid] || sid,
-		}));
-
-		result.push({
-			fieldName: rrf.name,
-			sourceObjectName: rrf.source_object_name,
-			sourceObjectId: rrf.object_id,
-			displayField: displayFieldName,
-			links,
-		});
 	}
 
 	return result;

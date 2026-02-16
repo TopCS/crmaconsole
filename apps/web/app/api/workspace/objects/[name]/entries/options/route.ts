@@ -1,4 +1,4 @@
-import { duckdbQuery, duckdbPath } from "@/lib/workspace";
+import { duckdbQueryOnFile, findDuckDBForObject } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -44,15 +44,16 @@ export async function GET(
 ) {
 	const { name } = await params;
 
-	if (!duckdbPath()) {
-		return Response.json({ error: "DuckDB not found" }, { status: 404 });
-	}
-
 	if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
 		return Response.json({ error: "Invalid object name" }, { status: 400 });
 	}
 
-	const objects = duckdbQuery<ObjectRow>(
+	const dbFile = findDuckDBForObject(name);
+	if (!dbFile) {
+		return Response.json({ error: "DuckDB not found" }, { status: 404 });
+	}
+
+	const objects = duckdbQueryOnFile<ObjectRow>(dbFile,
 		`SELECT * FROM objects WHERE name = '${sqlEscape(name)}' LIMIT 1`,
 	);
 	if (objects.length === 0) {
@@ -60,7 +61,7 @@ export async function GET(
 	}
 	const obj = objects[0];
 
-	const fields = duckdbQuery<FieldRow>(
+	const fields = duckdbQueryOnFile<FieldRow>(dbFile,
 		`SELECT * FROM fields WHERE object_id = '${sqlEscape(obj.id)}' ORDER BY sort_order`,
 	);
 	const displayFieldName = resolveDisplayField(obj, fields);
@@ -70,7 +71,7 @@ export async function GET(
 	const query = url.searchParams.get("q")?.trim() ?? "";
 
 	// Fetch entries with their display field value
-	const rows = duckdbQuery<{ entry_id: string; label: string | null }>(
+	const rows = duckdbQueryOnFile<{ entry_id: string; label: string | null }>(dbFile,
 		`SELECT e.id as entry_id, ef.value as label
 		 FROM entries e
 		 LEFT JOIN entry_fields ef ON ef.entry_id = e.id

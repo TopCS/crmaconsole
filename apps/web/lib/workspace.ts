@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { execSync, exec } from "node:child_process";
 import { promisify } from "node:util";
 import { join, resolve, normalize, relative } from "node:path";
@@ -50,12 +50,79 @@ export function resolveAgentWorkspacePrefix(): string | null {
   return root;
 }
 
-/** Path to the DuckDB database file, or null if workspace doesn't exist. */
+// ---------------------------------------------------------------------------
+// Hierarchical DuckDB discovery
+//
+// Supports multiple workspace.duckdb files in a tree structure.  Each
+// subdirectory may contain its own workspace.duckdb that is authoritative
+// for the objects in that subtree.  Shallower (closer to workspace root)
+// databases take priority when objects share the same name.
+// ---------------------------------------------------------------------------
+
+/**
+ * Recursively discover all workspace.duckdb files under `root`.
+ * Returns absolute paths sorted by depth (shallowest first) so that
+ * root-level databases have priority over deeper ones.
+ */
+export function discoverDuckDBPaths(root?: string): string[] {
+  const wsRoot = root ?? resolveWorkspaceRoot();
+  if (!wsRoot) {return [];}
+
+  const results: Array<{ path: string; depth: number }> = [];
+
+  function walk(dir: string, depth: number) {
+    const dbFile = join(dir, "workspace.duckdb");
+    if (existsSync(dbFile)) {
+      results.push({ path: dbFile, depth });
+    }
+    try {
+      const entries = readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) {continue;}
+        if (entry.name.startsWith(".")) {continue;}
+        // Skip common non-workspace directories
+        if (entry.name === "tmp" || entry.name === "exports" || entry.name === "node_modules") {continue;}
+        walk(join(dir, entry.name), depth + 1);
+      }
+    } catch {
+      // unreadable directory
+    }
+  }
+
+  walk(wsRoot, 0);
+  results.sort((a, b) => a.depth - b.depth);
+  return results.map((r) => r.path);
+}
+
+/**
+ * Path to the primary DuckDB database file.
+ * Checks the workspace root first, then falls back to any workspace.duckdb
+ * discovered in subdirectories (backward compat with dench/ layout).
+ */
 export function duckdbPath(): string | null {
   const root = resolveWorkspaceRoot();
   if (!root) {return null;}
-  const dbPath = join(root, "workspace.duckdb");
-  return existsSync(dbPath) ? dbPath : null;
+
+  // Try root-level first (standard layout)
+  const rootDb = join(root, "workspace.duckdb");
+  if (existsSync(rootDb)) {return rootDb;}
+
+  // Fallback: discover the shallowest workspace.duckdb in subdirectories
+  const all = discoverDuckDBPaths(root);
+  return all.length > 0 ? all[0] : null;
+}
+
+/**
+ * Compute the workspace-relative directory that a DuckDB file is authoritative for.
+ * e.g. for `~/.openclaw/workspace/dench/workspace.duckdb` returns `"dench"`.
+ * For the root DB returns `""` (empty string).
+ */
+export function duckdbRelativeScope(dbPath: string): string {
+  const root = resolveWorkspaceRoot();
+  if (!root) {return "";}
+  const dir = resolve(dbPath, "..");
+  const rel = relative(root, dir);
+  return rel === "." ? "" : rel;
 }
 
 /**
@@ -153,6 +220,133 @@ export async function duckdbQueryAsync<T = Record<string, unknown>>(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Multi-DB query helpers — aggregate results from all discovered databases
+// ---------------------------------------------------------------------------
+
+/**
+ * Query ALL discovered workspace.duckdb files and merge results.
+ * Shallower databases are queried first; use `dedupeKey` to drop duplicates
+ * from deeper databases (shallower wins).
+ */
+export function duckdbQueryAll<T = Record<string, unknown>>(
+  sql: string,
+  dedupeKey?: keyof T,
+): T[] {
+  const dbPaths = discoverDuckDBPaths();
+  if (dbPaths.length === 0) {return [];}
+
+  const bin = resolveDuckdbBin();
+  if (!bin) {return [];}
+
+  const seen = new Set<unknown>();
+  const merged: T[] = [];
+
+  for (const db of dbPaths) {
+    try {
+      const escapedSql = sql.replace(/'/g, "'\\''");
+      const result = execSync(`'${bin}' -json '${db}' '${escapedSql}'`, {
+        encoding: "utf-8",
+        timeout: 10_000,
+        maxBuffer: 10 * 1024 * 1024,
+        shell: "/bin/sh",
+      });
+      const trimmed = result.trim();
+      if (!trimmed || trimmed === "[]") {continue;}
+      const rows = JSON.parse(trimmed) as T[];
+      for (const row of rows) {
+        if (dedupeKey) {
+          const key = row[dedupeKey];
+          if (seen.has(key)) {continue;}
+          seen.add(key);
+        }
+        merged.push(row);
+      }
+    } catch {
+      // skip failing DBs
+    }
+  }
+
+  return merged;
+}
+
+/**
+ * Async version of duckdbQueryAll.
+ */
+export async function duckdbQueryAllAsync<T = Record<string, unknown>>(
+  sql: string,
+  dedupeKey?: keyof T,
+): Promise<T[]> {
+  const dbPaths = discoverDuckDBPaths();
+  if (dbPaths.length === 0) {return [];}
+
+  const bin = resolveDuckdbBin();
+  if (!bin) {return [];}
+
+  const seen = new Set<unknown>();
+  const merged: T[] = [];
+
+  for (const db of dbPaths) {
+    try {
+      const escapedSql = sql.replace(/'/g, "'\\''");
+      const { stdout } = await execAsync(`'${bin}' -json '${db}' '${escapedSql}'`, {
+        encoding: "utf-8",
+        timeout: 10_000,
+        maxBuffer: 10 * 1024 * 1024,
+        shell: "/bin/sh",
+      });
+      const trimmed = stdout.trim();
+      if (!trimmed || trimmed === "[]") {continue;}
+      const rows = JSON.parse(trimmed) as T[];
+      for (const row of rows) {
+        if (dedupeKey) {
+          const key = row[dedupeKey];
+          if (seen.has(key)) {continue;}
+          seen.add(key);
+        }
+        merged.push(row);
+      }
+    } catch {
+      // skip failing DBs
+    }
+  }
+
+  return merged;
+}
+
+/**
+ * Find the DuckDB file that contains a specific object by name.
+ * Returns the absolute path to the database, or null if not found.
+ * Checks shallower databases first (parent takes priority).
+ */
+export function findDuckDBForObject(objectName: string): string | null {
+  const dbPaths = discoverDuckDBPaths();
+  if (dbPaths.length === 0) {return null;}
+
+  const bin = resolveDuckdbBin();
+  if (!bin) {return null;}
+
+  // Build the SQL then apply the same shell-escape as duckdbQuery:
+  // replace every ' with '\'' so the single-quoted shell arg stays valid.
+  const sql = `SELECT id FROM objects WHERE name = '${objectName.replace(/'/g, "''")}' LIMIT 1`;
+  const escapedSql = sql.replace(/'/g, "'\\''");
+
+  for (const db of dbPaths) {
+    try {
+      const result = execSync(
+        `'${bin}' -json '${db}' '${escapedSql}'`,
+        { encoding: "utf-8", timeout: 5_000, maxBuffer: 1024 * 1024, shell: "/bin/sh" },
+      );
+      const trimmed = result.trim();
+      if (trimmed && trimmed !== "[]") {return db;}
+    } catch {
+      // continue to next DB
+    }
+  }
+
+  return null;
+}
+
 /**
  * Execute a DuckDB statement (no JSON output expected).
  * Used for INSERT/UPDATE/ALTER operations.
@@ -160,13 +354,20 @@ export async function duckdbQueryAsync<T = Record<string, unknown>>(
 export function duckdbExec(sql: string): boolean {
   const db = duckdbPath();
   if (!db) {return false;}
+  return duckdbExecOnFile(db, sql);
+}
 
+/**
+ * Execute a DuckDB statement against a specific database file (no JSON output).
+ * Used for INSERT/UPDATE/ALTER operations on a targeted DB.
+ */
+export function duckdbExecOnFile(dbFilePath: string, sql: string): boolean {
   const bin = resolveDuckdbBin();
   if (!bin) {return false;}
 
   try {
     const escapedSql = sql.replace(/'/g, "'\\''");
-    execSync(`'${bin}' '${db}' '${escapedSql}'`, {
+    execSync(`'${bin}' '${dbFilePath}' '${escapedSql}'`, {
       encoding: "utf-8",
       timeout: 10_000,
       shell: "/bin/sh",
@@ -343,18 +544,25 @@ export function parseSimpleYaml(
 
 // --- System file protection ---
 
-const SYSTEM_FILE_PATTERNS = [
+/** Always protected regardless of depth. */
+const ALWAYS_SYSTEM_PATTERNS = [
   /^\.object\.yaml$/,
-  /^workspace\.duckdb/,
-  /^workspace_context\.yaml$/,
   /\.wal$/,
   /\.tmp$/,
+];
+
+/** Only protected at the workspace root (no "/" in the relative path). */
+const ROOT_ONLY_SYSTEM_PATTERNS = [
+  /^workspace\.duckdb/,
+  /^workspace_context\.yaml$/,
 ];
 
 /** Check if a workspace-relative path refers to a protected system file. */
 export function isSystemFile(relativePath: string): boolean {
   const base = relativePath.split("/").pop() ?? "";
-  return SYSTEM_FILE_PATTERNS.some((p) => p.test(base));
+  if (ALWAYS_SYSTEM_PATTERNS.some((p) => p.test(base))) {return true;}
+  const isRoot = !relativePath.includes("/");
+  return isRoot && ROOT_ONLY_SYSTEM_PATTERNS.some((p) => p.test(base));
 }
 
 /**

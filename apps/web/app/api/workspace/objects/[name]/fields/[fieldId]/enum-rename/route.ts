@@ -1,4 +1,4 @@
-import { duckdbExec, duckdbQuery, duckdbPath } from "@/lib/workspace";
+import { duckdbExecOnFile, duckdbQueryOnFile, findDuckDBForObject } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -20,16 +20,18 @@ export async function PATCH(
 ) {
 	const { name, fieldId } = await params;
 
-	if (!duckdbPath()) {
-		return Response.json(
-			{ error: "DuckDB not found" },
-			{ status: 404 },
-		);
-	}
 	if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
 		return Response.json(
 			{ error: "Invalid object name" },
 			{ status: 400 },
+		);
+	}
+
+	const dbFile = findDuckDBForObject(name);
+	if (!dbFile) {
+		return Response.json(
+			{ error: "DuckDB not found" },
+			{ status: 404 },
 		);
 	}
 
@@ -48,7 +50,7 @@ export async function PATCH(
 	}
 
 	// Validate object exists
-	const objects = duckdbQuery<{ id: string }>(
+	const objects = duckdbQueryOnFile<{ id: string }>(dbFile,
 		`SELECT id FROM objects WHERE name = '${sqlEscape(name)}' LIMIT 1`,
 	);
 	if (objects.length === 0) {
@@ -60,7 +62,7 @@ export async function PATCH(
 	const objectId = objects[0].id;
 
 	// Validate field exists and is an enum
-	const fields = duckdbQuery<{ id: string; enum_values: string | null; enum_colors: string | null }>(
+	const fields = duckdbQueryOnFile<{ id: string; enum_values: string | null; enum_colors: string | null }>(dbFile,
 		`SELECT id, enum_values, enum_colors FROM fields WHERE id = '${sqlEscape(fieldId)}' AND object_id = '${sqlEscape(objectId)}'`,
 	);
 	if (fields.length === 0) {
@@ -101,12 +103,12 @@ export async function PATCH(
 	enumValues[idx] = newValue.trim();
 	const newEnumJson = JSON.stringify(enumValues);
 
-	duckdbExec(
+	duckdbExecOnFile(dbFile,
 		`UPDATE fields SET enum_values = '${sqlEscape(newEnumJson)}' WHERE id = '${sqlEscape(fieldId)}'`,
 	);
 
 	// Update all entry_fields with the old value to the new value
-	const updatedEntries = duckdbExec(
+	const updatedEntries = duckdbExecOnFile(dbFile,
 		`UPDATE entry_fields SET value = '${sqlEscape(newValue.trim())}' WHERE field_id = '${sqlEscape(fieldId)}' AND value = '${sqlEscape(oldValue.trim())}'`,
 	);
 

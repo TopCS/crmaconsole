@@ -29,6 +29,8 @@ type WorkspaceSidebarProps = {
 	onFileSearchSelect?: (item: SuggestItem) => void;
 	/** Absolute path of the workspace root folder, used to render it as a special entry in browse mode. */
 	workspaceRoot?: string | null;
+	/** Navigate to the main chat / home panel. */
+	onGoToChat?: () => void;
 };
 
 function WorkspaceLogo() {
@@ -401,6 +403,7 @@ export function WorkspaceSidebar({
 	onGoHome,
 	onFileSearchSelect,
 	workspaceRoot,
+	onGoToChat,
 }: WorkspaceSidebarProps) {
 	const isBrowsing = browseDir != null;
 
@@ -462,15 +465,23 @@ export function WorkspaceSidebar({
 					</>
 				) : (
 					<>
-						<span
-							className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+						<button
+							type="button"
+							onClick={onGoToChat}
+							className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 cursor-pointer transition-opacity"
 							style={{
 								background: "var(--color-accent-light)",
 								color: "var(--color-accent)",
 							}}
+							title="All Chats"
+							onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.7"; }}
+							onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
 						>
-							<WorkspaceLogo />
-						</span>
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+								<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+								<polyline points="9 22 9 12 15 12 15 22" />
+							</svg>
+						</button>
 						<div className="flex-1 min-w-0">
 							<div
 								className="text-sm font-medium truncate"

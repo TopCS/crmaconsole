@@ -3,8 +3,9 @@ import { join } from "node:path";
 import {
   resolveWorkspaceRoot,
   parseSimpleYaml,
-  duckdbQueryAsync,
-  duckdbPath,
+  duckdbQueryAllAsync,
+  discoverDuckDBPaths,
+  duckdbQueryOnFileAsync,
   isDatabaseFile,
 } from "@/lib/workspace";
 
@@ -167,31 +168,46 @@ function flattenTree(
   }
 }
 
-/** Fetch all entries from all objects and produce search items. */
+/**
+ * Fetch all entries from all objects across ALL discovered DuckDB files.
+ * Deduplicates objects by name (shallower DBs win).
+ */
 async function buildEntryItems(): Promise<SearchIndexItem[]> {
   const items: SearchIndexItem[] = [];
+  const dbPaths = discoverDuckDBPaths();
+  if (dbPaths.length === 0) {return [];}
 
-  const objects = await duckdbQueryAsync<ObjectRow>(
-    "SELECT * FROM objects ORDER BY name",
-  );
+  // Collect all objects across DBs, deduplicating by name (shallowest wins)
+  const seenNames = new Set<string>();
+  const objectsWithDb: Array<{ obj: ObjectRow; dbPath: string }> = [];
 
-  for (const obj of objects) {
-    const fields = await duckdbQueryAsync<FieldRow>(
+  for (const dbPath of dbPaths) {
+    const objs = await duckdbQueryOnFileAsync<ObjectRow>(dbPath,
+      "SELECT * FROM objects ORDER BY name",
+    );
+    for (const obj of objs) {
+      if (seenNames.has(obj.name)) {continue;}
+      seenNames.add(obj.name);
+      objectsWithDb.push({ obj, dbPath });
+    }
+  }
+
+  for (const { obj, dbPath } of objectsWithDb) {
+    const fields = await duckdbQueryOnFileAsync<FieldRow>(dbPath,
       `SELECT * FROM fields WHERE object_id = '${sqlEscape(obj.id)}' ORDER BY sort_order`,
     );
     const displayField = resolveDisplayField(obj, fields);
-    // Pick the first few text-like fields for searchable preview (max 4)
     const previewFields = fields
       .filter((f) => !["relation", "richtext"].includes(f.type))
       .slice(0, 4);
 
-    // Try PIVOT view first, then raw EAV
-    let entries: Record<string, unknown>[] = await duckdbQueryAsync(
+    // Try PIVOT view first, then raw EAV (on the same DB)
+    let entries: Record<string, unknown>[] = await duckdbQueryOnFileAsync(dbPath,
       `SELECT * FROM v_${obj.name} ORDER BY created_at DESC LIMIT 500`,
     );
 
     if (entries.length === 0) {
-      const rawRows = await duckdbQueryAsync<EavRow>(
+      const rawRows = await duckdbQueryOnFileAsync<EavRow>(dbPath,
         `SELECT e.id as entry_id, e.created_at, e.updated_at,
                 f.name as field_name, ef.value
          FROM entries e
@@ -202,7 +218,6 @@ async function buildEntryItems(): Promise<SearchIndexItem[]> {
          LIMIT 2500`,
       );
 
-      // Pivot manually
       const grouped = new Map<string, Record<string, unknown>>();
       for (const row of rawRows) {
         let entry = grouped.get(row.entry_id);
@@ -252,20 +267,21 @@ export async function GET() {
   // 1. Files + objects from tree
   const root = resolveWorkspaceRoot();
   if (root) {
+    // Aggregate objects from ALL discovered DuckDB files (shallower wins)
     const dbObjects = new Map<string, ObjectRow>();
-    if (duckdbPath()) {
-      const objs = await duckdbQueryAsync<ObjectRow>(
-        "SELECT * FROM objects",
-      );
-      for (const o of objs) {dbObjects.set(o.name, o);}
-    }
+    const objs = await duckdbQueryAllAsync<ObjectRow & { name: string }>(
+      "SELECT * FROM objects",
+      "name",
+    );
+    for (const o of objs) {dbObjects.set(o.name, o);}
 
     // Scan workspace root (the workspace folder IS the knowledge base)
     flattenTree(root, "", dbObjects, items);
   }
 
-  // 2. Entries from all objects
-  if (duckdbPath()) {
+  // 2. Entries from all objects across all discovered DBs
+  const dbPaths = discoverDuckDBPaths();
+  if (dbPaths.length > 0) {
     items.push(...await buildEntryItems());
   }
 

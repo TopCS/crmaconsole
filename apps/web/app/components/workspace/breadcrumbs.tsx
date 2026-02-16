@@ -27,7 +27,7 @@ export function Breadcrumbs({ path, onNavigate }: BreadcrumbsProps) {
           (e.currentTarget as HTMLElement).style.background = "transparent";
         }}
       >
-        workspace
+        All Chats
       </button>
 
       {segments.map((segment, idx) => {

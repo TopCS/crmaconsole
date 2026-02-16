@@ -534,6 +534,13 @@ function WorkspacePageInner() {
     setBrowseDir(null);
   }, [setBrowseDir]);
 
+  // Navigate to the main chat / home panel
+  const handleGoToChat = useCallback(() => {
+    setActivePath(null);
+    setContent({ kind: "none" });
+    router.replace("/workspace", { scroll: false });
+  }, [router]);
+
   // Handle file search selection: navigate sidebar to the file's location and open it
   const handleFileSearchSelect = useCallback(
     (item: { name: string; path: string; type: string }) => {
@@ -811,6 +818,7 @@ function WorkspacePageInner() {
         onGoHome={handleGoHome}
         onFileSearchSelect={handleFileSearchSelect}
         workspaceRoot={workspaceRoot}
+        onGoToChat={handleGoToChat}
       />
 
       {/* Main content */}

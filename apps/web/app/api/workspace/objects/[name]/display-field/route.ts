@@ -1,4 +1,4 @@
-import { duckdbQuery, duckdbPath, duckdbExec } from "@/lib/workspace";
+import { duckdbQueryOnFile, duckdbExecOnFile, findDuckDBForObject } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -14,17 +14,18 @@ export async function PATCH(
 ) {
   const { name } = await params;
 
-  if (!duckdbPath()) {
-    return Response.json(
-      { error: "DuckDB database not found" },
-      { status: 404 },
-    );
-  }
-
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
     return Response.json(
       { error: "Invalid object name" },
       { status: 400 },
+    );
+  }
+
+  const dbFile = findDuckDBForObject(name);
+  if (!dbFile) {
+    return Response.json(
+      { error: "DuckDB database not found" },
+      { status: 404 },
     );
   }
 
@@ -39,12 +40,12 @@ export async function PATCH(
   }
 
   // Ensure display_field column exists
-  duckdbExec(
+  duckdbExecOnFile(dbFile,
     "ALTER TABLE objects ADD COLUMN IF NOT EXISTS display_field VARCHAR",
   );
 
   // Verify the object exists
-  const objects = duckdbQuery<{ id: string }>(
+  const objects = duckdbQueryOnFile<{ id: string }>(dbFile,
     `SELECT id FROM objects WHERE name = '${name}' LIMIT 1`,
   );
   if (objects.length === 0) {
@@ -56,7 +57,7 @@ export async function PATCH(
 
   // Verify the field exists on this object
   const escapedField = displayField.replace(/'/g, "''");
-  const fieldCheck = duckdbQuery<{ id: string }>(
+  const fieldCheck = duckdbQueryOnFile<{ id: string }>(dbFile,
     `SELECT id FROM fields WHERE object_id = '${objects[0].id}' AND name = '${escapedField}' LIMIT 1`,
   );
   if (fieldCheck.length === 0) {
@@ -67,7 +68,7 @@ export async function PATCH(
   }
 
   // Update the display_field
-  const success = duckdbExec(
+  const success = duckdbExecOnFile(dbFile,
     `UPDATE objects SET display_field = '${escapedField}', updated_at = now() WHERE name = '${name}'`,
   );
 

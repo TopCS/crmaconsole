@@ -1,4 +1,4 @@
-import { duckdbExec, duckdbQuery, duckdbPath } from "@/lib/workspace";
+import { duckdbExecOnFile, duckdbQueryOnFile, findDuckDBForObject } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,16 +18,18 @@ export async function POST(
 ) {
 	const { name } = await params;
 
-	if (!duckdbPath()) {
-		return Response.json(
-			{ error: "DuckDB not found" },
-			{ status: 404 },
-		);
-	}
 	if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
 		return Response.json(
 			{ error: "Invalid object name" },
 			{ status: 400 },
+		);
+	}
+
+	const dbFile = findDuckDBForObject(name);
+	if (!dbFile) {
+		return Response.json(
+			{ error: "DuckDB not found" },
+			{ status: 404 },
 		);
 	}
 
@@ -42,7 +44,7 @@ export async function POST(
 	}
 
 	// Validate object exists
-	const objects = duckdbQuery<{ id: string }>(
+	const objects = duckdbQueryOnFile<{ id: string }>(dbFile,
 		`SELECT id FROM objects WHERE name = '${sqlEscape(name)}' LIMIT 1`,
 	);
 	if (objects.length === 0) {
@@ -58,10 +60,10 @@ export async function POST(
 		.join(",");
 
 	// Delete field values first, then entries
-	duckdbExec(
+	duckdbExecOnFile(dbFile,
 		`DELETE FROM entry_fields WHERE entry_id IN (${idList})`,
 	);
-	duckdbExec(
+	duckdbExecOnFile(dbFile,
 		`DELETE FROM entries WHERE id IN (${idList}) AND object_id = '${sqlEscape(objectId)}'`,
 	);
 

@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, existsSync, type Dirent } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { resolveWorkspaceRoot, parseSimpleYaml, duckdbQuery, isDatabaseFile } from "@/lib/workspace";
+import { resolveWorkspaceRoot, parseSimpleYaml, duckdbQueryAll, isDatabaseFile } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -43,13 +43,15 @@ function readObjectMeta(
 }
 
 /**
- * Query DuckDB for all objects so we can identify object directories
- * even when .object.yaml files are missing.
+ * Query ALL discovered DuckDB files for objects so we can identify object
+ * directories even when .object.yaml files are missing.
+ * Shallower databases win on name conflicts (parent priority).
  */
 function loadDbObjects(): Map<string, DbObject> {
   const map = new Map<string, DbObject>();
-  const rows = duckdbQuery<DbObject>(
+  const rows = duckdbQueryAll<DbObject & { name: string }>(
     "SELECT name, icon, default_view FROM objects",
+    "name",
   );
   for (const row of rows) {
     map.set(row.name, row);

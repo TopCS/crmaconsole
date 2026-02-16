@@ -440,6 +440,15 @@ type FileScopedSession = {
 	messageCount: number;
 };
 
+/** A message waiting to be sent after the current agent run finishes. */
+type QueuedMessage = {
+	id: string;
+	text: string;
+	mentionedFiles: Array<{ name: string; path: string }>;
+	attachedFiles: AttachedFile[];
+	createdAt: number;
+};
+
 type ChatPanelProps = {
 	/** When set, scopes sessions to this file and prepends content as context. */
 	fileContext?: FileContext;
@@ -498,6 +507,9 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 		const [fileSessions, setFileSessions] = useState<
 			FileScopedSession[]
 		>([]);
+
+		// ── Message queue (messages to send after current run completes) ──
+		const [queuedMessages, setQueuedMessages] = useState<QueuedMessage[]>([]);
 
 		const filePath = fileContext?.path ?? null;
 
@@ -877,7 +889,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 				const hasText = text.trim().length > 0;
 				const hasMentions = mentionedFiles.length > 0;
 				const hasFiles = attachedFiles.length > 0;
-				if ((!hasText && !hasMentions && !hasFiles) || isStreaming) {
+				if (!hasText && !hasMentions && !hasFiles) {
 					return;
 				}
 
@@ -891,6 +903,21 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 
 				if (userText.toLowerCase() === "/new") {
 					handleNewSessionRef.current();
+					return;
+				}
+
+				// Queue the message if the agent is still running.
+				if (isStreaming) {
+					setQueuedMessages((prev) => [
+						...prev,
+						{
+							id: crypto.randomUUID(),
+							text: userText,
+							mentionedFiles,
+							attachedFiles: currentAttachments,
+							createdAt: Date.now(),
+						},
+					]);
 					return;
 				}
 
@@ -955,6 +982,24 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 			],
 		);
 
+		// ── Queue flush: send the next queued message once the stream finishes ──
+		const prevFlushStatusRef = useRef(status);
+		useEffect(() => {
+			const wasStreaming =
+				prevFlushStatusRef.current === "streaming" ||
+				prevFlushStatusRef.current === "submitted";
+			const isNowReady = status === "ready";
+			prevFlushStatusRef.current = status;
+
+			if (wasStreaming && isNowReady && queuedMessages.length > 0) {
+				const [next, ...rest] = queuedMessages;
+				setQueuedMessages(rest);
+				// Use a microtask so React can settle the status update first.
+				queueMicrotask(() => {
+					void handleEditorSubmit(next.text, next.mentionedFiles);
+				});
+			}
+		}, [status, queuedMessages, handleEditorSubmit]);
 
 		const handleSessionSelect = useCallback(
 			async (sessionId: string) => {
@@ -972,6 +1017,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 				onActiveSessionChange?.(sessionId);
 				savedMessageIdsRef.current.clear();
 				isFirstFileMessageRef.current = false;
+				setQueuedMessages([]);
 
 				try {
 					const response = await fetch(
@@ -1050,6 +1096,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 			savedMessageIdsRef.current.clear();
 			isFirstFileMessageRef.current = true;
 			newSessionPendingRef.current = false;
+			setQueuedMessages([]);
 
 			if (!filePath) {
 				setStartingNewSession(true);
@@ -1114,6 +1161,29 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 		// Stop the useChat transport stream
 		void stop();
 	}, [currentSessionId, stop]);
+
+		// ── Queue handlers ──
+
+		const removeQueuedMessage = useCallback((id: string) => {
+			setQueuedMessages((prev) => prev.filter((m) => m.id !== id));
+		}, []);
+
+		/** Force-send: stop the agent, then immediately submit this queued message. */
+		const forceSendQueuedMessage = useCallback(
+			async (id: string) => {
+				const msg = queuedMessages.find((m) => m.id === id);
+				if (!msg) {return;}
+				// Remove it from the queue first.
+				setQueuedMessages((prev) => prev.filter((m) => m.id !== id));
+				// Stop the current agent run.
+				await handleStop();
+				// Submit the message after a short delay to let status settle.
+				setTimeout(() => {
+					void handleEditorSubmit(msg.text, msg.mentionedFiles);
+				}, 100);
+			},
+			[queuedMessages, handleStop, handleEditorSubmit],
+		);
 
 		// ── Attachment handlers ──
 
@@ -1443,6 +1513,70 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 								}
 							}}
 						>
+						{/* Queued messages indicator */}
+						{queuedMessages.length > 0 && (
+							<div className={`${compact ? "px-2 pt-2" : "px-3 pt-3"}`}>
+								<div
+									className="rounded-xl overflow-hidden"
+									style={{
+										border: "1px dashed var(--color-border-strong)",
+										background: "var(--color-bg-elevated)",
+									}}
+								>
+									<div
+										className="flex items-center justify-between px-3 py-1.5"
+										style={{ borderBottom: "1px solid var(--color-border)" }}
+									>
+										<span
+											className="text-[11px] font-medium tracking-wide uppercase"
+											style={{ color: "var(--color-text-muted)", fontFamily: "var(--font-mono, monospace)" }}
+										>
+											Queued ({queuedMessages.length})
+										</span>
+									</div>
+									<div className="flex flex-col gap-1 p-1.5">
+										{queuedMessages.map((msg) => (
+											<div
+												key={msg.id}
+												className="flex items-start gap-2 rounded-lg px-2.5 py-2 group"
+												style={{ background: "var(--color-bg-secondary)" }}
+											>
+												<p
+													className="flex-1 text-[13px] leading-[1.45] line-clamp-3"
+													style={{ color: "var(--color-text)", whiteSpace: "pre-wrap" }}
+												>
+													{msg.text || (msg.attachedFiles.length > 0 ? `${msg.attachedFiles.length} file(s)` : "")}
+												</p>
+												<div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+													<button
+														type="button"
+														className="rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors hover:bg-[var(--color-bg)]"
+														style={{ color: "var(--color-accent)" }}
+														title="Stop agent and send this message now"
+														onClick={() => forceSendQueuedMessage(msg.id)}
+													>
+														Send now
+													</button>
+													<button
+														type="button"
+														className="rounded-md p-1 transition-colors hover:bg-[var(--color-bg)]"
+														style={{ color: "var(--color-text-muted)" }}
+														title="Remove from queue"
+														onClick={() => removeQueuedMessage(msg.id)}
+													>
+														<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+															<path d="M18 6 6 18" />
+															<path d="m6 6 12 12" />
+														</svg>
+													</button>
+												</div>
+											</div>
+										))}
+									</div>
+								</div>
+							</div>
+						)}
+
 							<ChatEditor
 								ref={editorRef}
 								onSubmit={handleEditorSubmit}
@@ -1452,13 +1586,14 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 							placeholder={
 								compact && fileContext
 									? `Ask about ${fileContext.isDirectory ? "this folder" : fileContext.filename}...`
+									: isStreaming
+										? "Type to queue a message..."
 									: attachedFiles.length >
 												0
 											? "Add a message or send files..."
 											: "Type @ to mention files..."
 								}
 								disabled={
-									isStreaming ||
 									loadingSession ||
 									startingNewSession
 								}
@@ -1511,8 +1646,9 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 										</svg>
 									</button>
 								</div>
-							{/* Send / Stop button */}
-							{isStreaming ? (
+							{/* Send / Stop / Queue buttons */}
+							<div className="flex items-center gap-1.5">
+							{isStreaming && (
 								<button
 									type="button"
 									onClick={() => handleStop()}
@@ -1532,7 +1668,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 										<rect width="10" height="10" rx="1.5" />
 									</svg>
 								</button>
-							) : (
+							)}
 								<button
 									type="button"
 									onClick={() => {
@@ -1551,11 +1687,33 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 											!editorEmpty ||
 											attachedFiles.length >
 												0
-												? "var(--color-accent)"
+												? isStreaming
+													? "var(--color-text-muted)"
+													: "var(--color-accent)"
 												: "var(--color-border-strong)",
 										color: "white",
 									}}
+									title={isStreaming ? "Queue message" : "Send message"}
 								>
+									{isStreaming && !editorEmpty ? (
+										/* Queue icon: stacked lines */
+										<svg
+											width="14"
+											height="14"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											strokeWidth="2.5"
+											strokeLinecap="round"
+											strokeLinejoin="round"
+										>
+											<path d="M16 3h5v5" />
+											<path d="m21 3-7 7" />
+											<path d="M12 19V5" />
+											<path d="m5 12 7-7 7 7" />
+										</svg>
+									) : (
+										/* Normal send arrow */
 									<svg
 										width="14"
 										height="14"
@@ -1569,8 +1727,9 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 										<path d="M12 19V5" />
 										<path d="m5 12 7-7 7 7" />
 									</svg>
+									)}
 								</button>
-							)}
+							</div>
 							</div>
 						</div>
 					</div>

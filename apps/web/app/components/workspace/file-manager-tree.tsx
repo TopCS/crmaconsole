@@ -56,17 +56,24 @@ type FileManagerTreeProps = {
 
 // --- System file detection (client-side mirror) ---
 
-const SYSTEM_PATTERNS = [
+/** Always protected regardless of depth. */
+const ALWAYS_SYSTEM_PATTERNS = [
   /^\.object\.yaml$/,
-  /^workspace\.duckdb/,
-  /^workspace_context\.yaml$/,
   /\.wal$/,
   /\.tmp$/,
 ];
 
+/** Only protected at the workspace root (no "/" in the relative path). */
+const ROOT_ONLY_SYSTEM_PATTERNS = [
+  /^workspace\.duckdb/,
+  /^workspace_context\.yaml$/,
+];
+
 function isSystemFile(path: string): boolean {
   const base = path.split("/").pop() ?? "";
-  return SYSTEM_PATTERNS.some((p) => p.test(base));
+  if (ALWAYS_SYSTEM_PATTERNS.some((p) => p.test(base))) {return true;}
+  const isRoot = !path.includes("/");
+  return isRoot && ROOT_ONLY_SYSTEM_PATTERNS.some((p) => p.test(base));
 }
 
 // --- Icons (inline SVG, zero-dep) ---
@@ -599,6 +606,40 @@ function DraggableNode({
   );
 }
 
+// --- Root drop zone (allows dropping items back to the top level) ---
+
+function RootDropZone({ isDragging }: { isDragging: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: "drop-__root__",
+    data: { rootDrop: true },
+  });
+
+  const showHighlight = isOver && isDragging;
+
+  return (
+    <div
+      ref={setNodeRef}
+      className="flex-1 min-h-[48px]"
+      style={{
+        margin: isDragging ? "4px 8px" : undefined,
+        borderRadius: "6px",
+        border: showHighlight ? "1.5px dashed var(--color-accent)" : isDragging ? "1.5px dashed var(--color-border)" : "1.5px dashed transparent",
+        background: showHighlight ? "var(--color-accent-light)" : "transparent",
+        transition: "all 150ms ease",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {isDragging && (
+        <span className="text-[11px] select-none" style={{ color: showHighlight ? "var(--color-accent)" : "var(--color-text-muted)", opacity: showHighlight ? 1 : 0.6 }}>
+          Drop here to move to root
+        </span>
+      )}
+    </div>
+  );
+}
+
 // --- Drag Overlay ---
 
 function DragOverlayContent({ node }: { node: TreeNode }) {
@@ -713,8 +754,10 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
   }, []);
 
   const handleDragOver = useCallback((event: DragOverEvent) => {
-    const overData = event.over?.data.current as { node: TreeNode } | undefined;
-    if (overData?.node) {
+    const overData = event.over?.data.current as { node?: TreeNode; rootDrop?: boolean } | undefined;
+    if (overData?.rootDrop) {
+      setDragOverPath("__root__");
+    } else if (overData?.node) {
       setDragOverPath(overData.node.path);
       // Auto-expand folders on drag hover (300ms delay)
       const path = overData.node.path;
@@ -739,11 +782,25 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
       setDragOverPath(null);
 
       const activeData = event.active.data.current as { node: TreeNode } | undefined;
-      const overData = event.over?.data.current as { node: TreeNode } | undefined;
+      const overData = event.over?.data.current as { node?: TreeNode; rootDrop?: boolean } | undefined;
 
-      if (!activeData?.node || !overData?.node) {return;}
+      if (!activeData?.node) {return;}
 
       const source = activeData.node;
+
+      // Drop onto root level
+      if (overData?.rootDrop) {
+        // Already at root? No-op
+        if (parentPath(source.path) === ".") {return;}
+        const result = await apiMove(source.path, ".");
+        if (result.ok) {
+          onRefresh();
+        }
+        return;
+      }
+
+      if (!overData?.node) {return;}
+
       const target = overData.node;
 
       // Only drop onto expandable targets (folders/objects)
@@ -1052,7 +1109,7 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
     >
       <div
         ref={containerRef}
-        className="py-1 outline-none"
+        className="py-1 outline-none flex flex-col min-h-full"
         tabIndex={0}
         role="tree"
         onKeyDown={handleKeyDown}
@@ -1109,6 +1166,8 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
             workspaceRoot={workspaceRoot}
           />
         ))}
+        {/* Root-level drop zone: fills remaining space so items can be moved to root */}
+        <RootDropZone isDragging={!!activeNode} />
       </div>
 
       {/* Drag overlay (ghost) */}

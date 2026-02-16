@@ -1,4 +1,5 @@
-import { duckdbQuery, duckdbPath, duckdbExec, parseRelationValue, resolveDuckdbBin } from "@/lib/workspace";
+import { duckdbPath, parseRelationValue, resolveDuckdbBin, findDuckDBForObject, duckdbQueryOnFile, discoverDuckDBPaths } from "@/lib/workspace";
+import { execSync } from "node:child_process";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,17 +48,30 @@ type EavRow = {
 
 // --- Schema migration (idempotent, runs once per process) ---
 
-let schemaMigrated = false;
+const migratedDbs = new Set<string>();
 
-function ensureDisplayFieldColumn() {
-  if (schemaMigrated) {return;}
-  duckdbExec(
-    "ALTER TABLE objects ADD COLUMN IF NOT EXISTS display_field VARCHAR",
-  );
-  schemaMigrated = true;
+/** Ensure the display_field column exists on a specific DB file. */
+function ensureDisplayFieldColumn(dbFile: string) {
+  if (migratedDbs.has(dbFile)) {return;}
+  const bin = resolveDuckdbBin();
+  if (!bin) {return;}
+  try {
+    execSync(
+      `'${bin}' '${dbFile}' 'ALTER TABLE objects ADD COLUMN IF NOT EXISTS display_field VARCHAR'`,
+      { encoding: "utf-8", timeout: 5_000, shell: "/bin/sh" },
+    );
+  } catch {
+    // migration might fail on DBs that don't have the objects table — skip
+  }
+  migratedDbs.add(dbFile);
 }
 
 // --- Helpers ---
+
+/** Scoped query helper: queries a specific DB file. */
+function q<T = Record<string, unknown>>(dbFile: string, sql: string): T[] {
+  return duckdbQueryOnFile<T>(dbFile, sql);
+}
 
 /**
  * Pivot raw EAV rows into one object per entry with field names as keys.
@@ -124,9 +138,10 @@ function resolveDisplayField(
 
 /**
  * Resolve relation field values to human-readable display labels.
- * Returns: { fieldName: { entryId: displayLabel } }
+ * All queries target the same DB file where the object lives.
  */
 function resolveRelationLabels(
+  dbFile: string,
   fields: FieldRow[],
   entries: Record<string, unknown>[],
 ): {
@@ -141,20 +156,18 @@ function resolveRelationLabels(
   );
 
   for (const rf of relationFields) {
-    const relatedObjs = duckdbQuery<ObjectRow>(
+    const relatedObjs = q<ObjectRow>(dbFile,
       `SELECT * FROM objects WHERE id = '${sqlEscape(rf.related_object_id!)}' LIMIT 1`,
     );
     if (relatedObjs.length === 0) {continue;}
     const relObj = relatedObjs[0];
     relatedObjectNames[rf.name] = relObj.name;
 
-    // Get related object's fields for display field resolution
-    const relFields = duckdbQuery<FieldRow>(
+    const relFields = q<FieldRow>(dbFile,
       `SELECT * FROM fields WHERE object_id = '${sqlEscape(relObj.id)}' ORDER BY sort_order`,
     );
     const displayFieldName = resolveDisplayField(relObj, relFields);
 
-    // Collect all referenced entry IDs from our entries
     const entryIds = new Set<string>();
     for (const entry of entries) {
       const val = entry[rf.name];
@@ -169,14 +182,10 @@ function resolveRelationLabels(
       continue;
     }
 
-    // Query display values for the referenced entries
     const idList = Array.from(entryIds)
       .map((id) => `'${sqlEscape(id)}'`)
       .join(",");
-    const displayRows = duckdbQuery<{
-      entry_id: string;
-      value: string;
-    }>(
+    const displayRows = q<{ entry_id: string; value: string }>(dbFile,
       `SELECT e.id as entry_id, ef.value
        FROM entries e
        JOIN entry_fields ef ON ef.entry_id = e.id
@@ -190,7 +199,6 @@ function resolveRelationLabels(
     for (const row of displayRows) {
       labelMap[row.entry_id] = row.value || row.entry_id;
     }
-    // Fill in any IDs that didn't get a display label
     for (const id of entryIds) {
       if (!labelMap[id]) {labelMap[id] = id;}
     }
@@ -211,97 +219,80 @@ type ReverseRelation = {
 
 /**
  * Find reverse relations: other objects with relation fields pointing TO this object.
- * For each, resolve the display labels and group by target entry ID.
+ * Searches across ALL discovered databases to catch cross-DB relations.
  */
 function findReverseRelations(objectId: string): ReverseRelation[] {
-  // Find all relation fields in other objects that reference this object
-  const reverseFields = duckdbQuery<
-    FieldRow & { source_object_id: string; source_object_name: string }
-  >(
-    `SELECT f.*, f.object_id as source_object_id, o.name as source_object_name
-     FROM fields f
-     JOIN objects o ON o.id = f.object_id
-     WHERE f.type = 'relation'
-     AND f.related_object_id = '${sqlEscape(objectId)}'`,
-  );
-
-  if (reverseFields.length === 0) {return [];}
-
+  const dbPaths = discoverDuckDBPaths();
   const result: ReverseRelation[] = [];
 
-  for (const rrf of reverseFields) {
-    // Get source object and its fields
-    const sourceObjs = duckdbQuery<ObjectRow>(
-      `SELECT * FROM objects WHERE id = '${sqlEscape(rrf.source_object_id)}' LIMIT 1`,
-    );
-    if (sourceObjs.length === 0) {continue;}
-
-    const sourceFields = duckdbQuery<FieldRow>(
-      `SELECT * FROM fields WHERE object_id = '${sqlEscape(rrf.source_object_id)}' ORDER BY sort_order`,
-    );
-    const displayFieldName = resolveDisplayField(sourceObjs[0], sourceFields);
-
-    // Fetch all source entries that have this relation field set
-    const refRows = duckdbQuery<{
-      source_entry_id: string;
-      target_value: string;
-    }>(
-      `SELECT ef.entry_id as source_entry_id, ef.value as target_value
-       FROM entry_fields ef
-       WHERE ef.field_id = '${sqlEscape(rrf.id)}'
-       AND ef.value IS NOT NULL
-       AND ef.value != ''`,
+  for (const db of dbPaths) {
+    const reverseFields = q<
+      FieldRow & { source_object_id: string; source_object_name: string }
+    >(db,
+      `SELECT f.*, f.object_id as source_object_id, o.name as source_object_name
+       FROM fields f
+       JOIN objects o ON o.id = f.object_id
+       WHERE f.type = 'relation'
+       AND f.related_object_id = '${sqlEscape(objectId)}'`,
     );
 
-    if (refRows.length === 0) {continue;}
+    for (const rrf of reverseFields) {
+      const sourceObjs = q<ObjectRow>(db,
+        `SELECT * FROM objects WHERE id = '${sqlEscape(rrf.source_object_id)}' LIMIT 1`,
+      );
+      if (sourceObjs.length === 0) {continue;}
 
-    // Get display labels for the source entries
-    const sourceEntryIds = [
-      ...new Set(refRows.map((r) => r.source_entry_id)),
-    ];
-    const idList = sourceEntryIds
-      .map((id) => `'${sqlEscape(id)}'`)
-      .join(",");
-    const displayRows = duckdbQuery<{
-      entry_id: string;
-      value: string;
-    }>(
-      `SELECT ef.entry_id, ef.value
-       FROM entry_fields ef
-       JOIN fields f ON f.id = ef.field_id
-       WHERE ef.entry_id IN (${idList})
-       AND f.name = '${sqlEscape(displayFieldName)}'
-       AND f.object_id = '${sqlEscape(rrf.source_object_id)}'`,
-    );
+      const sourceFields = q<FieldRow>(db,
+        `SELECT * FROM fields WHERE object_id = '${sqlEscape(rrf.source_object_id)}' ORDER BY sort_order`,
+      );
+      const displayFieldName = resolveDisplayField(sourceObjs[0], sourceFields);
 
-    const displayMap: Record<string, string> = {};
-    for (const row of displayRows) {
-      displayMap[row.entry_id] = row.value || row.entry_id;
-    }
+      const refRows = q<{ source_entry_id: string; target_value: string }>(db,
+        `SELECT ef.entry_id as source_entry_id, ef.value as target_value
+         FROM entry_fields ef
+         WHERE ef.field_id = '${sqlEscape(rrf.id)}'
+         AND ef.value IS NOT NULL
+         AND ef.value != ''`,
+      );
 
-    // Build: target_entry_id -> [{id, label}]
-    const entriesMap: Record<
-      string,
-      Array<{ id: string; label: string }>
-    > = {};
-    for (const row of refRows) {
-      const targetIds = parseRelationValue(row.target_value);
-      for (const targetId of targetIds) {
-        if (!entriesMap[targetId]) {entriesMap[targetId] = [];}
-        entriesMap[targetId].push({
-          id: row.source_entry_id,
-          label: displayMap[row.source_entry_id] || row.source_entry_id,
-        });
+      if (refRows.length === 0) {continue;}
+
+      const sourceEntryIds = [...new Set(refRows.map((r) => r.source_entry_id))];
+      const idList = sourceEntryIds.map((id) => `'${sqlEscape(id)}'`).join(",");
+      const displayRows = q<{ entry_id: string; value: string }>(db,
+        `SELECT ef.entry_id, ef.value
+         FROM entry_fields ef
+         JOIN fields f ON f.id = ef.field_id
+         WHERE ef.entry_id IN (${idList})
+         AND f.name = '${sqlEscape(displayFieldName)}'
+         AND f.object_id = '${sqlEscape(rrf.source_object_id)}'`,
+      );
+
+      const displayMap: Record<string, string> = {};
+      for (const row of displayRows) {
+        displayMap[row.entry_id] = row.value || row.entry_id;
       }
-    }
 
-    result.push({
-      fieldName: rrf.name,
-      sourceObjectName: rrf.source_object_name,
-      sourceObjectId: rrf.source_object_id,
-      displayField: displayFieldName,
-      entries: entriesMap,
-    });
+      const entriesMap: Record<string, Array<{ id: string; label: string }>> = {};
+      for (const row of refRows) {
+        const targetIds = parseRelationValue(row.target_value);
+        for (const targetId of targetIds) {
+          if (!entriesMap[targetId]) {entriesMap[targetId] = [];}
+          entriesMap[targetId].push({
+            id: row.source_entry_id,
+            label: displayMap[row.source_entry_id] || row.source_entry_id,
+          });
+        }
+      }
+
+      result.push({
+        fieldName: rrf.name,
+        sourceObjectName: rrf.source_object_name,
+        sourceObjectId: rrf.source_object_id,
+        displayField: displayFieldName,
+        entries: entriesMap,
+      });
+    }
   }
 
   return result;
@@ -322,26 +313,35 @@ export async function GET(
     );
   }
 
-  if (!duckdbPath()) {
-    return Response.json(
-      { error: "DuckDB database not found" },
-      { status: 404 },
-    );
-  }
-
-  // Sanitize name to prevent injection (only allow alphanumeric + underscore)
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+  // Sanitize name to prevent injection (only allow alphanumeric + underscore + hyphen)
+  if (!/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(name)) {
     return Response.json(
       { error: "Invalid object name" },
       { status: 400 },
     );
   }
 
-  // Ensure display_field column exists (idempotent migration)
-  ensureDisplayFieldColumn();
+  // Find which DuckDB file contains this object (searches all discovered DBs)
+  const dbFile = findDuckDBForObject(name);
+  if (!dbFile) {
+    // Fall back to primary DB check for a friendlier error message
+    if (!duckdbPath()) {
+      return Response.json(
+        { error: "DuckDB database not found" },
+        { status: 404 },
+      );
+    }
+    return Response.json(
+      { error: `Object '${name}' not found` },
+      { status: 404 },
+    );
+  }
 
-  // Fetch object metadata
-  const objects = duckdbQuery<ObjectRow>(
+  // Ensure display_field column exists on this specific DB
+  ensureDisplayFieldColumn(dbFile);
+
+  // All queries below target the specific DB that owns this object
+  const objects = q<ObjectRow>(dbFile,
     `SELECT * FROM objects WHERE name = '${name}' LIMIT 1`,
   );
 
@@ -354,27 +354,25 @@ export async function GET(
 
   const obj = objects[0];
 
-  // Fetch fields for this object
-  const fields = duckdbQuery<FieldRow>(
+  const fields = q<FieldRow>(dbFile,
     `SELECT * FROM fields WHERE object_id = '${obj.id}' ORDER BY sort_order`,
   );
 
-  // Fetch statuses for this object
-  const statuses = duckdbQuery<StatusRow>(
+  const statuses = q<StatusRow>(dbFile,
     `SELECT * FROM statuses WHERE object_id = '${obj.id}' ORDER BY sort_order`,
   );
 
   // Try the PIVOT view first, then fall back to raw EAV query + client-side pivot
   let entries: Record<string, unknown>[] = [];
 
-  const pivotEntries = duckdbQuery(
+  const pivotEntries = q(dbFile,
     `SELECT * FROM v_${name} ORDER BY created_at DESC LIMIT 200`,
   );
 
   if (pivotEntries.length > 0) {
     entries = pivotEntries;
   } else {
-    const rawRows = duckdbQuery<EavRow>(
+    const rawRows = q<EavRow>(dbFile,
       `SELECT e.id as entry_id, e.created_at, e.updated_at,
               f.name as field_name, ef.value
        FROM entries e
@@ -388,28 +386,23 @@ export async function GET(
     entries = pivotEavRows(rawRows);
   }
 
-  // Parse enum JSON strings in fields
   const parsedFields = fields.map((f) => ({
     ...f,
     enum_values: f.enum_values ? tryParseJson(f.enum_values) : undefined,
     enum_colors: f.enum_colors ? tryParseJson(f.enum_colors) : undefined,
   }));
 
-  // Resolve relation field values to human-readable display labels
   const { labels: relationLabels, relatedObjectNames } =
-    resolveRelationLabels(fields, entries);
+    resolveRelationLabels(dbFile, fields, entries);
 
-  // Enrich fields with related object names for frontend display
   const enrichedFields = parsedFields.map((f) => ({
     ...f,
     related_object_name:
       f.type === "relation" ? relatedObjectNames[f.name] : undefined,
   }));
 
-  // Find reverse relations (other objects linking TO this one)
   const reverseRelations = findReverseRelations(obj.id);
 
-  // Compute the effective display field for this object
   const effectiveDisplayField = resolveDisplayField(obj, fields);
 
   return Response.json({

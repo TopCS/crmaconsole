@@ -1,4 +1,4 @@
-import { duckdbExec, duckdbQuery, duckdbPath } from "@/lib/workspace";
+import { duckdbExecOnFile, duckdbQueryOnFile, findDuckDBForObject } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,12 +18,6 @@ export async function POST(
 ) {
 	const { name } = await params;
 
-	if (!duckdbPath()) {
-		return Response.json(
-			{ error: "DuckDB not found" },
-			{ status: 404 },
-		);
-	}
 	if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
 		return Response.json(
 			{ error: "Invalid object name" },
@@ -31,8 +25,16 @@ export async function POST(
 		);
 	}
 
+	const dbFile = findDuckDBForObject(name);
+	if (!dbFile) {
+		return Response.json(
+			{ error: "DuckDB not found" },
+			{ status: 404 },
+		);
+	}
+
 	// Find object
-	const objects = duckdbQuery<{ id: string }>(
+	const objects = duckdbQueryOnFile<{ id: string }>(dbFile,
 		`SELECT id FROM objects WHERE name = '${sqlEscape(name)}' LIMIT 1`,
 	);
 	if (objects.length === 0) {
@@ -44,7 +46,7 @@ export async function POST(
 	const objectId = objects[0].id;
 
 	// Generate UUID for the new entry
-	const idRows = duckdbQuery<{ id: string }>(
+	const idRows = duckdbQueryOnFile<{ id: string }>(dbFile,
 		"SELECT uuid()::VARCHAR as id",
 	);
 	const entryId = idRows[0]?.id;
@@ -57,7 +59,7 @@ export async function POST(
 
 	// Create entry
 	const now = new Date().toISOString();
-	const ok = duckdbExec(
+	const ok = duckdbExecOnFile(dbFile,
 		`INSERT INTO entries (id, object_id, created_at, updated_at) VALUES ('${sqlEscape(entryId)}', '${sqlEscape(objectId)}', '${now}', '${now}')`,
 	);
 	if (!ok) {
@@ -77,7 +79,7 @@ export async function POST(
 
 	if (body.fields && typeof body.fields === "object") {
 		// Get field IDs by name
-		const dbFields = duckdbQuery<{ id: string; name: string }>(
+		const dbFields = duckdbQueryOnFile<{ id: string; name: string }>(dbFile,
 			`SELECT id, name FROM fields WHERE object_id = '${sqlEscape(objectId)}'`,
 		);
 		const fieldMap = new Map(dbFields.map((f) => [f.name, f.id]));
@@ -85,7 +87,7 @@ export async function POST(
 		for (const [fieldName, value] of Object.entries(body.fields)) {
 			const fieldId = fieldMap.get(fieldName);
 			if (!fieldId || value == null) {continue;}
-			duckdbExec(
+			duckdbExecOnFile(dbFile,
 				`INSERT INTO entry_fields (entry_id, field_id, value) VALUES ('${sqlEscape(entryId)}', '${sqlEscape(fieldId)}', '${sqlEscape(String(value))}')`,
 			);
 		}

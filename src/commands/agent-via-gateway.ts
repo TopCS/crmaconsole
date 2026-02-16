@@ -228,42 +228,80 @@ async function agentViaGatewayStreamJson(opts: AgentCliOpts, _runtime: RuntimeEn
   const channel = normalizeMessageChannel(opts.channel) ?? DEFAULT_CHAT_CHANNEL;
   const idempotencyKey = opts.runId?.trim() || randomIdempotencyKey();
 
-  const response = await callGateway<GatewayAgentResponse>({
-    method: "agent",
-    params: {
-      message: body,
-      agentId,
-      to: opts.to,
-      replyTo: opts.replyTo,
-      sessionId: opts.sessionId,
-      sessionKey,
-      thinking: opts.thinking,
-      deliver: Boolean(opts.deliver),
-      channel,
-      replyChannel: opts.replyChannel,
-      replyAccountId: opts.replyAccount,
-      timeout: timeoutSeconds,
-      lane: opts.lane,
-      extraSystemPrompt: opts.extraSystemPrompt,
-      idempotencyKey,
-    },
-    expectFinal: true,
-    timeoutMs: gatewayTimeoutMs,
-    clientName: GATEWAY_CLIENT_NAMES.CLI,
-    mode: GATEWAY_CLIENT_MODES.CLI,
-    // Request tool-events capability so the gateway streams tool start/result
-    // events alongside assistant text, thinking, and lifecycle events.
-    caps: ["tool-events"],
-    onEvent: (evt) => {
-      // Emit each gateway event as an NDJSON line (chat deltas, agent tool/lifecycle events).
-      emitNdjsonLine({ event: evt.event, ...(evt.payload as Record<string, unknown>) });
-    },
-  });
+  // Capture the runId from early gateway events so we can abort the
+  // correct run when the process receives SIGTERM/SIGINT.
+  let capturedRunId: string | undefined;
+  const abortController = new AbortController();
+  const onSignal = () => {
+    if (!abortController.signal.aborted) {
+      abortController.abort();
+    }
+  };
+  process.on("SIGTERM", onSignal);
+  process.on("SIGINT", onSignal);
 
-  // Emit the final result as the last NDJSON line.
-  emitNdjsonLine({ event: "result", ...response });
+  try {
+    const response = await callGateway<GatewayAgentResponse>({
+      method: "agent",
+      params: {
+        message: body,
+        agentId,
+        to: opts.to,
+        replyTo: opts.replyTo,
+        sessionId: opts.sessionId,
+        sessionKey,
+        thinking: opts.thinking,
+        deliver: Boolean(opts.deliver),
+        channel,
+        replyChannel: opts.replyChannel,
+        replyAccountId: opts.replyAccount,
+        timeout: timeoutSeconds,
+        lane: opts.lane,
+        extraSystemPrompt: opts.extraSystemPrompt,
+        idempotencyKey,
+      },
+      expectFinal: true,
+      timeoutMs: gatewayTimeoutMs,
+      clientName: GATEWAY_CLIENT_NAMES.CLI,
+      mode: GATEWAY_CLIENT_MODES.CLI,
+      // Request tool-events capability so the gateway streams tool start/result
+      // events alongside assistant text, thinking, and lifecycle events.
+      caps: ["tool-events"],
+      signal: abortController.signal,
+      onEvent: (evt) => {
+        // Capture runId from the first event that carries one (lifecycle/accepted).
+        if (!capturedRunId) {
+          const payload = evt.payload as Record<string, unknown> | undefined;
+          if (payload?.runId) {
+            capturedRunId = String(payload.runId);
+          }
+        }
+        // Emit each gateway event as an NDJSON line (chat deltas, agent tool/lifecycle events).
+        emitNdjsonLine({ event: evt.event, ...(evt.payload as Record<string, unknown>) });
+      },
+      onAbort: async (client) => {
+        // Best-effort: tell the gateway to abort the agent run before we exit.
+        if (capturedRunId) {
+          await client.request("chat.abort", { sessionKey, runId: capturedRunId }).catch(() => {});
+        }
+      },
+    });
 
-  return response;
+    // Emit the final result as the last NDJSON line.
+    emitNdjsonLine({ event: "result", ...response });
+
+    return response;
+  } catch (err) {
+    // Re-throw everything except AbortError (expected on SIGTERM/SIGINT).
+    if (err instanceof DOMException && err.name === "AbortError") {
+      emitNdjsonLine({ event: "aborted", reason: "signal" });
+      return {} as GatewayAgentResponse;
+    }
+    throw err;
+  } finally {
+    process.removeListener("SIGTERM", onSignal);
+    process.removeListener("SIGINT", onSignal);
+  }
 }
 
 export async function agentCliCommand(opts: AgentCliOpts, runtime: RuntimeEnv, deps?: CliDeps) {
