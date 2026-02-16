@@ -43,6 +43,15 @@ type ObjectKanbanProps = {
 
 // --- Helpers ---
 
+/** Safely convert unknown (DuckDB) value to string for display. */
+function safeString(val: unknown): string {
+	if (val == null) {return "";}
+	if (typeof val === "object") {return JSON.stringify(val);}
+	if (typeof val === "string") {return val;}
+	if (typeof val === "number" || typeof val === "boolean" || typeof val === "bigint") {return String(val);}
+	return "";
+}
+
 function parseRelationValue(value: string | null | undefined): string[] {
   if (!value) {return [];}
   const trimmed = value.trim();
@@ -65,8 +74,8 @@ function getEntryTitle(entry: Record<string, unknown>, fields: Field[]): string 
       f.name.toLowerCase().includes("title"),
   );
   return titleField
-    ? String(entry[titleField.name] ?? "Untitled")
-    : String(entry[fields[0]?.name] ?? "Untitled");
+    ? safeString(entry[titleField.name]) || "Untitled"
+    : safeString(entry[fields[0]?.name]) || "Untitled";
 }
 
 // --- Draggable Card ---
@@ -84,7 +93,7 @@ function DraggableCard({
   relationLabels?: Record<string, Record<string, string>>;
   onEntryClick?: (entryId: string) => void;
 }) {
-  const entryId = String(entry.entry_id ?? "");
+  const entryId = safeString(entry.entry_id) || "";
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: entryId,
     data: { entry },
@@ -167,7 +176,7 @@ function CardContent({
             const val = entry[field.name];
             if (!val) {return null;}
 
-            let displayVal = String(val);
+            let displayVal = safeString(val);
             if (field.type === "user") {
               const member = members?.find((m) => m.id === displayVal);
               if (member) {displayVal = member.name;}
@@ -185,7 +194,7 @@ function CardContent({
                 </span>
                 {field.type === "enum" ? (
                   <EnumBadgeMini
-                    value={String(val)}
+                    value={safeString(val)}
                     enumValues={field.enum_values}
                     enumColors={field.enum_colors}
                   />
@@ -349,7 +358,7 @@ function DroppableColumn({
             onChange={(e) => setNameValue(e.target.value)}
             onBlur={handleRename}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {handleRename();}
+              if (e.key === "Enter") {void handleRename();}
               if (e.key === "Escape") {
                 setNameValue(columnName);
                 setEditingName(false);
@@ -403,7 +412,7 @@ function DroppableColumn({
         ) : (
           items.map((entry, idx) => (
             <DraggableCard
-              key={String(entry.entry_id ?? idx)}
+              key={safeString(entry.entry_id) || String(idx)}
               entry={entry}
               fields={cardFields}
               members={members}
@@ -473,7 +482,7 @@ export function ObjectKanban({
     const unique = new Set<string>();
     for (const e of localEntries) {
       const val = groupField ? e[groupField.name] : undefined;
-      if (val) {unique.add(String(val));}
+      if (val) {unique.add(safeString(val));}
     }
     return Array.from(unique).map((v) => ({ name: v, color: "#94a3b8" }));
   }, [statuses, groupField, localEntries]);
@@ -485,7 +494,7 @@ export function ObjectKanban({
     groups["_ungrouped"] = [];
 
     for (const entry of localEntries) {
-      const val = groupField ? String(entry[groupField.name] ?? "") : "";
+      const val = groupField ? safeString(entry[groupField.name]) : "";
       if (groups[val]) {
         groups[val].push(entry);
       } else {
@@ -535,7 +544,7 @@ export function ObjectKanban({
       const entry = localEntries.find((e) => String(e.entry_id) === entryId);
       if (!entry) {return;}
 
-      const currentValue = String(entry[groupField.name] ?? "");
+      const currentValue = safeString(entry[groupField.name]);
       if (currentValue === targetColumn) {return;}
 
       // Optimistic update
@@ -658,7 +667,7 @@ export function ObjectKanban({
             <div className="flex-1 overflow-y-auto p-2">
               {grouped["_ungrouped"].map((entry, idx) => (
                 <DraggableCard
-                  key={String(entry.entry_id ?? idx)}
+                  key={safeString(entry.entry_id) || String(idx)}
                   entry={entry}
                   fields={cardFields}
                   members={members}

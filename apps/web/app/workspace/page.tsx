@@ -24,6 +24,7 @@ import { isCodeFile } from "@/lib/report-utils";
 import { CronDashboard } from "../components/cron/cron-dashboard";
 import { CronJobDetail } from "../components/cron/cron-job-detail";
 import type { CronJob, CronJobsResponse } from "../types/cron";
+import { useIsMobile } from "../hooks/use-mobile";
 
 // --- Types ---
 
@@ -247,6 +248,11 @@ function WorkspacePageInner() {
     objectName: string;
     entryId: string;
   } | null>(null);
+
+  // Mobile responsive state
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [chatSessionsOpen, setChatSessionsOpen] = useState(false);
 
   // Derive file context for chat sidebar directly from activePath (stable across loading).
   // Exclude reserved virtual paths (~chats, ~cron, etc.) where file-scoped chat is irrelevant.
@@ -833,28 +839,106 @@ function WorkspacePageInner() {
   return (
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
     <div className="flex h-screen" style={{ background: "var(--color-bg)" }} onClick={handleContainerClick}>
-      {/* Sidebar */}
-      <WorkspaceSidebar
-        tree={enhancedTree}
-        activePath={activePath}
-        onSelect={handleNodeSelect}
-        onRefresh={refreshTree}
-        orgName={context?.organization?.name}
-        loading={treeLoading}
-        browseDir={browseDir}
-        parentDir={effectiveParentDir}
-        onNavigateUp={handleNavigateUp}
-        onGoHome={handleGoHome}
-        onFileSearchSelect={handleFileSearchSelect}
-        workspaceRoot={workspaceRoot}
-        onGoToChat={handleGoToChat}
-        onExternalDrop={handleSidebarExternalDrop}
-      />
+      {/* Sidebar — static on desktop, drawer overlay on mobile */}
+      {isMobile ? (
+        sidebarOpen && (
+          <WorkspaceSidebar
+            tree={enhancedTree}
+            activePath={activePath}
+            onSelect={(node) => { handleNodeSelect(node); setSidebarOpen(false); }}
+            onRefresh={refreshTree}
+            orgName={context?.organization?.name}
+            loading={treeLoading}
+            browseDir={browseDir}
+            parentDir={effectiveParentDir}
+            onNavigateUp={handleNavigateUp}
+            onGoHome={handleGoHome}
+            onFileSearchSelect={(item) => { handleFileSearchSelect?.(item); setSidebarOpen(false); }}
+            workspaceRoot={workspaceRoot}
+            onGoToChat={() => { handleGoToChat(); setSidebarOpen(false); }}
+            onExternalDrop={handleSidebarExternalDrop}
+            mobile
+            onClose={() => setSidebarOpen(false)}
+          />
+        )
+      ) : (
+        <WorkspaceSidebar
+          tree={enhancedTree}
+          activePath={activePath}
+          onSelect={handleNodeSelect}
+          onRefresh={refreshTree}
+          orgName={context?.organization?.name}
+          loading={treeLoading}
+          browseDir={browseDir}
+          parentDir={effectiveParentDir}
+          onNavigateUp={handleNavigateUp}
+          onGoHome={handleGoHome}
+          onFileSearchSelect={handleFileSearchSelect}
+          workspaceRoot={workspaceRoot}
+          onGoToChat={handleGoToChat}
+          onExternalDrop={handleSidebarExternalDrop}
+        />
+      )}
 
       {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* When a file is selected: show top bar with breadcrumbs */}
-        {activePath && content.kind !== "none" && (
+        {/* Mobile top bar — always visible on mobile */}
+        {isMobile && (
+          <div
+            className="px-3 py-2 border-b flex-shrink-0 flex items-center justify-between gap-2"
+            style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+          >
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="p-2 rounded-lg flex-shrink-0"
+              style={{ color: "var(--color-text-muted)" }}
+              title="Open sidebar"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="4" x2="20" y1="12" y2="12" /><line x1="4" x2="20" y1="6" y2="6" /><line x1="4" x2="20" y1="18" y2="18" />
+              </svg>
+            </button>
+            <div className="flex-1 min-w-0 text-sm font-medium truncate" style={{ color: "var(--color-text)" }}>
+              {activePath ? activePath.split("/").pop() : (context?.organization?.name || "Workspace")}
+            </div>
+            <div className="flex items-center gap-1">
+              {activePath && content.kind !== "none" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActivePath(null);
+                    setContent({ kind: "none" });
+                    router.replace("/workspace", { scroll: false });
+                  }}
+                  className="p-2 rounded-lg flex-shrink-0"
+                  style={{ color: "var(--color-text-muted)" }}
+                  title="Back to chat"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m12 19-7-7 7-7" /><path d="M19 12H5" />
+                  </svg>
+                </button>
+              )}
+              {showMainChat && (
+                <button
+                  type="button"
+                  onClick={() => setChatSessionsOpen(true)}
+                  className="p-2 rounded-lg flex-shrink-0"
+                  style={{ color: "var(--color-text-muted)" }}
+                  title="Chat sessions"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* When a file is selected: show top bar with breadcrumbs (desktop only, mobile has unified top bar) */}
+        {!isMobile && activePath && content.kind !== "none" && (
           <div
             className="px-6 border-b flex-shrink-0 flex items-center justify-between"
             style={{ borderColor: "var(--color-border)" }}
@@ -915,23 +999,48 @@ function WorkspacePageInner() {
                     setActiveSessionId(id);
                   }}
                   onSessionsChange={refreshSessions}
+                  compact={isMobile}
                 />
               </div>
-              <ChatSessionsSidebar
-                sessions={sessions}
-                activeSessionId={activeSessionId}
-                activeSessionTitle={activeSessionTitle}
-                streamingSessionIds={streamingSessionIds}
-                onSelectSession={(sessionId) => {
-                  setActiveSessionId(sessionId);
-                  void chatRef.current?.loadSession(sessionId);
-                }}
-                onNewSession={() => {
-                  setActiveSessionId(null);
-                  void chatRef.current?.newSession();
-                  router.replace("/workspace", { scroll: false });
-                }}
-              />
+              {/* Chat sessions sidebar — static on desktop, drawer overlay on mobile */}
+              {isMobile ? (
+                chatSessionsOpen && (
+                  <ChatSessionsSidebar
+                    sessions={sessions}
+                    activeSessionId={activeSessionId}
+                    activeSessionTitle={activeSessionTitle}
+                    streamingSessionIds={streamingSessionIds}
+                    onSelectSession={(sessionId) => {
+                      setActiveSessionId(sessionId);
+                      void chatRef.current?.loadSession(sessionId);
+                    }}
+                    onNewSession={() => {
+                      setActiveSessionId(null);
+                      void chatRef.current?.newSession();
+                      router.replace("/workspace", { scroll: false });
+                      setChatSessionsOpen(false);
+                    }}
+                    mobile
+                    onClose={() => setChatSessionsOpen(false)}
+                  />
+                )
+              ) : (
+                <ChatSessionsSidebar
+                  sessions={sessions}
+                  activeSessionId={activeSessionId}
+                  activeSessionTitle={activeSessionTitle}
+                  streamingSessionIds={streamingSessionIds}
+                  onSelectSession={(sessionId) => {
+                    setActiveSessionId(sessionId);
+                    void chatRef.current?.loadSession(sessionId);
+                  }}
+                  onNewSession={() => {
+                    setActiveSessionId(null);
+                    void chatRef.current?.newSession();
+                    router.replace("/workspace", { scroll: false });
+                  }}
+                />
+              )}
             </>
           ) : (
             <>
@@ -957,8 +1066,8 @@ function WorkspacePageInner() {
                 />
               </div>
 
-              {/* Chat sidebar (file/folder-scoped) — hidden for reserved paths */}
-              {fileContext && showChatSidebar && (
+              {/* Chat sidebar (file/folder-scoped) — hidden for reserved paths, hidden on mobile */}
+              {!isMobile && fileContext && showChatSidebar && (
                 <aside
                   className="flex-shrink-0 border-l"
                   style={{

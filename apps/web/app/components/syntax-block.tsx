@@ -42,7 +42,7 @@ export function SyntaxBlock({ code, lang }: SyntaxBlockProps) {
 
   useEffect(() => {
     let cancelled = false;
-    getHighlighter().then((hl) => {
+    void getHighlighter().then((hl) => {
       if (cancelled) {return;}
       try {
         const result = hl.codeToHtml(code, {

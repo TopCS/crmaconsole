@@ -1243,3 +1243,44 @@ a,
 .code-viewer-highlighted .line:hover {
   background: var(--color-surface-hover);
 }
+
+/* ============================================================
+   Mobile Drawer & Overlay
+   ============================================================ */
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  animation: drawer-fade-in 200ms ease-out;
+}
+
+@keyframes drawer-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes drawer-slide-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes drawer-slide-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.drawer-left {
+  animation: drawer-slide-left 200ms ease-out;
+}
+
+.drawer-right {
+  animation: drawer-slide-right 200ms ease-out;
+}
+
+/* Prevent horizontal overflow on mobile */
+html, body {
+  overflow-x: hidden;
+}

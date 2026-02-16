@@ -97,7 +97,7 @@ export function ReportCard({ config }: ReportCardProps) {
   }, [visiblePanels]);
 
   useEffect(() => {
-    executePanels();
+    void executePanels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

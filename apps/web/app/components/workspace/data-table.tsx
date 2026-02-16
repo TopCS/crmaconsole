@@ -511,7 +511,7 @@ export function DataTable<TData, TValue>({
 			{/* Table */}
 			<div
 				ref={scrollContainerRef}
-				className="flex-1 overflow-auto"
+				className="flex-1 overflow-auto min-w-0"
 				onScroll={handleScroll}
 			>
 				{loading ? (

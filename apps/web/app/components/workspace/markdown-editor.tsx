@@ -170,7 +170,7 @@ export function MarkdownEditor({
 
       event.preventDefault();
       event.stopPropagation();
-      insertUploadedImages(imageFiles);
+      void insertUploadedImages(imageFiles);
     };
 
     // Also prevent dragover so the browser doesn't hijack the drop
@@ -190,7 +190,7 @@ export function MarkdownEditor({
       if (imageFiles.length > 0) {
         event.preventDefault();
         event.stopPropagation();
-        insertUploadedImages(imageFiles);
+        void insertUploadedImages(imageFiles);
         return;
       }
 
@@ -312,7 +312,7 @@ export function MarkdownEditor({
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
-        handleSave();
+        void handleSave();
       }
     };
     document.addEventListener("keydown", handleKeyDown);
@@ -369,7 +369,7 @@ export function MarkdownEditor({
           </span>
           <button
             type="button"
-            onClick={handleSave}
+            onClick={() => void handleSave()}
             disabled={saving || !isDirty}
             className="editor-save-button"
           >

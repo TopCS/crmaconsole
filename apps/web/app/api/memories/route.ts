@@ -34,7 +34,9 @@ export async function GET() {
     try {
       const entries = readdirSync(memoryDir, { withFileTypes: true });
       for (const entry of entries) {
-        if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+        if (!entry.isFile() || !entry.name.endsWith(".md")) {
+          continue;
+        }
         const filePath = join(memoryDir, entry.name);
         try {
           const content = readFileSync(filePath, "utf-8");

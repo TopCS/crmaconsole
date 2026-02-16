@@ -234,46 +234,55 @@ function AttachmentStrip({
 								</svg>
 							</button>
 
-							<div className="flex items-center gap-2.5 px-3 py-2.5">
-								<div
-									className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-									style={{
-										background:
-											meta.bg,
-										color: meta.fg,
-									}}
-								>
-									<FileTypeIcon
-										category={
-											category
-										}
-									/>
-								</div>
-								<div className="min-w-0 max-w-[140px]">
-									<p
-										className="text-[11px] font-medium truncate"
-										style={{
-											color: "var(--color-text)",
+							{category === "image" ? (
+								/* Image thumbnail preview */
+								<div className="flex flex-col items-center" style={{ width: 96 }}>
+									<img
+										src={`/api/workspace/raw-file?path=${encodeURIComponent(af.path)}`}
+										alt={af.name}
+										className="w-full rounded-t-xl object-cover"
+										style={{ height: 56, background: "var(--color-bg-secondary)" }}
+										onError={(e) => {
+											(e.currentTarget as HTMLImageElement).style.display = "none";
 										}}
-										title={
-											af.path
-										}
+									/>
+									<p
+										className="text-[10px] font-medium truncate w-full px-2 py-1.5 text-center"
+										style={{ color: "var(--color-text)" }}
+										title={af.path}
 									>
 										{af.name}
 									</p>
-									<p
-										className="text-[9px] truncate"
-										style={{
-											color: "var(--color-text-muted)",
-										}}
-										title={
-											af.path
-										}
-									>
-										{short}
-									</p>
 								</div>
-							</div>
+							) : (
+								<div className="flex items-center gap-2.5 px-3 py-2.5">
+									<div
+										className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+										style={{
+											background: meta.bg,
+											color: meta.fg,
+										}}
+									>
+										<FileTypeIcon category={category} />
+									</div>
+									<div className="min-w-0 max-w-[140px]">
+										<p
+											className="text-[11px] font-medium truncate"
+											style={{ color: "var(--color-text)" }}
+											title={af.path}
+										>
+											{af.name}
+										</p>
+										<p
+											className="text-[9px] truncate"
+											style={{ color: "var(--color-text-muted)" }}
+											title={af.path}
+										>
+											{short}
+										</p>
+									</div>
+								</div>
+							)}
 						</div>
 					);
 				})}
@@ -625,7 +634,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 					// period), skip the expensive SSE replay -- the
 					// persisted messages we already loaded are final.
 					if (res.headers.get("X-Run-Active") === "false") {
-						res.body.cancel();
+						void res.body.cancel();
 						return false;
 					}
 
@@ -1135,10 +1144,10 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 		useImperativeHandle(
 			ref,
 			() => ({
-				loadSession: handleSessionSelect,
-				newSession: handleNewSession,
+			loadSession: handleSessionSelect,
+			newSession: async () => { handleNewSession(); },
 				sendNewMessage: async (text: string) => {
-					await handleNewSession();
+					handleNewSession();
 					const title =
 						text.length > 60 ? text.slice(0, 60) + "..." : text;
 					const sessionId = await createSession(title);
@@ -1231,6 +1240,37 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 			setAttachedFiles([]);
 		}, []);
 
+		/** Upload native files (e.g. dropped from Finder/Desktop) and attach them. */
+		const uploadAndAttachNativeFiles = useCallback(
+			async (files: FileList) => {
+				const uploaded: AttachedFile[] = [];
+				for (const file of Array.from(files)) {
+					try {
+						const form = new FormData();
+						form.append("file", file);
+						const res = await fetch("/api/workspace/upload", {
+							method: "POST",
+							body: form,
+						});
+						if (!res.ok) { continue; }
+						const json = (await res.json()) as { ok?: boolean; path?: string };
+						if (!json.ok || !json.path) { continue; }
+						uploaded.push({
+							id: `${json.path}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+							name: file.name,
+							path: json.path,
+						});
+					} catch {
+						// skip files that fail to upload
+					}
+				}
+				if (uploaded.length > 0) {
+					setAttachedFiles((prev) => [...prev, ...uploaded]);
+				}
+			},
+			[],
+		);
+
 		// ── Status label ──
 
 		const statusLabel = loadingSession
@@ -1257,7 +1297,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 				<div className="flex flex-col min-h-full">
 				{/* Header — sticky glass bar */}
 				<header
-					className={`${compact ? "px-3 py-2" : "px-6 py-3"} flex items-center justify-between sticky top-0 z-20 backdrop-blur-md`}
+					className={`${compact ? "px-3 py-2" : "px-3 py-2 md:px-6 md:py-3"} flex items-center justify-between sticky top-0 z-20 backdrop-blur-md`}
 					style={{
 						background: "var(--color-bg-glass)",
 					}}
@@ -1493,7 +1533,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 
 				{/* Input — sticky glass bar at bottom */}
 				<div
-					className={`${compact ? "px-3 py-2" : "px-6 pb-5 pt-0"} sticky bottom-0 z-20 backdrop-blur-md`}
+					className={`${compact ? "px-3 py-2" : "px-3 pb-3 pt-0 md:px-6 md:pb-5"} sticky bottom-0 z-20 backdrop-blur-md`}
 					style={{ background: "var(--color-bg-glass)" }}
 				>
 					<div
@@ -1508,15 +1548,29 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 								border: "1px solid var(--color-border)",
 								boxShadow: "0 0 32px rgba(0,0,0,0.07)",
 							}}
-							onDragOver={(e) => {
-								if (e.dataTransfer?.types.includes("application/x-file-mention")) {
-									e.preventDefault();
-									e.dataTransfer.dropEffect = "copy";
-								}
-							}}
-							onDrop={(e) => {
-								const data = e.dataTransfer?.getData("application/x-file-mention");
-								if (!data) {return;}
+						onDragOver={(e) => {
+							if (
+								e.dataTransfer?.types.includes("application/x-file-mention") ||
+								e.dataTransfer?.types.includes("Files")
+							) {
+								e.preventDefault();
+								e.dataTransfer.dropEffect = "copy";
+								// visual feedback
+								(e.currentTarget as HTMLElement).setAttribute("data-drag-hover", "");
+							}
+						}}
+						onDragLeave={(e) => {
+							// Only remove when leaving the container itself (not entering a child)
+							if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+								(e.currentTarget as HTMLElement).removeAttribute("data-drag-hover");
+							}
+						}}
+						onDrop={(e) => {
+							(e.currentTarget as HTMLElement).removeAttribute("data-drag-hover");
+
+							// Sidebar file mention drop
+							const data = e.dataTransfer?.getData("application/x-file-mention");
+							if (data) {
 								e.preventDefault();
 								e.stopPropagation();
 								try {
@@ -1527,11 +1581,21 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 								} catch {
 									// ignore malformed data
 								}
-							}}
+								return;
+							}
+
+							// Native file drop (from OS file manager / Desktop)
+							const files = e.dataTransfer?.files;
+							if (files && files.length > 0) {
+								e.preventDefault();
+								e.stopPropagation();
+								void uploadAndAttachNativeFiles(files);
+							}
+						}}
 						>
 						{/* Queued messages indicator */}
 						{queuedMessages.length > 0 && (
-							<div className={`${compact ? "px-2 pt-2" : "px-3 pt-3"}`}>
+                            <div className={compact ? "px-2 pt-2" : "px-3 pt-3"}>
 								<div
 									className="rounded-xl overflow-hidden"
 									style={{
@@ -1599,6 +1663,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 								onChange={(isEmpty) =>
 									setEditorEmpty(isEmpty)
 								}
+								onNativeFileDrop={uploadAndAttachNativeFiles}
 							placeholder={
 								compact && fileContext
 									? `Ask about ${fileContext.isDirectory ? "this folder" : fileContext.filename}...`

@@ -37,7 +37,9 @@ function findSessionFile(sessionId: string): string | null {
   try {
     const agentDirs = readdirSync(agentsDir, { withFileTypes: true });
     for (const agentDir of agentDirs) {
-      if (!agentDir.isDirectory()) continue;
+      if (!agentDir.isDirectory()) {
+        continue;
+      }
 
       const sessionFile = join(
         agentsDir,

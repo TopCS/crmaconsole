@@ -272,8 +272,11 @@ async function agentViaGatewayStreamJson(opts: AgentCliOpts, _runtime: RuntimeEn
         // Capture runId from the first event that carries one (lifecycle/accepted).
         if (!capturedRunId) {
           const payload = evt.payload as Record<string, unknown> | undefined;
-          if (payload?.runId) {
-            capturedRunId = String(payload.runId);
+          const rid = payload?.runId;
+          if (typeof rid === "string" && rid.trim()) {
+            capturedRunId = rid.trim();
+          } else if (typeof rid === "number") {
+            capturedRunId = String(rid);
           }
         }
         // Emit each gateway event as an NDJSON line (chat deltas, agent tool/lifecycle events).

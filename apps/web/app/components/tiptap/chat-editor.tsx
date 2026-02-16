@@ -38,6 +38,8 @@ type ChatEditorProps = {
 	onSubmit: (text: string, mentionedFiles: Array<{ name: string; path: string }>) => void;
 	/** Called on every content change. */
 	onChange?: (isEmpty: boolean) => void;
+	/** Called when native files (e.g. from Finder/Desktop) are dropped onto the editor. */
+	onNativeFileDrop?: (files: FileList) => void;
 	placeholder?: string;
 	disabled?: boolean;
 	compact?: boolean;
@@ -207,9 +209,12 @@ function createChatFileMentionSuggestion() {
 // ── Main component ──
 
 export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(
-	function ChatEditor({ onSubmit, onChange, placeholder, disabled, compact }, ref) {
+	function ChatEditor({ onSubmit, onChange, onNativeFileDrop, placeholder, disabled, compact }, ref) {
 		const submitRef = useRef(onSubmit);
 		submitRef.current = onSubmit;
+
+		const nativeFileDropRef = useRef(onNativeFileDrop);
+		nativeFileDropRef.current = onNativeFileDrop;
 
 		// Ref to access the TipTap editor from within ProseMirror's handleDOMEvents
 		// (the handlers are defined at useEditor() call time, before the editor exists).
@@ -261,35 +266,53 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(
 							de.dataTransfer.dropEffect = "copy";
 							return true;
 						}
+						// Accept native file drops (e.g. from Finder/Desktop)
+						if (de.dataTransfer?.types.includes("Files")) {
+							de.preventDefault();
+							de.dataTransfer.dropEffect = "copy";
+							return true;
+						}
 						return false;
 					},
 					drop: (_view, event) => {
 						const de = event;
+
+						// Sidebar file mention drop
 						const data = de.dataTransfer?.getData("application/x-file-mention");
-						if (!data) {return false;}
-
-						de.preventDefault();
-						de.stopPropagation();
-
-						try {
-							const { name, path } = JSON.parse(data) as { name: string; path: string };
-							if (name && path) {
-								editorRefInternal.current
-									?.chain()
-									.focus()
-									.insertContent([
-										{
-											type: "chatFileMention",
-											attrs: { label: name, path },
-										},
-										{ type: "text", text: " " },
-									])
-									.run();
+						if (data) {
+							de.preventDefault();
+							de.stopPropagation();
+							try {
+								const { name, path } = JSON.parse(data) as { name: string; path: string };
+								if (name && path) {
+									editorRefInternal.current
+										?.chain()
+										.focus()
+										.insertContent([
+											{
+												type: "chatFileMention",
+												attrs: { label: name, path },
+											},
+											{ type: "text", text: " " },
+										])
+										.run();
+								}
+							} catch {
+								// ignore malformed data
 							}
-						} catch {
-							// ignore malformed data
+							return true;
 						}
-						return true;
+
+						// Native file drop (from OS file manager)
+						const files = de.dataTransfer?.files;
+						if (files && files.length > 0) {
+							de.preventDefault();
+							de.stopPropagation();
+							nativeFileDropRef.current?.(files);
+							return true;
+						}
+
+						return false;
 					},
 				},
 			},

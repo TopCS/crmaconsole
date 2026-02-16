@@ -141,7 +141,7 @@ function HighlightedCode({
 
   useEffect(() => {
     let cancelled = false;
-    getHighlighter().then((highlighter) => {
+    void getHighlighter().then((highlighter) => {
       if (cancelled) {return;}
       const result = highlighter.codeToHtml(content, {
         lang: lang === "text" ? "text" : lang,

@@ -1,6 +1,6 @@
 import { cpSync, existsSync, statSync } from "node:fs";
-import { dirname, basename, extname, join } from "node:path";
-import { safeResolvePath, safeResolveNewPath, isSystemFile } from "@/lib/workspace";
+import { dirname, basename, extname } from "node:path";
+import { safeResolvePath, safeResolveNewPath } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

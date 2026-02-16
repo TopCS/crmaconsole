@@ -234,7 +234,11 @@ export function FilterBar({ filters, value, onChange }: FilterBarProps) {
           const opts = rows
             .map((r) => {
               const vals = Object.values(r);
-              return vals[0] != null ? String(vals[0]) : null;
+              const v = vals[0];
+              if (v == null) {return null;}
+              if (typeof v === "object") {return JSON.stringify(v);}
+              // eslint-disable-next-line @typescript-eslint/no-base-to-string -- v narrowed, object handled above
+              return typeof v === "string" ? v : (typeof v === "number" || typeof v === "boolean" ? String(v) : String(v));
             })
             .filter((v): v is string => v !== null);
           results[f.id] = opts;
@@ -247,7 +251,7 @@ export function FilterBar({ filters, value, onChange }: FilterBarProps) {
   }, [filters]);
 
   useEffect(() => {
-    fetchOptions();
+    void fetchOptions();
   }, [fetchOptions]);
 
   const handleFilterChange = useCallback(

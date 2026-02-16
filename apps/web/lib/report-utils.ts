@@ -76,17 +76,29 @@ export function panelColSpan(size?: string): string {
   }
 }
 
+/** Safe string conversion for display (handles objects via JSON.stringify). */
+function toDisplayStr(val: unknown): string {
+  if (val == null) {return "";}
+  if (typeof val === "object") {return JSON.stringify(val);}
+  if (typeof val === "string") {return val;}
+  if (typeof val === "number" || typeof val === "boolean") {return String(val);}
+  // symbol, bigint, function — val is narrowed (object already handled above)
+  // eslint-disable-next-line @typescript-eslint/no-base-to-string
+  return String(val);
+}
+
 /**
  * Format a numeric value for chart display.
  */
 export function formatChartValue(val: unknown): string {
   if (val === null || val === undefined) {return "";}
+  if (typeof val === "object") {return JSON.stringify(val);}
   if (typeof val === "number") {
     if (Math.abs(val) >= 1_000_000) {return `${(val / 1_000_000).toFixed(1)}M`;}
     if (Math.abs(val) >= 1_000) {return `${(val / 1_000).toFixed(1)}K`;}
     return Number.isInteger(val) ? String(val) : val.toFixed(2);
   }
-  return String(val);
+  return toDisplayStr(val);
 }
 
 /**
@@ -94,7 +106,7 @@ export function formatChartValue(val: unknown): string {
  */
 export function formatChartLabel(val: unknown): string {
   if (val === null || val === undefined) {return "";}
-  const str = String(val);
+  const str = toDisplayStr(val);
   if (str.length > 16 && !isNaN(Date.parse(str))) {
     return str.slice(0, 10);
   }

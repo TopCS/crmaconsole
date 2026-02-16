@@ -76,7 +76,7 @@ export function RelationSelect({
 
 	useEffect(() => {
 		if (open) {
-			fetchOptions(search);
+			void fetchOptions(search);
 		}
 	}, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -134,7 +134,8 @@ export function RelationSelect({
 	// Find labels for currently selected IDs (from loaded options, fallback to ID)
 	const selectedLabels = selectedIds.map((id) => {
 		const opt = options.find((o) => o.id === id);
-		return { id, label: opt?.label ?? id };
+		const rawLabel = opt?.label ?? id;
+		return { id, label: String(rawLabel != null && typeof rawLabel === "object" ? JSON.stringify(rawLabel) : (rawLabel ?? "")) };
 	});
 
 	const isInline = variant === "inline";
@@ -162,7 +163,7 @@ export function RelationSelect({
 								border: "1px solid rgba(96, 165, 250, 0.2)",
 							}}
 						>
-							<span className="truncate max-w-[160px]">{label}</span>
+							<span className="truncate max-w-[160px]">{String(label ?? "")}</span>
 							<button
 								type="button"
 								onClick={(e) => { e.stopPropagation(); removeId(id); }}
@@ -269,7 +270,7 @@ export function RelationSelect({
 												<path d="M20 6 9 17l-5-5" />
 											</svg>
 										)}
-										<span className="truncate">{opt.label}</span>
+										<span className="truncate">{String(opt.label != null && typeof opt.label === "object" ? JSON.stringify(opt.label) : (opt.label ?? ""))}</span>
 									</button>
 								);
 							})

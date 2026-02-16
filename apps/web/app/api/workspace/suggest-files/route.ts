@@ -241,7 +241,7 @@ function readObjectIcon(workspaceRoot: string, objName: string): string | undefi
 					const yamlPath = join(dir, entry.name, ".object.yaml");
 					if (existsSync(yamlPath)) {
 						const parsed = parseSimpleYaml(readFileSync(yamlPath, "utf-8"));
-						if (parsed.icon) {return String(parsed.icon);}
+						if (parsed.icon) {return dbStr(parsed.icon);}
 					}
 				}
 				const found = walk(join(dir, entry.name), depth + 1);

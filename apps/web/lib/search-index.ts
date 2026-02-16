@@ -73,7 +73,7 @@ export function useSearchIndex(refreshSignal?: number) {
 
   useEffect(() => {
     mountedRef.current = true;
-    fetchIndex();
+    void fetchIndex();
     return () => {
       mountedRef.current = false;
     };

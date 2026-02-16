@@ -171,7 +171,7 @@ describe("formatChartValue", () => {
   });
 
   it("formats floats to 2 decimal places", () => {
-    expect(formatChartValue(3.14159)).toBe("3.14");
+    expect(formatChartValue(Math.PI)).toBe("3.14");
   });
 
   it("formats zero as integer", () => {

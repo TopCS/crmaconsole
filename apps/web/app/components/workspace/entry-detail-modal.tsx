@@ -4,6 +4,14 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { RelationSelect } from "./relation-select";
 
 
+function safeString(val: unknown): string {
+  if (val == null) {return "";}
+  if (typeof val === "object") {return JSON.stringify(val);}
+  if (typeof val === "string") {return val;}
+  if (typeof val === "number" || typeof val === "boolean" || typeof val === "bigint") {return String(val);}
+  return "";
+}
+
 // --- Types ---
 
 type Field = {
@@ -246,7 +254,7 @@ function FieldValue({
     case "enum":
       return (
         <EnumBadge
-          value={String(value)}
+          value={safeString(value)}
           enumValues={field.enum_values}
           enumColors={field.enum_colors}
         />
@@ -268,18 +276,18 @@ function FieldValue({
       );
     case "email":
       return (
-        <a href={`mailto:${value}`} className="underline underline-offset-2" style={{ color: "#60a5fa" }}>
-          {String(value)}
+        <a href={`mailto:${safeString(value)}`} className="underline underline-offset-2" style={{ color: "#60a5fa" }}>
+          {safeString(value)}
         </a>
       );
     case "richtext":
-      return <span className="whitespace-pre-wrap">{String(value)}</span>;
+      return <span className="whitespace-pre-wrap">{safeString(value)}</span>;
     case "number":
-      return <span className="tabular-nums">{String(value)}</span>;
+      return <span className="tabular-nums">{safeString(value)}</span>;
     case "date":
-      return <span>{String(value)}</span>;
+      return <span>{safeString(value)}</span>;
     default:
-      return <span>{String(value)}</span>;
+      return <span>{safeString(value)}</span>;
   }
 }
 
@@ -335,7 +343,7 @@ export function EntryDetailModal({
       }
     }
 
-    load();
+    void load();
     return () => { cancelled = true; };
   }, [objectName, entryId]);
 
@@ -398,8 +406,8 @@ export function EntryDetailModal({
 
   const displayField = data?.effectiveDisplayField;
   const title = displayField && data?.entry[displayField]
-    ? String(data.entry[displayField])
-    : `${objectName} entry`;
+    ? safeString(data.entry[displayField])
+    : `${String(objectName)} entry`;
 
   return (
     <div
@@ -409,23 +417,23 @@ export function EntryDetailModal({
       style={{ background: "rgba(0, 0, 0, 0.5)", backdropFilter: "blur(2px)" }}
     >
       <div
-        className="relative mt-12 mb-12 w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col"
+        className="relative mt-4 mb-4 mx-3 md:mt-12 md:mb-12 md:mx-0 w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col"
         style={{
           background: "var(--color-bg)",
           border: "1px solid var(--color-border)",
-          maxHeight: "calc(100vh - 6rem)",
+          maxHeight: "calc(100vh - 2rem)",
         }}
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0"
+          className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4 border-b flex-shrink-0"
           style={{ borderColor: "var(--color-border)" }}
         >
           <div className="flex items-center gap-3 min-w-0">
             {/* Object badge */}
             <button
               type="button"
-              onClick={() => onNavigateObject?.(objectName)}
+              onClick={() => void onNavigateObject?.(objectName)}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium capitalize transition-colors hover:opacity-80 flex-shrink-0"
               style={{
                 background: "var(--color-accent-light)",
@@ -449,8 +457,8 @@ export function EntryDetailModal({
           <div className="flex items-center gap-1 flex-shrink-0">
             {/* Delete button */}
             <button
-              type="button"
-              onClick={handleDelete}
+            type="button"
+            onClick={() => void handleDelete()}
               disabled={deleting}
               className="p-1.5 rounded-lg flex-shrink-0"
               style={{ color: "var(--color-error)" }}
@@ -517,9 +525,9 @@ export function EntryDetailModal({
                             <div className="flex-1">
                               <RelationSelect
                                 relatedObjectName={field.related_object_name}
-                                value={String(value ?? "")}
+                                value={safeString(value)}
                                 multiple={field.relationship_type === "many_to_many"}
-                                onChange={(v) => { handleSaveField(field.name, v); }}
+                                onChange={(v) => { void handleSaveField(field.name, v); }}
                                 autoFocus
                               />
                             </div>
@@ -529,13 +537,13 @@ export function EntryDetailModal({
                           </div>
                         ) : (
                         <form
-                          onSubmit={(e) => { e.preventDefault(); handleSaveField(field.name, editValue); }}
+                          onSubmit={(e) => { e.preventDefault(); void handleSaveField(field.name, editValue); }}
                           className="flex items-center gap-2 w-full"
                         >
                           {field.type === "enum" && field.enum_values ? (
                             <select
                               value={editValue}
-                              onChange={(e) => { setEditValue(e.target.value); handleSaveField(field.name, e.target.value); }}
+                              onChange={(e) => { setEditValue(e.target.value); void handleSaveField(field.name, e.target.value); }}
                               autoFocus
                               className="flex-1 px-2 py-1 text-sm rounded-lg outline-none"
                               style={{ background: "var(--color-surface-hover)", color: "var(--color-text)", border: "2px solid var(--color-accent)" }}
@@ -546,7 +554,7 @@ export function EntryDetailModal({
                           ) : field.type === "boolean" ? (
                             <select
                               value={editValue}
-                              onChange={(e) => { setEditValue(e.target.value); handleSaveField(field.name, e.target.value); }}
+                              onChange={(e) => { setEditValue(e.target.value); void handleSaveField(field.name, e.target.value); }}
                               autoFocus
                               className="flex-1 px-2 py-1 text-sm rounded-lg outline-none"
                               style={{ background: "var(--color-surface-hover)", color: "var(--color-text)", border: "2px solid var(--color-accent)" }}
@@ -580,7 +588,7 @@ export function EntryDetailModal({
                           onClick={() => {
                             if (!["user"].includes(field.type)) {
                               setEditingField(field.name);
-                              setEditValue(String(value ?? ""));
+                              setEditValue(safeString(value));
                             }
                           }}
                           title={!["user"].includes(field.type) ? "Click to edit" : undefined}
@@ -628,10 +636,10 @@ export function EntryDetailModal({
                   style={{ borderColor: "var(--color-border)", color: "var(--color-text-muted)" }}
                 >
                   {data.entry.created_at != null && (
-                    <span>Created: {String(data.entry.created_at as string)}</span>
+                    <span>Created: {safeString(data.entry.created_at)}</span>
                   )}
                   {data.entry.updated_at != null && (
-                    <span>Updated: {String(data.entry.updated_at as string)}</span>
+                    <span>Updated: {safeString(data.entry.updated_at)}</span>
                   )}
                 </div>
               )}

@@ -33,27 +33,11 @@ type WorkspaceSidebarProps = {
 	onGoToChat?: () => void;
 	/** Called when a tree node is dragged and dropped onto an external target (e.g. chat input). */
 	onExternalDrop?: (node: TreeNode) => void;
+	/** When true, renders as a mobile overlay drawer instead of a static sidebar. */
+	mobile?: boolean;
+	/** Close the mobile drawer. */
+	onClose?: () => void;
 };
-
-function WorkspaceLogo() {
-	return (
-		<svg
-			width="20"
-			height="20"
-			viewBox="0 0 24 24"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="2"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-		>
-			<rect width="7" height="7" x="3" y="3" rx="1" />
-			<rect width="7" height="7" x="14" y="3" rx="1" />
-			<rect width="7" height="7" x="14" y="14" rx="1" />
-			<rect width="7" height="7" x="3" y="14" rx="1" />
-		</svg>
-	);
-}
 
 function HomeIcon() {
 	return (
@@ -407,14 +391,16 @@ export function WorkspaceSidebar({
 	workspaceRoot,
 	onGoToChat,
 	onExternalDrop,
+	mobile,
+	onClose,
 }: WorkspaceSidebarProps) {
 	const isBrowsing = browseDir != null;
 
-	return (
+	const sidebar = (
 		<aside
-			className="flex flex-col h-screen border-r flex-shrink-0"
+			className={`flex flex-col h-screen flex-shrink-0 ${mobile ? "drawer-left" : "border-r"}`}
 			style={{
-				width: "260px",
+				width: mobile ? "280px" : "260px",
 				background: "var(--color-surface)",
 				borderColor: "var(--color-border)",
 			}}
@@ -470,7 +456,7 @@ export function WorkspaceSidebar({
 					<>
 						<button
 							type="button"
-							onClick={onGoToChat}
+							onClick={() => void onGoToChat?.()}
 							className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 cursor-pointer transition-opacity"
 							style={{
 								background: "var(--color-accent-light)",
@@ -555,5 +541,16 @@ export function WorkspaceSidebar({
 				<ThemeToggle />
 			</div>
 		</aside>
+	);
+
+    if (!mobile) { return sidebar; }
+
+	return (
+		<div className="drawer-backdrop" onClick={() => void onClose?.()}>
+			{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+			<div onClick={(e) => e.stopPropagation()} className="fixed inset-y-0 left-0 z-50">
+				{sidebar}
+			</div>
+		</div>
 	);
 }

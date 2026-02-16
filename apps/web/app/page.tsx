@@ -87,10 +87,10 @@ export default function Home() {
         }
       `}</style>
 
-      <div className="relative flex flex-col items-center justify-center min-h-screen bg-stone-50 overflow-hidden">
-        {/* Claw slash marks as full background */}
+      <div className="relative flex flex-col items-center justify-center min-h-screen bg-stone-50 overflow-hidden px-4">
+        {/* Claw slash marks as full background — hidden on small screens */}
         <div
-          className="absolute inset-0 flex items-center justify-center select-none pointer-events-none text-stone-200/40"
+          className="absolute inset-0 hidden md:flex items-center justify-center select-none pointer-events-none text-stone-200/40"
           style={{
             fontFamily: '"SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", "Courier New", monospace',
             whiteSpace: "pre",
@@ -103,12 +103,15 @@ export default function Home() {
 
         {/* Foreground content */}
         <div className="relative z-10 flex flex-col items-center">
-          <div className="ascii-banner select-none" aria-label="IRONCLAW">
+          <div className="ascii-banner select-none hidden sm:block" aria-label="IRONCLAW">
             {IRONCLAW_ASCII.join("\n")}
           </div>
+          <h1 className="sm:hidden text-3xl font-bold text-stone-600" style={{ fontFamily: "monospace" }}>
+            IRONCLAW
+          </h1>
           <Link
             href="/workspace"
-            className="mt-10 text-lg text-stone-400 hover:text-stone-600 transition-all"
+            className="mt-10 text-lg text-stone-400 hover:text-stone-600 transition-all min-h-[44px] flex items-center"
             style={{ fontFamily: "monospace" }}
           >
             enter the app &rarr;

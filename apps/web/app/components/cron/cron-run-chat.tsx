@@ -29,7 +29,7 @@ export function CronRunChat({ sessionId }: { sessionId: string }) {
   }, [sessionId]);
 
   useEffect(() => {
-    fetchSession();
+    void fetchSession();
   }, [fetchSession]);
 
   if (loading) {
@@ -123,7 +123,7 @@ export function CronRunTranscriptSearch({
   }, [jobId, runAtMs, summary]);
 
   useEffect(() => {
-    fetchTranscript();
+    void fetchTranscript();
   }, [fetchTranscript]);
 
   if (loading) {

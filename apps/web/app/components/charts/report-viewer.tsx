@@ -192,7 +192,7 @@ export function ReportViewer({ config: propConfig, reportPath }: ReportViewerPro
 
   // Re-execute when config, filters, or refresh key changes
   useEffect(() => {
-    executeAllPanels();
+    void executeAllPanels();
   }, [executeAllPanels, refreshKey]);
 
   const totalRows = useMemo(() => {

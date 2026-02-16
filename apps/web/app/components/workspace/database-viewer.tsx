@@ -99,6 +99,15 @@ function SortIndicator({ active, direction }: { active: boolean; direction: "asc
 
 // --- Helpers ---
 
+/** Safely convert unknown (DuckDB) value to string for display/sort. */
+function safeString(val: unknown): string {
+  if (val == null) {return "";}
+  if (typeof val === "object") {return JSON.stringify(val);}
+  if (typeof val === "string") {return val;}
+  if (typeof val === "number" || typeof val === "boolean" || typeof val === "bigint") {return String(val);}
+  return "";
+}
+
 function formatRowCount(n: number): string {
   if (n >= 1_000_000) {return `${(n / 1_000_000).toFixed(1)}M`;}
   if (n >= 1_000) {return `${(n / 1_000).toFixed(1)}K`;}
@@ -246,7 +255,7 @@ export function DatabaseViewer({ dbPath, filename }: DatabaseViewerProps) {
       }
     }
 
-    introspect();
+    void introspect();
     return () => { cancelled = true; };
   }, [dbPath]);
 
@@ -280,7 +289,7 @@ export function DatabaseViewer({ dbPath, filename }: DatabaseViewerProps) {
   useEffect(() => {
     if (selectedTable) {
       setSort(null);
-      fetchTableData(selectedTable, page * pageSize);
+      void fetchTableData(selectedTable, page * pageSize);
     }
   }, [selectedTable, page, fetchTableData]);
 
@@ -320,8 +329,8 @@ export function DatabaseViewer({ dbPath, filename }: DatabaseViewerProps) {
     const data = queryMode && queryResult ? queryResult : tableData;
     if (!sort) {return data;}
     return [...data].toSorted((a, b) => {
-      const aVal = String(a[sort.column] ?? "");
-      const bVal = String(b[sort.column] ?? "");
+      const aVal = safeString(a[sort.column]);
+      const bVal = safeString(b[sort.column]);
       const cmp = aVal.localeCompare(bVal, undefined, { numeric: true });
       return sort.direction === "asc" ? cmp : -cmp;
     });
@@ -965,7 +974,7 @@ function CellContent({ value }: { value: unknown }) {
     return <span className="tabular-nums">{value}</span>;
   }
 
-  const str = String(value);
+  const str = safeString(value);
 
   // Truncate very long values
   if (str.length > 120) {

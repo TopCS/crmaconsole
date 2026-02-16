@@ -384,7 +384,7 @@ export function Sidebar({
         setLoading(false);
       }
     }
-    load();
+    void load();
   }, [refreshKey]);
 
   const refreshWorkspace = useCallback(async () => {

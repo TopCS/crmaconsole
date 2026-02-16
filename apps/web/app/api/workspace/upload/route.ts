@@ -1,15 +1,11 @@
 import { writeFileSync, mkdirSync } from "node:fs";
-import { join, dirname, extname } from "node:path";
+import { join, dirname } from "node:path";
 import { resolveWorkspaceRoot, safeResolveNewPath } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const ALLOWED_EXTENSIONS = new Set([
-  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico",
-]);
-
-const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_SIZE = 25 * 1024 * 1024; // 25 MB
 
 /**
  * POST /api/workspace/upload
@@ -41,19 +37,10 @@ export async function POST(req: Request) {
     );
   }
 
-  // Validate extension
-  const ext = extname(file.name).toLowerCase();
-  if (!ALLOWED_EXTENSIONS.has(ext)) {
-    return Response.json(
-      { error: `File type ${ext} is not allowed` },
-      { status: 400 },
-    );
-  }
-
   // Validate size
   if (file.size > MAX_SIZE) {
     return Response.json(
-      { error: "File is too large (max 10 MB)" },
+      { error: "File is too large (max 25 MB)" },
       { status: 400 },
     );
   }

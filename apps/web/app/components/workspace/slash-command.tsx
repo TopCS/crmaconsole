@@ -502,7 +502,7 @@ function createSuggestionRenderer() {
         container = document.createElement("div");
         document.body.appendChild(container);
 
-        import("react-dom/client").then(({ createRoot }) => {
+        void import("react-dom/client").then(({ createRoot }) => {
           root = createRoot(container!);
           root.render(
             <SlashPopupRenderer

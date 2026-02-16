@@ -201,7 +201,15 @@ export async function GET(
 			continue;
 		}
 
-		const ids = parseRelationValue(String(val));
+		const valStr =
+			typeof val === "object" && val !== null
+				? JSON.stringify(val)
+				: typeof val === "string"
+					? val
+					: typeof val === "number" || typeof val === "boolean"
+						? String(val)
+						: "";
+		const ids = parseRelationValue(valStr);
 		if (ids.length === 0) {
 			relationLabels[rf.name] = {};
 			continue;

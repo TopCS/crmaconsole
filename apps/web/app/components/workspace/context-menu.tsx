@@ -194,7 +194,7 @@ export function ContextMenu({ x, y, target, onAction, onClose }: ContextMenuProp
           );
         }
 
-        const menuItem = item as Exclude<ContextMenuItem, { separator: true }>;
+        const menuItem = item;
         const isDisabled = menuItem.disabled;
 
         return (

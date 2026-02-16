@@ -305,6 +305,103 @@ function appendUserTranscriptMessage(params: {
   return { ok: true, messageId, message: transcriptEntry.message };
 }
 
+function collectSessionAbortPartials(params: {
+  chatAbortControllers: Map<string, ChatAbortControllerEntry>;
+  chatRunBuffers: Map<string, string>;
+  sessionKey: string;
+  abortOrigin: AbortOrigin;
+}): AbortedPartialSnapshot[] {
+  const out: AbortedPartialSnapshot[] = [];
+  for (const [runId, active] of params.chatAbortControllers) {
+    if (active.sessionKey !== params.sessionKey) {
+      continue;
+    }
+    const text = params.chatRunBuffers.get(runId);
+    if (!text || !text.trim()) {
+      continue;
+    }
+    out.push({
+      runId,
+      sessionId: active.sessionId,
+      text,
+      abortOrigin: params.abortOrigin,
+    });
+  }
+  return out;
+}
+
+function persistAbortedPartials(params: {
+  context: Pick<GatewayRequestContext, "logGateway">;
+  sessionKey: string;
+  snapshots: AbortedPartialSnapshot[];
+}) {
+  if (params.snapshots.length === 0) {
+    return;
+  }
+  const { storePath, entry } = loadSessionEntry(params.sessionKey);
+  for (const snapshot of params.snapshots) {
+    const sessionId = entry?.sessionId ?? snapshot.sessionId ?? snapshot.runId;
+    const appended = appendAssistantTranscriptMessage({
+      message: snapshot.text,
+      sessionId,
+      storePath,
+      sessionFile: entry?.sessionFile,
+      createIfMissing: true,
+      idempotencyKey: `${snapshot.runId}:assistant`,
+      abortMeta: {
+        aborted: true,
+        origin: snapshot.abortOrigin,
+        runId: snapshot.runId,
+      },
+    });
+    if (!appended.ok) {
+      params.context.logGateway.warn(
+        `chat.abort transcript append failed: ${appended.error ?? "unknown error"}`,
+      );
+    }
+  }
+}
+
+function createChatAbortOps(context: GatewayRequestContext): ChatAbortOps {
+  return {
+    chatAbortControllers: context.chatAbortControllers,
+    chatRunBuffers: context.chatRunBuffers,
+    chatDeltaSentAt: context.chatDeltaSentAt,
+    chatAbortedRuns: context.chatAbortedRuns,
+    removeChatRun: context.removeChatRun,
+    agentRunSeq: context.agentRunSeq,
+    broadcast: context.broadcast,
+    nodeSendToSession: context.nodeSendToSession,
+  };
+}
+
+function abortChatRunsForSessionKeyWithPartials(params: {
+  context: GatewayRequestContext;
+  ops: ChatAbortOps;
+  sessionKey: string;
+  abortOrigin: AbortOrigin;
+  stopReason?: string;
+}) {
+  const snapshots = collectSessionAbortPartials({
+    chatAbortControllers: params.context.chatAbortControllers,
+    chatRunBuffers: params.context.chatRunBuffers,
+    sessionKey: params.sessionKey,
+    abortOrigin: params.abortOrigin,
+  });
+  const res = abortChatRunsForSessionKey(params.ops, {
+    sessionKey: params.sessionKey,
+    stopReason: params.stopReason,
+  });
+  if (res.aborted) {
+    persistAbortedPartials({
+      context: params.context,
+      sessionKey: params.sessionKey,
+      snapshots,
+    });
+  }
+  return res;
+}
+
 function nextChatSeq(context: { agentRunSeq: Map<string, number> }, runId: string) {
   const next = (context.agentRunSeq.get(runId) ?? 0) + 1;
   context.agentRunSeq.set(runId, next);

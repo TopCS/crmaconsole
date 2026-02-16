@@ -490,7 +490,7 @@ export function createFileMentionRenderer() {
 		function debouncedFetch(query: string) {
 			if (debounceTimer) {clearTimeout(debounceTimer);}
 			debounceTimer = setTimeout(() => {
-				fetchSuggestions(query);
+				void fetchSuggestions(query);
 			}, 120);
 		}
 
@@ -506,7 +506,7 @@ export function createFileMentionRenderer() {
 				latestClientRect = props.clientRect ?? null;
 				currentQuery = props.query;
 
-				import("react-dom/client").then(({ createRoot }) => {
+				void import("react-dom/client").then(({ createRoot }) => {
 					root = createRoot(container!);
 					debouncedFetch(currentQuery);
 				});

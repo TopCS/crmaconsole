@@ -774,7 +774,7 @@ export function ChainOfThought({ parts, isStreaming }: { parts: ChainPart[]; isS
 
 function ReasoningBlock({
 	text,
-	isStreaming,
+	isStreaming: _isStreaming,
 }: {
 	text: string;
 	isStreaming: boolean;
@@ -845,7 +845,7 @@ function FetchGroup({ items }: { items: ToolPart[] }) {
 						border: "1px solid var(--color-border)",
 					}}
 				>
-					{items.map((tool, i) => {
+					{items.map((tool) => {
 						const { domain, url } = getFetchDomainAndUrl(tool.args, tool.output);
 						return (
 							<a
@@ -1301,7 +1301,7 @@ function ToolStep({
 									: "var(--color-error)",
 							}}
 						>
-							exit {String(output.exitCode)}
+							exit {typeof output.exitCode === "object" && output.exitCode != null ? JSON.stringify(output.exitCode) : typeof output.exitCode === "number" ? String(output.exitCode) : typeof output.exitCode === "string" ? output.exitCode : ""}
 						</span>
 					)}
 				</div>

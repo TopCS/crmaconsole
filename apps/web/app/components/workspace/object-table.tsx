@@ -44,6 +44,16 @@ type EntryRow = Record<string, unknown> & { entry_id?: string };
 
 /* ─── Helpers ─── */
 
+/** Safely convert unknown (DuckDB) value to string for display. */
+function safeString(val: unknown): string {
+	if (val == null) {return "";}
+	if (typeof val === "object") {return JSON.stringify(val);}
+	if (typeof val === "string") {return val;}
+	if (typeof val === "number" || typeof val === "boolean" || typeof val === "bigint") {return String(val);}
+	// symbol, function
+	return "";
+}
+
 function parseRelationValue(value: string | null | undefined): string[] {
 	if (!value) {return [];}
 	const trimmed = value.trim();
@@ -169,13 +179,13 @@ function EditableCell({
 	onSaved?: () => void;
 }) {
 	const [editing, setEditing] = useState(false);
-	const [localValue, setLocalValue] = useState(String(initialValue ?? ""));
+	const [localValue, setLocalValue] = useState(safeString(initialValue));
 	const inputRef = useRef<HTMLInputElement | HTMLSelectElement>(null);
 	const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	// Sync with prop changes
 	useEffect(() => {
-		if (!editing) {setLocalValue(String(initialValue ?? ""));}
+		if (!editing) {setLocalValue(safeString(initialValue));}
 	}, [initialValue, editing]);
 
 	// Focus input on edit start
@@ -205,19 +215,19 @@ function EditableCell({
 	};
 
 	const handleBlur = () => {
-		if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); save(localValue); }
+		if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); void save(localValue); }
 		setEditing(false);
 	};
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		if (e.key === "Enter") { handleBlur(); }
-		if (e.key === "Escape") { setEditing(false); setLocalValue(String(initialValue ?? "")); }
+		if (e.key === "Escape") { setEditing(false); setLocalValue(safeString(initialValue)); }
 	};
 
 	// Read-only display for non-editable types
 	if (!isEditable) {
 		if (field.type === "user") {return <UserCell value={initialValue} members={members} />;}
-		return <span className="truncate block max-w-[300px]">{String(initialValue ?? "")}</span>;
+		return <span className="truncate block max-w-[300px]">{safeString(initialValue)}</span>;
 	}
 
 	// Editing mode — Excel-style seamless inline editing
@@ -234,9 +244,9 @@ function EditableCell({
 				>
 					<RelationSelect
 						relatedObjectName={field.related_object_name!}
-						value={String(initialValue ?? "")}
+						value={safeString(initialValue)}
 						multiple={field.relationship_type === "many_to_many"}
-						onChange={(v) => { save(v); setEditing(false); }}
+						onChange={(v) => { void save(v); setEditing(false); }}
 						variant="inline"
 						autoFocus
 					/>
@@ -327,17 +337,17 @@ function EditableCell({
 			{displayValue === null || displayValue === undefined || displayValue === "" ? (
 				<span style={{ color: "var(--color-text-muted)", opacity: 0.5 }}>--</span>
 			) : field.type === "enum" ? (
-				<EnumBadge value={String(displayValue)} enumValues={field.enum_values} enumColors={field.enum_colors} />
+				<EnumBadge value={safeString(displayValue)} enumValues={field.enum_values} enumColors={field.enum_colors} />
 			) : field.type === "boolean" ? (
 				<BooleanCell value={displayValue} />
 			) : field.type === "email" ? (
-				<a href={`mailto:${displayValue}`} className="underline underline-offset-2" style={{ color: "var(--color-accent)" }} onClick={(e) => e.stopPropagation()}>
-					{String(displayValue)}
+				<a href={`mailto:${safeString(displayValue)}`} className="underline underline-offset-2" style={{ color: "var(--color-accent)" }} onClick={(e) => e.stopPropagation()}>
+					{safeString(displayValue)}
 				</a>
 			) : field.type === "number" ? (
-				<span className="tabular-nums">{String(displayValue)}</span>
+				<span className="tabular-nums">{safeString(displayValue)}</span>
 			) : (
-				<span className="truncate block max-w-[300px]">{String(displayValue)}</span>
+				<span className="truncate block max-w-[300px]">{safeString(displayValue)}</span>
 			)}
 		</div>
 	);
@@ -380,12 +390,13 @@ export function ObjectTable({
 				</span>
 			),
 			cell: (info: CellContext<EntryRow, unknown>) => {
-				const entryId = String(info.row.original.entry_id ?? "");
+				const eid = info.row.original.entry_id;
+				const entryId = String(eid != null && typeof eid === "object" ? JSON.stringify(eid) : (eid ?? ""));
 
 				// First column (sticky): bold link that opens the entry detail modal
 				if (fieldIdx === 0 && onEntryClick) {
 					const val = info.getValue();
-					const displayVal = val === null || val === undefined || val === "" ? "--" : String(val);
+					const displayVal = val === null || val === undefined || val === "" ? "--" : safeString(val);
 					const isEmpty = displayVal === "--";
 					return (
 						<span
@@ -433,7 +444,8 @@ export function ObjectTable({
 					</span>
 				),
 				cell: (info: CellContext<EntryRow, unknown>) => {
-					const entryId = String(info.row.original.entry_id ?? "");
+					const eid = info.row.original.entry_id;
+					const entryId = String(eid != null && typeof eid === "object" ? JSON.stringify(eid) : (eid ?? ""));
 					const links = rr.entries[entryId] ?? [];
 					return <ReverseRelationCell links={links} sourceObjectName={rr.sourceObjectName} onNavigate={onNavigateToObject} />;
 				},
@@ -454,7 +466,7 @@ export function ObjectTable({
 	const handleBulkDelete = useCallback(async () => {
 		const selectedIds = Object.keys(rowSelection)
 			.filter((k) => rowSelection[k])
-			.map((idx) => String(entries[Number(idx)]?.entry_id ?? ""))
+			.map((idx) => safeString(entries[Number(idx)]?.entry_id))
 			.filter(Boolean);
 
 		if (selectedIds.length === 0) {return;}
@@ -473,7 +485,8 @@ export function ObjectTable({
 
 	// Single delete handler
 	const handleDeleteEntry = useCallback(async (entry: EntryRow) => {
-		const entryId = String(entry.entry_id ?? "");
+		const eid = entry.entry_id;
+		const entryId = String(eid != null && typeof eid === "object" ? JSON.stringify(eid) : (eid ?? ""));
 		if (!entryId) {return;}
 		if (!confirm("Delete this entry?")) {return;}
 		try {
@@ -485,8 +498,8 @@ export function ObjectTable({
 	}, [objectName, onRefresh]);
 
 	// Row actions
-	const getRowActions = useCallback(
-		(row: EntryRow): RowAction<EntryRow>[] => {
+		const getRowActions = useCallback(
+		(_row: EntryRow): RowAction<EntryRow>[] => {
 			const actions: RowAction<EntryRow>[] = [];
 			if (onEntryClick) {
 				actions.push({
@@ -529,7 +542,7 @@ export function ObjectTable({
 	const bulkActions = (
 		<button
 			type="button"
-			onClick={handleBulkDelete}
+			onClick={() => void handleBulkDelete()}
 			className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium"
 			style={{ background: "rgba(220, 38, 38, 0.08)", color: "var(--color-error)", border: "1px solid rgba(220, 38, 38, 0.2)" }}
 		>
@@ -655,7 +668,7 @@ function AddEntryModal({
 
 				{/* Form */}
 				<form
-					onSubmit={(e) => { e.preventDefault(); handleSave(); }}
+					onSubmit={(e) => { e.preventDefault(); void handleSave(); }}
 					className="flex-1 overflow-y-auto px-6 py-5 space-y-4"
 				>
 					{fields.map((field) => {
@@ -778,7 +791,7 @@ function AddEntryModal({
 					</button>
 					<button
 						type="button"
-						onClick={handleSave}
+						onClick={() => void handleSave()}
 						disabled={saving}
 						className="px-4 py-2 text-sm font-medium rounded-lg"
 						style={{ background: "var(--color-accent)", color: "white", opacity: saving ? 0.7 : 1 }}

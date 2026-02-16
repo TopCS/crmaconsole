@@ -19,6 +19,10 @@ type ChatSessionsSidebarProps = {
 	streamingSessionIds?: Set<string>;
 	onSelectSession: (sessionId: string) => void;
 	onNewSession: () => void;
+	/** When true, renders as a mobile overlay drawer instead of a static sidebar. */
+	mobile?: boolean;
+	/** Close the mobile drawer. */
+	onClose?: () => void;
 };
 
 /** Format a timestamp into a human-readable relative time string. */
@@ -80,24 +84,27 @@ export function ChatSessionsSidebar({
 	streamingSessionIds,
 	onSelectSession,
 	onNewSession,
+	mobile,
+	onClose,
 }: ChatSessionsSidebarProps) {
 	const [hoveredId, setHoveredId] = useState<string | null>(null);
 
 	const handleSelect = useCallback(
 		(id: string) => {
 			onSelectSession(id);
+			onClose?.();
 		},
-		[onSelectSession],
+		[onSelectSession, onClose],
 	);
 
 	// Group sessions: today, yesterday, this week, this month, older
 	const grouped = groupSessions(sessions);
 
-	return (
+	const sidebar = (
 		<aside
-			className="flex flex-col h-full border-l flex-shrink-0"
+			className={`flex flex-col h-full flex-shrink-0 ${mobile ? "drawer-right" : "border-l"}`}
 			style={{
-				width: 260,
+				width: mobile ? "280px" : 260,
 				borderColor: "var(--color-border)",
 				background: "var(--color-surface)",
 			}}
@@ -233,6 +240,17 @@ export function ChatSessionsSidebar({
 				)}
 			</div>
 		</aside>
+	);
+
+    if (!mobile) { return sidebar; }
+
+	return (
+		<div className="drawer-backdrop" onClick={() => void onClose?.()}>
+			{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+			<div onClick={(e) => e.stopPropagation()} className="fixed inset-y-0 right-0 z-50">
+				{sidebar}
+			</div>
+		</div>
 	);
 }
 

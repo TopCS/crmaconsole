@@ -252,7 +252,7 @@ export function FilePickerModal({
 
 	// Fetch on open and navigation
 	useEffect(() => {
-		if (open) {fetchDir(currentDir);}
+		if (open) { void fetchDir(currentDir); }
 	}, [open, currentDir, fetchDir]);
 
 	// Escape key
@@ -301,7 +301,7 @@ export function FilePickerModal({
 			});
 			setCreatingFolder(false);
 			setNewFolderName("");
-			fetchDir(currentDir);
+			void fetchDir(currentDir);
 		} catch {
 			setError("Failed to create folder");
 		}
@@ -356,9 +356,8 @@ export function FilePickerModal({
 
 			{/* Modal */}
 			<div
-				className="relative flex flex-col rounded-2xl shadow-2xl overflow-hidden"
+				className="relative flex flex-col rounded-2xl shadow-2xl overflow-hidden w-[calc(100%-2rem)] max-w-[540px]"
 				style={{
-					width: 540,
 					maxHeight: "70vh",
 					background: "var(--color-surface)",
 					border: "1px solid var(--color-border)",
@@ -690,8 +689,9 @@ export function FilePickerModal({
 											if (
 												e.key ===
 												"Enter"
-											)
-												{handleCreateFolder();}
+											) {
+												void handleCreateFolder();
+											}
 											if (
 												e.key ===
 												"Escape"

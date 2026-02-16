@@ -111,8 +111,8 @@ export function CronDashboard({
   }, []);
 
   useEffect(() => {
-    fetchData();
-    const id = setInterval(fetchData, 30_000);
+    void fetchData();
+    const id = setInterval(() => void fetchData(), 30_000);
     return () => clearInterval(id);
   }, [fetchData]);
 

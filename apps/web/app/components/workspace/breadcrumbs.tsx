@@ -10,7 +10,7 @@ export function Breadcrumbs({ path, onNavigate }: BreadcrumbsProps) {
   const segments = path.split("/").filter(Boolean);
 
   return (
-    <nav className="flex items-center gap-1 text-sm py-2">
+    <nav className="flex items-center gap-1 text-xs md:text-sm py-2 overflow-x-auto min-w-0">
       <button
         type="button"
         onClick={() => onNavigate("")}

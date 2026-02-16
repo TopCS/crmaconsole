@@ -171,8 +171,18 @@ function resolveRelationLabels(
     const entryIds = new Set<string>();
     for (const entry of entries) {
       const val = entry[rf.name];
-      if (val == null || val === "") {continue;}
-      for (const id of parseRelationValue(String(val))) {
+      if (val == null || val === "") {
+        continue;
+      }
+      const valStr =
+        typeof val === "object" && val !== null
+          ? JSON.stringify(val)
+          : typeof val === "string"
+            ? val
+            : typeof val === "number" || typeof val === "boolean"
+              ? String(val)
+              : "";
+      for (const id of parseRelationValue(valStr)) {
         entryIds.add(id);
       }
     }

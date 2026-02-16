@@ -54,17 +54,23 @@ export async function GET() {
   try {
     const entries = readdirSync(agentsDir, { withFileTypes: true });
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+      if (!entry.isDirectory()) {
+        continue;
+      }
       agentIds.push(entry.name);
 
       const storePath = join(agentsDir, entry.name, "sessions", "sessions.json");
-      if (!existsSync(storePath)) continue;
+      if (!existsSync(storePath)) {
+        continue;
+      }
 
       try {
         const raw = readFileSync(storePath, "utf-8");
         const store = JSON.parse(raw) as Record<string, SessionEntry>;
         for (const [key, session] of Object.entries(store)) {
-          if (!session || typeof session !== "object") continue;
+          if (!session || typeof session !== "object") {
+            continue;
+          }
           allSessions.push({
             key,
             sessionId: session.sessionId,
