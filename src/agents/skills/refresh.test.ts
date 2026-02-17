@@ -81,8 +81,8 @@ describe("ensureSkillsWatcher", () => {
     expect(watchMock).toHaveBeenCalledTimes(1);
     const watchedPaths = watchMock.mock.calls[0]?.[0] as string[];
 
-    // Should include workspace skills, managed skills, and bundled skills
-    expect(watchedPaths).toContain("/tmp/workspace-bundled-test/skills");
-    expect(watchedPaths).toContain("/mock/package/root/skills");
+    // Should include workspace skills and bundled skills (as SKILL.md globs)
+    expect(watchedPaths.some((p) => p.startsWith("/tmp/workspace-bundled-test/skills"))).toBe(true);
+    expect(watchedPaths.some((p) => p.startsWith("/mock/package/root/skills"))).toBe(true);
   });
 });
