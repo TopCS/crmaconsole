@@ -38,6 +38,8 @@ type ObjectTableProps = {
 	onNavigateToObject?: (objectName: string) => void;
 	onEntryClick?: (entryId: string) => void;
 	onRefresh?: () => void;
+	/** Column visibility state keyed by field ID. */
+	columnVisibility?: Record<string, boolean>;
 };
 
 type EntryRow = Record<string, unknown> & { entry_id?: string };
@@ -365,6 +367,7 @@ export function ObjectTable({
 	onNavigateToObject,
 	onEntryClick,
 	onRefresh,
+	columnVisibility,
 }: ObjectTableProps) {
 	const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
 	const [showAddModal, setShowAddModal] = useState(false);
@@ -379,6 +382,7 @@ export function ObjectTable({
 		const cols: ColumnDef<EntryRow>[] = fields.map((field, fieldIdx) => ({
 			id: field.id,
 			accessorKey: field.name,
+			meta: { label: field.name, fieldName: field.name },
 			header: () => (
 				<span className="flex items-center gap-1" style={{ color: "var(--color-text-muted)" }}>
 					{field.name}
@@ -434,6 +438,7 @@ export function ObjectTable({
 		for (const rr of activeReverseRelations) {
 			cols.push({
 				id: `rev_${rr.sourceObjectName}_${rr.fieldName}`,
+				meta: { label: `${rr.sourceObjectName} (via ${rr.fieldName})` },
 				header: () => (
 					<span className="flex items-center gap-1.5" style={{ color: "var(--color-text-muted)" }}>
 						<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}>
@@ -570,6 +575,7 @@ export function ObjectTable({
 			addButtonLabel="+ Add"
 			rowActions={getRowActions}
 			stickyFirstColumn
+			initialColumnVisibility={columnVisibility}
 		/>
 
 			{/* Add Entry Modal */}

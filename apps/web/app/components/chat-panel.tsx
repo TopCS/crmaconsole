@@ -1172,24 +1172,28 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 
 		// ── Stop handler (aborts server-side run + client-side stream) ──
 		const handleStop = useCallback(async () => {
-			// Abort the server-side agent run
-			if (currentSessionId) {
-				fetch("/api/chat/stop", {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						sessionId: currentSessionId,
-					}),
-				}).catch(() => {});
-			}
-
-			// Abort reconnection stream if active
+			// Abort reconnection stream if active (immediate visual feedback).
 			reconnectAbortRef.current?.abort();
 			setIsReconnecting(false);
 
-		// Stop the useChat transport stream
+			// Stop the server-side agent run and wait for confirmation so the
+			// session is no longer in "running" state before we stop the
+			// client-side stream (which may trigger queued message flush).
+			if (currentSessionId) {
+				try {
+					await fetch("/api/chat/stop", {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({
+							sessionId: currentSessionId,
+						}),
+					});
+				} catch { /* ignore */ }
+			}
+
+		// Stop the useChat transport stream (transitions status → "ready").
 		void stop();
 	}, [currentSessionId, stop]);
 

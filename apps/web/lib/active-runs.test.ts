@@ -597,6 +597,73 @@ describe("active-runs", () => {
 			const { abortRun } = await setup();
 			expect(abortRun("nonexistent")).toBe(false);
 		});
+
+		it("immediately marks the run as non-active so new messages are not blocked", async () => {
+			const { startRun, abortRun, hasActiveRun, getActiveRun } = await setup();
+
+			startRun({
+				sessionId: "s-abort-status",
+				message: "hi",
+				agentSessionId: "s-abort-status",
+			});
+
+			expect(hasActiveRun("s-abort-status")).toBe(true);
+
+			abortRun("s-abort-status");
+
+			// hasActiveRun must return false immediately after abort
+			// (before the child process exits), otherwise the next
+			// user message is rejected with 409.
+			expect(hasActiveRun("s-abort-status")).toBe(false);
+			expect(getActiveRun("s-abort-status")?.status).toBe("error");
+		});
+
+		it("allows starting a new run after abort (no 409 race)", async () => {
+			const { startRun, abortRun, hasActiveRun } = await setup();
+
+			startRun({
+				sessionId: "s-abort-new",
+				message: "first",
+				agentSessionId: "s-abort-new",
+			});
+
+			abortRun("s-abort-new");
+
+			// Starting a new run for the same session should succeed.
+			expect(() =>
+				startRun({
+					sessionId: "s-abort-new",
+					message: "second",
+					agentSessionId: "s-abort-new",
+				}),
+			).not.toThrow();
+
+			expect(hasActiveRun("s-abort-new")).toBe(true);
+		});
+
+		it("signals subscribers with null on abort", async () => {
+			const { startRun, abortRun, subscribeToRun } = await setup();
+
+			const completed: boolean[] = [];
+
+			startRun({
+				sessionId: "s-abort-sub",
+				message: "hi",
+				agentSessionId: "s-abort-sub",
+			});
+
+			subscribeToRun(
+				"s-abort-sub",
+				(event) => {
+					if (event === null) {completed.push(true);}
+				},
+				{ replay: false },
+			);
+
+			abortRun("s-abort-sub");
+
+			expect(completed).toHaveLength(1);
+		});
 	});
 
 	// ── duplicate run prevention ──────────────────────────────────────

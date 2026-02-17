@@ -178,6 +178,12 @@ export function DataTable<TData, TValue>({
 	const [globalFilter, setGlobalFilter] = useState("");
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 	const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(initialColumnVisibility ?? {});
+	// Sync column visibility when the prop changes (e.g. loading a saved view)
+	useEffect(() => {
+		if (initialColumnVisibility) {
+			setColumnVisibility(initialColumnVisibility);
+		}
+	}, [initialColumnVisibility]);
 	const [internalRowSelection, setInternalRowSelection] = useState<Record<string, boolean>>({});
 	const [showColumnsMenu, setShowColumnsMenu] = useState(false);
 	const [stickyFirstColumn, setStickyFirstColumn] = useState(stickyFirstProp);
@@ -484,7 +490,7 @@ export function DataTable<TData, TValue>({
 											/>
 											{typeof column.columnDef.header === "string"
 												? column.columnDef.header
-												: column.id}
+												: String((column.columnDef.meta as Record<string, string> | undefined)?.label ?? column.id)}
 										</label>
 									))
 							)}

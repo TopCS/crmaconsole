@@ -227,7 +227,7 @@ describe("Web Sessions API", () => {
 
   describe("POST /api/web-sessions/[id]/messages", () => {
     it("appends messages to session file", async () => {
-      const { existsSync: mockExists, readFileSync: mockReadFile, writeFileSync: mockWrite } = await import("node:fs");
+      const { existsSync: mockExists, readFileSync: mockReadFile, writeFileSync: _mockWrite } = await import("node:fs");
       vi.mocked(mockExists).mockReturnValue(true);
       vi.mocked(mockReadFile).mockImplementation((p) => {
         const s = String(p);
@@ -251,7 +251,7 @@ describe("Web Sessions API", () => {
     });
 
     it("auto-creates session file if missing", async () => {
-      const { existsSync: mockExists, readFileSync: mockReadFile, writeFileSync: mockWrite } = await import("node:fs");
+      const { existsSync: mockExists, readFileSync: mockReadFile, writeFileSync: _mockWrite } = await import("node:fs");
       vi.mocked(mockExists).mockImplementation((p) => {
         const s = String(p);
         if (s.endsWith(".jsonl")) {return false;}

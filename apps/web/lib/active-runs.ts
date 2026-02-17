@@ -8,7 +8,7 @@
  *  - Messages are written to persistent sessions as they arrive.
  *  - New HTTP connections can re-attach to a running stream.
  */
-import { type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { join } from "node:path";
 import {
@@ -21,6 +21,7 @@ import { homedir } from "node:os";
 import {
 	type AgentEvent,
 	spawnAgentProcess,
+	resolvePackageRoot,
 	extractToolResult,
 	buildToolOutput,
 	parseAgentErrorMessage,
@@ -157,22 +158,86 @@ export function subscribeToRun(
 export function abortRun(sessionId: string): boolean {
 	const run = activeRuns.get(sessionId);
 	if (!run || run.status !== "running") {return false;}
+
+	// Immediately mark the run as non-running so hasActiveRun() returns
+	// false and the next user message isn't rejected with 409.
+	run.status = "error";
+
 	run.abortController.abort();
 	run.childProcess.kill("SIGTERM");
+
+	// Send chat.abort directly to the gateway so the agent run stops
+	// even if the CLI child's best-effort onAbort doesn't complete in time.
+	sendGatewayAbort(sessionId);
+
+	// Flush persistence to save the partial response (without _streaming).
+	flushPersistence(run);
+
+	// Signal subscribers that the stream ended.
+	for (const sub of run.subscribers) {
+		try { sub(null); } catch { /* ignore */ }
+	}
+	run.subscribers.clear();
+
+	// Schedule grace-period cleanup (guard: only if we're still the active run).
+	setTimeout(() => {
+		if (activeRuns.get(sessionId) === run) {
+			cleanupRun(sessionId);
+		}
+	}, CLEANUP_GRACE_MS);
 
 	// Fallback: if the child doesn't exit within 5 seconds after
 	// SIGTERM (e.g. the CLI's best-effort chat.abort RPC hangs),
 	// send SIGKILL to force-terminate.
 	const killTimer = setTimeout(() => {
 		try {
-			if (run.status === "running") {
-				run.childProcess.kill("SIGKILL");
-			}
+			run.childProcess.kill("SIGKILL");
 		} catch { /* already dead */ }
 	}, 5_000);
 	run.childProcess.once("close", () => clearTimeout(killTimer));
 
 	return true;
+}
+
+/**
+ * Send a `chat.abort` RPC directly to the gateway daemon via a short-lived
+ * CLI process.  This is a belt-and-suspenders complement to the SIGTERM sent
+ * to the child: even if the child's best-effort `onAbort` callback doesn't
+ * reach the gateway in time, this separate process will.
+ */
+function sendGatewayAbort(sessionId: string): void {
+	try {
+		const root = resolvePackageRoot();
+		const devScript = join(root, "scripts", "run-node.mjs");
+		const prodScript = join(root, "openclaw.mjs");
+		const scriptPath = existsSync(devScript) ? devScript : prodScript;
+
+		const sessionKey = `agent:main:web:${sessionId}`;
+		const child = spawn(
+			"node",
+			[
+				scriptPath,
+				"gateway",
+				"call",
+				"chat.abort",
+				"--params",
+				JSON.stringify({ sessionKey }),
+				"--json",
+				"--timeout",
+				"4000",
+			],
+			{
+				cwd: root,
+				env: { ...process.env },
+				stdio: "ignore",
+				detached: true,
+			},
+		);
+		// Let the abort process run independently — don't block on it.
+		child.unref();
+	} catch {
+		// Best-effort; don't let abort failures break the stop flow.
+	}
 }
 
 /**
@@ -650,6 +715,12 @@ function wireChildProcess(run: ActiveRun): void {
 	// ── Child process exit ──
 
 	child.on("close", (code) => {
+		// If already finalized (e.g. by abortRun), just record the exit code.
+		if (run.status !== "running") {
+			run.exitCode = code;
+			return;
+		}
+
 		if (!agentErrorReported && stderrChunks.length > 0) {
 			const stderr = stderrChunks.join("").trim();
 			const msg = parseErrorFromStderr(stderr);
@@ -692,10 +763,18 @@ function wireChildProcess(run: ActiveRun): void {
 
 		// Clean up run state after a grace period so reconnections
 		// within that window still get the buffered events.
-		setTimeout(() => cleanupRun(run.sessionId), CLEANUP_GRACE_MS);
+		// Guard: only clean up if we're still the active run for this session.
+		setTimeout(() => {
+			if (activeRuns.get(run.sessionId) === run) {
+				cleanupRun(run.sessionId);
+			}
+		}, CLEANUP_GRACE_MS);
 	});
 
 	child.on("error", (err) => {
+		// If already finalized (e.g. by abortRun), skip.
+		if (run.status !== "running") {return;}
+
 		console.error("[active-runs] Child process error:", err);
 		emitError(`Failed to start agent: ${err.message}`);
 		run.status = "error";
@@ -708,7 +787,11 @@ function wireChildProcess(run: ActiveRun): void {
 			}
 		}
 		run.subscribers.clear();
-		setTimeout(() => cleanupRun(run.sessionId), CLEANUP_GRACE_MS);
+		setTimeout(() => {
+			if (activeRuns.get(run.sessionId) === run) {
+				cleanupRun(run.sessionId);
+			}
+		}, CLEANUP_GRACE_MS);
 	});
 
 	child.stderr?.on("data", (chunk: Buffer) => {

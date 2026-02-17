@@ -1,4 +1,5 @@
-import { duckdbPath, parseRelationValue, resolveDuckdbBin, findDuckDBForObject, duckdbQueryOnFile, discoverDuckDBPaths } from "@/lib/workspace";
+import { duckdbPath, parseRelationValue, resolveDuckdbBin, findDuckDBForObject, duckdbQueryOnFile, discoverDuckDBPaths, getObjectViews } from "@/lib/workspace";
+import { deserializeFilters, buildWhereClause, buildOrderByClause, type FieldMeta } from "@/lib/object-filters";
 import { execSync } from "node:child_process";
 
 export const dynamic = "force-dynamic";
@@ -372,16 +373,65 @@ export async function GET(
     `SELECT * FROM statuses WHERE object_id = '${obj.id}' ORDER BY sort_order`,
   );
 
+  // --- Parse filter/sort/pagination query params ---
+  const url = new URL(_req.url);
+  const filtersParam = url.searchParams.get("filters");
+  const sortParam = url.searchParams.get("sort");
+  const searchParam = url.searchParams.get("search");
+  const pageParam = url.searchParams.get("page");
+  const pageSizeParam = url.searchParams.get("pageSize");
+
+  const filterGroup = filtersParam ? deserializeFilters(filtersParam) : undefined;
+  const fieldsMeta: FieldMeta[] = fields.map((f) => ({ name: f.name, type: f.type }));
+
+  // Build WHERE clause from filters
+  let whereClause = "";
+  if (filterGroup) {
+    const where = buildWhereClause(filterGroup, fieldsMeta);
+    if (where) {whereClause = ` WHERE ${where}`;}
+  }
+
+  // Build ORDER BY clause
+  let orderByClause = " ORDER BY created_at DESC";
+  if (sortParam) {
+    try {
+      const sortRules = JSON.parse(sortParam);
+      const orderBy = buildOrderByClause(sortRules);
+      if (orderBy) {orderByClause = ` ORDER BY ${orderBy}`;}
+    } catch {
+      // keep default sort
+    }
+  }
+
+  // Pagination
+  const page = Math.max(1, Number(pageParam) || 1);
+  const pageSize = Math.min(500, Math.max(1, Number(pageSizeParam) || 200));
+  const offset = (page - 1) * pageSize;
+  const limitClause = ` LIMIT ${pageSize} OFFSET ${offset}`;
+
+  // Full-text search across text fields
+  if (searchParam && searchParam.trim()) {
+    const textFields = fields.filter((f) => ["text", "richtext", "email"].includes(f.type));
+    if (textFields.length > 0) {
+      const searchConditions = textFields
+        .map((f) => `LOWER(CAST("${f.name.replace(/"/g, '""')}" AS VARCHAR)) LIKE '%${sqlEscape(searchParam.toLowerCase())}%'`)
+        .join(" OR ");
+      whereClause = whereClause
+        ? `${whereClause} AND (${searchConditions})`
+        : ` WHERE (${searchConditions})`;
+    }
+  }
+
   // Try the PIVOT view first, then fall back to raw EAV query + client-side pivot
   let entries: Record<string, unknown>[] = [];
 
-  const pivotEntries = q(dbFile,
-    `SELECT * FROM v_${name} ORDER BY created_at DESC LIMIT 200`,
-  );
-
-  if (pivotEntries.length > 0) {
+  try {
+    const pivotEntries = q(dbFile,
+      `SELECT * FROM v_${name}${whereClause}${orderByClause}${limitClause}`,
+    );
     entries = pivotEntries;
-  } else {
+  } catch {
+    // Pivot view might not exist or filter SQL may not apply; fall back
     const rawRows = q<EavRow>(dbFile,
       `SELECT e.id as entry_id, e.created_at, e.updated_at,
               f.name as field_name, ef.value
@@ -392,7 +442,6 @@ export async function GET(
        ORDER BY e.created_at DESC
        LIMIT 5000`,
     );
-
     entries = pivotEavRows(rawRows);
   }
 
@@ -415,6 +464,9 @@ export async function GET(
 
   const effectiveDisplayField = resolveDisplayField(obj, fields);
 
+  // Include saved views from .object.yaml
+  const { views: savedViews, activeView } = getObjectViews(name);
+
   return Response.json({
     object: obj,
     fields: enrichedFields,
@@ -423,5 +475,7 @@ export async function GET(
     relationLabels,
     reverseRelations,
     effectiveDisplayField,
+    savedViews,
+    activeView,
   });
 }

@@ -25,10 +25,10 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 
-const mockExistsSync = vi.mocked(existsSync);
-const mockReadFileSync = vi.mocked(readFileSync);
-const mockReaddirSync = vi.mocked(readdirSync);
-const mockExecSync = vi.mocked(execSync);
+const _mockExistsSync = vi.mocked(existsSync);
+const _mockReadFileSync = vi.mocked(readFileSync);
+const _mockReaddirSync = vi.mocked(readdirSync);
+const _mockExecSync = vi.mocked(execSync);
 
 /** Helper to create mock Dirent entries. */
 function makeDirent(name: string, isDir: boolean): Dirent {

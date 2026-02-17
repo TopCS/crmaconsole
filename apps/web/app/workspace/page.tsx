@@ -25,6 +25,8 @@ import { CronDashboard } from "../components/cron/cron-dashboard";
 import { CronJobDetail } from "../components/cron/cron-job-detail";
 import type { CronJob, CronJobsResponse } from "../types/cron";
 import { useIsMobile } from "../hooks/use-mobile";
+import { ObjectFilterBar } from "../components/workspace/object-filter-bar";
+import { type FilterGroup, type SavedView, emptyFilterGroup, matchesFilter } from "@/lib/object-filters";
 
 // --- Types ---
 
@@ -73,6 +75,8 @@ type ObjectData = {
   relationLabels?: Record<string, Record<string, string>>;
   reverseRelations?: ReverseRelation[];
   effectiveDisplayField?: string;
+  savedViews?: import("@/lib/object-filters").SavedView[];
+  activeView?: string;
 };
 
 type FileData = {
@@ -791,6 +795,19 @@ function WorkspacePageInner() {
     }
   }, [content]);
 
+  // Auto-refresh the current object view when the workspace tree updates.
+  // The SSE watcher triggers tree refreshes on any file change (including
+  // .object.yaml edits by the AI agent). We track the tree reference and
+  // re-fetch the object data so saved views/filters update live.
+  const prevTreeRef = useRef(tree);
+  useEffect(() => {
+    if (prevTreeRef.current === tree) {return;}
+    prevTreeRef.current = tree;
+    if (content.kind === "object") {
+      void refreshCurrentObject();
+    }
+  }, [tree, content.kind, refreshCurrentObject]);
+
   // Top-level safety net: catch workspace link clicks anywhere in the page
   // to prevent full-page navigation and handle via client-side state instead.
   const handleContainerClick = useCallback(
@@ -1299,6 +1316,113 @@ function ObjectView({
 }) {
   const [updatingDisplayField, setUpdatingDisplayField] = useState(false);
 
+  // --- Filter state ---
+  const [filters, setFilters] = useState<FilterGroup>(() => emptyFilterGroup());
+  const [savedViews, setSavedViews] = useState<SavedView[]>(data.savedViews ?? []);
+  const [activeViewName, setActiveViewName] = useState<string | undefined>(data.activeView);
+
+  // Column visibility: maps field IDs to boolean (false = hidden)
+  const [viewColumns, setViewColumns] = useState<string[] | undefined>(undefined);
+
+  // Convert field-name-based columns list to TanStack VisibilityState keyed by field ID
+  const columnVisibility = useMemo(() => {
+    if (!viewColumns || viewColumns.length === 0) {return undefined;}
+    const vis: Record<string, boolean> = {};
+    for (const field of data.fields) {
+      vis[field.id] = viewColumns.includes(field.name);
+    }
+    return vis;
+  }, [viewColumns, data.fields]);
+
+  // Sync saved views when data changes (e.g. SSE refresh from AI editing .object.yaml)
+  useEffect(() => {
+    setSavedViews(data.savedViews ?? []);
+    if (data.activeView && data.activeView !== activeViewName) {
+      const view = (data.savedViews ?? []).find((v) => v.name === data.activeView);
+      if (view) {
+        setFilters(view.filters ?? emptyFilterGroup());
+        setViewColumns(view.columns);
+        setActiveViewName(view.name);
+      }
+    }
+  // Only re-run when the API data itself changes (not our local state)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.savedViews, data.activeView]);
+
+  // Apply client-side filtering
+  const filteredEntries = useMemo(
+    () => matchesFilter(data.entries, filters),
+    [data.entries, filters],
+  );
+
+  // Save view to .object.yaml via API
+  const handleSaveView = useCallback(async (name: string) => {
+    const newView: SavedView = { name, filters, columns: viewColumns };
+    const updated = [...savedViews.filter((v) => v.name !== name), newView];
+    setSavedViews(updated);
+    setActiveViewName(name);
+    try {
+      await fetch(
+        `/api/workspace/objects/${encodeURIComponent(data.object.name)}/views`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ views: updated, activeView: name }),
+        },
+      );
+    } catch {
+      // ignore save errors
+    }
+  }, [filters, savedViews, data.object.name]);
+
+  const handleLoadView = useCallback((view: SavedView) => {
+    setFilters(view.filters ?? emptyFilterGroup());
+    setViewColumns(view.columns);
+    setActiveViewName(view.name);
+  }, []);
+
+  const handleDeleteView = useCallback(async (name: string) => {
+    const updated = savedViews.filter((v) => v.name !== name);
+    setSavedViews(updated);
+    if (activeViewName === name) {
+      setActiveViewName(undefined);
+      setFilters(emptyFilterGroup());
+      setViewColumns(undefined);
+    }
+    try {
+      await fetch(
+        `/api/workspace/objects/${encodeURIComponent(data.object.name)}/views`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            views: updated,
+            activeView: activeViewName === name ? undefined : activeViewName,
+          }),
+        },
+      );
+    } catch {
+      // ignore
+    }
+  }, [savedViews, activeViewName, data.object.name]);
+
+  const handleSetActiveView = useCallback(async (name: string | undefined) => {
+    setActiveViewName(name);
+    if (!name) {setViewColumns(undefined);}
+    try {
+      await fetch(
+        `/api/workspace/objects/${encodeURIComponent(data.object.name)}/views`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ views: savedViews, activeView: name }),
+        },
+      );
+    } catch {
+      // ignore
+    }
+  }, [savedViews, data.object.name]);
+
   const handleDisplayFieldChange = async (fieldName: string) => {
     setUpdatingDisplayField(true);
     try {
@@ -1330,10 +1454,15 @@ function ObjectView({
       (rr) => Object.keys(rr.entries).length > 0,
     );
 
+  const filterBarMembers = useMemo(
+    () => members?.map((m) => ({ id: m.id, name: m.name })),
+    [members],
+  );
+
   return (
     <div className="p-6">
       {/* Object header */}
-      <div className="mb-6">
+      <div className="mb-4">
         <h1
           className="font-instrument text-3xl tracking-tight capitalize"
           style={{ color: "var(--color-text)" }}
@@ -1357,7 +1486,7 @@ function ObjectView({
               border: "1px solid var(--color-border)",
             }}
           >
-            {data.entries.length} entries
+            {filteredEntries.length}{filters.rules.length > 0 ? `/${data.entries.length}` : ""} entries
           </span>
           <span
             className="text-xs px-2 py-1 rounded-full"
@@ -1438,12 +1567,34 @@ function ObjectView({
         )}
       </div>
 
+      {/* Filter bar */}
+      <div
+        className="mb-4 py-3 px-4 rounded-lg border"
+        style={{
+          borderColor: "var(--color-border)",
+          background: "var(--color-surface)",
+        }}
+      >
+        <ObjectFilterBar
+          fields={data.fields}
+          filters={filters}
+          onFiltersChange={setFilters}
+          savedViews={savedViews}
+          activeViewName={activeViewName}
+          onSaveView={handleSaveView}
+          onLoadView={handleLoadView}
+          onDeleteView={handleDeleteView}
+          onSetActiveView={handleSetActiveView}
+          members={filterBarMembers}
+        />
+      </div>
+
       {/* Table or Kanban */}
       {data.object.default_view === "kanban" ? (
         <ObjectKanban
           objectName={data.object.name}
           fields={data.fields}
-          entries={data.entries}
+          entries={filteredEntries}
           statuses={data.statuses}
           members={members}
           relationLabels={data.relationLabels}
@@ -1454,13 +1605,14 @@ function ObjectView({
         <ObjectTable
           objectName={data.object.name}
           fields={data.fields}
-          entries={data.entries}
+          entries={filteredEntries}
           members={members}
           relationLabels={data.relationLabels}
           reverseRelations={data.reverseRelations}
           onNavigateToObject={onNavigateToObject}
           onEntryClick={onOpenEntry ? (entryId) => onOpenEntry(data.object.name, entryId) : undefined}
           onRefresh={onRefreshObject}
+          columnVisibility={columnVisibility}
         />
       )}
     </div>

@@ -1,8 +1,10 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { execSync, exec } from "node:child_process";
 import { promisify } from "node:util";
 import { join, resolve, normalize, relative } from "node:path";
 import { homedir } from "node:os";
+import YAML from "yaml";
+import type { SavedView } from "./object-filters";
 
 const execAsync = promisify(exec);
 
@@ -540,6 +542,142 @@ export function parseSimpleYaml(
   }
 
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// .object.yaml with nested views support
+// ---------------------------------------------------------------------------
+
+/** Parsed representation of a .object.yaml file. */
+export type ObjectYamlConfig = {
+  icon?: string;
+  default_view?: string;
+  views?: SavedView[];
+  active_view?: string;
+  /** Any other top-level keys. */
+  [key: string]: unknown;
+};
+
+/**
+ * Parse a .object.yaml file with full YAML support (handles nested views).
+ * Falls back to parseSimpleYaml for files that only have flat keys.
+ */
+export function parseObjectYaml(content: string): ObjectYamlConfig {
+  try {
+    const parsed = YAML.parse(content);
+    if (!parsed || typeof parsed !== "object") {return {};}
+    return parsed as ObjectYamlConfig;
+  } catch {
+    // Fall back to the simple parser for minimal files
+    return parseSimpleYaml(content) as ObjectYamlConfig;
+  }
+}
+
+/**
+ * Read and parse a .object.yaml from disk.
+ * Returns null if the file does not exist.
+ */
+export function readObjectYaml(objectDir: string): ObjectYamlConfig | null {
+  const yamlPath = join(objectDir, ".object.yaml");
+  if (!existsSync(yamlPath)) {return null;}
+  const raw = readFileSync(yamlPath, "utf-8");
+  return parseObjectYaml(raw);
+}
+
+/**
+ * Write a .object.yaml file, merging view config with existing top-level keys.
+ */
+export function writeObjectYaml(objectDir: string, config: ObjectYamlConfig): void {
+  const yamlPath = join(objectDir, ".object.yaml");
+
+  // Read existing to preserve keys we don't manage
+  let existing: ObjectYamlConfig = {};
+  if (existsSync(yamlPath)) {
+    try {
+      existing = parseObjectYaml(readFileSync(yamlPath, "utf-8"));
+    } catch {
+      existing = {};
+    }
+  }
+
+  const merged = { ...existing, ...config };
+
+  // Remove undefined values
+  for (const key of Object.keys(merged)) {
+    if (merged[key] === undefined) {delete merged[key];}
+  }
+
+  const yamlStr = YAML.stringify(merged, { indent: 2, lineWidth: 0 });
+  writeFileSync(yamlPath, yamlStr, "utf-8");
+}
+
+/**
+ * Find the filesystem directory for an object by name.
+ * Walks the workspace tree looking for a directory containing a .object.yaml
+ * or a directory matching the object name inside the workspace.
+ */
+export function findObjectDir(objectName: string): string | null {
+  const root = resolveWorkspaceRoot();
+  if (!root) {return null;}
+
+  // Check direct match: workspace/{objectName}/
+  const direct = join(root, objectName);
+  if (existsSync(direct) && existsSync(join(direct, ".object.yaml"))) {
+    return direct;
+  }
+
+  // Search one level deep for a matching .object.yaml
+  try {
+    const entries = readdirSync(root, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {continue;}
+      const subDir = join(root, entry.name);
+      if (entry.name === objectName && existsSync(join(subDir, ".object.yaml"))) {
+        return subDir;
+      }
+    }
+  } catch {
+    // ignore read errors
+  }
+
+  return null;
+}
+
+/**
+ * Get saved views for an object from its .object.yaml.
+ */
+export function getObjectViews(objectName: string): {
+  views: SavedView[];
+  activeView: string | undefined;
+} {
+  const dir = findObjectDir(objectName);
+  if (!dir) {return { views: [], activeView: undefined };}
+
+  const config = readObjectYaml(dir);
+  if (!config) {return { views: [], activeView: undefined };}
+
+  return {
+    views: config.views ?? [],
+    activeView: config.active_view,
+  };
+}
+
+/**
+ * Save views for an object to its .object.yaml.
+ */
+export function saveObjectViews(
+  objectName: string,
+  views: SavedView[],
+  activeView?: string,
+): boolean {
+  const dir = findObjectDir(objectName);
+  if (!dir) {return false;}
+
+  writeObjectYaml(dir, {
+    views: views.length > 0 ? views : undefined,
+    active_view: activeView,
+  });
+  return true;
 }
 
 // --- System file protection ---

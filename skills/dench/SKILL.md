@@ -57,6 +57,95 @@ fields:
     type: user
 ```
 
+### Saved Views and Filters
+
+`.object.yaml` supports a `views` section for saved filter views. These views appear in the UI filter bar and can be created or modified by the agent to immediately change what the user sees (the UI live-reloads via the file watcher).
+
+**Filter operators by field type:**
+
+| Field Type          | Operators                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| text/richtext/email | contains, not_contains, equals, not_equals, starts_with, ends_with, is_empty, is_not_empty |
+| number              | eq, neq, gt, gte, lt, lte, between, is_empty, is_not_empty                                 |
+| date                | on, before, after, date_between, relative_past, relative_next, is_empty, is_not_empty      |
+| enum                | is, is_not, is_any_of, is_none_of, is_empty, is_not_empty                                  |
+| boolean             | is_true, is_false, is_empty, is_not_empty                                                  |
+| relation/user       | has_any, has_none, has_all, is_empty, is_not_empty                                         |
+
+**Views template (append to .object.yaml):**
+
+```yaml
+views:
+  - name: "Active deals"
+    filters:
+      id: root
+      conjunction: and
+      rules:
+        - id: f1
+          field: status
+          operator: is_any_of
+          value:
+            - "Negotiating"
+            - "Proposal sent"
+        - id: f2
+          field: amount
+          operator: gte
+          value: 10000
+    sort:
+      - field: updated_at
+        direction: desc
+    columns:
+      - name
+      - status
+      - amount
+      - assignee
+
+  - name: "Overdue"
+    filters:
+      id: root
+      conjunction: and
+      rules:
+        - id: f1
+          field: due_date
+          operator: before
+          value: today
+        - id: f2
+          field: status
+          operator: is_not
+          value: Done
+
+active_view: "Active deals"
+```
+
+**Relative date filters** (e.g. "in the last 7 days"):
+
+```yaml
+- id: f1
+  field: created_at
+  operator: relative_past
+  relativeAmount: 7
+  relativeUnit: days
+```
+
+**OR groups** (match any rule):
+
+```yaml
+filters:
+  id: root
+  conjunction: or
+  rules:
+    - id: f1
+      field: status
+      operator: is
+      value: "Active"
+    - id: f2
+      field: priority
+      operator: is
+      value: "High"
+```
+
+**When the user asks to filter/show/hide entries by natural language**, write the `.object.yaml` with the appropriate views and set `active_view`. The web UI will pick up the change instantly via SSE file watcher. Every rule needs a unique `id` (short alphanumeric string). The root filter group also needs `id: root`.
+
 Generate by querying DuckDB then writing the file:
 
 ```bash
