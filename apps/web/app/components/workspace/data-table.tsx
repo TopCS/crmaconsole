@@ -798,7 +798,7 @@ function LoadingSkeleton({ columnCount }: { columnCount: number }) {
 		<div className="p-4 space-y-2">
 			{Array.from({ length: 12 }).map((_, i) => (
 				<div key={i} className="flex gap-3">
-					{Array.from({ length: Math.min(columnCount, 6) }).map((_, j) => (
+					{Array.from({ length: Math.min(columnCount, 6) }).map((_col, j) => (
 						<div
 							key={j}
 							className="h-8 rounded-lg animate-pulse flex-1"

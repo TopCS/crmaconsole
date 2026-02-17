@@ -846,7 +846,7 @@ function WorkspacePageInner() {
   // Derive the active session's title for the header / right sidebar
   const activeSessionTitle = useMemo(() => {
     if (!activeSessionId) {return undefined;}
-    const s = sessions.find((s) => s.id === activeSessionId);
+    const s = sessions.find((sess) => sess.id === activeSessionId);
     return s?.title || undefined;
   }, [activeSessionId, sessions]);
 

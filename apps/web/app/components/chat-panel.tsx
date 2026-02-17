@@ -476,7 +476,7 @@ type ChatPanelProps = {
 };
 
 export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
-	function ChatPanel(
+	function ChatPanelInner(
 		{
 			fileContext,
 			compact,
