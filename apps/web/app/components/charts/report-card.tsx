@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { ChartPanel } from "./chart-panel";
 import type { ReportConfig, PanelConfig } from "./types";
 
@@ -20,12 +21,24 @@ function ChartBarIcon() {
   );
 }
 
-function ExternalLinkIcon() {
+function ExpandIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
       <polyline points="15 3 21 3 21 9" />
-      <line x1="10" x2="21" y1="14" y2="3" />
+      <polyline points="9 21 3 21 3 15" />
+      <line x1="21" x2="14" y1="3" y2="10" />
+      <line x1="3" x2="10" y1="21" y2="14" />
+    </svg>
+  );
+}
+
+function CollapseIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="4 14 10 14 10 20" />
+      <polyline points="20 10 14 10 14 4" />
+      <line x1="14" x2="21" y1="10" y2="3" />
+      <line x1="3" x2="10" y1="21" y2="14" />
     </svg>
   );
 }
@@ -39,6 +52,17 @@ function PinIcon() {
   );
 }
 
+function RefreshIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+      <path d="M16 16h5v5" />
+    </svg>
+  );
+}
+
 // --- Panel data state ---
 
 type PanelData = {
@@ -47,26 +71,42 @@ type PanelData = {
   error?: string;
 };
 
+// --- Grid size helpers ---
+
+function panelColSpan(size?: string): string {
+  switch (size) {
+    case "full":
+      return "col-span-6";
+    case "third":
+      return "col-span-2";
+    case "half":
+    default:
+      return "col-span-3";
+  }
+}
+
 // --- Main ReportCard ---
 
 export function ReportCard({ config }: ReportCardProps) {
   const [panelData, setPanelData] = useState<Record<string, PanelData>>({});
   const [pinning, setPinning] = useState(false);
   const [pinned, setPinned] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
-  // Show at most 2 panels inline
-  const visiblePanels = config.panels.slice(0, 2);
+  // In compact mode show at most 2 panels; expanded shows all
+  const visiblePanels = expanded ? config.panels : config.panels.slice(0, 2);
+  const hasMore = config.panels.length > 2;
 
   // Execute panel SQL queries
-  const executePanels = useCallback(async () => {
+  const executePanels = useCallback(async (panels: PanelConfig[]) => {
     const initial: Record<string, PanelData> = {};
-    for (const panel of visiblePanels) {
+    for (const panel of panels) {
       initial[panel.id] = { rows: [], loading: true };
     }
-    setPanelData(initial);
+    setPanelData((prev) => ({ ...prev, ...initial }));
 
     await Promise.all(
-      visiblePanels.map(async (panel) => {
+      panels.map(async (panel) => {
         try {
           const res = await fetch("/api/workspace/reports/execute", {
             method: "POST",
@@ -94,14 +134,34 @@ export function ReportCard({ config }: ReportCardProps) {
         }
       }),
     );
-  }, [visiblePanels]);
+  }, []);
 
+  // Load initial compact panels
   useEffect(() => {
-    void executePanels();
+    void executePanels(config.panels.slice(0, 2));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Pin report to workspace filesystem
+  // When expanding, fetch any panels not yet loaded
+  const handleToggleExpand = useCallback(() => {
+    setExpanded((prev) => {
+      const next = !prev;
+      if (next && hasMore) {
+        const unloaded = config.panels.filter((p) => !panelData[p.id]);
+        if (unloaded.length > 0) {
+          void executePanels(unloaded);
+        }
+      }
+      return next;
+    });
+  }, [hasMore, config.panels, panelData, executePanels]);
+
+  // Refresh all visible panels
+  const handleRefresh = useCallback(() => {
+    void executePanels(expanded ? config.panels : config.panels.slice(0, 2));
+  }, [expanded, config.panels, executePanels]);
+
+  // Pin report to workspace /reports directory
   const handlePin = async () => {
     setPinning(true);
     try {
@@ -130,7 +190,7 @@ export function ReportCard({ config }: ReportCardProps) {
 
   return (
     <div
-      className="rounded-xl overflow-hidden my-2"
+      className="rounded-xl overflow-hidden my-2 transition-all duration-200"
       style={{
         background: "var(--color-bg)",
         border: "1px solid var(--color-border)",
@@ -164,7 +224,18 @@ export function ReportCard({ config }: ReportCardProps) {
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {!pinned && (
+          {expanded && (
+            <button
+              type="button"
+              onClick={handleRefresh}
+              className="p-1 rounded-md transition-colors cursor-pointer"
+              style={{ color: "var(--color-text-muted)" }}
+              title="Refresh data"
+            >
+              <RefreshIcon />
+            </button>
+          )}
+          {!pinned ? (
             <button
               type="button"
               onClick={handlePin}
@@ -175,31 +246,35 @@ export function ReportCard({ config }: ReportCardProps) {
                 background: "var(--color-surface)",
                 border: "1px solid var(--color-border)",
               }}
-              title="Save to workspace"
+              title="Save to workspace /reports"
             >
               <PinIcon />
               {pinning ? "Saving..." : "Pin"}
             </button>
-          )}
-          {pinned && (
+          ) : (
             <span
-              className="text-[10px] px-2 py-1 rounded-md"
+              className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md"
               style={{ color: "#22c55e", background: "rgba(34, 197, 94, 0.1)" }}
             >
-              Saved
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Pinned
             </span>
           )}
-          <a
-            href="/workspace"
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] transition-colors"
+          <button
+            type="button"
+            onClick={handleToggleExpand}
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] transition-colors cursor-pointer"
             style={{
-              color: "var(--color-accent)",
-              background: "var(--color-accent-light)",
+              color: expanded ? "var(--color-text)" : "var(--color-accent)",
+              background: expanded ? "var(--color-surface-hover)" : "var(--color-accent-light)",
             }}
+            title={expanded ? "Collapse report" : "Expand full report"}
           >
-            <ExternalLinkIcon />
-            Open
-          </a>
+            {expanded ? <CollapseIcon /> : <ExpandIcon />}
+            {expanded ? "Collapse" : "Open"}
+          </button>
         </div>
       </div>
 
@@ -212,28 +287,62 @@ export function ReportCard({ config }: ReportCardProps) {
         </div>
       )}
 
-      {/* Panels (compact mode) */}
-      <div className={`grid gap-2 p-2 ${visiblePanels.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
-        {visiblePanels.map((panel) => (
-          <CompactPanelCard
-            key={panel.id}
-            panel={panel}
-            data={panelData[panel.id]}
-          />
-        ))}
-      </div>
+      <AnimatePresence mode="wait" initial={false}>
+        {expanded ? (
+          /* ── Expanded: full grid with all panels ── */
+          <motion.div
+            key="expanded"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <div className="grid grid-cols-6 gap-3 p-3">
+              {config.panels.map((panel) => (
+                <ExpandedPanelCard
+                  key={panel.id}
+                  panel={panel}
+                  data={panelData[panel.id]}
+                />
+              ))}
+            </div>
+          </motion.div>
+        ) : (
+          /* ── Compact: max 2 panels ── */
+          <motion.div
+            key="compact"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <div className={`grid gap-2 p-2 ${visiblePanels.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+              {visiblePanels.map((panel) => (
+                <CompactPanelCard
+                  key={panel.id}
+                  panel={panel}
+                  data={panelData[panel.id]}
+                />
+              ))}
+            </div>
 
-      {/* More panels indicator */}
-      {config.panels.length > 2 && (
-        <div
-          className="px-3 py-1.5 text-center border-t"
-          style={{ borderColor: "var(--color-border)" }}
-        >
-          <span className="text-[10px]" style={{ color: "var(--color-text-muted)" }}>
-            +{config.panels.length - 2} more chart{config.panels.length - 2 !== 1 ? "s" : ""}
-          </span>
-        </div>
-      )}
+            {/* More panels indicator */}
+            {hasMore && (
+              <button
+                type="button"
+                onClick={handleToggleExpand}
+                className="w-full px-3 py-1.5 text-center border-t cursor-pointer transition-colors hover:opacity-80"
+                style={{ borderColor: "var(--color-border)" }}
+              >
+                <span className="text-[10px]" style={{ color: "var(--color-accent)" }}>
+                  +{config.panels.length - 2} more chart{config.panels.length - 2 !== 1 ? "s" : ""} — click to expand
+                </span>
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -282,6 +391,72 @@ function CompactPanelCard({
           </div>
         ) : (
           <ChartPanel config={panel} data={data?.rows ?? []} compact />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --- Expanded panel card for full report view ---
+
+function ExpandedPanelCard({
+  panel,
+  data,
+}: {
+  panel: PanelConfig;
+  data?: PanelData;
+}) {
+  const colSpan = panelColSpan(panel.size);
+
+  return (
+    <div
+      className={`${colSpan} rounded-xl overflow-hidden`}
+      style={{
+        background: "var(--color-surface)",
+        border: "1px solid var(--color-border)",
+      }}
+    >
+      <div className="px-3 py-2 flex items-center justify-between">
+        <h4
+          className="text-xs font-medium"
+          style={{ color: "var(--color-text)" }}
+        >
+          {panel.title}
+        </h4>
+        {data && !data.loading && !data.error && (
+          <span
+            className="text-[10px] px-1.5 py-0.5 rounded"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            {data.rows.length} rows
+          </span>
+        )}
+      </div>
+      <div className="px-1.5 pb-2">
+        {data?.loading ? (
+          <div className="flex items-center justify-center" style={{ height: 280 }}>
+            <div
+              className="w-4 h-4 border-2 rounded-full animate-spin"
+              style={{
+                borderColor: "var(--color-border)",
+                borderTopColor: "var(--color-accent)",
+              }}
+            />
+          </div>
+        ) : data?.error ? (
+          <div className="flex flex-col items-center justify-center gap-1.5" style={{ height: 280 }}>
+            <p className="text-[10px]" style={{ color: "#f87171" }}>
+              Query error
+            </p>
+            <p
+              className="text-[10px] px-2 py-1 rounded max-w-xs text-center"
+              style={{ background: "rgba(248, 113, 113, 0.1)", color: "#f87171" }}
+            >
+              {data.error}
+            </p>
+          </div>
+        ) : (
+          <ChartPanel config={panel} data={data?.rows ?? []} />
         )}
       </div>
     </div>
