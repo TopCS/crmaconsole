@@ -16,6 +16,8 @@ export function isChatStopCommandText(text: string): boolean {
   return trimmed.toLowerCase() === "/stop" || isAbortTrigger(trimmed);
 }
 
+const NO_EXPIRATION_THRESHOLD_MS = 2_000_000_000;
+
 export function resolveChatRunExpiresAtMs(params: {
   now: number;
   timeoutMs: number;
@@ -23,6 +25,11 @@ export function resolveChatRunExpiresAtMs(params: {
   minMs?: number;
   maxMs?: number;
 }): number {
+  // "No timeout" runs (timeoutMs at or above the timer-safe max) never expire
+  // automatically; they can still be aborted via /stop or chat.abort.
+  if (params.timeoutMs >= NO_EXPIRATION_THRESHOLD_MS) {
+    return Number.MAX_SAFE_INTEGER;
+  }
   const { now, timeoutMs, graceMs = 60_000, minMs = 2 * 60_000, maxMs = 24 * 60 * 60_000 } = params;
   const boundedTimeoutMs = Math.max(0, timeoutMs);
   const target = now + boundedTimeoutMs + graceMs;

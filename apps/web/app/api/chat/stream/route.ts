@@ -19,7 +19,6 @@ import { join } from "node:path";
 import { resolveOpenClawStateDir } from "@/lib/workspace";
 
 export const runtime = "nodejs";
-export const maxDuration = 600;
 
 function deriveSubagentInfo(sessionKey: string): { parentSessionId: string; task: string } | null {
 	const registryPath = join(resolveOpenClawStateDir(), "subagents", "runs.json");

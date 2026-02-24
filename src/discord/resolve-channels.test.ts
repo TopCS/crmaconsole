@@ -87,6 +87,33 @@ describe("resolveDiscordChannelAllowlist", () => {
     expect(res[0]?.channelId).toBeUndefined();
   });
 
+  it("resolves numeric guildId/channelId pair by ID", async () => {
+    const fetcher = withFetchPreconnect(async (input: RequestInfo | URL) => {
+      const url = urlToString(input);
+      if (url.endsWith("/users/@me/guilds")) {
+        return jsonResponse([{ id: "1468757251106934866", name: "Test Server" }]);
+      }
+      if (url.endsWith("/guilds/1468757251106934866/channels")) {
+        return jsonResponse([
+          { id: "1475662965717078159", name: "bot-chat", guild_id: "1468757251106934866", type: 0 },
+          { id: "9999", name: "general", guild_id: "1468757251106934866", type: 0 },
+        ]);
+      }
+      return new Response("not found", { status: 404 });
+    });
+
+    const res = await resolveDiscordChannelAllowlist({
+      token: "test",
+      entries: ["1468757251106934866/1475662965717078159"],
+      fetcher,
+    });
+
+    expect(res[0]?.resolved).toBe(true);
+    expect(res[0]?.guildId).toBe("1468757251106934866");
+    expect(res[0]?.channelId).toBe("1475662965717078159");
+    expect(res[0]?.channelName).toBe("bot-chat");
+  });
+
   it("bare numeric guild id is misrouted as channel id (regression)", async () => {
     // Demonstrates why provider.ts must prefix guild-only entries with "guild:"
     // In reality, Discord returns 404 when a guild ID is sent to /channels/<guildId>,

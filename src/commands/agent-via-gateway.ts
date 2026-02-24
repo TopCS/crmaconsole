@@ -74,7 +74,7 @@ function parseTimeoutSeconds(opts: { cfg: ReturnType<typeof loadConfig>; timeout
   const raw =
     opts.timeout !== undefined
       ? Number.parseInt(String(opts.timeout), 10)
-      : (opts.cfg.agents?.defaults?.timeoutSeconds ?? 600);
+      : (opts.cfg.agents?.defaults?.timeoutSeconds ?? 0);
   if (Number.isNaN(raw) || raw < 0) {
     throw new Error("--timeout must be a non-negative integer (seconds; 0 means no timeout)");
   }
@@ -226,7 +226,8 @@ async function agentViaGatewayStreamJson(opts: AgentCliOpts, _runtime: RuntimeEn
     }
   }
   const timeoutSeconds = parseTimeoutSeconds({ cfg, timeout: opts.timeout });
-  const gatewayTimeoutMs = Math.max(10_000, (timeoutSeconds + 30) * 1000);
+  const gatewayTimeoutMs =
+    timeoutSeconds === 0 ? NO_GATEWAY_TIMEOUT_MS : Math.max(10_000, (timeoutSeconds + 30) * 1000);
 
   const sessionKey = resolveSessionKeyForRequest({
     cfg,
