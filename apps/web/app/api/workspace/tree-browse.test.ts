@@ -17,6 +17,8 @@ vi.mock("node:os", () => ({
 // Mock workspace
 vi.mock("@/lib/workspace", () => ({
   resolveWorkspaceRoot: vi.fn(() => null),
+  resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw"),
+  getEffectiveProfile: vi.fn(() => "default"),
   parseSimpleYaml: vi.fn(() => ({})),
   duckdbQueryAll: vi.fn(() => []),
   duckdbQueryAllAsync: vi.fn(async () => []),
@@ -55,6 +57,8 @@ describe("Workspace Tree & Browse API", () => {
     }));
     vi.mock("@/lib/workspace", () => ({
       resolveWorkspaceRoot: vi.fn(() => null),
+      resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw"),
+      getEffectiveProfile: vi.fn(() => "default"),
       parseSimpleYaml: vi.fn(() => ({})),
       duckdbQueryAll: vi.fn(() => []),
       duckdbQueryAllAsync: vi.fn(async () => []),
@@ -74,7 +78,8 @@ describe("Workspace Tree & Browse API", () => {
   describe("GET /api/workspace/tree", () => {
     it("returns tree with exists=false when no workspace root", async () => {
       const { GET } = await import("./tree/route.js");
-      const res = await GET();
+      const req = new Request("http://localhost/api/workspace/tree");
+      const res = await GET(req);
       const json = await res.json();
       expect(json.exists).toBe(false);
       expect(json.tree).toEqual([]);
@@ -96,7 +101,8 @@ describe("Workspace Tree & Browse API", () => {
       });
 
       const { GET } = await import("./tree/route.js");
-      const res = await GET();
+      const req = new Request("http://localhost/api/workspace/tree");
+      const res = await GET(req);
       const json = await res.json();
       expect(json.exists).toBe(true);
       expect(json.tree.length).toBeGreaterThan(0);
@@ -109,7 +115,8 @@ describe("Workspace Tree & Browse API", () => {
       vi.mocked(mockExists).mockReturnValue(true);
 
       const { GET } = await import("./tree/route.js");
-      const res = await GET();
+      const req = new Request("http://localhost/api/workspace/tree");
+      const res = await GET(req);
       const json = await res.json();
       expect(json.workspaceRoot).toBe("/ws");
     });

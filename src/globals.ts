@@ -1,52 +1,56 @@
-import { getLogger, isFileLogLevelEnabled } from "./logging/logger.js";
-import { theme } from "./terminal/theme.js";
+let verboseEnabled = false;
+let yesEnabled = false;
 
-let globalVerbose = false;
-let globalYes = false;
-
-export function setVerbose(v: boolean) {
-  globalVerbose = v;
-}
-
-export function isVerbose() {
-  return globalVerbose;
-}
-
-export function shouldLogVerbose() {
-  return globalVerbose || isFileLogLevelEnabled("debug");
-}
-
-export function logVerbose(message: string) {
-  if (!shouldLogVerbose()) {
-    return;
+function isTruthyEnvValue(value: string | undefined): boolean {
+  if (!value) {
+    return false;
   }
-  try {
-    getLogger().debug({ message }, "verbose");
-  } catch {
-    // ignore logger failures to avoid breaking verbose printing
+  const normalized = value.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
+export function setVerbose(enabled: boolean): void {
+  verboseEnabled = Boolean(enabled);
+}
+
+export function isVerbose(): boolean {
+  return (
+    verboseEnabled ||
+    isTruthyEnvValue(process.env.OPENCLAW_VERBOSE) ||
+    isTruthyEnvValue(process.env.CLAWDBOT_VERBOSE)
+  );
+}
+
+export function shouldLogVerbose(): boolean {
+  return isVerbose();
+}
+
+export function setYes(enabled: boolean): void {
+  yesEnabled = Boolean(enabled);
+}
+
+export function isYes(): boolean {
+  return (
+    yesEnabled ||
+    isTruthyEnvValue(process.env.OPENCLAW_YES) ||
+    isTruthyEnvValue(process.env.CLAWDBOT_YES)
+  );
+}
+
+export function logVerbose(...args: unknown[]): void {
+  if (shouldLogVerbose()) {
+    console.error(...args);
   }
-  if (!globalVerbose) {
-    return;
-  }
-  console.log(theme.muted(message));
 }
 
-export function logVerboseConsole(message: string) {
-  if (!globalVerbose) {
-    return;
-  }
-  console.log(theme.muted(message));
+export function info(...args: unknown[]): void {
+  console.log(...args);
 }
 
-export function setYes(v: boolean) {
-  globalYes = v;
+export function warn(...args: unknown[]): void {
+  console.warn(...args);
 }
 
-export function isYes() {
-  return globalYes;
+export function danger(...args: unknown[]): void {
+  console.error(...args);
 }
-
-export const success = theme.success;
-export const warn = theme.warn;
-export const info = theme.info;
-export const danger = theme.error;

@@ -1,12 +1,32 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("node:fs", () => ({
-  existsSync: vi.fn(() => false),
-  readFileSync: vi.fn(() => ""),
-  readdirSync: vi.fn(() => []),
-  writeFileSync: vi.fn(),
-  mkdirSync: vi.fn(),
-}));
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  const existsSync = vi.fn(() => false);
+  const readFileSync = vi.fn(() => "");
+  const readdirSync = vi.fn(() => []);
+  const writeFileSync = vi.fn();
+  const mkdirSync = vi.fn();
+  const renameSync = vi.fn();
+  return {
+    ...actual,
+    existsSync,
+    readFileSync,
+    readdirSync,
+    writeFileSync,
+    mkdirSync,
+    renameSync,
+    default: {
+      ...actual,
+      existsSync,
+      readFileSync,
+      readdirSync,
+      writeFileSync,
+      mkdirSync,
+      renameSync,
+    },
+  };
+});
 
 vi.mock("node:child_process", () => ({
   execSync: vi.fn(() => ""),
@@ -29,7 +49,11 @@ import { join } from "node:path";
 
 describe("profile-scoped chat session isolation", () => {
   const originalEnv = { ...process.env };
-  const STATE_DIR = join("/home/testuser", ".openclaw");
+  const DEFAULT_STATE_DIR = join("/home/testuser", ".openclaw");
+  const stateDirForProfile = (profile: string | null) =>
+    !profile || profile.toLowerCase() === "default"
+      ? DEFAULT_STATE_DIR
+      : join("/home/testuser", `.openclaw-${profile}`);
 
   beforeEach(() => {
     vi.resetModules();
@@ -40,13 +64,33 @@ describe("profile-scoped chat session isolation", () => {
     delete process.env.OPENCLAW_WORKSPACE;
     delete process.env.OPENCLAW_STATE_DIR;
 
-    vi.mock("node:fs", () => ({
-      existsSync: vi.fn(() => false),
-      readFileSync: vi.fn(() => ""),
-      readdirSync: vi.fn(() => []),
-      writeFileSync: vi.fn(),
-      mkdirSync: vi.fn(),
-    }));
+    vi.mock("node:fs", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("node:fs")>();
+      const existsSync = vi.fn(() => false);
+      const readFileSync = vi.fn(() => "");
+      const readdirSync = vi.fn(() => []);
+      const writeFileSync = vi.fn();
+      const mkdirSync = vi.fn();
+      const renameSync = vi.fn();
+      return {
+        ...actual,
+        existsSync,
+        readFileSync,
+        readdirSync,
+        writeFileSync,
+        mkdirSync,
+        renameSync,
+        default: {
+          ...actual,
+          existsSync,
+          readFileSync,
+          readdirSync,
+          writeFileSync,
+          mkdirSync,
+          renameSync,
+        },
+      };
+    });
     vi.mock("node:child_process", () => ({
       execSync: vi.fn(() => ""),
       exec: vi.fn(
@@ -85,15 +129,15 @@ describe("profile-scoped chat session isolation", () => {
     mockReadFile.mockImplementation(() => {
       throw new Error("ENOENT");
     });
-    expect(resolveWebChatDir()).toBe(join(STATE_DIR, "web-chat"));
+    expect(resolveWebChatDir()).toBe(join(DEFAULT_STATE_DIR, "web-chat"));
   });
 
-  it("named profile uses web-chat-<name> directory", async () => {
+  it("named profile uses profile-scoped web-chat directory", async () => {
     const { resolveWebChatDir, setUIActiveProfile, mockReadFile } =
       await importWorkspace();
     mockReadFile.mockReturnValue(JSON.stringify({}) as never);
     setUIActiveProfile("work");
-    expect(resolveWebChatDir()).toBe(join(STATE_DIR, "web-chat-work"));
+    expect(resolveWebChatDir()).toBe(join(stateDirForProfile("work"), "web-chat"));
   });
 
   it("different profiles produce different chat directories", async () => {
@@ -109,8 +153,8 @@ describe("profile-scoped chat session isolation", () => {
     const dirBeta = resolveWebChatDir();
 
     expect(dirAlpha).not.toBe(dirBeta);
-    expect(dirAlpha).toBe(join(STATE_DIR, "web-chat-alpha"));
-    expect(dirBeta).toBe(join(STATE_DIR, "web-chat-beta"));
+    expect(dirAlpha).toBe(join(stateDirForProfile("alpha"), "web-chat"));
+    expect(dirBeta).toBe(join(stateDirForProfile("beta"), "web-chat"));
   });
 
   it("switching to default after named profile reverts to base dir", async () => {
@@ -119,10 +163,10 @@ describe("profile-scoped chat session isolation", () => {
     mockReadFile.mockReturnValue(JSON.stringify({}) as never);
 
     setUIActiveProfile("work");
-    expect(resolveWebChatDir()).toBe(join(STATE_DIR, "web-chat-work"));
+    expect(resolveWebChatDir()).toBe(join(stateDirForProfile("work"), "web-chat"));
 
     setUIActiveProfile(null);
-    expect(resolveWebChatDir()).toBe(join(STATE_DIR, "web-chat"));
+    expect(resolveWebChatDir()).toBe(join(DEFAULT_STATE_DIR, "web-chat"));
   });
 
   it("'default' profile name uses base web-chat dir (case-insensitive)", async () => {
@@ -131,10 +175,10 @@ describe("profile-scoped chat session isolation", () => {
     mockReadFile.mockReturnValue(JSON.stringify({}) as never);
 
     setUIActiveProfile("Default");
-    expect(resolveWebChatDir()).toBe(join(STATE_DIR, "web-chat"));
+    expect(resolveWebChatDir()).toBe(join(DEFAULT_STATE_DIR, "web-chat"));
 
     setUIActiveProfile("DEFAULT");
-    expect(resolveWebChatDir()).toBe(join(STATE_DIR, "web-chat"));
+    expect(resolveWebChatDir()).toBe(join(DEFAULT_STATE_DIR, "web-chat"));
   });
 
   it("OPENCLAW_STATE_DIR override changes base for chat dirs", async () => {
@@ -147,7 +191,7 @@ describe("profile-scoped chat session isolation", () => {
     expect(resolveWebChatDir()).toBe(join("/custom/state", "web-chat"));
 
     setUIActiveProfile("test");
-    expect(resolveWebChatDir()).toBe(join("/custom/state", "web-chat-test"));
+    expect(resolveWebChatDir()).toBe(join("/custom/state", "web-chat"));
   });
 
   it("workspace roots are isolated per profile too", async () => {
@@ -155,8 +199,8 @@ describe("profile-scoped chat session isolation", () => {
       await importWorkspace();
     mockReadFile.mockReturnValue(JSON.stringify({}) as never);
 
-    const defaultWs = join(STATE_DIR, "workspace");
-    const workWs = join(STATE_DIR, "workspace-work");
+    const defaultWs = join(DEFAULT_STATE_DIR, "workspace");
+    const workWs = join(stateDirForProfile("work"), "workspace");
 
     mockExists.mockImplementation((p) => {
       const s = String(p);

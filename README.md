@@ -34,8 +34,8 @@
 **Runtime: Node 22+**
 
 ```bash
-npm i -g ironclaw
-ironclaw onboard --install-daemon
+npm i -g openclaw
+npx ironclaw
 ```
 
 Opens at `localhost:3100`. That's it.
@@ -43,9 +43,9 @@ Opens at `localhost:3100`. That's it.
 Three steps total:
 
 ```
-1. npm i -g ironclaw
-2. ironclaw onboard
-3. ironclaw gateway start
+1. npm i -g openclaw
+2. npx ironclaw
+3. bootstrap opens UI on localhost:3100
 ```
 
 ---

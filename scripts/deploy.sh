@@ -188,8 +188,8 @@ fi
 
 # ── build ────────────────────────────────────────────────────────────────────
 
-# The `prepack` script (triggered by `npm publish`) runs the full build chain:
-#   pnpm build && pnpm ui:build && pnpm web:build && pnpm web:prepack
+# The `prepack` script (triggered by `npm publish`) runs the IronClaw build chain:
+#   pnpm build && pnpm web:build && pnpm web:prepack
 # Running `pnpm build` here is a redundant fail-fast: catch CLI build errors
 # before committing to a publish attempt.
 if [[ "$SKIP_BUILD" != true ]]; then

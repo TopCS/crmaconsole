@@ -1,7 +1,5 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
 import { getEffectiveProfile, resolveWorkspaceRoot } from "./workspace";
 
 export type AgentEvent = {
@@ -111,68 +109,42 @@ export type RunAgentOptions = {
 	sessionId?: string;
 };
 
-/**
- * Resolve the ironclaw/openclaw package root directory.
- *
- * In a dev workspace the cwd is `<repo>/apps/web` and `scripts/run-node.mjs`
- * exists two levels up.  In a production standalone build the cwd is
- * `<pkg>/apps/web/.next/standalone/apps/web/` — walking two levels up lands
- * inside the `.next` tree, not at the package root.
- *
- * Strategy:
- *  1. Honour `OPENCLAW_ROOT` env var (set by the gateway when spawning the
- *     standalone server — guaranteed correct).
- *  2. Walk upward from cwd looking for `openclaw.mjs` (production) or
- *     `scripts/run-node.mjs` (dev).
- *  3. Fallback: original 2-levels-up heuristic.
- */
-export function resolvePackageRoot(): string {
-	// 1. Env var (fastest, most reliable in standalone mode).
-	if (process.env.OPENCLAW_ROOT && existsSync(process.env.OPENCLAW_ROOT)) {
-		return process.env.OPENCLAW_ROOT;
-	}
-
-	// 2. Walk up from cwd.
-	let dir = process.cwd();
-	for (let i = 0; i < 20; i++) {
-		if (
-			existsSync(join(dir, "openclaw.mjs")) ||
-			existsSync(join(dir, "scripts", "run-node.mjs"))
-		) {
-			return dir;
-		}
-		const parent = dirname(dir);
-		if (parent === dir) {break;}
-		dir = parent;
-	}
-
-	// 3. Fallback: legacy heuristic.
-	const cwd = process.cwd();
-	return cwd.endsWith(join("apps", "web"))
-		? join(cwd, "..", "..")
-		: cwd;
-}
+export type AgentProcessHandle = {
+	stdout: NodeJS.ReadableStream | null;
+	stderr: NodeJS.ReadableStream | null;
+	kill: (signal?: NodeJS.Signals | number) => boolean;
+	on: {
+		(
+			event: "close",
+			listener: (code: number | null, signal: NodeJS.Signals | null) => void,
+		): AgentProcessHandle;
+		(event: string, listener: (...args: unknown[]) => void): AgentProcessHandle;
+	};
+	once: {
+		(
+			event: "close",
+			listener: (code: number | null, signal: NodeJS.Signals | null) => void,
+		): AgentProcessHandle;
+		(event: string, listener: (...args: unknown[]) => void): AgentProcessHandle;
+	};
+};
 
 /**
  * Spawn an agent child process and return the ChildProcess handle.
  * Shared between `runAgent` (legacy callback API) and the ActiveRunManager.
- *
- * In a dev workspace uses `scripts/run-node.mjs` (auto-rebuilds TypeScript).
- * In production / global-install uses `openclaw.mjs` directly (pre-built).
  */
 export function spawnAgentProcess(
 	message: string,
 	agentSessionId?: string,
+): AgentProcessHandle {
+	return spawnLegacyAgentProcess(message, agentSessionId);
+}
+
+function spawnLegacyAgentProcess(
+	message: string,
+	agentSessionId?: string,
 ): ReturnType<typeof spawn> {
-	const root = resolvePackageRoot();
-
-	// Dev: scripts/run-node.mjs (auto-rebuild). Prod: openclaw.mjs (pre-built).
-	const devScript = join(root, "scripts", "run-node.mjs");
-	const prodScript = join(root, "openclaw.mjs");
-	const scriptPath = existsSync(devScript) ? devScript : prodScript;
-
 	const args = [
-		scriptPath,
 		"agent",
 		"--agent",
 		"main",
@@ -188,8 +160,7 @@ export function spawnAgentProcess(
 
 	const profile = getEffectiveProfile();
 	const workspace = resolveWorkspaceRoot();
-	return spawn("node", args, {
-		cwd: root,
+	return spawn("openclaw", args, {
 		env: {
 			...process.env,
 			...(profile ? { OPENCLAW_PROFILE: profile } : {}),
@@ -206,15 +177,15 @@ export function spawnAgentProcess(
 export function spawnAgentSubscribeProcess(
 	sessionKey: string,
 	afterSeq = 0,
+): AgentProcessHandle {
+	return spawnLegacyAgentSubscribeProcess(sessionKey, afterSeq);
+}
+
+function spawnLegacyAgentSubscribeProcess(
+	sessionKey: string,
+	afterSeq = 0,
 ): ReturnType<typeof spawn> {
-	const root = resolvePackageRoot();
-
-	const devScript = join(root, "scripts", "run-node.mjs");
-	const prodScript = join(root, "openclaw.mjs");
-	const scriptPath = existsSync(devScript) ? devScript : prodScript;
-
 	const args = [
-		scriptPath,
 		"agent",
 		"--stream-json",
 		"--subscribe-session-key",
@@ -225,8 +196,7 @@ export function spawnAgentSubscribeProcess(
 
 	const profile = getEffectiveProfile();
 	const workspace = resolveWorkspaceRoot();
-	return spawn("node", args, {
-		cwd: root,
+	return spawn("openclaw", args, {
 		env: {
 			...process.env,
 			...(profile ? { OPENCLAW_PROFILE: profile } : {}),
@@ -472,7 +442,8 @@ export async function runAgent(
 		});
 
 		child.on("error", (err) => {
-			callback.onError(err);
+			const error = err instanceof Error ? err : new Error(String(err));
+			callback.onError(error);
 			resolve();
 		});
 

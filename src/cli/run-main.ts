@@ -1,17 +1,14 @@
+import { spawn } from "node:child_process";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { loadDotEnv } from "../infra/dotenv.js";
 import { isTruthyEnvValue, normalizeEnv } from "../infra/env.js";
-import { formatUncaughtError } from "../infra/errors.js";
 import { isMainModule } from "../infra/is-main.js";
 import { ensureOpenClawCliOnPath } from "../infra/path-env.js";
 import { assertSupportedRuntime } from "../infra/runtime-guard.js";
-import { installUnhandledRejectionHandler } from "../infra/unhandled-rejections.js";
-import { enableConsoleCapture } from "../logging.js";
 import { VERSION } from "../version.js";
 import { getCommandPath, getPrimaryCommand, hasHelpOrVersion } from "./argv.js";
 import { emitCliBanner } from "./banner.js";
-import { tryRouteCli } from "./route.js";
+import { resolveCliName } from "./cli-name.js";
 import { normalizeWindowsArgv } from "./windows-argv.js";
 
 export function rewriteUpdateFlagArgv(argv: string[]): string[] {
@@ -27,20 +24,6 @@ export function rewriteUpdateFlagArgv(argv: string[]): string[] {
 
 export function shouldRegisterPrimarySubcommand(argv: string[]): boolean {
   return !hasHelpOrVersion(argv);
-}
-
-export function shouldSkipPluginCommandRegistration(params: {
-  argv: string[];
-  primary: string | null;
-  hasBuiltinPrimary: boolean;
-}): boolean {
-  if (params.hasBuiltinPrimary) {
-    return true;
-  }
-  if (!params.primary) {
-    return hasHelpOrVersion(params.argv);
-  }
-  return false;
 }
 
 export function shouldEnsureCliPath(argv: string[]): boolean {
@@ -63,9 +46,138 @@ export function shouldEnsureCliPath(argv: string[]): boolean {
   return true;
 }
 
+export type BootstrapRolloutStage = "legacy" | "internal" | "beta" | "default";
+
+function normalizeBootstrapRolloutStage(
+  value: string | undefined,
+): BootstrapRolloutStage | undefined {
+  const normalized = value?.trim().toLowerCase();
+  if (
+    normalized === "legacy" ||
+    normalized === "internal" ||
+    normalized === "beta" ||
+    normalized === "default"
+  ) {
+    return normalized;
+  }
+  return undefined;
+}
+
+export function resolveBootstrapRolloutStage(
+  env: NodeJS.ProcessEnv = process.env,
+): BootstrapRolloutStage {
+  const raw = env.IRONCLAW_BOOTSTRAP_ROLLOUT ?? env.OPENCLAW_BOOTSTRAP_ROLLOUT;
+  return normalizeBootstrapRolloutStage(raw) ?? "default";
+}
+
+export function shouldEnableBootstrapCutover(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (
+    isTruthyEnvValue(env.IRONCLAW_BOOTSTRAP_LEGACY_FALLBACK) ||
+    isTruthyEnvValue(env.OPENCLAW_BOOTSTRAP_LEGACY_FALLBACK)
+  ) {
+    return false;
+  }
+  const stage = resolveBootstrapRolloutStage(env);
+  if (stage === "legacy") {
+    return false;
+  }
+  if (stage === "beta") {
+    return (
+      isTruthyEnvValue(env.IRONCLAW_BOOTSTRAP_BETA_OPT_IN) ||
+      isTruthyEnvValue(env.OPENCLAW_BOOTSTRAP_BETA_OPT_IN)
+    );
+  }
+  return true;
+}
+
+export function rewriteBareArgvToBootstrap(
+  argv: string[],
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  if (hasHelpOrVersion(argv)) {
+    return argv;
+  }
+  if (getPrimaryCommand(argv)) {
+    return argv;
+  }
+  if (resolveCliName(argv) !== "ironclaw") {
+    return argv;
+  }
+  if (!shouldEnableBootstrapCutover(env)) {
+    return argv;
+  }
+  return [...argv.slice(0, 2), "bootstrap", ...argv.slice(2)];
+}
+
+function isDelegationDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (
+    isTruthyEnvValue(env.IRONCLAW_DISABLE_OPENCLAW_DELEGATION) ||
+    isTruthyEnvValue(env.OPENCLAW_DISABLE_OPENCLAW_DELEGATION)
+  );
+}
+
+export function shouldDelegateToGlobalOpenClaw(
+  argv: string[],
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (isDelegationDisabled(env)) {
+    return false;
+  }
+  const primary = getPrimaryCommand(argv);
+  if (!primary) {
+    return false;
+  }
+  return primary !== "bootstrap";
+}
+
+async function delegateToGlobalOpenClaw(argv: string[]): Promise<number> {
+  if (
+    isTruthyEnvValue(process.env.IRONCLAW_DELEGATED) ||
+    isTruthyEnvValue(process.env.OPENCLAW_DELEGATED)
+  ) {
+    throw new Error(
+      "OpenClaw delegation loop detected. Check PATH so `openclaw` resolves to the global OpenClaw CLI.",
+    );
+  }
+  const delegatedArgv = argv.slice(2);
+  return await new Promise<number>((resolve, reject) => {
+    const child = spawn("openclaw", delegatedArgv, {
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        IRONCLAW_DELEGATED: "1",
+        OPENCLAW_DELEGATED: "1",
+      },
+    });
+
+    child.once("error", (error) => {
+      const err = error as NodeJS.ErrnoException;
+      if (err?.code === "ENOENT") {
+        reject(
+          new Error(
+            [
+              "Global `openclaw` CLI was not found on PATH.",
+              "Install it once with: npm install -g openclaw",
+            ].join("\n"),
+          ),
+        );
+        return;
+      }
+      reject(error);
+    });
+
+    child.once("exit", (code, signal) => {
+      if (signal) {
+        resolve(1);
+        return;
+      }
+      resolve(code ?? 1);
+    });
+  });
+}
+
 export async function runCli(argv: string[] = process.argv) {
   const normalizedArgv = normalizeWindowsArgv(argv);
-  loadDotEnv({ quiet: true });
   normalizeEnv();
   if (shouldEnsureCliPath(normalizedArgv)) {
     ensureOpenClawCliOnPath();
@@ -88,54 +200,15 @@ export async function runCli(argv: string[] = process.argv) {
     await emitCliBanner(VERSION, { argv: normalizedArgv });
   }
 
-  if (await tryRouteCli(normalizedArgv)) {
+  const parseArgv = rewriteBareArgvToBootstrap(rewriteUpdateFlagArgv(normalizedArgv));
+  if (shouldDelegateToGlobalOpenClaw(parseArgv)) {
+    const exitCode = await delegateToGlobalOpenClaw(parseArgv);
+    process.exitCode = exitCode;
     return;
   }
 
-  // Capture all console output into structured logs while keeping stdout/stderr behavior.
-  enableConsoleCapture();
-
   const { buildProgram } = await import("./program.js");
   const program = buildProgram();
-
-  // Global error handlers to prevent silent crashes from unhandled rejections/exceptions.
-  // These log the error and exit gracefully instead of crashing without trace.
-  installUnhandledRejectionHandler();
-
-  process.on("uncaughtException", (error) => {
-    console.error("[ironclaw] Uncaught exception:", formatUncaughtError(error));
-    process.exit(1);
-  });
-
-  const parseArgv = rewriteUpdateFlagArgv(normalizedArgv);
-  // Register the primary command (builtin or subcli) so help and command parsing
-  // are correct even with lazy command registration.
-  const primary = getPrimaryCommand(parseArgv);
-  if (primary) {
-    const { getProgramContext } = await import("./program/program-context.js");
-    const ctx = getProgramContext(program);
-    if (ctx) {
-      const { registerCoreCliByName } = await import("./program/command-registry.js");
-      await registerCoreCliByName(program, ctx, primary, parseArgv);
-    }
-    const { registerSubCliByName } = await import("./program/register.subclis.js");
-    await registerSubCliByName(program, primary);
-  }
-
-  const hasBuiltinPrimary =
-    primary !== null && program.commands.some((command) => command.name() === primary);
-  const shouldSkipPluginRegistration = shouldSkipPluginCommandRegistration({
-    argv: parseArgv,
-    primary,
-    hasBuiltinPrimary,
-  });
-  if (!shouldSkipPluginRegistration) {
-    // Register plugin CLI commands before parsing
-    const { registerPluginCliCommands } = await import("../plugins/cli.js");
-    const { loadConfig } = await import("../config/config.js");
-    registerPluginCliCommands(program, loadConfig());
-  }
-
   await program.parseAsync(parseArgv);
 }
 

@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import json5 from "json5";
 import { resolveConfigPath } from "../config/paths.js";
-import type { OpenClawConfig } from "../config/types.js";
+import type { LoggingConfig } from "../config/types.base.js";
 
-type LoggingConfig = OpenClawConfig["logging"];
+type LoggingConfigOrUndefined = LoggingConfig | undefined;
 
-export function readLoggingConfig(): LoggingConfig | undefined {
+export function readLoggingConfig(): LoggingConfigOrUndefined {
   const configPath = resolveConfigPath();
   try {
     if (!fs.existsSync(configPath)) {

@@ -159,7 +159,8 @@ describe("Chat API routes", () => {
     });
 
     it("aborts run and returns result", async () => {
-      const { abortRun } = await import("@/lib/active-runs");
+      const { abortRun, getActiveRun } = await import("@/lib/active-runs");
+      vi.mocked(getActiveRun).mockReturnValue({ status: "running" } as never);
       vi.mocked(abortRun).mockReturnValue(true);
 
       const { POST } = await import("./stop/route.js");

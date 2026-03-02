@@ -8,7 +8,7 @@
  *  - Messages are written to persistent sessions as they arrive.
  *  - New HTTP connections can re-attach to a running stream.
  */
-import { type ChildProcess, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { join } from "node:path";
 import {
@@ -19,10 +19,10 @@ import {
 } from "node:fs";
 import { resolveWebChatDir, resolveOpenClawStateDir } from "./workspace";
 import {
+	type AgentProcessHandle,
 	type AgentEvent,
 	spawnAgentProcess,
 	spawnAgentSubscribeProcess,
-	resolvePackageRoot,
 	extractToolResult,
 	buildToolOutput,
 	parseAgentErrorMessage,
@@ -59,7 +59,7 @@ type AccumulatedMessage = {
 
 export type ActiveRun = {
 	sessionId: string;
-	childProcess: ChildProcess;
+	childProcess: AgentProcessHandle;
 	eventBuffer: SseEvent[];
 	subscribers: Set<RunSubscriber>;
 	accumulated: AccumulatedMessage;
@@ -74,7 +74,7 @@ export type ActiveRun = {
 	/** @internal last globalSeq seen from the gateway event stream */
 	lastGlobalSeq: number;
 	/** @internal subscribe child process for waiting-for-subagents continuation */
-	_subscribeProcess?: ChildProcess | null;
+	_subscribeProcess?: AgentProcessHandle | null;
 	/** Full gateway session key (used for subagent subscribe-only runs) */
 	sessionKey?: string;
 	/** Parent web session ID (for subagent runs) */
@@ -251,14 +251,10 @@ export function reactivateSubscribeRun(sessionKey: string): boolean {
  */
 export function sendSubagentFollowUp(sessionKey: string, message: string): boolean {
 	try {
-		const root = resolvePackageRoot();
-		const devScript = join(root, "scripts", "run-node.mjs");
-		const prodScript = join(root, "openclaw.mjs");
-		const scriptPath = existsSync(devScript) ? devScript : prodScript;
 		const child = spawn(
-			"node",
+			"openclaw",
 			[
-				scriptPath, "gateway", "call", "agent",
+				"gateway", "call", "agent",
 				"--params", JSON.stringify({
 					message, sessionKey,
 					idempotencyKey: `follow-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -266,8 +262,9 @@ export function sendSubagentFollowUp(sessionKey: string, message: string): boole
 				}),
 				"--json", "--timeout", "10000",
 			],
-			{ cwd: root, env: { ...process.env }, stdio: "ignore", detached: true },
+			{ env: { ...process.env }, stdio: "ignore", detached: true },
 		);
+		child.on("error", () => {});
 		child.unref();
 		return true;
 	} catch {
@@ -359,16 +356,10 @@ export function abortRun(sessionId: string): boolean {
  */
 function sendGatewayAbort(sessionId: string): void {
 	try {
-		const root = resolvePackageRoot();
-		const devScript = join(root, "scripts", "run-node.mjs");
-		const prodScript = join(root, "openclaw.mjs");
-		const scriptPath = existsSync(devScript) ? devScript : prodScript;
-
 		const sessionKey = `agent:main:web:${sessionId}`;
 		const child = spawn(
-			"node",
+			"openclaw",
 			[
-				scriptPath,
 				"gateway",
 				"call",
 				"chat.abort",
@@ -379,12 +370,12 @@ function sendGatewayAbort(sessionId: string): void {
 				"4000",
 			],
 			{
-				cwd: root,
 				env: { ...process.env },
 				stdio: "ignore",
 				detached: true,
 			},
 		);
+		child.on("error", () => {});
 		// Let the abort process run independently — don't block on it.
 		child.unref();
 	} catch {
@@ -510,7 +501,7 @@ export function startSubscribeRun(params: {
  */
 function wireSubscribeOnlyProcess(
 	run: ActiveRun,
-	child: ChildProcess,
+	child: AgentProcessHandle,
 	sessionKey: string,
 ): void {
 	let idCounter = 0;
@@ -1361,7 +1352,8 @@ function wireChildProcess(run: ActiveRun): void {
 		if (run.status !== "running") {return;}
 
 		console.error("[active-runs] Child process error:", err);
-		emitError(`Failed to start agent: ${err.message}`);
+		const message = err instanceof Error ? err.message : String(err);
+		emitError(`Failed to start agent: ${message}`);
 		run.status = "error";
 		flushPersistence(run);
 		for (const sub of run.subscribers) {

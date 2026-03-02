@@ -115,15 +115,17 @@ describe("profiles API", () => {
 
     it("discovers workspace-<name> directories", async () => {
       const { existsSync: es, readdirSync: rds } = await import("node:fs");
+      const devStateDir = join("/home/testuser", ".openclaw-dev");
+      const devWorkspaceDir = join(devStateDir, "workspace");
       vi.mocked(es).mockImplementation((p) => {
         const s = String(p);
         return (
           s === STATE_DIR ||
-          s === join(STATE_DIR, "workspace-dev")
+          s === devWorkspaceDir
         );
       });
       vi.mocked(rds).mockReturnValue([
-        makeDirent("workspace-dev", true),
+        makeDirent(".openclaw-dev", true),
       ] as unknown as Dirent[]);
 
       const response = await callGet();
@@ -206,7 +208,7 @@ describe("profiles API", () => {
 
       const response = await callSwitch({ profile: "test" });
       const json = await response.json();
-      expect(json.stateDir).toBe(STATE_DIR);
+      expect(json.stateDir).toBe(join("/home/testuser", ".openclaw-test"));
     });
   });
 });

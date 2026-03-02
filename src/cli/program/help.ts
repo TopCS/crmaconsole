@@ -7,14 +7,10 @@ import { formatCliBannerLine, hasEmittedCliBanner } from "../banner.js";
 import { replaceCliName, resolveCliName } from "../cli-name.js";
 import { getCoreCliCommandsWithSubcommands } from "./command-registry.js";
 import type { ProgramContext } from "./context.js";
-import { getSubCliCommandsWithSubcommands } from "./register.subclis.js";
 
 const CLI_NAME = resolveCliName();
 const CLI_NAME_PATTERN = escapeRegExp(CLI_NAME);
-const ROOT_COMMANDS_WITH_SUBCOMMANDS = new Set([
-  ...getCoreCliCommandsWithSubcommands(),
-  ...getSubCliCommandsWithSubcommands(),
-]);
+const ROOT_COMMANDS_WITH_SUBCOMMANDS = new Set(getCoreCliCommandsWithSubcommands());
 const ROOT_COMMANDS_HINT =
   "Hint: commands suffixed with * have subcommands. Run <command> --help for details.";
 

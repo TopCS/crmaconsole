@@ -1,5 +1,4 @@
 import { VERSION } from "../../version.js";
-import { resolveCliChannelOptions } from "../channel-options.js";
 
 export type ProgramContext = {
   programVersion: string;
@@ -9,7 +8,9 @@ export type ProgramContext = {
 };
 
 export function createProgramContext(): ProgramContext {
-  const channelOptions = resolveCliChannelOptions();
+  // Bootstrap-only CLI path does not register channel commands, so avoid loading
+  // the full channel/plugin registry here.
+  const channelOptions = ["web"];
   return {
     programVersion: VERSION,
     channelOptions,

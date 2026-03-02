@@ -12,12 +12,6 @@ if (process.getMaxListeners() > 0 && process.getMaxListeners() < TEST_PROCESS_MA
   process.setMaxListeners(TEST_PROCESS_MAX_LISTENERS);
 }
 
-import type {
-  ChannelId,
-  ChannelOutboundAdapter,
-  ChannelPlugin,
-} from "../src/channels/plugins/types.js";
-import type { OpenClawConfig } from "../src/config/config.js";
 import type { OutboundSendDeps } from "../src/infra/outbound/deliver.js";
 import { withIsolatedTestHome } from "./test-env.js";
 
@@ -33,6 +27,49 @@ const [{ installProcessWarningFilter }, { setActivePluginRegistry }, { createTes
   ]);
 
 installProcessWarningFilter();
+
+// Define types locally since original modules were removed
+type ChannelId = string;
+type DeliveryMode = "direct" | "gateway";
+type ChannelOutboundAdapter = {
+  deliveryMode: DeliveryMode;
+  sendText: (params: {
+    deps?: OutboundSendDeps;
+    to: string;
+    text: string;
+  }) => Promise<{ channel: string; messageId?: string }>;
+  sendMedia?: (params: {
+    deps?: OutboundSendDeps;
+    to: string;
+    text: string;
+    mediaUrl: string;
+  }) => Promise<{ channel: string; messageId?: string }>;
+};
+
+type ChannelPluginMeta = {
+  id: ChannelId;
+  label: string;
+  selectionLabel: string;
+  docsPath: string;
+  blurb: string;
+  aliases?: string[];
+  preferSessionLookupForAnnounceTarget?: boolean;
+};
+
+type ChannelPlugin = {
+  id: ChannelId;
+  meta: ChannelPluginMeta;
+  capabilities: { chatTypes: string[] };
+  config: {
+    listAccountIds: (cfg: Record<string, unknown>) => string[];
+    resolveAccount: (cfg: Record<string, unknown>, accountId?: string | null) => unknown;
+    isConfigured: (_account: unknown, cfg: Record<string, unknown>) => Promise<boolean>;
+  };
+  outbound: ChannelOutboundAdapter;
+  status?: {
+    buildChannelSummary: () => Promise<Record<string, unknown>>;
+  };
+};
 
 const pickSendFn = (id: ChannelId, deps?: OutboundSendDeps) => {
   switch (id) {
@@ -97,7 +134,7 @@ const createStubPlugin = (params: {
   },
   capabilities: { chatTypes: ["direct", "group"] },
   config: {
-    listAccountIds: (cfg: OpenClawConfig) => {
+    listAccountIds: (cfg: Record<string, unknown>) => {
       const channels = cfg.channels as Record<string, unknown> | undefined;
       const entry = channels?.[params.id];
       if (!entry || typeof entry !== "object") {
@@ -107,7 +144,7 @@ const createStubPlugin = (params: {
       const ids = accounts ? Object.keys(accounts).filter(Boolean) : [];
       return ids.length > 0 ? ids : ["default"];
     },
-    resolveAccount: (cfg: OpenClawConfig, accountId?: string | null) => {
+    resolveAccount: (cfg: Record<string, unknown>, accountId?: string | null) => {
       const channels = cfg.channels as Record<string, unknown> | undefined;
       const entry = channels?.[params.id];
       if (!entry || typeof entry !== "object") {
@@ -117,7 +154,7 @@ const createStubPlugin = (params: {
       const match = accountId ? accounts?.[accountId] : undefined;
       return (match && typeof match === "object") || typeof match === "string" ? match : entry;
     },
-    isConfigured: async (_account, cfg: OpenClawConfig) => {
+    isConfigured: async (_account, cfg: Record<string, unknown>) => {
       const channels = cfg.channels as Record<string, unknown> | undefined;
       return Boolean(channels?.[params.id]);
     },

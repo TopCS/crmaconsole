@@ -6,15 +6,15 @@
  *
  * Events are fed from CLI NDJSON streams (parent run + subscribe continuations).
  */
-import { type ChildProcess, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 import {
 	type AgentEvent,
+	type AgentProcessHandle,
 	spawnAgentSubscribeProcess,
-	resolvePackageRoot,
 	extractToolResult,
 	buildToolOutput,
 	parseAgentErrorMessage,
@@ -43,7 +43,7 @@ type SubagentRun = SubagentInfo & {
 	subscribers: Set<SubagentSubscriber>;
 	/** Internal state for event-to-SSE transformation */
 	_state: TransformState;
-	_subscribeProcess: ChildProcess | null;
+	_subscribeProcess: AgentProcessHandle | null;
 	_cleanupTimer: ReturnType<typeof setTimeout> | null;
 	/** Set when lifecycle/end is received; actual finalization deferred to subscribe close. */
 	_lifecycleEnded: boolean;
@@ -462,14 +462,9 @@ export function reactivateSubagent(sessionKey: string): boolean {
 
 function sendGatewayAbortForSubagent(sessionKey: string): void {
 	try {
-		const root = resolvePackageRoot();
-		const devScript = join(root, "scripts", "run-node.mjs");
-		const prodScript = join(root, "openclaw.mjs");
-		const scriptPath = existsSync(devScript) ? devScript : prodScript;
 		const child = spawn(
-			"node",
+			"openclaw",
 			[
-				scriptPath,
 				"gateway",
 				"call",
 				"chat.abort",
@@ -480,12 +475,12 @@ function sendGatewayAbortForSubagent(sessionKey: string): void {
 				"4000",
 			],
 			{
-				cwd: root,
 				env: { ...process.env },
 				stdio: "ignore",
 				detached: true,
 			},
 		);
+		child.on("error", () => {});
 		child.unref();
 	} catch {
 		// best effort
@@ -504,15 +499,10 @@ export function spawnSubagentMessage(sessionKey: string, message: string): boole
 	try {
 		const run = getRegistry().runs.get(sessionKey);
 		if (!run) {return false;}
-		const root = resolvePackageRoot();
-		const devScript = join(root, "scripts", "run-node.mjs");
-		const prodScript = join(root, "openclaw.mjs");
-		const scriptPath = existsSync(devScript) ? devScript : prodScript;
 		const idempotencyKey = randomUUID();
 		const child = spawn(
-			"node",
+			"openclaw",
 			[
-				scriptPath,
 				"gateway",
 				"call",
 				"agent",
@@ -531,12 +521,12 @@ export function spawnSubagentMessage(sessionKey: string, message: string): boole
 				"10000",
 			],
 			{
-				cwd: root,
 				env: { ...process.env },
 				stdio: "ignore",
 				detached: true,
 			},
 		);
+		child.on("error", () => {});
 		child.unref();
 		return true;
 	} catch {
