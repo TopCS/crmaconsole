@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { discoverProfiles, getEffectiveProfile } from "@/lib/workspace";
+import { discoverWorkspaces, getActiveWorkspaceName } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -40,14 +40,17 @@ function readGatewayMeta(stateDir: string): GatewayMeta | null {
 }
 
 export async function GET() {
-  const activeProfile = getEffectiveProfile() ?? "default";
-  const profiles = discoverProfiles().map((profile) => ({
-    ...profile,
-    gateway: readGatewayMeta(profile.stateDir),
+  const workspaces = discoverWorkspaces().map((workspace) => ({
+    ...workspace,
+    gateway: readGatewayMeta(workspace.stateDir),
   }));
+  const activeWorkspace = getActiveWorkspaceName() ?? workspaces.find((item) => item.isActive)?.name ?? null;
 
   return Response.json({
-    profiles,
-    activeProfile,
+    workspaces,
+    activeWorkspace,
+    // Backward-compat response fields while web callers migrate away from /api/profiles.
+    profiles: workspaces,
+    activeProfile: activeWorkspace,
   });
 }
