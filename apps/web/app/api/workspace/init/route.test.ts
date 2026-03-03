@@ -1,3 +1,6 @@
+import { EventEmitter } from "node:events";
+import { join } from "node:path";
+import type { Dirent } from "node:fs";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("node:fs", () => ({
@@ -7,6 +10,7 @@ vi.mock("node:fs", () => ({
   writeFileSync: vi.fn(),
   mkdirSync: vi.fn(),
   copyFileSync: vi.fn(),
+  cpSync: vi.fn(),
 }));
 
 vi.mock("node:child_process", () => ({
@@ -20,18 +24,55 @@ vi.mock("node:child_process", () => ({
       cb(null, { stdout: "" });
     },
   ),
+  spawn: vi.fn(),
 }));
 
 vi.mock("node:os", () => ({
   homedir: vi.fn(() => "/home/testuser"),
 }));
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-
 describe("POST /api/workspace/init", () => {
   const originalEnv = { ...process.env };
-  const STATE_DIR = join("/home/testuser", ".openclaw");
+  const HOME = "/home/testuser";
+  const IRONCLAW_STATE = join(HOME, ".openclaw-ironclaw");
+  const WORK_STATE = join(HOME, ".openclaw-work");
+  const IRONCLAW_CONFIG = join(IRONCLAW_STATE, "openclaw.json");
+  const IRONCLAW_AUTH = join(IRONCLAW_STATE, "agents", "main", "agent", "auth-profiles.json");
+
+  function makeDirent(name: string, isDir: boolean): Dirent {
+    return {
+      name,
+      isDirectory: () => isDir,
+      isFile: () => !isDir,
+      isBlockDevice: () => false,
+      isCharacterDevice: () => false,
+      isFIFO: () => false,
+      isSocket: () => false,
+      isSymbolicLink: () => false,
+      path: "",
+      parentPath: "",
+    } as Dirent;
+  }
+
+  function mockSpawnExit(code: number, stderr = "") {
+    return vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & {
+        stdout: EventEmitter;
+        stderr: EventEmitter;
+        kill: ReturnType<typeof vi.fn>;
+      };
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = vi.fn();
+      queueMicrotask(() => {
+        if (stderr) {
+          child.stderr.emit("data", Buffer.from(stderr));
+        }
+        child.emit("close", code);
+      });
+      return child as unknown as ReturnType<typeof import("node:child_process").spawn>;
+    });
+  }
 
   beforeEach(() => {
     vi.resetModules();
@@ -49,6 +90,7 @@ describe("POST /api/workspace/init", () => {
       writeFileSync: vi.fn(),
       mkdirSync: vi.fn(),
       copyFileSync: vi.fn(),
+      cpSync: vi.fn(),
     }));
     vi.mock("node:child_process", () => ({
       execSync: vi.fn(() => ""),
@@ -61,6 +103,7 @@ describe("POST /api/workspace/init", () => {
           cb(null, { stdout: "" });
         },
       ),
+      spawn: vi.fn(),
     }));
     vi.mock("node:os", () => ({
       homedir: vi.fn(() => "/home/testuser"),
@@ -81,139 +124,128 @@ describe("POST /api/workspace/init", () => {
     return POST(req);
   }
 
-  it("creates default workspace directory", async () => {
-    const mockMkdir = vi.mocked(mkdirSync);
-    const response = await callInit({});
-    expect(response.status).toBe(200);
-    expect(mockMkdir).toHaveBeenCalledWith(
-      join(STATE_DIR, "workspace"),
-      { recursive: true },
-    );
-    const json = await response.json();
-    expect(json.profile).toBe("default");
-    expect(json.workspaceDir).toBe(join(STATE_DIR, "workspace"));
+  it("rejects missing or invalid profile names", async () => {
+    const missing = await callInit({});
+    expect(missing.status).toBe(400);
+
+    const invalid = await callInit({ profile: "../bad" });
+    expect(invalid.status).toBe(400);
   });
 
-  it("creates profile-specific workspace directory", async () => {
-    const mockMkdir = vi.mocked(mkdirSync);
+  it("returns 409 when the profile already exists", async () => {
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const mockReaddir = vi.mocked(readdirSync);
+    const mockReadFile = vi.mocked(readFileSync);
+    mockReaddir.mockReturnValue([makeDirent(".openclaw-work", true)] as unknown as Dirent[]);
+    mockReadFile.mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
+
     const response = await callInit({ profile: "work" });
+    expect(response.status).toBe(409);
+  });
+
+  it("creates a profile, copies config/auth, allocates gateway port, and runs onboard", async () => {
+    const { existsSync, readFileSync, readdirSync, copyFileSync } = await import("node:fs");
+    const { spawn } = await import("node:child_process");
+    const mockExists = vi.mocked(existsSync);
+    const mockReadFile = vi.mocked(readFileSync);
+    const mockReaddir = vi.mocked(readdirSync);
+    const mockCopyFile = vi.mocked(copyFileSync);
+    const mockSpawn = vi.mocked(spawn);
+
+    mockSpawn.mockImplementation(mockSpawnExit(0));
+    mockReaddir.mockReturnValue([
+      makeDirent(".openclaw-ironclaw", true),
+      makeDirent("Documents", true),
+    ] as unknown as Dirent[]);
+    mockExists.mockImplementation((p) => {
+      const s = String(p);
+      return (
+        s === IRONCLAW_CONFIG ||
+        s === IRONCLAW_AUTH ||
+        s.endsWith("docs/reference/templates/AGENTS.md") ||
+        s.endsWith("assets/seed/workspace.duckdb")
+      );
+    });
+    mockReadFile.mockImplementation((p) => {
+      const s = String(p);
+      if (s === IRONCLAW_CONFIG) {
+        return JSON.stringify({ gateway: { mode: "local", port: 18789 } }) as never;
+      }
+      if (s.endsWith("/openclaw.json")) {
+        return JSON.stringify({}) as never;
+      }
+      if (s.endsWith("/AGENTS.md")) {
+        return "# AGENTS\n" as never;
+      }
+      return "" as never;
+    });
+
+    const response = await callInit({
+      profile: "work",
+      seedBootstrap: true,
+      copyConfigAuth: true,
+    });
     expect(response.status).toBe(200);
-    expect(mockMkdir).toHaveBeenCalledWith(
-      join(STATE_DIR, "workspace-work"),
-      { recursive: true },
-    );
     const json = await response.json();
     expect(json.profile).toBe("work");
-  });
-
-  it("rejects invalid profile names", async () => {
-    const response = await callInit({ profile: "invalid profile!" });
-    expect(response.status).toBe(400);
-    const json = await response.json();
-    expect(json.error).toContain("Invalid profile name");
-  });
-
-  it("allows alphanumeric, hyphens, and underscores in profile names", async () => {
-    const response = await callInit({ profile: "my-work_1" });
-    expect(response.status).toBe(200);
-    const json = await response.json();
-    expect(json.profile).toBe("my-work_1");
-  });
-
-  it("accepts 'default' as profile name", async () => {
-    const response = await callInit({ profile: "default" });
-    expect(response.status).toBe(200);
-    const json = await response.json();
-    expect(json.workspaceDir).toBe(join(STATE_DIR, "workspace"));
-  });
-
-  it("seeds bootstrap files when seedBootstrap is not false", async () => {
-    const mockWrite = vi.mocked(writeFileSync);
-    await callInit({});
-    const writtenPaths = mockWrite.mock.calls.map((c) => c[0] as string);
-    const bootstrapFiles = writtenPaths.filter(
-      (p) =>
-        p.endsWith("AGENTS.md") ||
-        p.endsWith("SOUL.md") ||
-        p.endsWith("TOOLS.md") ||
-        p.endsWith("IDENTITY.md") ||
-        p.endsWith("USER.md") ||
-        p.endsWith("HEARTBEAT.md") ||
-        p.endsWith("BOOTSTRAP.md"),
+    expect(json.stateDir).toBe(WORK_STATE);
+    expect(json.gatewayPort).toBe(18809);
+    expect(json.copiedFiles).toEqual(
+      expect.arrayContaining(["openclaw.json", "agents/main/agent/auth-profiles.json"]),
     );
-    expect(bootstrapFiles.length).toBeGreaterThan(0);
-  });
+    expect(json.activeProfile).toBe("work");
 
-  it("returns seeded files list", async () => {
-    const response = await callInit({});
-    const json = await response.json();
-    expect(Array.isArray(json.seededFiles)).toBe(true);
-  });
-
-  it("skips bootstrap seeding when seedBootstrap is false", async () => {
-    const mockWrite = vi.mocked(writeFileSync);
-    const callsBefore = mockWrite.mock.calls.length;
-    await callInit({ seedBootstrap: false });
-    const bootstrapWrites = mockWrite.mock.calls
-      .slice(callsBefore)
-      .filter((c) => {
-        const p = c[0] as string;
-        return p.endsWith(".md") && !p.endsWith("workspace-state.json");
-      });
-    expect(bootstrapWrites).toHaveLength(0);
-  });
-
-  it("does not overwrite existing bootstrap files (idempotent)", async () => {
-    const mockExist = vi.mocked(existsSync);
-    const wsDir = join(STATE_DIR, "workspace");
-    mockExist.mockImplementation((p) => {
-      const s = String(p);
-      return s === join(wsDir, "AGENTS.md") || s === join(wsDir, "SOUL.md");
-    });
-
-    const response = await callInit({});
-    const json = await response.json();
-    expect(json.seededFiles).not.toContain("AGENTS.md");
-    expect(json.seededFiles).not.toContain("SOUL.md");
-  });
-
-  it("handles custom workspace path", async () => {
-    const mockMkdir = vi.mocked(mkdirSync);
-    const response = await callInit({
-      profile: "custom",
-      path: "/my/custom/workspace",
-    });
-    expect(response.status).toBe(200);
-    expect(mockMkdir).toHaveBeenCalledWith("/my/custom/workspace", {
-      recursive: true,
-    });
-    const json = await response.json();
-    expect(json.workspaceDir).toBe("/my/custom/workspace");
-  });
-
-  it("resolves tilde in custom path", async () => {
-    const mockMkdir = vi.mocked(mkdirSync);
-    await callInit({ profile: "tilde", path: "~/my-workspace" });
-    expect(mockMkdir).toHaveBeenCalledWith(
-      join("/home/testuser", "my-workspace"),
-      { recursive: true },
+    const onboardCall = mockSpawn.mock.calls.find(
+      (call) =>
+        String(call[0]) === "openclaw" &&
+        Array.isArray(call[1]) &&
+        (call[1] as string[]).includes("onboard"),
+    );
+    expect(onboardCall).toBeTruthy();
+    const args = onboardCall?.[1] as string[];
+    expect(args).toEqual(
+      expect.arrayContaining([
+        "--profile",
+        "work",
+        "onboard",
+        "--install-daemon",
+        "--gateway-port",
+        "18809",
+        "--non-interactive",
+        "--accept-risk",
+        "--skip-ui",
+      ]),
+    );
+    expect(mockCopyFile).toHaveBeenCalledWith(IRONCLAW_CONFIG, join(WORK_STATE, "openclaw.json"));
+    expect(mockCopyFile).toHaveBeenCalledWith(
+      IRONCLAW_AUTH,
+      join(WORK_STATE, "agents", "main", "agent", "auth-profiles.json"),
     );
   });
 
-  it("auto-switches to new profile after creation", async () => {
-    const response = await callInit({ profile: "newprofile" });
-    const json = await response.json();
-    expect(json.activeProfile).toBe("newprofile");
-  });
+  it("returns 500 when onboard fails", async () => {
+    const { readdirSync, readFileSync, existsSync } = await import("node:fs");
+    const { spawn } = await import("node:child_process");
+    const mockReaddir = vi.mocked(readdirSync);
+    const mockReadFile = vi.mocked(readFileSync);
+    const mockExists = vi.mocked(existsSync);
+    const mockSpawn = vi.mocked(spawn);
 
-  it("handles mkdir failure with 500", async () => {
-    const mockMkdir = vi.mocked(mkdirSync);
-    mockMkdir.mockImplementation(() => {
-      throw new Error("EACCES: permission denied");
+    mockSpawn.mockImplementation(mockSpawnExit(1, "onboard error"));
+    mockReaddir.mockReturnValue([makeDirent(".openclaw-ironclaw", true)] as unknown as Dirent[]);
+    mockExists.mockImplementation((p) => String(p) === IRONCLAW_CONFIG || String(p) === IRONCLAW_AUTH);
+    mockReadFile.mockImplementation((p) => {
+      if (String(p) === IRONCLAW_CONFIG) {
+        return JSON.stringify({ gateway: { port: 18789 } }) as never;
+      }
+      return "" as never;
     });
-    const response = await callInit({ profile: "fail" });
+
+    const response = await callInit({ profile: "work" });
     expect(response.status).toBe(500);
     const json = await response.json();
-    expect(json.error).toContain("Failed to create workspace directory");
+    expect(String(json.error)).toContain("onboarding failed");
   });
 });
