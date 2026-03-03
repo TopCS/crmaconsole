@@ -118,6 +118,8 @@ function groupParts(parts: UIMessage["parts"]): MessageSegment[] {
 			const statusLabels = [
 				"Preparing response...",
 				"Optimizing session context...",
+				"Waiting for subagent results...",
+				"Waiting for subagents...",
 			];
 			const isStatus = statusLabels.some((l) =>
 				rp.text.startsWith(l),
@@ -746,11 +748,6 @@ export const ChatMessage = memo(function ChatMessage({ message, isStreaming, onS
 		);
 	}
 
-	// Find the last text segment index for streaming optimization
-	const lastTextIdx = isStreaming
-		? segments.reduce((acc, s, i) => (s.type === "text" ? i : acc), -1)
-		: -1;
-
 	// Assistant: free-flowing text, left-aligned, NO bubble
 	return (
 		<div className="py-3 space-y-2 min-w-0 overflow-hidden">
@@ -809,24 +806,6 @@ export const ChatMessage = memo(function ChatMessage({ message, isStreaming, onS
 									{errorMatch[1].trim()}
 								</span>
 							</div>
-						);
-					}
-
-					// During streaming, render the active text as plain text
-					// to avoid expensive ReactMarkdown re-parses on every token.
-					// Switch to full markdown once streaming ends.
-					if (index === lastTextIdx) {
-						return (
-							<motion.div
-								key={`text-${index}`}
-								initial={{ opacity: 0, y: 4 }}
-								animate={{ opacity: 1, y: 0 }}
-								transition={{ duration: 0.2, ease: "easeOut" }}
-								className="chat-prose chat-message-font text-sm whitespace-pre-wrap break-all"
-								style={{ color: "var(--color-text)" }}
-							>
-								{segment.text}
-							</motion.div>
 						);
 					}
 
