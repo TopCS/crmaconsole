@@ -25,7 +25,10 @@ const EXAMPLES = [
     "Send via your web session and print JSON result.",
   ],
   ["openclaw gateway --port 18789", "Run the WebSocket Gateway locally."],
-  ["openclaw --dev gateway", "Run a dev Gateway (isolated state/config) on ws://127.0.0.1:19001."],
+  [
+    "openclaw --profile team-a gateway",
+    "Compatibility flag example: warns and still runs with --profile ironclaw.",
+  ],
   ["openclaw gateway --force", "Kill anything bound to the default gateway port, then start it."],
   ["openclaw gateway ...", "Gateway control via WebSocket."],
   [
@@ -45,11 +48,11 @@ export function configureProgramHelp(program: Command, ctx: ProgramContext) {
     .version(ctx.programVersion)
     .option(
       "--dev",
-      "Dev profile: isolate state under ~/.openclaw-dev, default gateway port 19001, and shift derived ports (browser/canvas)",
+      "Compatibility flag; Ironclaw always uses --profile ironclaw and ~/.openclaw-ironclaw",
     )
     .option(
       "--profile <name>",
-      "Use a named profile (isolates OPENCLAW_STATE_DIR/OPENCLAW_CONFIG_PATH under ~/.openclaw-<name>)",
+      "Compatibility flag; non-ironclaw values are ignored with a warning",
     );
 
   program.option("--no-color", "Disable ANSI colors", false);

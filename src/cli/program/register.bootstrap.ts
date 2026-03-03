@@ -11,7 +11,7 @@ export function registerBootstrapCommand(program: Command) {
     .description("Bootstrap IronClaw on top of OpenClaw and open the web UI")
     .option(
       "--profile <name>",
-      "Use this profile for bootstrap subprocesses (same as root --profile)",
+      "Compatibility flag; non-ironclaw values are ignored with a warning",
     )
     .option("--force-onboard", "Run onboarding even if config already exists", false)
     .option("--non-interactive", "Skip prompts where possible", false)
