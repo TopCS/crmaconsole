@@ -204,7 +204,7 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWork
               </div>
 
               {/* Bootstrap toggle */}
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className="flex items-center gap-2 cursor-pointer hidden">
                 <input
                   type="checkbox"
                   checked={seedBootstrap}

@@ -37,7 +37,6 @@ const SKIP_DIRS = new Set([
 function listDir(
 	absDir: string,
 	filter?: string,
-	workspaceRoot?: string,
 ): SuggestItem[] {
 	let entries: Dirent[];
 	try {
@@ -47,13 +46,8 @@ function listDir(
 	}
 
 	const lowerFilter = filter?.toLowerCase();
-	const hideRootIdentity =
-		typeof workspaceRoot === "string" &&
-		resolve(absDir) === resolve(workspaceRoot);
-
 	const sorted = entries
 		.filter((e) => !e.name.startsWith("."))
-		.filter((e) => !(hideRootIdentity && e.name === "IDENTITY.md"))
 		.filter((e) => !(e.isDirectory() && SKIP_DIRS.has(e.name)))
 		.filter((e) => !lowerFilter || e.name.toLowerCase().includes(lowerFilter))
 		.toSorted((a, b) => {
@@ -90,7 +84,6 @@ function searchFiles(
 	query: string,
 	results: SuggestItem[],
 	maxResults: number,
-	workspaceRoot: string,
 	depth = 0,
 ): void {
 	if (depth > 6 || results.length >= maxResults) {return;}
@@ -103,12 +96,9 @@ function searchFiles(
 	}
 
 	const lowerQuery = query.toLowerCase();
-	const hideRootIdentity = resolve(absDir) === resolve(workspaceRoot);
-
 	for (const entry of entries) {
 		if (results.length >= maxResults) {return;}
 		if (entry.name.startsWith(".")) {continue;}
-		if (hideRootIdentity && entry.name === "IDENTITY.md") {continue;}
 		if (entry.isDirectory() && SKIP_DIRS.has(entry.name)) {continue;}
 
 		const absPath = join(absDir, entry.name);
@@ -131,7 +121,7 @@ function searchFiles(
 		}
 
 		if (entry.isDirectory()) {
-			searchFiles(absPath, query, results, maxResults, workspaceRoot, depth + 1);
+			searchFiles(absPath, query, results, maxResults, depth + 1);
 		}
 	}
 }
@@ -404,7 +394,7 @@ export async function GET(req: Request) {
 	if (searchQuery) {
 		// File search: workspace only (skip expensive home dir traversal)
 		const fileResults: SuggestItem[] = [];
-		searchFiles(workspaceRoot, searchQuery, fileResults, 15, workspaceRoot);
+		searchFiles(workspaceRoot, searchQuery, fileResults, 15);
 
 		// DuckDB search: objects and entries (sequential to avoid lock contention)
 		const objectResults = await searchObjects(searchQuery, workspaceRoot, 10);
@@ -426,15 +416,15 @@ export async function GET(req: Request) {
 		const resolved = resolvePath(pathQuery, workspaceRoot);
 		if (!resolved) {
 			const results: SuggestItem[] = [];
-			searchFiles(workspaceRoot, pathQuery, results, 20, workspaceRoot);
+			searchFiles(workspaceRoot, pathQuery, results, 20);
 			return Response.json({ items: results });
 		}
-		const items = listDir(resolved.dir, resolved.filter, workspaceRoot);
+		const items = listDir(resolved.dir, resolved.filter);
 		return Response.json({ items });
 	}
 
 	// Default: list workspace root + all objects
-	const fileItems = listDir(workspaceRoot, undefined, workspaceRoot);
+	const fileItems = listDir(workspaceRoot);
 	const objectItems = await searchObjects("", workspaceRoot, 20);
 	// Deduplicate: if an object also appears as a folder, keep the object version
 	const objectNames = new Set(objectItems.map((o) => o.name));

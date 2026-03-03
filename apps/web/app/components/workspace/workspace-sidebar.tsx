@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { FileManagerTree, type TreeNode } from "./file-manager-tree";
 import { ProfileSwitcher } from "./profile-switcher";
 import { CreateWorkspaceDialog } from "./create-workspace-dialog";
@@ -389,27 +389,6 @@ function dirDisplayName(dir: string): string {
 	return dir.split("/").pop() || dir;
 }
 
-function filterSidebarTree(nodes: TreeNode[]): TreeNode[] {
-	const filtered: TreeNode[] = [];
-	for (const node of nodes) {
-		// Root identity file is system-managed and hidden in Ironclaw UI.
-		if (node.path === "IDENTITY.md") {
-			continue;
-		}
-		// Dench is an always-on managed skill; hide it from the sidebar list.
-		if (node.path === "~skills/dench/SKILL.md") {
-			continue;
-		}
-
-		const children = node.children ? filterSidebarTree(node.children) : undefined;
-		if (node.path === "~skills" && (!children || children.length === 0)) {
-			continue;
-		}
-		filtered.push(children ? { ...node, children } : node);
-	}
-	return filtered;
-}
-
 export function WorkspaceSidebar({
 	tree,
 	activePath,
@@ -436,7 +415,6 @@ export function WorkspaceSidebar({
 }: WorkspaceSidebarProps) {
 	const isBrowsing = browseDir != null;
 	const width = mobile ? "280px" : (widthProp ?? 260);
-	const visibleTree = useMemo(() => filterSidebarTree(tree), [tree]);
 	const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
 
 	const sidebar = (
@@ -594,7 +572,7 @@ export function WorkspaceSidebar({
 					</div>
 				) : (
 			<FileManagerTree
-				tree={visibleTree}
+				tree={tree}
 				activePath={activePath}
 				onSelect={onSelect}
 				onRefresh={onRefresh}

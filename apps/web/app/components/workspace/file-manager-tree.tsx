@@ -71,7 +71,6 @@ const ALWAYS_SYSTEM_PATTERNS = [
 const ROOT_ONLY_SYSTEM_PATTERNS = [
   /^workspace\.duckdb/,
   /^workspace_context\.yaml$/,
-  /^IDENTITY\.md$/,
 ];
 
 function isSystemFile(path: string): boolean {
