@@ -109,6 +109,20 @@ describe("Workspace File Operations API", () => {
       expect(mockWrite).toHaveBeenCalled();
     });
 
+    it("returns 403 when attempting to modify a system file", async () => {
+      const { isSystemFile } = await import("@/lib/workspace");
+      vi.mocked(isSystemFile).mockReturnValueOnce(true);
+
+      const { POST } = await import("./file/route.js");
+      const req = new Request("http://localhost/api/workspace/file", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: "IDENTITY.md", content: "# override" }),
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(403);
+    });
+
     it("returns 400 for missing path", async () => {
       const { POST } = await import("./file/route.js");
       const req = new Request("http://localhost/api/workspace/file", {

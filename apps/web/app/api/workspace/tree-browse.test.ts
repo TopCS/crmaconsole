@@ -120,6 +120,68 @@ describe("Workspace Tree & Browse API", () => {
       const json = await res.json();
       expect(json.workspaceRoot).toBe("/ws");
     });
+
+    it("omits root IDENTITY.md from the workspace tree", async () => {
+      const { resolveWorkspaceRoot } = await import("@/lib/workspace");
+      vi.mocked(resolveWorkspaceRoot).mockReturnValue("/ws");
+      const { readdirSync: mockReaddir, existsSync: mockExists } = await import("node:fs");
+      vi.mocked(mockExists).mockImplementation((p) => String(p) === "/ws");
+      vi.mocked(mockReaddir).mockImplementation((dir) => {
+        if (String(dir) === "/ws") {
+          return [
+            makeDirent("IDENTITY.md", false),
+            makeDirent("notes.md", false),
+          ] as unknown as Dirent[];
+        }
+        return [] as unknown as Dirent[];
+      });
+
+      const { GET } = await import("./tree/route.js");
+      const req = new Request("http://localhost/api/workspace/tree");
+      const res = await GET(req);
+      const json = await res.json();
+      const paths = (json.tree as Array<{ path: string }>).map((n) => n.path);
+      expect(paths).not.toContain("IDENTITY.md");
+      expect(paths).toContain("notes.md");
+    });
+
+    it("omits managed dench skill from the virtual skills folder", async () => {
+      const { resolveWorkspaceRoot } = await import("@/lib/workspace");
+      vi.mocked(resolveWorkspaceRoot).mockReturnValue("/ws");
+      const { readdirSync: mockReaddir, existsSync: mockExists } = await import("node:fs");
+      vi.mocked(mockExists).mockImplementation((p) => {
+        const value = String(p);
+        return (
+          value === "/ws" ||
+          value === "/home/testuser/.openclaw/skills" ||
+          value === "/home/testuser/.openclaw/skills/alpha/SKILL.md" ||
+          value === "/home/testuser/.openclaw/skills/dench/SKILL.md"
+        );
+      });
+      vi.mocked(mockReaddir).mockImplementation((dir) => {
+        if (String(dir) === "/ws") {
+          return [] as unknown as Dirent[];
+        }
+        if (String(dir) === "/home/testuser/.openclaw/skills") {
+          return [
+            makeDirent("alpha", true),
+            makeDirent("dench", true),
+          ] as unknown as Dirent[];
+        }
+        return [] as unknown as Dirent[];
+      });
+
+      const { GET } = await import("./tree/route.js");
+      const req = new Request("http://localhost/api/workspace/tree");
+      const res = await GET(req);
+      const json = await res.json();
+      const skillsFolder = (json.tree as Array<{ path: string; children?: Array<{ path: string }> }>).find(
+        (node) => node.path === "~skills",
+      );
+      const skillPaths = (skillsFolder?.children ?? []).map((child) => child.path);
+      expect(skillPaths).toContain("~skills/alpha/SKILL.md");
+      expect(skillPaths).not.toContain("~skills/dench/SKILL.md");
+    });
   });
 
   // ─── GET /api/workspace/browse ──────────────────────────────────
@@ -174,6 +236,31 @@ describe("Workspace Tree & Browse API", () => {
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.items).toBeDefined();
+    });
+
+    it("omits root IDENTITY.md from sidebar file suggestions", async () => {
+      const { resolveWorkspaceRoot } = await import("@/lib/workspace");
+      vi.mocked(resolveWorkspaceRoot).mockReturnValue("/ws");
+      const { existsSync: mockExists, readdirSync: mockReaddir } = await import("node:fs");
+      vi.mocked(mockExists).mockReturnValue(true);
+      vi.mocked(mockReaddir).mockImplementation((dir) => {
+        if (String(dir) === "/ws") {
+          return [
+            makeDirent("IDENTITY.md", false),
+            makeDirent("doc.md", false),
+          ] as unknown as Dirent[];
+        }
+        return [] as unknown as Dirent[];
+      });
+
+      const { GET } = await import("./suggest-files/route.js");
+      const req = new Request("http://localhost/api/workspace/suggest-files");
+      const res = await GET(req);
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      const names = (json.items as Array<{ name: string }>).map((item) => item.name);
+      expect(names).toContain("doc.md");
+      expect(names).not.toContain("IDENTITY.md");
     });
   });
 
