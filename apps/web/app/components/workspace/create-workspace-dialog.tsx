@@ -10,7 +10,14 @@ type CreateWorkspaceDialogProps = {
 };
 
 function shortenPath(p: string): string {
-  return p.replace(/^\/Users\/[^/]+/, "~").replace(/^\/home\/[^/]+/, "~");
+  return p
+    .replace(/^\/Users\/[^/]+/, "~")
+    .replace(/^\/home\/[^/]+/, "~")
+    .replace(/^[A-Za-z]:[/\\]Users[/\\][^/\\]+/, "~");
+}
+
+function pathBasename(p: string): string {
+  return p.replaceAll("\\", "/").split("/").pop() || p;
 }
 
 export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWorkspaceDialogProps) {
@@ -19,6 +26,7 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWork
   const [useCustomPath, setUseCustomPath] = useState(false);
   const [showDirPicker, setShowDirPicker] = useState(false);
   const [seedBootstrap, setSeedBootstrap] = useState(true);
+  const [copyConfigAuth, setCopyConfigAuth] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ workspaceDir: string; seededFiles: string[] } | null>(null);
@@ -32,6 +40,7 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWork
       setCustomPath("");
       setUseCustomPath(false);
       setShowDirPicker(false);
+      setCopyConfigAuth(true);
       setError(null);
       setResult(null);
       setTimeout(() => inputRef.current?.focus(), 100);
@@ -67,6 +76,7 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWork
       const body: Record<string, unknown> = {
         profile: name,
         seedBootstrap,
+        copyConfigAuth,
       };
       if (useCustomPath && customPath.trim()) {
         body.path = customPath.trim();
@@ -161,7 +171,7 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWork
                   border: "1px solid var(--color-border)",
                 }}
               >
-                {result.workspaceDir.replace(/^\/Users\/[^/]+/, "~")}
+                {shortenPath(result.workspaceDir)}
               </code>
               {result.seededFiles.length > 0 && (
                 <p
@@ -248,7 +258,7 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWork
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate" style={{ color: "var(--color-text)" }}>
-                            {customPath.split("/").pop()}
+                            {pathBasename(customPath)}
                           </p>
                           <p className="text-[11px] truncate" style={{ color: "var(--color-text-muted)" }} title={customPath}>
                             {shortenPath(customPath)}
@@ -305,6 +315,21 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWork
                   style={{ color: "var(--color-text-secondary)" }}
                 >
                   Seed bootstrap files and workspace database
+                </span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={copyConfigAuth}
+                  onChange={(e) => setCopyConfigAuth(e.target.checked)}
+                  className="rounded"
+                  style={{ accentColor: "var(--color-accent)" }}
+                />
+                <span
+                  className="text-sm"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  Copy Ironclaw config and auth profiles
                 </span>
               </label>
 
