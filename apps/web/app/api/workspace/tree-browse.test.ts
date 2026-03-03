@@ -17,8 +17,8 @@ vi.mock("node:os", () => ({
 // Mock workspace
 vi.mock("@/lib/workspace", () => ({
   resolveWorkspaceRoot: vi.fn(() => null),
-  resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw"),
-  getEffectiveProfile: vi.fn(() => "default"),
+  resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw-ironclaw"),
+  getActiveWorkspaceName: vi.fn(() => null),
   parseSimpleYaml: vi.fn(() => ({})),
   duckdbQueryAll: vi.fn(() => []),
   duckdbQueryAllAsync: vi.fn(async () => []),
@@ -57,8 +57,8 @@ describe("Workspace Tree & Browse API", () => {
     }));
     vi.mock("@/lib/workspace", () => ({
       resolveWorkspaceRoot: vi.fn(() => null),
-      resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw"),
-      getEffectiveProfile: vi.fn(() => "default"),
+      resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw-ironclaw"),
+      getActiveWorkspaceName: vi.fn(() => null),
       parseSimpleYaml: vi.fn(() => ({})),
       duckdbQueryAll: vi.fn(() => []),
       duckdbQueryAllAsync: vi.fn(async () => []),
@@ -83,11 +83,13 @@ describe("Workspace Tree & Browse API", () => {
       const json = await res.json();
       expect(json.exists).toBe(false);
       expect(json.tree).toEqual([]);
+      expect(json.workspace).toBeNull();
     });
 
     it("returns tree with workspace files", async () => {
-      const { resolveWorkspaceRoot } = await import("@/lib/workspace");
+      const { resolveWorkspaceRoot, getActiveWorkspaceName } = await import("@/lib/workspace");
       vi.mocked(resolveWorkspaceRoot).mockReturnValue("/ws");
+      vi.mocked(getActiveWorkspaceName).mockReturnValue("default");
       const { readdirSync: mockReaddir, existsSync: mockExists } = await import("node:fs");
       vi.mocked(mockExists).mockReturnValue(true);
       vi.mocked(mockReaddir).mockImplementation((dir) => {
@@ -106,6 +108,7 @@ describe("Workspace Tree & Browse API", () => {
       const json = await res.json();
       expect(json.exists).toBe(true);
       expect(json.tree.length).toBeGreaterThan(0);
+      expect(json.workspace).toBe("default");
     });
 
     it("includes workspaceRoot in response", async () => {
@@ -153,16 +156,16 @@ describe("Workspace Tree & Browse API", () => {
         const value = String(p);
         return (
           value === "/ws" ||
-          value === "/home/testuser/.openclaw/skills" ||
-          value === "/home/testuser/.openclaw/skills/alpha/SKILL.md" ||
-          value === "/home/testuser/.openclaw/skills/dench/SKILL.md"
+          value === "/ws/skills" ||
+          value === "/ws/skills/alpha/SKILL.md" ||
+          value === "/ws/skills/dench/SKILL.md"
         );
       });
       vi.mocked(mockReaddir).mockImplementation((dir) => {
         if (String(dir) === "/ws") {
           return [] as unknown as Dirent[];
         }
-        if (String(dir) === "/home/testuser/.openclaw/skills") {
+        if (String(dir) === "/ws/skills") {
           return [
             makeDirent("alpha", true),
             makeDirent("dench", true),

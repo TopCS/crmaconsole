@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, existsSync, statSync, type Dirent } from "node:fs";
 import { join } from "node:path";
-import { resolveWorkspaceRoot, resolveOpenClawStateDir, getEffectiveProfile, parseSimpleYaml, duckdbQueryAll, isDatabaseFile } from "@/lib/workspace";
+import { resolveWorkspaceRoot, resolveOpenClawStateDir, getActiveWorkspaceName, parseSimpleYaml, duckdbQueryAll, isDatabaseFile } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -186,12 +186,13 @@ function parseSkillFrontmatter(content: string): { name?: string; emoji?: string
   return { name: result.name, emoji: result.emoji };
 }
 
-/** Build a virtual "Skills" folder from <stateDir>/skills/. */
+/** Build a virtual "Skills" folder from <workspace>/skills/. */
 function buildSkillsVirtualFolder(): TreeNode | null {
-  const stateDir = resolveOpenClawStateDir();
-  const dirs = [
-    join(stateDir, "skills"),
-  ];
+  const workspaceRoot = resolveWorkspaceRoot();
+  if (!workspaceRoot) {
+    return null;
+  }
+  const dirs = [join(workspaceRoot, "skills")];
 
   const children: TreeNode[] = [];
   const seen = new Set<string>();
@@ -247,13 +248,13 @@ export async function GET(req: Request) {
   const showHidden = url.searchParams.get("showHidden") === "1";
 
   const openclawDir = resolveOpenClawStateDir();
-  const profile = getEffectiveProfile();
+  const workspace = getActiveWorkspaceName();
   const root = resolveWorkspaceRoot();
   if (!root) {
     const tree: TreeNode[] = [];
     const skillsFolder = buildSkillsVirtualFolder();
     if (skillsFolder) {tree.push(skillsFolder);}
-    return Response.json({ tree, exists: false, workspaceRoot: null, openclawDir, profile });
+    return Response.json({ tree, exists: false, workspaceRoot: null, openclawDir, workspace });
   }
 
   const dbObjects = loadDbObjects();
@@ -263,5 +264,5 @@ export async function GET(req: Request) {
   const skillsFolder = buildSkillsVirtualFolder();
   if (skillsFolder) {tree.push(skillsFolder);}
 
-  return Response.json({ tree, exists: true, workspaceRoot: root, openclawDir, profile });
+  return Response.json({ tree, exists: true, workspaceRoot: root, openclawDir, workspace });
 }
