@@ -16,7 +16,7 @@ import {
 	existsSync,
 	mkdirSync,
 } from "node:fs";
-import { resolveWebChatDir, resolveOpenClawStateDir } from "./workspace";
+import { resolveWebChatDir, resolveOpenClawStateDir, resolveActiveAgentId } from "./workspace";
 import {
 	type AgentProcessHandle,
 	type AgentEvent,
@@ -129,6 +129,16 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 		return null;
 	}
 	return value as Record<string, unknown>;
+}
+
+function resolveModelLabel(provider: unknown, model: unknown): string | null {
+	if (typeof model !== "string" || !model.trim()) { return null; }
+	const m = model.trim();
+	if (typeof provider === "string" && provider.trim()) {
+		const p = provider.trim();
+		return m.toLowerCase().startsWith(`${p.toLowerCase()}/`) ? m : `${p}/${m}`;
+	}
+	return m;
 }
 
 function extractAssistantTextFromChatPayload(
@@ -411,7 +421,7 @@ export function abortRun(sessionId: string): boolean {
  */
 function sendGatewayAbort(sessionId: string): void {
 	try {
-		const sessionKey = `agent:main:web:${sessionId}`;
+		const sessionKey = `agent:${resolveActiveAgentId()}:web:${sessionId}`;
 		void callGatewayRpc("chat.abort", { sessionKey }, { timeoutMs: 4_000 }).catch(
 			() => {
 				// Best effort; don't let abort failures break the stop flow.
@@ -717,6 +727,12 @@ function wireSubscribeOnlyProcess(
 				emit({ type: "tool-input-available", toolCallId, toolName, input: args });
 				run.accumulated.parts.push({ type: "tool-invocation", toolCallId, toolName, args });
 				accToolMap.set(toolCallId, run.accumulated.parts.length - 1);
+			} else if (phase === "update") {
+				const partialResult = extractToolResult(ev.data?.partialResult);
+				if (partialResult) {
+					const output = buildToolOutput(partialResult);
+					emit({ type: "tool-output-partial", toolCallId, output });
+				}
 			} else if (phase === "result") {
 				const isError = ev.data?.isError === true;
 				const result = extractToolResult(ev.data?.result);
@@ -739,6 +755,23 @@ function wireSubscribeOnlyProcess(
 						if (part.type === "tool-invocation") { part.result = output; }
 					}
 				}
+			}
+		}
+
+		if (ev.event === "agent" && ev.stream === "lifecycle" && (ev.data?.phase === "fallback" || ev.data?.phase === "fallback_cleared")) {
+			const data = ev.data;
+			const selected = resolveModelLabel(data?.selectedProvider, data?.selectedModel)
+				?? resolveModelLabel(data?.fromProvider, data?.fromModel);
+			const active = resolveModelLabel(data?.activeProvider, data?.activeModel)
+				?? resolveModelLabel(data?.toProvider, data?.toModel);
+			if (selected && active) {
+				const isClear = data?.phase === "fallback_cleared";
+				const reason = typeof data?.reasonSummary === "string" ? data.reasonSummary
+					: typeof data?.reason === "string" ? data.reason : undefined;
+				const label = isClear
+					? `Restored to ${selected}`
+					: `Switched to ${active}${reason ? ` (${reason})` : ""}`;
+				openStatusReasoning(label);
 			}
 		}
 
@@ -1093,7 +1126,7 @@ function wireChildProcess(run: ActiveRun): void {
 	// ── Parse stdout JSON lines ──
 
 	const rl = createInterface({ input: child.stdout! });
-	const parentSessionKey = `agent:main:web:${run.sessionId}`;
+	const parentSessionKey = `agent:${resolveActiveAgentId()}:web:${run.sessionId}`;
 	// Prevent unhandled 'error' events on the readline interface.
 	// When the child process fails to start (e.g. ENOENT — missing script)
 	// the stdout pipe is destroyed and readline re-emits the error.  Without
@@ -1237,6 +1270,12 @@ function wireChildProcess(run: ActiveRun): void {
 					args,
 				});
 				accToolMap.set(toolCallId, run.accumulated.parts.length - 1);
+			} else if (phase === "update") {
+				const partialResult = extractToolResult(ev.data?.partialResult);
+				if (partialResult) {
+					const output = buildToolOutput(partialResult);
+					emit({ type: "tool-output-partial", toolCallId, output });
+				}
 			} else if (phase === "result") {
 				const isError = ev.data?.isError === true;
 				const result = extractToolResult(ev.data?.result);
@@ -1288,6 +1327,28 @@ function wireChildProcess(run: ActiveRun): void {
 						});
 					}
 				}
+			}
+		}
+
+		// Model fallback events
+		if (
+			ev.event === "agent" &&
+			ev.stream === "lifecycle" &&
+			(ev.data?.phase === "fallback" || ev.data?.phase === "fallback_cleared")
+		) {
+			const data = ev.data;
+			const selected = resolveModelLabel(data?.selectedProvider, data?.selectedModel)
+				?? resolveModelLabel(data?.fromProvider, data?.fromModel);
+			const active = resolveModelLabel(data?.activeProvider, data?.activeModel)
+				?? resolveModelLabel(data?.toProvider, data?.toModel);
+			if (selected && active) {
+				const isClear = data?.phase === "fallback_cleared";
+				const reason = typeof data?.reasonSummary === "string" ? data.reasonSummary
+					: typeof data?.reason === "string" ? data.reason : undefined;
+				const label = isClear
+					? `Restored to ${selected}`
+					: `Switched to ${active}${reason ? ` (${reason})` : ""}`;
+				openStatusReasoning(label);
 			}
 		}
 

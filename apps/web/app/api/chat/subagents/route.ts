@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { resolveOpenClawStateDir } from "@/lib/workspace";
+import { resolveOpenClawStateDir, resolveActiveAgentId } from "@/lib/workspace";
 
 export const runtime = "nodejs";
 
@@ -38,7 +38,7 @@ export async function GET(req: Request) {
 		return Response.json({ error: "sessionId required" }, { status: 400 });
 	}
 
-	const webSessionKey = `agent:main:web:${sessionId}`;
+	const webSessionKey = `agent:${resolveActiveAgentId()}:web:${sessionId}`;
 	const entries = readSubagentRegistry();
 
 	const subagents = entries

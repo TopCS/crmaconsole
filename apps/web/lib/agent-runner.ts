@@ -8,6 +8,7 @@ import { PassThrough } from "node:stream";
 import NodeWebSocket from "ws";
 import {
 	getEffectiveProfile,
+	resolveActiveAgentId,
 	resolveOpenClawStateDir,
 	resolveWorkspaceRoot,
 } from "./workspace";
@@ -653,6 +654,7 @@ class GatewayProcessHandle
 				const patch = await this.client.request("sessions.patch", {
 					key: sessionKey,
 					verboseLevel: "full",
+					reasoningLevel: "on",
 				});
 				if (patch.ok) {
 					return;
@@ -880,8 +882,9 @@ export function spawnAgentProcess(
 	if (shouldForceLegacyStream()) {
 		return spawnLegacyAgentProcess(message, agentSessionId);
 	}
+	const agentId = resolveActiveAgentId();
 	const sessionKey = agentSessionId
-		? `agent:main:web:${agentSessionId}`
+		? `agent:${agentId}:web:${agentSessionId}`
 		: undefined;
 	return new GatewayProcessHandle({
 		mode: "start",
@@ -902,17 +905,18 @@ function spawnCliAgentProcess(
 	message: string,
 	agentSessionId?: string,
 ): ReturnType<typeof spawn> {
+	const cliAgentId = resolveActiveAgentId();
 	const args = [
 		"agent",
 		"--agent",
-		"main",
+		cliAgentId,
 		"--message",
 		message,
 		"--stream-json",
 	];
 
 	if (agentSessionId) {
-		const sessionKey = `agent:main:web:${agentSessionId}`;
+		const sessionKey = `agent:${cliAgentId}:web:${agentSessionId}`;
 		args.push("--session-key", sessionKey, "--lane", "web", "--channel", "webchat");
 	}
 
