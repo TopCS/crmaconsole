@@ -7,6 +7,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeEnv } from "../runtime.js";
 import { bootstrapCommand } from "./bootstrap-external.js";
 
+const promptMocks = vi.hoisted(() => {
+  const cancelSignal = Symbol("clack-cancel");
+  return {
+    cancelSignal,
+    confirmDecision: false as boolean | symbol,
+    confirm: vi.fn(async () => false as boolean | symbol),
+    isCancel: vi.fn((value: unknown) => value === cancelSignal),
+    spinner: vi.fn(() => ({
+      start: vi.fn(),
+      stop: vi.fn(),
+      message: vi.fn(),
+    })),
+  };
+});
+
+vi.mock("@clack/prompts", () => ({
+  confirm: promptMocks.confirm,
+  isCancel: promptMocks.isCancel,
+  spinner: promptMocks.spinner,
+}));
+
 vi.mock("node:child_process", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:child_process")>();
   return {
@@ -20,6 +41,18 @@ type SpawnCall = {
   args: string[];
   options?: { stdio?: unknown };
 };
+
+function createWebProfilesResponse(params?: {
+  status?: number;
+  payload?: { profiles?: unknown[]; activeProfile?: string };
+}): Response {
+  const status = params?.status ?? 200;
+  const payload = params?.payload ?? { profiles: [], activeProfile: "ironclaw" };
+  return {
+    status,
+    json: async () => payload,
+  } as unknown as Response;
+}
 
 function createTempStateDir(): string {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -87,11 +120,27 @@ function createMockChild(params: {
   return child;
 }
 
+async function withForcedStdinTty<T>(isTTY: boolean, fn: () => Promise<T>): Promise<T> {
+  const descriptor = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+  Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: isTTY });
+  try {
+    return await fn();
+  } finally {
+    if (descriptor) {
+      Object.defineProperty(process.stdin, "isTTY", descriptor);
+    } else {
+      Reflect.deleteProperty(process.stdin, "isTTY");
+    }
+  }
+}
+
 describe("bootstrapCommand always-onboard behavior", () => {
   const originalEnv = { ...process.env };
   const spawnMock = vi.mocked(spawn);
   let stateDir = "";
   let spawnCalls: SpawnCall[] = [];
+  let fetchMock: ReturnType<typeof vi.fn>;
+  let fetchBehavior: (url: string) => Promise<Response>;
   let forceGlobalMissing = false;
   let globalDetectCount = 0;
   let healthFailuresBeforeSuccess = 0;
@@ -113,6 +162,12 @@ describe("bootstrapCommand always-onboard behavior", () => {
       OPENCLAW_STATE_DIR: stateDir,
       VITEST: "true",
     };
+    promptMocks.confirmDecision = false;
+    promptMocks.confirm.mockReset();
+    promptMocks.confirm.mockImplementation(async () => promptMocks.confirmDecision);
+    promptMocks.isCancel.mockReset();
+    promptMocks.isCancel.mockImplementation((value: unknown) => value === promptMocks.cancelSignal);
+    promptMocks.spinner.mockClear();
 
     spawnMock.mockImplementation((command, args = [], options) => {
       const commandString = String(command);
@@ -174,10 +229,29 @@ describe("bootstrapCommand always-onboard behavior", () => {
       return createMockChild({ code: 0, stdout: "ok\n" }) as never;
     });
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({ status: 200 }) as unknown as Response),
-    );
+    fetchBehavior = async (url: string) => {
+      if (url.includes("/api/profiles")) {
+        return createWebProfilesResponse();
+      }
+      return createWebProfilesResponse({ status: 404, payload: {} });
+    };
+    fetchMock = vi.fn(async (input: unknown) => {
+      let url = "";
+      if (typeof input === "string") {
+        url = input;
+      } else if (input instanceof URL) {
+        url = input.toString();
+      } else if (input && typeof input === "object" && "url" in input) {
+        const requestUrl = (input as { url?: unknown }).url;
+        if (typeof requestUrl === "string") {
+          url = requestUrl;
+        } else if (requestUrl instanceof URL) {
+          url = requestUrl.toString();
+        }
+      }
+      return await fetchBehavior(url);
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
   });
 
   afterEach(() => {
@@ -220,6 +294,144 @@ describe("bootstrapCommand always-onboard behavior", () => {
     );
     expect(onboardCalls[0]?.options?.stdio).toEqual(["ignore", "pipe", "pipe"]);
     expect(summary.onboarded).toBe(true);
+  });
+
+  it("accepts bootstrap --profile and propagates it to onboard subprocesses", async () => {
+    const runtime: RuntimeEnv = {
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: vi.fn(),
+    };
+    process.env.OPENCLAW_PROFILE = "ironclaw";
+
+    const summary = await bootstrapCommand(
+      {
+        profile: "team-a",
+        nonInteractive: true,
+        noOpen: true,
+        skipUpdate: true,
+      },
+      runtime,
+    );
+
+    const onboardCall = spawnCalls.find(
+      (call) => call.command === "openclaw" && call.args.includes("onboard"),
+    );
+    expect(onboardCall?.args).toEqual(expect.arrayContaining(["--profile", "team-a"]));
+    expect(summary.profile).toBe("team-a");
+  });
+
+  it("adds --reset to onboarding args when --force-onboard is requested", async () => {
+    const runtime: RuntimeEnv = {
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: vi.fn(),
+    };
+
+    await bootstrapCommand(
+      {
+        forceOnboard: true,
+        nonInteractive: true,
+        noOpen: true,
+        skipUpdate: true,
+      },
+      runtime,
+    );
+
+    const onboardCall = spawnCalls.find(
+      (call) => call.command === "openclaw" && call.args.includes("onboard"),
+    );
+    expect(onboardCall?.args).toContain("--reset");
+  });
+
+  it("runs update before onboarding when --update-now is set", async () => {
+    const runtime: RuntimeEnv = {
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: vi.fn(),
+    };
+
+    await bootstrapCommand(
+      {
+        nonInteractive: true,
+        noOpen: true,
+        updateNow: true,
+      },
+      runtime,
+    );
+
+    const updateIndex = spawnCalls.findIndex(
+      (call) =>
+        call.command === "openclaw" && call.args.includes("update") && call.args.includes("--yes"),
+    );
+    const onboardIndex = spawnCalls.findIndex(
+      (call) => call.command === "openclaw" && call.args.includes("onboard"),
+    );
+
+    expect(updateIndex).toBeGreaterThan(-1);
+    expect(onboardIndex).toBeGreaterThan(-1);
+    expect(updateIndex).toBeLessThan(onboardIndex);
+  });
+
+  it("runs update before onboarding when interactive prompt is accepted", async () => {
+    promptMocks.confirmDecision = true;
+    const runtime: RuntimeEnv = {
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: vi.fn(),
+    };
+
+    await withForcedStdinTty(true, async () => {
+      await bootstrapCommand(
+        {
+          noOpen: true,
+        },
+        runtime,
+      );
+    });
+
+    expect(promptMocks.confirm).toHaveBeenCalledTimes(1);
+    const updateIndex = spawnCalls.findIndex(
+      (call) =>
+        call.command === "openclaw" && call.args.includes("update") && call.args.includes("--yes"),
+    );
+    const onboardIndex = spawnCalls.findIndex(
+      (call) => call.command === "openclaw" && call.args.includes("onboard"),
+    );
+
+    expect(updateIndex).toBeGreaterThan(-1);
+    expect(onboardIndex).toBeGreaterThan(-1);
+    expect(updateIndex).toBeLessThan(onboardIndex);
+  });
+
+  it("skips update when interactive prompt is declined", async () => {
+    promptMocks.confirmDecision = false;
+    const runtime: RuntimeEnv = {
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: vi.fn(),
+    };
+
+    await withForcedStdinTty(true, async () => {
+      await bootstrapCommand(
+        {
+          noOpen: true,
+        },
+        runtime,
+      );
+    });
+
+    expect(promptMocks.confirm).toHaveBeenCalledTimes(1);
+    const updateCalled = spawnCalls.some(
+      (call) =>
+        call.command === "openclaw" && call.args.includes("update") && call.args.includes("--yes"),
+    );
+    const onboardCalls = spawnCalls.filter(
+      (call) => call.command === "openclaw" && call.args.includes("onboard"),
+    );
+
+    expect(updateCalled).toBe(false);
+    expect(onboardCalls).toHaveLength(1);
   });
 
   it("seeds workspace.duckdb on bootstrap when missing", async () => {
@@ -508,11 +720,16 @@ describe("bootstrapCommand always-onboard behavior", () => {
       (call) =>
         call.command === "openclaw" && call.args.includes("doctor") && call.args.includes("--fix"),
     );
+    const gatewayStopCalled = spawnCalls.some(
+      (call) =>
+        call.command === "openclaw" && call.args.includes("gateway") && call.args.includes("stop"),
+    );
     const gatewayInstallCalled = spawnCalls.some(
       (call) =>
         call.command === "openclaw" &&
         call.args.includes("gateway") &&
-        call.args.includes("install"),
+        call.args.includes("install") &&
+        call.args.includes("--force"),
     );
     const gatewayStartCalled = spawnCalls.some(
       (call) =>
@@ -520,11 +737,54 @@ describe("bootstrapCommand always-onboard behavior", () => {
     );
 
     expect(doctorFixCalled).toBe(true);
+    expect(gatewayStopCalled).toBe(true);
     expect(gatewayInstallCalled).toBe(true);
     expect(gatewayStartCalled).toBe(true);
     expect(summary.gatewayReachable).toBe(true);
     expect(summary.gatewayAutoFix?.attempted).toBe(true);
     expect(summary.gatewayAutoFix?.recovered).toBe(true);
+  });
+
+  it("keeps preferred web port and does not probe sibling ports", async () => {
+    let preferredPortChecks = 0;
+    fetchBehavior = async (url: string) => {
+      if (url.includes("127.0.0.1:3100/api/profiles")) {
+        preferredPortChecks += 1;
+        if (preferredPortChecks <= 2) {
+          return createWebProfilesResponse({ status: 503, payload: {} });
+        }
+        return createWebProfilesResponse({
+          status: 200,
+          payload: { profiles: [], activeProfile: "ironclaw" },
+        });
+      }
+      if (url.includes("127.0.0.1:3101/api/profiles")) {
+        return createWebProfilesResponse({
+          status: 200,
+          payload: { profiles: [{ id: "stale" }], activeProfile: "stale" },
+        });
+      }
+      return createWebProfilesResponse({ status: 404, payload: {} });
+    };
+    const runtime: RuntimeEnv = {
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: vi.fn(),
+    };
+
+    const summary = await bootstrapCommand(
+      {
+        nonInteractive: true,
+        noOpen: true,
+        skipUpdate: true,
+      },
+      runtime,
+    );
+
+    expect(summary.webUrl).toBe("http://localhost:3100");
+    expect(fetchMock.mock.calls.some((call) => String(call[0] ?? "").includes(":3101/"))).toBe(
+      false,
+    );
   });
 
   it("prints likely gateway cause with log excerpt when autofix cannot recover", async () => {

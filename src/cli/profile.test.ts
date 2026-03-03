@@ -48,6 +48,51 @@ describe("parseCliProfileArgs", () => {
       argv: ["node", "ironclaw", "chat", "--profile", "dev"],
     });
   });
+
+  it("produces equivalent profile env for root and bootstrap-local profile forms", () => {
+    const rootProfile = parseCliProfileArgs([
+      "node",
+      "ironclaw",
+      "--profile",
+      "team-a",
+      "bootstrap",
+    ]);
+    const bootstrapLocalProfile = parseCliProfileArgs([
+      "node",
+      "ironclaw",
+      "bootstrap",
+      "--profile",
+      "team-a",
+    ]);
+
+    expect(rootProfile).toEqual({
+      ok: true,
+      profile: "team-a",
+      argv: ["node", "ironclaw", "bootstrap"],
+    });
+    expect(bootstrapLocalProfile).toEqual({
+      ok: true,
+      profile: null,
+      argv: ["node", "ironclaw", "bootstrap", "--profile", "team-a"],
+    });
+
+    const rootEnv: Record<string, string | undefined> = {};
+    const bootstrapLocalEnv: Record<string, string | undefined> = {};
+    applyCliProfileEnv({
+      profile: "team-a",
+      env: rootEnv,
+      homedir: () => "/tmp/home",
+    });
+    applyCliProfileEnv({
+      profile: "team-a",
+      env: bootstrapLocalEnv,
+      homedir: () => "/tmp/home",
+    });
+
+    expect(rootEnv.OPENCLAW_PROFILE).toBe(bootstrapLocalEnv.OPENCLAW_PROFILE);
+    expect(rootEnv.OPENCLAW_STATE_DIR).toBe(bootstrapLocalEnv.OPENCLAW_STATE_DIR);
+    expect(rootEnv.OPENCLAW_CONFIG_PATH).toBe(bootstrapLocalEnv.OPENCLAW_CONFIG_PATH);
+  });
 });
 
 describe("applyCliProfileEnv", () => {

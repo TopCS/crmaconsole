@@ -33,6 +33,8 @@ jobs:
         include:
           - runtime: node
             command: pnpm canvas:a2ui:bundle && pnpm test
+          - runtime: bootstrap
+            command: pnpm vitest run --config src/cli/vitest.config.ts src/cli/profile.test.ts src/cli/bootstrap-external.test.ts src/cli/bootstrap-external.bootstrap-command.test.ts
           - runtime: bun
             command: pnpm canvas:a2ui:bundle && bunx vitest run --config vitest.unit.config.ts
     steps:

@@ -10,6 +10,7 @@ import { resolveRequiredHomeDir } from "../infra/home-dir.js";
 import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
 import { stylePromptMessage } from "../terminal/prompt-style.js";
 import { theme } from "../terminal/theme.js";
+import { isValidProfileName } from "./profile-utils.js";
 import { applyCliProfileEnv } from "./profile.js";
 import { seedWorkspaceFromAssets, type WorkspaceSeedResult } from "./workspace-seed.js";
 
@@ -48,6 +49,7 @@ export type BootstrapDiagnostics = {
 };
 
 export type BootstrapOptions = {
+  profile?: string;
   yes?: boolean;
   nonInteractive?: boolean;
   forceOnboard?: boolean;
@@ -266,6 +268,18 @@ function resolveProfileStateDir(profile: string, env: NodeJS.ProcessEnv = proces
   return path.join(home, `.openclaw-${profile}`);
 }
 
+function resolveBootstrapProfile(
+  opts: BootstrapOptions,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const explicitProfile = opts.profile?.trim() || env.OPENCLAW_PROFILE?.trim();
+  const profile = explicitProfile || DEFAULT_IRONCLAW_PROFILE;
+  if (!isValidProfileName(profile)) {
+    throw new Error('Invalid --profile (use letters, numbers, "_", "-" only)');
+  }
+  return profile;
+}
+
 function resolveGatewayLaunchAgentLabel(profile: string): string {
   const normalized = profile.trim().toLowerCase();
   if (!normalized || normalized === "default") {
@@ -296,12 +310,24 @@ async function probeForWebApp(port: number): Promise<boolean> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 1_500);
   try {
-    const response = await fetch(`http://127.0.0.1:${port}`, {
+    const response = await fetch(`http://127.0.0.1:${port}/api/profiles`, {
       method: "GET",
       signal: controller.signal,
       redirect: "manual",
     });
-    return response.status < 500;
+    if (response.status < 200 || response.status >= 400) {
+      return false;
+    }
+    const payload = (await response.json().catch(() => null)) as {
+      profiles?: unknown;
+      activeProfile?: unknown;
+    } | null;
+    return Boolean(
+      payload &&
+      typeof payload === "object" &&
+      Array.isArray(payload.profiles) &&
+      typeof payload.activeProfile === "string",
+    );
   } catch {
     return false;
   } finally {
@@ -309,31 +335,14 @@ async function probeForWebApp(port: number): Promise<boolean> {
   }
 }
 
-async function detectRunningWebAppPort(preferredPort: number): Promise<number> {
-  if (await probeForWebApp(preferredPort)) {
-    return preferredPort;
-  }
-  for (let offset = 1; offset <= 10; offset += 1) {
-    const candidate = preferredPort + offset;
-    if (candidate > 65535) {
-      break;
-    }
-    if (await probeForWebApp(candidate)) {
-      return candidate;
-    }
-  }
-  return preferredPort;
-}
-
-async function waitForWebAppPort(preferredPort: number): Promise<number> {
+async function waitForWebApp(preferredPort: number): Promise<boolean> {
   for (let attempt = 0; attempt < WEB_APP_PROBE_ATTEMPTS; attempt += 1) {
-    const port = await detectRunningWebAppPort(preferredPort);
-    if (await probeForWebApp(port)) {
-      return port;
+    if (await probeForWebApp(preferredPort)) {
+      return true;
     }
     await sleep(WEB_APP_PROBE_DELAY_MS);
   }
-  return preferredPort;
+  return false;
 }
 
 function resolveCliPackageRoot(): string {
@@ -706,7 +715,7 @@ function deriveGatewayFailureSummary(
 ): string | undefined {
   const combinedLines = excerpts.flatMap((entry) => entry.excerpt.split(/\r?\n/));
   const signalRegex =
-    /(cannot find module|plugin not found|invalid config|unauthorized|token mismatch|eaddrinuse|address already in use|error:|failed to|failovererror)/iu;
+    /(cannot find module|plugin not found|invalid config|unauthorized|token mismatch|device token mismatch|device signature invalid|device signature expired|device-signature|eaddrinuse|address already in use|error:|failed to|failovererror)/iu;
   const likely = [...combinedLines].toReversed().find((line) => signalRegex.test(line));
   if (likely) {
     return likely.length > 220 ? `${likely.slice(0, 217)}...` : likely;
@@ -726,13 +735,18 @@ async function attemptGatewayAutoFix(params: {
     timeoutMs: number;
   }> = [
     {
+      name: "openclaw gateway stop",
+      args: ["--profile", params.profile, "gateway", "stop"],
+      timeoutMs: 90_000,
+    },
+    {
       name: "openclaw doctor --fix",
       args: ["--profile", params.profile, "doctor", "--fix"],
       timeoutMs: 2 * 60_000,
     },
     {
-      name: "openclaw gateway install",
-      args: ["--profile", params.profile, "gateway", "install"],
+      name: "openclaw gateway install --force",
+      args: ["--profile", params.profile, "gateway", "install", "--force"],
       timeoutMs: 2 * 60_000,
     },
     {
@@ -792,22 +806,34 @@ async function openUrl(url: string): Promise<boolean> {
   return Boolean(result && result.code === 0);
 }
 
-function remediationForGatewayFailure(detail: string | undefined, port: number): string {
+function remediationForGatewayFailure(
+  detail: string | undefined,
+  port: number,
+  profile: string,
+): string {
   const normalized = detail?.toLowerCase() ?? "";
-  if (normalized.includes("device token mismatch")) {
-    return "Clear stale device auth and rerun: `openclaw --profile ironclaw onboard --install-daemon`.";
+  const isDeviceAuthMismatch =
+    normalized.includes("device token mismatch") ||
+    normalized.includes("device signature invalid") ||
+    normalized.includes("device signature expired") ||
+    normalized.includes("device-signature");
+  if (isDeviceAuthMismatch) {
+    return [
+      `Gateway device-auth mismatch detected. Re-run \`openclaw --profile ${profile} onboard --install-daemon --reset\`.`,
+      `Last resort (security downgrade): \`openclaw --profile ${profile} config set gateway.controlUi.dangerouslyDisableDeviceAuth true\`. Revert after recovery: \`openclaw --profile ${profile} config set gateway.controlUi.dangerouslyDisableDeviceAuth false\`.`,
+    ].join(" ");
   }
   if (
     normalized.includes("unauthorized") ||
     normalized.includes("token") ||
     normalized.includes("password")
   ) {
-    return "Gateway auth mismatch detected. Re-run `openclaw --profile ironclaw onboard --install-daemon`.";
+    return `Gateway auth mismatch detected. Re-run \`openclaw --profile ${profile} onboard --install-daemon --reset\`.`;
   }
   if (normalized.includes("address already in use") || normalized.includes("eaddrinuse")) {
     return `Port ${port} is busy. Stop the conflicting process or rerun bootstrap with \`--gateway-port <port>\`.`;
   }
-  return "Run `openclaw --profile ironclaw doctor --fix` and retry `ironclaw bootstrap --force-onboard`.";
+  return `Run \`openclaw --profile ${profile} doctor --fix\` and retry \`ironclaw bootstrap --profile ${profile} --force-onboard\`.`;
 }
 
 function remediationForWebUiFailure(port: number): string {
@@ -1039,7 +1065,11 @@ export function buildBootstrapDiagnostics(params: {
         "gateway",
         "fail",
         `Gateway probe failed at ${params.gatewayUrl}${params.gatewayProbe.detail ? ` (${params.gatewayProbe.detail})` : ""}.`,
-        remediationForGatewayFailure(params.gatewayProbe.detail, params.gatewayPort),
+        remediationForGatewayFailure(
+          params.gatewayProbe.detail,
+          params.gatewayPort,
+          params.profile,
+        ),
       ),
     );
   }
@@ -1191,7 +1221,7 @@ export async function bootstrapCommand(
   runtime: RuntimeEnv = defaultRuntime,
 ): Promise<BootstrapSummary> {
   const nonInteractive = Boolean(opts.nonInteractive || opts.json);
-  const profile = process.env.OPENCLAW_PROFILE?.trim() || DEFAULT_IRONCLAW_PROFILE;
+  const profile = resolveBootstrapProfile(opts);
   const rolloutStage = resolveBootstrapRolloutStage();
   const legacyFallbackEnabled = isLegacyFallbackEnabled();
   applyCliProfileEnv({ profile });
@@ -1212,6 +1242,17 @@ export async function bootstrapCommand(
   }
   const openclawCommand = installResult.command;
 
+  if (await shouldRunUpdate({ opts, runtime })) {
+    await runOpenClawWithProgress({
+      openclawCommand,
+      args: ["update", "--yes"],
+      timeoutMs: 8 * 60_000,
+      startMessage: "Checking for OpenClaw updates...",
+      successMessage: "OpenClaw is up to date.",
+      errorMessage: "OpenClaw update failed",
+    });
+  }
+
   const requestedGatewayPort = parseOptionalPort(opts.gatewayPort) ?? DEFAULT_GATEWAY_PORT;
   const stateDir = resolveProfileStateDir(profile);
   const onboardArgv = [
@@ -1224,6 +1265,9 @@ export async function bootstrapCommand(
     "--gateway-port",
     String(requestedGatewayPort),
   ];
+  if (opts.forceOnboard) {
+    onboardArgv.push("--reset");
+  }
   if (nonInteractive) {
     onboardArgv.push("--non-interactive", "--accept-risk");
   }
@@ -1256,17 +1300,6 @@ export async function bootstrapCommand(
   // Keep this post-onboard so we normalize any wizard defaults.
   await ensureGatewayModeLocal(openclawCommand, profile);
 
-  if (await shouldRunUpdate({ opts, runtime })) {
-    await runOpenClawWithProgress({
-      openclawCommand,
-      args: ["update", "--yes"],
-      timeoutMs: 8 * 60_000,
-      startMessage: "Checking for OpenClaw updates...",
-      successMessage: "OpenClaw is up to date.",
-      errorMessage: "OpenClaw update failed",
-    });
-  }
-
   let gatewayProbe = await probeGateway(openclawCommand, profile);
   let gatewayAutoFix: GatewayAutoFixResult | undefined;
   if (!gatewayProbe.ok) {
@@ -1292,9 +1325,8 @@ export async function bootstrapCommand(
     startWebAppIfNeeded(preferredWebPort, stateDir);
   }
 
-  const runningWebPort = await waitForWebAppPort(preferredWebPort);
-  const webUrl = `http://localhost:${runningWebPort}`;
-  const webReachable = await probeForWebApp(runningWebPort);
+  const webReachable = await waitForWebApp(preferredWebPort);
+  const webUrl = `http://localhost:${preferredWebPort}`;
   const diagnostics = buildBootstrapDiagnostics({
     profile,
     openClawCliAvailable: installResult.available,
@@ -1302,7 +1334,7 @@ export async function bootstrapCommand(
     gatewayPort: requestedGatewayPort,
     gatewayUrl,
     gatewayProbe,
-    webPort: runningWebPort,
+    webPort: preferredWebPort,
     webReachable,
     rolloutStage,
     legacyFallbackEnabled,

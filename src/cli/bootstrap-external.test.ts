@@ -150,7 +150,24 @@ describe("bootstrap-external diagnostics", () => {
     const gateway = getCheck(diagnostics, "gateway");
     expect(gateway.status).toBe("fail");
     expect(String(gateway.remediation)).toContain("onboard");
+    expect(String(gateway.remediation)).not.toContain("dangerouslyDisableDeviceAuth");
     expect(diagnostics.hasFailures).toBe(true);
+  });
+
+  it("includes break-glass guidance only for device signature/token mismatch failures", () => {
+    const diagnostics = buildBootstrapDiagnostics({
+      ...baseParams(stateDir),
+      gatewayProbe: {
+        ok: false as const,
+        detail: "gateway connect failed: device signature invalid",
+      },
+    });
+
+    const gateway = getCheck(diagnostics, "gateway");
+    expect(gateway.status).toBe("fail");
+    expect(String(gateway.remediation)).toContain("dangerouslyDisableDeviceAuth true");
+    expect(String(gateway.remediation)).toContain("dangerouslyDisableDeviceAuth false");
+    expect(String(gateway.remediation)).toContain("--profile ironclaw");
   });
 
   it("marks rollout-stage as warning for beta and includes opt-in guidance", () => {
