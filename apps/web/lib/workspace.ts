@@ -246,6 +246,142 @@ export function isValidWorkspaceName(name: string): boolean {
   return normalizeWorkspaceName(name) !== null;
 }
 
+// ---------------------------------------------------------------------------
+// OpenClaw config (openclaw.json) agent list helpers
+// ---------------------------------------------------------------------------
+
+type OpenClawAgentEntry = {
+  id: string;
+  default?: boolean;
+  workspace?: string;
+  [key: string]: unknown;
+};
+
+type OpenClawConfig = {
+  agents?: {
+    defaults?: { workspace?: string; [key: string]: unknown };
+    list?: OpenClawAgentEntry[];
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
+
+const GATEWAY_MAIN_AGENT_ID = "main";
+
+function workspaceNameToAgentId(workspaceName: string): string {
+  return workspaceName === DEFAULT_WORKSPACE_NAME ? GATEWAY_MAIN_AGENT_ID : workspaceName;
+}
+
+/**
+ * Return the gateway agent ID for the currently active workspace.
+ * Maps workspace name "default" to "main" (the gateway's built-in ID);
+ * all other workspace names pass through as-is.
+ */
+export function resolveActiveAgentId(): string {
+  const workspaceName = getActiveWorkspaceName();
+  return workspaceNameToAgentId(workspaceName ?? DEFAULT_WORKSPACE_NAME);
+}
+
+function openclawConfigPath(): string {
+  return join(resolveOpenClawStateDir(), "openclaw.json");
+}
+
+function readOpenClawConfig(): OpenClawConfig {
+  const configPath = openclawConfigPath();
+  if (!existsSync(configPath)) {
+    return {};
+  }
+  try {
+    return JSON.parse(readFileSync(configPath, "utf-8")) as OpenClawConfig;
+  } catch {
+    return {};
+  }
+}
+
+function writeOpenClawConfig(config: OpenClawConfig): void {
+  const configPath = openclawConfigPath();
+  const dir = join(configPath, "..");
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+}
+
+/**
+ * Upsert an agent entry in `agents.list[]`. If the list doesn't exist yet,
+ * bootstrap it with a "main" entry pointing to `agents.defaults.workspace`
+ * so the original workspace is preserved. Sets `default: true` on the new agent.
+ *
+ * Workspace name "default" maps to agent ID "main" (the gateway's built-in
+ * default agent ID); all other workspace names are used as-is.
+ */
+export function ensureAgentInConfig(workspaceName: string, workspaceDir: string): void {
+  const config = readOpenClawConfig();
+  if (!config.agents) {
+    config.agents = {};
+  }
+
+  const resolvedId = workspaceNameToAgentId(workspaceName);
+
+  if (!Array.isArray(config.agents.list)) {
+    config.agents.list = [];
+    const currentDefaultWorkspace = config.agents.defaults?.workspace;
+    if (currentDefaultWorkspace) {
+      config.agents.list.push({
+        id: GATEWAY_MAIN_AGENT_ID,
+        workspace: currentDefaultWorkspace,
+      });
+    }
+  }
+
+  const existing = config.agents.list.find((a) => a.id === resolvedId);
+  if (existing) {
+    existing.workspace = workspaceDir;
+  } else {
+    config.agents.list.push({ id: resolvedId, workspace: workspaceDir });
+  }
+
+  for (const agent of config.agents.list) {
+    if (agent.id === resolvedId) {
+      agent.default = true;
+    } else {
+      delete agent.default;
+    }
+  }
+
+  writeOpenClawConfig(config);
+}
+
+/**
+ * Flip `default: true` to the target agent in `agents.list[]`.
+ * No-op if the list doesn't exist or the agent isn't found.
+ *
+ * Accepts a workspace name; maps "default" to agent ID "main".
+ */
+export function setDefaultAgentInConfig(workspaceName: string): void {
+  const config = readOpenClawConfig();
+  const list = config.agents?.list;
+  if (!Array.isArray(list) || list.length === 0) {
+    return;
+  }
+
+  const resolvedId = workspaceNameToAgentId(workspaceName);
+  const target = list.find((a) => a.id === resolvedId);
+  if (!target) {
+    return;
+  }
+
+  for (const agent of list) {
+    if (agent.id === resolvedId) {
+      agent.default = true;
+    } else {
+      delete agent.default;
+    }
+  }
+
+  writeOpenClawConfig(config);
+}
+
 export function resolveWorkspaceDirForName(name: string): string {
   const normalized = normalizeWorkspaceName(name);
   if (!normalized) {
@@ -365,7 +501,7 @@ export function discoverDuckDBPaths(root?: string): string[] {
 /**
  * Path to the primary DuckDB database file.
  * Checks the workspace root first, then falls back to any workspace.duckdb
- * discovered in subdirectories (backward compat with dench/ layout).
+ * discovered in subdirectories (backward compat with legacy layout).
  */
 export function duckdbPath(): string | null {
   const root = resolveWorkspaceRoot();
@@ -382,7 +518,7 @@ export function duckdbPath(): string | null {
 
 /**
  * Compute the workspace-relative directory that a DuckDB file is authoritative for.
- * e.g. for `~/.openclaw/workspace/dench/workspace.duckdb` returns `"dench"`.
+ * e.g. for `~/.openclaw/workspace/subdir/workspace.duckdb` returns `"subdir"`.
  * For the root DB returns `""` (empty string).
  */
 export function duckdbRelativeScope(dbPath: string): string {
@@ -962,7 +1098,6 @@ const ALWAYS_SYSTEM_PATTERNS = [
 const ROOT_ONLY_SYSTEM_PATTERNS = [
   /^workspace\.duckdb/,
   /^workspace_context\.yaml$/,
-  /^IDENTITY\.md$/,
 ];
 
 /** Check if a workspace-relative path refers to a protected system file. */
