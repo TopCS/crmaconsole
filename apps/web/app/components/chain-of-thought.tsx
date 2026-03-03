@@ -1451,27 +1451,28 @@ function ToolStep({
 						</pre>
 					)}
 
-				{/* Output toggle — skip for media files and diffs only */}
+				{/* Output toggle — show for completed tools, or partial output while running */}
 				{outputText &&
-					status === "done" &&
 					!isSingleMedia &&
 					!diffText && (
 						<div className="mt-1">
-							<button
-								type="button"
-								onClick={() =>
-									setShowOutput((v) => !v)
-								}
-								className="text-[11px] hover:underline cursor-pointer"
-								style={{
-									color: "var(--color-accent)",
-								}}
-							>
-								{showOutput
-									? "Hide output"
-									: "Show output"}
-							</button>
-							{showOutput && (
+							{status === "done" && (
+								<button
+									type="button"
+									onClick={() =>
+										setShowOutput((v) => !v)
+									}
+									className="text-[11px] hover:underline cursor-pointer"
+									style={{
+										color: "var(--color-accent)",
+									}}
+								>
+									{showOutput
+										? "Hide output"
+										: "Show output"}
+								</button>
+							)}
+							{(showOutput || status === "running") && (
 								<pre
 									className="mt-1 text-[11px] font-mono rounded-lg px-2.5 py-2 overflow-x-auto whitespace-pre-wrap break-all max-h-96 overflow-y-auto leading-relaxed"
 									style={{

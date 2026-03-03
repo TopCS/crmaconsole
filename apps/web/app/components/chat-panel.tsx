@@ -548,6 +548,22 @@ export function createStreamParser() {
 					}
 				}
 				break;
+			case "tool-output-partial":
+				for (let i = parts.length - 1; i >= 0; i--) {
+					const p = parts[i];
+					if (
+						p.type === "dynamic-tool" &&
+						p.toolCallId === event.toolCallId
+					) {
+						p.output =
+							(event.output as Record<
+								string,
+								unknown
+							>) ?? {};
+						break;
+					}
+				}
+				break;
 			case "tool-output-available":
 				for (let i = parts.length - 1; i >= 0; i--) {
 					const p = parts[i];
