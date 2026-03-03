@@ -21,6 +21,8 @@ export async function POST(req: Request) {
 	}
 
 	const run = getActiveRun(runKey);
-	const aborted = run?.status === "running" ? abortRun(runKey) : false;
+	const canAbort =
+		run?.status === "running" || run?.status === "waiting-for-subagents";
+	const aborted = canAbort ? abortRun(runKey) : false;
 	return Response.json({ aborted });
 }
