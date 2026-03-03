@@ -1,21 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { CreateWorkspaceDialog } from "./create-workspace-dialog";
+function shortenPath(p: string): string {
+	return p
+		.replace(/^\/Users\/[^/]+/, "~")
+		.replace(/^\/home\/[^/]+/, "~")
+		.replace(/^[A-Za-z]:[/\\]Users[/\\][^/\\]+/, "~");
+}
 
 export function EmptyState({
 	workspaceExists,
 	expectedPath,
-	onWorkspaceCreated,
 }: {
 	workspaceExists: boolean;
 	/** The resolved workspace path to display (e.g. from the tree API). */
 	expectedPath?: string | null;
-	/** Called after a workspace is created from this empty state. */
-	onWorkspaceCreated?: () => void;
 }) {
-	const [showCreate, setShowCreate] = useState(false);
-
 	return (
 		<div className="flex flex-col items-center justify-center h-full gap-6 px-8">
 			{/* Icon */}
@@ -90,30 +89,13 @@ export function EmptyState({
 				) : (
 					<>
 						The workspace directory was not
-						found. Create one to get started, or start a
+						found. Run the ironclaw bootstrap flow or start a
 						conversation and the agent will set it up
-						automatically.
+						automatically in the managed profile.
 					</>
 				)}
 				</p>
 			</div>
-
-			{/* Create workspace button — prominent when no workspace exists */}
-			{!workspaceExists && (
-				<button
-					onClick={() => setShowCreate(true)}
-					className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-colors"
-					style={{
-						background: "var(--color-accent)",
-						color: "#fff",
-					}}
-				>
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-						<path d="M12 5v14" /><path d="M5 12h14" />
-					</svg>
-					Create Workspace
-				</button>
-			)}
 
 			{/* Hint */}
 			<div
@@ -153,7 +135,7 @@ export function EmptyState({
 						}}
 					>
 						{expectedPath
-							? expectedPath.replace(/^\/Users\/[^/]+/, "~")
+							? shortenPath(expectedPath)
 							: "~/.openclaw/workspace"}
 					</code>
 				</span>
@@ -180,13 +162,6 @@ export function EmptyState({
 				</svg>
 				Back to Home
 			</a>
-
-			{/* Create workspace dialog */}
-			<CreateWorkspaceDialog
-				isOpen={showCreate}
-				onClose={() => setShowCreate(false)}
-				onCreated={onWorkspaceCreated}
-			/>
 		</div>
 	);
 }
