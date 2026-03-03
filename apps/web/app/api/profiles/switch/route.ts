@@ -1,34 +1,80 @@
-import { setUIActiveProfile, getEffectiveProfile, resolveWorkspaceRoot, resolveOpenClawStateDir } from "@/lib/workspace";
+import {
+  discoverProfiles,
+  getEffectiveProfile,
+  resolveOpenClawStateDir,
+  resolveWorkspaceRoot,
+  setUIActiveProfile,
+} from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function POST(req: Request) {
-  const body = (await req.json()) as { profile?: string };
-  const profileName = body.profile?.trim();
+const PROFILE_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 
-  if (!profileName) {
-    return Response.json({ error: "Missing profile name" }, { status: 400 });
+function normalizeSwitchProfile(raw: unknown): string | null {
+  if (typeof raw !== "string") {
+    return null;
   }
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (trimmed.toLowerCase() === "default") {
+    return "default";
+  }
+  if (!PROFILE_NAME_RE.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
+}
 
-  // Validate profile name: letters, numbers, hyphens, underscores only
-  if (profileName !== "default" && !/^[a-zA-Z0-9_-]+$/.test(profileName)) {
+export async function POST(req: Request) {
+  const body = (await req.json().catch(() => ({}))) as { profile?: unknown };
+  const requestedProfile = normalizeSwitchProfile(body.profile);
+  if (!requestedProfile) {
     return Response.json(
       { error: "Invalid profile name. Use letters, numbers, hyphens, or underscores." },
       { status: 400 },
     );
   }
 
-  // "default" clears the override
-  setUIActiveProfile(profileName === "default" ? null : profileName);
+  const discovered = discoverProfiles();
+  const availableNames = new Set(discovered.map((profile) => profile.name));
+  if (!availableNames.has(requestedProfile)) {
+    return Response.json(
+      { error: `Profile '${requestedProfile}' was not found.` },
+      { status: 404 },
+    );
+  }
 
-  const activeProfile = getEffectiveProfile();
-  const workspaceRoot = resolveWorkspaceRoot();
-  const stateDir = resolveOpenClawStateDir();
+  const pinnedEnvProfile = process.env.OPENCLAW_PROFILE?.trim() || null;
+  if (pinnedEnvProfile && pinnedEnvProfile !== requestedProfile) {
+    return Response.json(
+      {
+        error:
+          "Profile switch was overridden by OPENCLAW_PROFILE in the server environment.",
+      },
+      { status: 409 },
+    );
+  }
 
+  setUIActiveProfile(requestedProfile === "default" ? null : requestedProfile);
+  const activeProfile = getEffectiveProfile() ?? "default";
+  if (activeProfile !== requestedProfile) {
+    return Response.json(
+      {
+        error:
+          "Profile switch was overridden by OPENCLAW_PROFILE in the server environment.",
+      },
+      { status: 409 },
+    );
+  }
+
+  const selected = discoverProfiles().find((profile) => profile.name === activeProfile) ?? null;
   return Response.json({
-    activeProfile: activeProfile || "default",
-    workspaceRoot,
-    stateDir,
+    activeProfile,
+    stateDir: resolveOpenClawStateDir(activeProfile === "default" ? null : activeProfile),
+    workspaceRoot: resolveWorkspaceRoot(),
+    profile: selected,
   });
 }
