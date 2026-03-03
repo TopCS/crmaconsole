@@ -416,6 +416,8 @@ git merge upstream/main
 
 MIT Licensed. Fork it, extend it, make it yours.
 
+[![Star History Chart](https://api.star-history.com/image?repos=denchHQ/ironclaw&type=date&legend=top-left)](https://www.star-history.com/?repos=denchHQ%2Fironclaw&type=date&legend=top-left)
+
 <p align="center">
   <a href="https://github.com/DenchHQ/ironclaw"><img src="https://img.shields.io/github/stars/DenchHQ/ironclaw?style=for-the-badge" alt="GitHub stars"></a>
 </p>
