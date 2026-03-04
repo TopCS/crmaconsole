@@ -345,7 +345,8 @@ export function sendSubagentFollowUp(sessionKey: string, message: string): boole
 
 /**
  * Persist a user message for a subscribe-only (subagent) run.
- * Emits a user-message event so reconnecting clients see the message.
+ * Emits a user-message event so reconnecting clients see the message,
+ * and writes the message to the session JSONL file on disk.
  */
 export function persistSubscribeUserMessage(
 	sessionKey: string,
@@ -353,15 +354,40 @@ export function persistSubscribeUserMessage(
 ): boolean {
 	const run = activeRuns.get(sessionKey);
 	if (!run) {return false;}
+	const msgId = msg.id ?? `user-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 	const event: SseEvent = {
 		type: "user-message",
-		id: msg.id ?? `user-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+		id: msgId,
 		text: msg.text,
 	};
 	run.eventBuffer.push(event);
 	for (const sub of run.subscribers) {
 		try { sub(event); } catch { /* ignore */ }
 	}
+
+	// Write the user message to the session JSONL (same as persistUserMessage
+	// does for parent sessions) so it survives page reloads.
+	try {
+		ensureDir();
+		const fp = join(webChatDir(), `${sessionKey}.jsonl`);
+		if (!existsSync(fp)) {writeFileSync(fp, "");}
+		const content = readFileSync(fp, "utf-8");
+		const lines = content.split("\n").filter((l) => l.trim());
+		const alreadySaved = lines.some((l) => {
+			try { return JSON.parse(l).id === msgId; } catch { return false; }
+		});
+		if (!alreadySaved) {
+			const line = JSON.stringify({
+				id: msgId,
+				role: "user",
+				content: msg.text,
+				parts: [{ type: "text", text: msg.text }],
+				timestamp: new Date().toISOString(),
+			});
+			writeFileSync(fp, [...lines, line].join("\n") + "\n");
+		}
+	} catch { /* best effort */ }
+
 	schedulePersist(run);
 	return true;
 }
@@ -565,6 +591,82 @@ export function startSubscribeRun(params: {
 	return run;
 }
 
+type TranscriptToolPart = {
+	type: "tool-invocation";
+	toolCallId: string;
+	toolName: string;
+	args: Record<string, unknown>;
+	result?: Record<string, unknown>;
+};
+
+function readLatestTranscriptToolParts(
+	sessionKey: string,
+): { sessionId: string; tools: TranscriptToolPart[] } | null {
+	const stateDir = resolveOpenClawStateDir();
+	const agentId = resolveActiveAgentId();
+	const sessionsJsonPath = join(stateDir, "agents", agentId, "sessions", "sessions.json");
+	if (!existsSync(sessionsJsonPath)) { return null; }
+	const sessions = JSON.parse(readFileSync(sessionsJsonPath, "utf-8")) as Record<string, Record<string, unknown>>;
+	const sessionData = sessions[sessionKey];
+	const sessionId = typeof sessionData?.sessionId === "string" ? sessionData.sessionId : null;
+	if (!sessionId) { return null; }
+	const transcriptPath = join(stateDir, "agents", agentId, "sessions", `${sessionId}.jsonl`);
+	if (!existsSync(transcriptPath)) { return null; }
+
+	const entries = readFileSync(transcriptPath, "utf-8")
+		.split("\n").filter((l) => l.trim())
+		.map((l) => { try { return JSON.parse(l); } catch { return null; } })
+		.filter(Boolean) as Array<Record<string, unknown>>;
+
+	const toolResults = new Map<string, Record<string, unknown>>();
+	let latestToolCalls: TranscriptToolPart[] = [];
+
+	for (const entry of entries) {
+		if (entry.type !== "message") { continue; }
+		const msg = entry.message as Record<string, unknown> | undefined;
+		if (!msg) { continue; }
+		const role = typeof msg.role === "string" ? msg.role : "";
+		const content = msg.content;
+
+		if (role === "toolResult" && typeof msg.toolCallId === "string") {
+			const text = Array.isArray(content)
+				? (content as Array<Record<string, unknown>>)
+					.filter((c) => c.type === "text" && typeof c.text === "string")
+					.map((c) => c.text as string).join("\n")
+				: typeof content === "string" ? content : "";
+			toolResults.set(msg.toolCallId, { text: text.slice(0, 500) });
+			continue;
+		}
+
+		if (role !== "assistant" || !Array.isArray(content)) { continue; }
+		const calls: TranscriptToolPart[] = [];
+		for (const part of content as Array<Record<string, unknown>>) {
+			if (part.type === "toolCall" && typeof part.id === "string" && typeof part.name === "string") {
+				calls.push({
+					type: "tool-invocation",
+					toolCallId: part.id,
+					toolName: part.name,
+					args: (part.arguments as Record<string, unknown>) ?? {},
+				});
+			}
+		}
+		if (calls.length > 0) {
+			latestToolCalls = calls;
+		}
+	}
+
+	if (latestToolCalls.length === 0) {
+		return null;
+	}
+
+	const withResults = latestToolCalls.map((tool) => {
+		const result = toolResults.get(tool.toolCallId);
+		return result ? { ...tool, result } : tool;
+	});
+
+	return { sessionId, tools: withResults };
+}
+
 /**
  * Wire event processing for a subscribe-only run (subagent).
  * Uses the same processParentEvent pipeline as parent runs,
@@ -586,6 +688,10 @@ function wireSubscribeOnlyProcess(
 	let reasoningStarted = false;
 	let statusReasoningActive = false;
 	let agentErrorReported = false;
+	const liveStats = {
+		assistantChunks: 0,
+		toolStartCount: 0,
+	};
 
 	let accTextIdx = -1;
 	let accReasoningIdx = -1;
@@ -663,6 +769,61 @@ function wireSubscribeOnlyProcess(
 		currentStatusReasoningLabel = label;
 	};
 
+	const maybeBackfillLiveToolsFromTranscript = (_reason: "assistant-chunk" | "lifecycle-end") => {
+		if (liveStats.toolStartCount > 0) {
+			return;
+		}
+		const bundle = readLatestTranscriptToolParts(sessionKey);
+		if (!bundle) {
+			return;
+		}
+
+		for (const tool of bundle.tools) {
+			const existingIdx = accToolMap.get(tool.toolCallId);
+			if (existingIdx === undefined) {
+				closeReasoning();
+				closeText();
+				emit({
+					type: "tool-input-start",
+					toolCallId: tool.toolCallId,
+					toolName: tool.toolName,
+				});
+				emit({
+					type: "tool-input-available",
+					toolCallId: tool.toolCallId,
+					toolName: tool.toolName,
+					input: tool.args ?? {},
+				});
+				run.accumulated.parts.push({
+					type: "tool-invocation",
+					toolCallId: tool.toolCallId,
+					toolName: tool.toolName,
+					args: tool.args ?? {},
+				});
+				accToolMap.set(tool.toolCallId, run.accumulated.parts.length - 1);
+			}
+
+			if (!tool.result) {
+				continue;
+			}
+
+			const idx = accToolMap.get(tool.toolCallId);
+			if (idx === undefined) {
+				continue;
+			}
+			const part = run.accumulated.parts[idx];
+			if (part.type !== "tool-invocation" || part.result) {
+				continue;
+			}
+			part.result = tool.result;
+			emit({
+				type: "tool-output-available",
+				toolCallId: tool.toolCallId,
+				output: tool.result,
+			});
+		}
+	};
+
 	const processEvent = (ev: AgentEvent) => {
 		const isLifecycleEndEvent =
 			ev.event === "agent" &&
@@ -699,6 +860,13 @@ function wireSubscribeOnlyProcess(
 			const textFallback = !delta && typeof ev.data?.text === "string" ? ev.data.text : undefined;
 			const chunk = delta ?? textFallback;
 			if (chunk) {
+				liveStats.assistantChunks += 1;
+				if (
+					liveStats.toolStartCount === 0 &&
+					(liveStats.assistantChunks === 1 || liveStats.assistantChunks % 40 === 0)
+				) {
+					maybeBackfillLiveToolsFromTranscript("assistant-chunk");
+				}
 				closeReasoning();
 				if (!textStarted) {
 					currentTextId = nextId("text");
@@ -735,6 +903,7 @@ function wireSubscribeOnlyProcess(
 			const toolCallId = typeof ev.data?.toolCallId === "string" ? ev.data.toolCallId : "";
 			const toolName = typeof ev.data?.name === "string" ? ev.data.name : "";
 			if (phase === "start") {
+				liveStats.toolStartCount += 1;
 				closeReasoning();
 				closeText();
 				const args = ev.data?.args && typeof ev.data.args === "object" ? (ev.data.args as Record<string, unknown>) : {};
@@ -820,6 +989,7 @@ function wireSubscribeOnlyProcess(
 		}
 
 		if (ev.event === "agent" && ev.stream === "lifecycle" && ev.data?.phase === "end") {
+			maybeBackfillLiveToolsFromTranscript("lifecycle-end");
 			closeReasoning();
 			closeText();
 			run._lifecycleEnded = true;
@@ -894,107 +1064,11 @@ function wireSubscribeOnlyProcess(
 	run._subscribeProcess = child;
 }
 
-/**
- * When the subscribe process doesn't receive tool events (gateway
- * `agent.subscribe` unsupported), backfill tool-invocation parts from
- * the gateway's on-disk session transcript.
- */
-function enrichFromGatewayTranscript(run: ActiveRun): void {
-	if (!run.isSubscribeOnly || !run.sessionKey) {return;}
-	if (run.accumulated.parts.some((p) => p.type === "tool-invocation")) {return;}
-
-	try {
-		const stateDir = resolveOpenClawStateDir();
-		const agentId = resolveActiveAgentId();
-		const sessionsJsonPath = join(stateDir, "agents", agentId, "sessions", "sessions.json");
-		if (!existsSync(sessionsJsonPath)) {return;}
-
-		const sessions = JSON.parse(readFileSync(sessionsJsonPath, "utf-8")) as Record<string, Record<string, unknown>>;
-		const sessionData = sessions[run.sessionKey];
-		const sessionId = typeof sessionData?.sessionId === "string" ? sessionData.sessionId : null;
-		if (!sessionId) {return;}
-
-		const transcriptPath = join(stateDir, "agents", agentId, "sessions", `${sessionId}.jsonl`);
-		if (!existsSync(transcriptPath)) {return;}
-
-		const entries = readFileSync(transcriptPath, "utf-8")
-			.split("\n")
-			.filter((l) => l.trim())
-			.map((l) => { try { return JSON.parse(l); } catch { return null; } })
-			.filter(Boolean) as Array<Record<string, unknown>>;
-
-		const toolParts: AccumulatedPart[] = [];
-		const toolResults = new Map<string, Record<string, unknown>>();
-
-		for (const entry of entries) {
-			if (entry.type !== "message") {continue;}
-			const msg = entry.message as Record<string, unknown> | undefined;
-			if (!msg) {continue;}
-			const content = msg.content;
-
-			if (msg.role === "toolResult" && typeof msg.toolCallId === "string") {
-				const text = Array.isArray(content)
-					? (content as Array<Record<string, unknown>>)
-						.filter((c) => c.type === "text" && typeof c.text === "string")
-						.map((c) => c.text as string)
-						.join("\n")
-					: typeof content === "string" ? content : "";
-				toolResults.set(msg.toolCallId, { text: text.slice(0, 500) });
-			}
-
-			if (Array.isArray(content)) {
-				for (const part of content as Array<Record<string, unknown>>) {
-					if (part.type === "toolCall" && typeof part.id === "string" && typeof part.name === "string") {
-						toolParts.push({
-							type: "tool-invocation",
-							toolCallId: part.id,
-							toolName: part.name,
-							args: (part.arguments as Record<string, unknown>) ?? {},
-						});
-					}
-				}
-			}
-		}
-
-		if (toolParts.length === 0) {return;}
-
-		for (const tp of toolParts) {
-			if (tp.type === "tool-invocation") {
-				const result = toolResults.get(tp.toolCallId);
-				if (result) { tp.result = result; }
-			}
-		}
-
-		const textParts = run.accumulated.parts.filter((p) => p.type === "text");
-		const nonTextParts = run.accumulated.parts.filter((p) => p.type !== "text");
-		run.accumulated.parts = [...nonTextParts, ...toolParts, ...textParts];
-
-		// Also emit SSE events for tool parts so reconnecting clients see them
-		for (const tp of toolParts) {
-			if (tp.type === "tool-invocation") {
-				const toolEvent = { type: "tool-input-start", toolCallId: tp.toolCallId, toolName: tp.toolName };
-				run.eventBuffer.push(toolEvent);
-				const inputEvent = { type: "tool-input-available", toolCallId: tp.toolCallId, toolName: tp.toolName, input: tp.args };
-				run.eventBuffer.push(inputEvent);
-				if (tp.result) {
-					const outputEvent = { type: "tool-output-available", toolCallId: tp.toolCallId, output: tp.result };
-					run.eventBuffer.push(outputEvent);
-				}
-			}
-		}
-
-	} catch {
-		// Best effort -- don't break finalization
-	}
-}
-
 function finalizeSubscribeRun(run: ActiveRun, status: "completed" | "error" = "completed"): void {
 	if (run.status !== "running") { return; }
 	if (run._finalizeTimer) { clearTimeout(run._finalizeTimer); run._finalizeTimer = null; }
 	clearWaitingFinalizeTimer(run);
 	resetSubscribeRetryState(run);
-
-	enrichFromGatewayTranscript(run);
 
 	run.status = status;
 	flushPersistence(run);
@@ -1006,10 +1080,131 @@ function finalizeSubscribeRun(run: ActiveRun, status: "completed" | "error" = "c
 
 	stopSubscribeProcess(run);
 
+	const hasToolParts = run.accumulated.parts.some((p) => p.type === "tool-invocation");
+
+	// Deferred enrichment: after the gateway writes the transcript (2s delay),
+	// backfill tool-invocation parts from the transcript into the web-chat JSONL.
+	if (run.isSubscribeOnly && run.sessionKey && !hasToolParts) {
+		const sessionKey = run.sessionKey;
+		setTimeout(() => { deferredTranscriptEnrich(sessionKey); }, 2_000);
+	}
+
 	const grace = run.isSubscribeOnly ? SUBSCRIBE_CLEANUP_GRACE_MS : CLEANUP_GRACE_MS;
 	setTimeout(() => {
 		if (activeRuns.get(run.sessionId) === run) { cleanupRun(run.sessionId); }
 	}, grace);
+}
+
+/**
+ * Deferred enrichment: reads the gateway's session transcript and backfills
+ * tool-invocation parts into the web-chat JSONL for a subagent session.
+ * Matches tools to assistant messages by text content to avoid index-mapping issues.
+ */
+function deferredTranscriptEnrich(sessionKey: string): void {
+	try {
+		const stateDir = resolveOpenClawStateDir();
+		const agentId = resolveActiveAgentId();
+		const sessionsJsonPath = join(stateDir, "agents", agentId, "sessions", "sessions.json");
+		if (!existsSync(sessionsJsonPath)) {return;}
+
+		const sessions = JSON.parse(readFileSync(sessionsJsonPath, "utf-8")) as Record<string, Record<string, unknown>>;
+		const sessionData = sessions[sessionKey];
+		const sessionId = typeof sessionData?.sessionId === "string" ? sessionData.sessionId : null;
+		if (!sessionId) {return;}
+
+		const transcriptPath = join(stateDir, "agents", agentId, "sessions", `${sessionId}.jsonl`);
+		if (!existsSync(transcriptPath)) {return;}
+
+		// Build text→tools map from transcript
+		const entries = readFileSync(transcriptPath, "utf-8")
+			.split("\n").filter((l) => l.trim())
+			.map((l) => { try { return JSON.parse(l); } catch { return null; } })
+			.filter(Boolean) as Array<Record<string, unknown>>;
+
+		const toolResults = new Map<string, Record<string, unknown>>();
+		let pendingTools: Array<Record<string, unknown>> = [];
+		const textToTools = new Map<string, Array<Record<string, unknown>>>();
+
+		for (const entry of entries) {
+			if (entry.type !== "message") {continue;}
+			const msg = entry.message as Record<string, unknown> | undefined;
+			if (!msg) {continue;}
+			const content = msg.content;
+			if (msg.role === "user") { pendingTools = []; }
+			if (msg.role === "toolResult" && typeof msg.toolCallId === "string") {
+				const text = Array.isArray(content)
+					? (content as Array<Record<string, unknown>>)
+						.filter((c) => c.type === "text" && typeof c.text === "string")
+						.map((c) => c.text as string).join("\n")
+					: typeof content === "string" ? content : "";
+				toolResults.set(msg.toolCallId, { text: text.slice(0, 500) });
+			}
+			if (msg.role !== "assistant" || !Array.isArray(content)) {continue;}
+			for (const part of content as Array<Record<string, unknown>>) {
+				if (part.type === "toolCall" && typeof part.id === "string" && typeof part.name === "string") {
+					pendingTools.push({
+						type: "tool-invocation", toolCallId: part.id,
+						toolName: part.name, args: (part.arguments as Record<string, unknown>) ?? {},
+					});
+				}
+			}
+			const textParts = (content as Array<Record<string, unknown>>)
+				.filter((c) => c.type === "text" && typeof c.text === "string")
+				.map((c) => (c.text as string).trim()).filter(Boolean);
+			if (textParts.length > 0 && pendingTools.length > 0) {
+				const key = textParts.join("\n").slice(0, 200);
+				if (key.length >= 10) {
+					const toolsWithResults = pendingTools.map((tp) => {
+						const result = toolResults.get(tp.toolCallId as string);
+						return result ? { ...tp, result } : tp;
+					});
+					textToTools.set(key, toolsWithResults);
+					pendingTools = [];
+				}
+			}
+		}
+
+		if (textToTools.size === 0) {return;}
+
+		// Read and enrich web-chat JSONL
+		const fp = join(webChatDir(), `${sessionKey}.jsonl`);
+		if (!existsSync(fp)) {return;}
+		const lines = readFileSync(fp, "utf-8").split("\n").filter((l) => l.trim());
+		const messages = lines.map((l) => { try { return JSON.parse(l) as Record<string, unknown>; } catch { return null; } }).filter(Boolean) as Array<Record<string, unknown>>;
+
+		let changed = false;
+		const enriched = messages.map((m) => {
+			if (m.role !== "assistant") {return m;}
+			const parts = (m.parts as Array<Record<string, unknown>>) ?? [{ type: "text", text: m.content }];
+			if (parts.some((p) => p.type === "tool-invocation")) {return m;}
+			const msgText = parts
+				.filter((p) => p.type === "text" && typeof p.text === "string")
+				.map((p) => (p.text as string).trim()).filter(Boolean)
+				.join("\n").slice(0, 200);
+			if (msgText.length < 10) {return m;}
+			const tools = textToTools.get(msgText);
+			if (!tools || tools.length === 0) {return m;}
+			const textP = parts.filter((p) => p.type === "text");
+			const otherP = parts.filter((p) => p.type !== "text");
+			changed = true;
+			return { ...m, parts: [...otherP, ...tools, ...textP] };
+		});
+
+		if (changed) {
+			writeFileSync(fp, enriched.map((m) => JSON.stringify(m)).join("\n") + "\n");
+		}
+	} catch { /* best effort */ }
+}
+
+/**
+ * Opportunistic on-read backfill for subagent sessions.
+ * This is safe to call repeatedly; enrichment is idempotent.
+ */
+export function enrichSubagentSessionFromTranscript(sessionKey: string): void {
+	if (!sessionKey.includes(":subagent:")) {
+		return;
+	}
+	deferredTranscriptEnrich(sessionKey);
 }
 
 // ── Persistence helpers (called from route to persist user messages) ──
