@@ -89,4 +89,112 @@ describe("resolveActiveViewSyncDecision", () => {
     expect(missingActive).toBeNull();
     expect(unknownActive).toBeNull();
   });
+
+  // --- New tests for viewType and settings ---
+
+  it("detects viewType change and triggers re-apply (prevents stale view mode after external edit)", () => {
+    const kanbanView: SavedView = {
+      name: "Board",
+      view_type: "kanban",
+      settings: { kanbanField: "Status" },
+    };
+
+    const decision = resolveActiveViewSyncDecision({
+      savedViews: [kanbanView],
+      activeView: "Board",
+      currentActiveViewName: "Board",
+      currentFilters: emptyFilterGroup(),
+      currentViewColumns: undefined,
+      currentViewType: "table",
+      currentSettings: undefined,
+    });
+
+    expect(decision).not.toBeNull();
+    expect(decision?.shouldApply).toBe(true);
+    expect(decision?.nextViewType).toBe("kanban");
+    expect(decision?.nextSettings).toEqual({ kanbanField: "Status" });
+  });
+
+  it("detects settings change while name and filters stay the same (calendar mode changed externally)", () => {
+    const calView: SavedView = {
+      name: "Monthly",
+      view_type: "calendar",
+      settings: { calendarDateField: "Due Date", calendarMode: "month" },
+    };
+
+    const decision = resolveActiveViewSyncDecision({
+      savedViews: [calView],
+      activeView: "Monthly",
+      currentActiveViewName: "Monthly",
+      currentFilters: emptyFilterGroup(),
+      currentViewColumns: undefined,
+      currentViewType: "calendar",
+      currentSettings: { calendarDateField: "Due Date", calendarMode: "week" },
+    });
+
+    expect(decision?.shouldApply).toBe(true);
+    expect(decision?.nextSettings?.calendarMode).toBe("month");
+  });
+
+  it("does not re-apply when viewType and settings are already aligned", () => {
+    const view: SavedView = {
+      name: "Timeline",
+      view_type: "timeline",
+      settings: { timelineStartField: "Start", timelineEndField: "End" },
+    };
+
+    const decision = resolveActiveViewSyncDecision({
+      savedViews: [view],
+      activeView: "Timeline",
+      currentActiveViewName: "Timeline",
+      currentFilters: emptyFilterGroup(),
+      currentViewColumns: undefined,
+      currentViewType: "timeline",
+      currentSettings: { timelineStartField: "Start", timelineEndField: "End" },
+    });
+
+    expect(decision?.shouldApply).toBe(false);
+  });
+
+  it("detects viewType-only change when settings are identical (prevents stuck view mode)", () => {
+    const view: SavedView = {
+      name: "Gallery",
+      view_type: "gallery",
+      settings: { galleryTitleField: "Name" },
+    };
+
+    const decision = resolveActiveViewSyncDecision({
+      savedViews: [view],
+      activeView: "Gallery",
+      currentActiveViewName: "Gallery",
+      currentFilters: emptyFilterGroup(),
+      currentViewColumns: undefined,
+      currentViewType: "table",
+      currentSettings: { galleryTitleField: "Name" },
+    });
+
+    expect(decision?.shouldApply).toBe(true);
+    expect(decision?.nextViewType).toBe("gallery");
+  });
+
+  it("propagates undefined viewType without crashing (backwards compat with old saved views)", () => {
+    const legacyView: SavedView = {
+      name: "Legacy",
+      filters: statusFilter("Active"),
+    };
+
+    const decision = resolveActiveViewSyncDecision({
+      savedViews: [legacyView],
+      activeView: "Legacy",
+      currentActiveViewName: undefined,
+      currentFilters: emptyFilterGroup(),
+      currentViewColumns: undefined,
+      currentViewType: "table",
+      currentSettings: {},
+    });
+
+    expect(decision?.shouldApply).toBe(true);
+    expect(decision?.nextViewType).toBeUndefined();
+    expect(decision?.nextSettings).toBeUndefined();
+  });
 });

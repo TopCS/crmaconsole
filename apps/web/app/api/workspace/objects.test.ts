@@ -147,6 +147,7 @@ describe("Workspace Objects API", () => {
           },
         ],
         activeView: "Important",
+        viewSettings: undefined,
       });
 
       let queryCall = 0;
