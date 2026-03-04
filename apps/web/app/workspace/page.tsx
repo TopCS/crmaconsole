@@ -7,12 +7,20 @@ import { type TreeNode } from "../components/workspace/file-manager-tree";
 import { useWorkspaceWatcher } from "../hooks/use-workspace-watcher";
 import { ObjectTable } from "../components/workspace/object-table";
 import { ObjectKanban } from "../components/workspace/object-kanban";
+import { ObjectCalendar, type CalendarDateChangePayload } from "../components/workspace/object-calendar";
+import { ObjectTimeline, type TimelineDateChangePayload } from "../components/workspace/object-timeline";
+import { ObjectGallery } from "../components/workspace/object-gallery";
+import { ObjectList } from "../components/workspace/object-list";
+import { ViewTypeSwitcher } from "../components/workspace/view-type-switcher";
+import { ViewSettingsPopover } from "../components/workspace/view-settings-popover";
 import { DocumentView } from "../components/workspace/document-view";
 import { FileViewer, isSpreadsheetFile } from "../components/workspace/file-viewer";
+import { SpreadsheetEditor } from "../components/workspace/spreadsheet-editor";
 import { HtmlViewer } from "../components/workspace/html-viewer";
-import { CodeViewer } from "../components/workspace/code-viewer";
+import { MonacoCodeEditor } from "../components/workspace/code-editor";
 import { MediaViewer, detectMediaType, type MediaType } from "../components/workspace/media-viewer";
 import { DatabaseViewer, DuckDBMissing } from "../components/workspace/database-viewer";
+import { RichDocumentEditor, isDocxFile, isTxtFile, textToHtml } from "../components/workspace/rich-document-editor";
 import { Breadcrumbs } from "../components/workspace/breadcrumbs";
 import { ChatSessionsSidebar } from "../components/workspace/chat-sessions-sidebar";
 import { EmptyState } from "../components/workspace/empty-state";
@@ -27,7 +35,12 @@ import { CronJobDetail } from "../components/cron/cron-job-detail";
 import type { CronJob, CronJobsResponse } from "../types/cron";
 import { useIsMobile } from "../hooks/use-mobile";
 import { ObjectFilterBar } from "../components/workspace/object-filter-bar";
-import { type FilterGroup, type SortRule, type SavedView, emptyFilterGroup, serializeFilters } from "@/lib/object-filters";
+import {
+  type FilterGroup, type SortRule, type SavedView, type ViewType,
+  type ViewTypeSettings,
+  emptyFilterGroup, serializeFilters, resolveViewType, resolveViewSettings,
+  autoDetectViewField,
+} from "@/lib/object-filters";
 import { UnicodeSpinner } from "../components/unicode-spinner";
 import { resolveActiveViewSyncDecision } from "./object-view-active-view";
 import { resetWorkspaceStateOnSwitch } from "./workspace-switch";
@@ -81,6 +94,7 @@ type ObjectData = {
   effectiveDisplayField?: string;
   savedViews?: import("@/lib/object-filters").SavedView[];
   activeView?: string;
+  viewSettings?: import("@/lib/object-filters").ViewTypeSettings;
   totalCount?: number;
   page?: number;
   pageSize?: number;
@@ -97,24 +111,27 @@ type ContentState =
   | { kind: "object"; data: ObjectData }
   | { kind: "document"; data: FileData; title: string }
   | { kind: "file"; data: FileData; filename: string }
-  | { kind: "code"; data: FileData; filename: string }
+  | { kind: "code"; data: FileData; filename: string; filePath: string }
   | { kind: "media"; url: string; mediaType: MediaType; filename: string; filePath: string }
-  | { kind: "spreadsheet"; url: string; filename: string }
+  | { kind: "spreadsheet"; url: string; filename: string; filePath: string }
   | { kind: "html"; rawUrl: string; contentUrl: string; filename: string }
   | { kind: "database"; dbPath: string; filename: string }
   | { kind: "report"; reportPath: string; filename: string }
   | { kind: "directory"; node: TreeNode }
   | { kind: "cron-dashboard" }
   | { kind: "cron-job"; jobId: string; job: CronJob }
-  | { kind: "duckdb-missing" };
+  | { kind: "duckdb-missing" }
+  | { kind: "richDocument"; html: string; filePath: string; mode: "docx" | "txt" };
 
 type SidebarPreviewContent =
   | { kind: "document"; data: FileData; title: string }
   | { kind: "file"; data: FileData; filename: string }
-  | { kind: "code"; data: FileData; filename: string }
+  | { kind: "code"; data: FileData; filename: string; filePath: string }
   | { kind: "media"; url: string; mediaType: MediaType; filename: string; filePath: string }
+  | { kind: "spreadsheet"; url: string; filename: string; filePath: string }
   | { kind: "database"; dbPath: string; filename: string }
-  | { kind: "directory"; path: string; name: string };
+  | { kind: "directory"; path: string; name: string }
+  | { kind: "richDocument"; html: string; filePath: string; mode: "docx" | "txt" };
 
 type ChatSidebarPreviewState =
   | { status: "loading"; path: string; filename: string }
@@ -669,10 +686,33 @@ function WorkspacePageInner() {
         } else if (node.type === "report") {
           setContent({ kind: "report", reportPath: node.path, filename: node.name });
         } else if (node.type === "file") {
-          // Spreadsheet files get their own binary viewer
           if (isSpreadsheetFile(node.name)) {
             const url = rawFileUrl(node.path);
-            setContent({ kind: "spreadsheet", url, filename: node.name });
+            setContent({ kind: "spreadsheet", url, filename: node.name, filePath: node.path });
+            return;
+          }
+
+          // DOCX files: fetch binary, convert to HTML with mammoth
+          if (isDocxFile(node.name)) {
+            try {
+              const rawRes = await fetch(rawFileUrl(node.path));
+              if (!rawRes.ok) { setContent({ kind: "none" }); return; }
+              const arrayBuffer = await rawRes.arrayBuffer();
+              const mammoth = await import("mammoth");
+              const result = await mammoth.convertToHtml({ arrayBuffer });
+              setContent({ kind: "richDocument", html: result.value, filePath: node.path, mode: "docx" });
+            } catch {
+              setContent({ kind: "none" });
+            }
+            return;
+          }
+
+          // TXT files: fetch text content and open in rich editor
+          if (isTxtFile(node.name)) {
+            const res = await fetch(fileApiUrl(node.path));
+            if (!res.ok) { setContent({ kind: "none" }); return; }
+            const data: FileData = await res.json();
+            setContent({ kind: "richDocument", html: textToHtml(data.content), filePath: node.path, mode: "txt" });
             return;
           }
 
@@ -697,9 +737,8 @@ function WorkspacePageInner() {
             return;
           }
           const data: FileData = await res.json();
-          // Route code files to the syntax-highlighted CodeViewer
           if (isCodeFile(node.name)) {
-            setContent({ kind: "code", data, filename: node.name });
+            setContent({ kind: "code", data, filename: node.name, filePath: node.path });
           } else {
             setContent({ kind: "file", data, filename: node.name });
           }
@@ -816,6 +855,37 @@ function WorkspacePageInner() {
         };
       }
 
+      if (isSpreadsheetFile(node.name)) {
+        return {
+          kind: "spreadsheet",
+          url: rawFileUrl(node.path),
+          filename: node.name,
+          filePath: node.path,
+        };
+      }
+
+      // DOCX: binary fetch -> mammoth -> HTML
+      if (isDocxFile(node.name)) {
+        try {
+          const rawRes = await fetch(rawFileUrl(node.path));
+          if (!rawRes.ok) {return null;}
+          const arrayBuffer = await rawRes.arrayBuffer();
+          const mammoth = await import("mammoth");
+          const result = await mammoth.convertToHtml({ arrayBuffer });
+          return { kind: "richDocument", html: result.value, filePath: node.path, mode: "docx" };
+        } catch {
+          return null;
+        }
+      }
+
+      // TXT: text fetch -> wrap in paragraphs
+      if (isTxtFile(node.name)) {
+        const txtRes = await fetch(fileApiUrl(node.path));
+        if (!txtRes.ok) {return null;}
+        const txtData: FileData = await txtRes.json();
+        return { kind: "richDocument", html: textToHtml(txtData.content), filePath: node.path, mode: "txt" };
+      }
+
       const res = await fetch(fileApiUrl(node.path));
       if (!res.ok) {return null;}
       const data: FileData = await res.json();
@@ -828,7 +898,7 @@ function WorkspacePageInner() {
         };
       }
       if (isCodeFile(node.name)) {
-        return { kind: "code", data, filename: node.name };
+        return { kind: "code", data, filename: node.name, filePath: node.path };
       }
       return { kind: "file", data, filename: node.name };
     },
@@ -1861,8 +1931,8 @@ function ChatSidebarPreview({
         break;
       case "code":
         body = (
-          <div className="overflow-auto h-full">
-            <CodeViewer content={c.data.content} filename={c.filename} />
+          <div className="h-full">
+            <MonacoCodeEditor content={c.data.content} filename={c.filename} filePath={c.filePath} />
           </div>
         );
         break;
@@ -1873,10 +1943,34 @@ function ChatSidebarPreview({
           </div>
         );
         break;
+      case "spreadsheet":
+        body = (
+          <div className="h-full">
+            <SpreadsheetEditor
+              url={c.url}
+              filename={c.filename}
+              filePath={c.filePath}
+              compact
+            />
+          </div>
+        );
+        break;
       case "database":
         body = (
           <div className="overflow-auto h-full">
             <DatabaseViewer dbPath={c.dbPath} filename={c.filename} />
+          </div>
+        );
+        break;
+      case "richDocument":
+        body = (
+          <div className="h-full">
+            <RichDocumentEditor
+              mode={c.mode}
+              initialHtml={c.html}
+              filePath={c.filePath}
+              compact
+            />
           </div>
         );
         break;
@@ -2094,9 +2188,10 @@ function ContentRenderer({
 
     case "code":
       return (
-        <CodeViewer
+        <MonacoCodeEditor
           content={content.data.content}
           filename={content.filename}
+          filePath={content.filePath}
         />
       );
 
@@ -2112,10 +2207,10 @@ function ContentRenderer({
 
     case "spreadsheet":
       return (
-        <FileViewer
-          filename={content.filename}
-          type="spreadsheet"
+        <SpreadsheetEditor
           url={content.url}
+          filename={content.filename}
+          filePath={content.filePath}
         />
       );
 
@@ -2184,6 +2279,16 @@ function ContentRenderer({
     case "duckdb-missing":
       return <DuckDBMissing />;
 
+    case "richDocument":
+      return (
+        <RichDocumentEditor
+          mode={content.mode}
+          initialHtml={content.html}
+          filePath={content.filePath}
+          onSave={onRefreshTree}
+        />
+      );
+
     case "none":
     default:
       if (tree.length === 0) {
@@ -2208,7 +2313,23 @@ function ObjectView({
   onRefreshObject: () => void;
   onOpenEntry?: (objectName: string, entryId: string) => void;
 }) {
+  const safeEntryId = (e: Record<string, unknown>) => {
+    const candidate = e.entry_id ?? e.id;
+    if (typeof candidate === "string") {return candidate;}
+    if (typeof candidate === "number" || typeof candidate === "boolean" || typeof candidate === "bigint") {
+      return String(candidate);
+    }
+    return "";
+  };
   const [updatingDisplayField, setUpdatingDisplayField] = useState(false);
+
+  // --- View type state ---
+  const [currentViewType, setCurrentViewType] = useState<ViewType>(
+    () => resolveViewType(undefined, undefined, data.object.default_view),
+  );
+  const [viewSettings, setViewSettings] = useState<ViewTypeSettings>(
+    () => data.viewSettings ?? {},
+  );
 
   // --- Filter state ---
   const [filters, setFilters] = useState<FilterGroup>(() => emptyFilterGroup());
@@ -2238,6 +2359,9 @@ function ObjectView({
     for (const field of data.fields) {
       vis[field.id] = viewColumns.includes(field.name);
     }
+    // Synthetic timestamp columns — keyed by their column ID, matched by name
+    vis["created_at"] = viewColumns.includes("created_at");
+    vis["updated_at"] = viewColumns.includes("updated_at");
     return vis;
   }, [viewColumns, data.fields]);
 
@@ -2298,6 +2422,7 @@ function ObjectView({
   // Sync saved views when data changes (e.g. SSE refresh from AI editing .object.yaml)
   useEffect(() => {
     setSavedViews(data.savedViews ?? []);
+    if (data.viewSettings) {setViewSettings(data.viewSettings);}
 
     const decision = resolveActiveViewSyncDecision({
       savedViews: data.savedViews,
@@ -2305,11 +2430,15 @@ function ObjectView({
       currentActiveViewName: activeViewName,
       currentFilters: filters,
       currentViewColumns: viewColumns,
+      currentViewType: currentViewType,
+      currentSettings: viewSettings,
     });
     if (decision?.shouldApply) {
       setFilters(decision.nextFilters);
       setViewColumns(decision.nextColumns);
       setActiveViewName(decision.nextActiveViewName);
+      if (decision.nextViewType) {setCurrentViewType(decision.nextViewType);}
+      if (decision.nextSettings) {setViewSettings((prev) => ({ ...prev, ...decision.nextSettings }));}
       // Re-fetch with filters from the synchronized active view.
       void fetchEntries({ page: 1, filters: decision.nextFilters });
     }
@@ -2357,7 +2486,13 @@ function ObjectView({
 
   // Save view to .object.yaml via API
   const handleSaveView = useCallback(async (name: string) => {
-    const newView: SavedView = { name, filters, columns: viewColumns };
+    const newView: SavedView = {
+      name,
+      view_type: currentViewType,
+      filters,
+      columns: viewColumns,
+      settings: viewSettings,
+    };
     const updated = [...savedViews.filter((v) => v.name !== name), newView];
     setSavedViews(updated);
     setActiveViewName(name);
@@ -2367,19 +2502,21 @@ function ObjectView({
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ views: updated, activeView: name }),
+          body: JSON.stringify({ views: updated, activeView: name, viewSettings }),
         },
       );
     } catch {
       // ignore save errors
     }
-  }, [filters, savedViews, data.object.name]);
+  }, [filters, savedViews, data.object.name, currentViewType, viewColumns, viewSettings]);
 
   const handleLoadView = useCallback((view: SavedView) => {
     const newFilters = view.filters ?? emptyFilterGroup();
     setFilters(newFilters);
     setViewColumns(view.columns);
     setActiveViewName(view.name);
+    if (view.view_type) {setCurrentViewType(view.view_type);}
+    if (view.settings) {setViewSettings((prev) => ({ ...prev, ...view.settings }));}
     setServerPage(1);
     void fetchEntries({ page: 1, filters: newFilters });
   }, [fetchEntries]);
@@ -2426,6 +2563,56 @@ function ObjectView({
     }
   }, [savedViews, data.object.name]);
 
+  // View type change handler
+  const handleViewTypeChange = useCallback((vt: ViewType) => {
+    setCurrentViewType(vt);
+  }, []);
+
+  // View settings change handler (persists to .object.yaml)
+  const handleViewSettingsChange = useCallback(async (newSettings: ViewTypeSettings) => {
+    setViewSettings(newSettings);
+    try {
+      await fetch(
+        `/api/workspace/objects/${encodeURIComponent(data.object.name)}/views`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ views: savedViews, activeView: activeViewName, viewSettings: newSettings }),
+        },
+      );
+    } catch {
+      // ignore
+    }
+  }, [savedViews, activeViewName, data.object.name]);
+
+  // Resolve effective settings for current view type with auto-detection fallbacks
+  const effectiveSettings = useMemo(() => {
+    const activeView = savedViews.find((v) => v.name === activeViewName);
+    const merged = resolveViewSettings(activeView?.settings, viewSettings);
+    const fieldMetas = [
+      ...data.fields.map((f) => ({ name: f.name, type: f.type })),
+      { name: "created_at", type: "date" },
+      { name: "updated_at", type: "date" },
+    ];
+
+    if (currentViewType === "kanban" && !merged.kanbanField) {
+      merged.kanbanField = autoDetectViewField("kanban", "kanbanField", fieldMetas);
+    }
+    if (currentViewType === "calendar" && !merged.calendarDateField) {
+      merged.calendarDateField = autoDetectViewField("calendar", "calendarDateField", fieldMetas);
+    }
+    if (currentViewType === "timeline" && !merged.timelineStartField) {
+      merged.timelineStartField = autoDetectViewField("timeline", "timelineStartField", fieldMetas);
+    }
+    if (currentViewType === "gallery" && !merged.galleryTitleField) {
+      merged.galleryTitleField = autoDetectViewField("gallery", "galleryTitleField", fieldMetas);
+    }
+    if (currentViewType === "list" && !merged.listTitleField) {
+      merged.listTitleField = autoDetectViewField("list", "listTitleField", fieldMetas);
+    }
+    return merged;
+  }, [currentViewType, viewSettings, savedViews, activeViewName, data.fields]);
+
   const handleDisplayFieldChange = async (fieldName: string) => {
     setUpdatingDisplayField(true);
     try {
@@ -2447,6 +2634,58 @@ function ObjectView({
     }
   };
 
+  // Persist date changes from calendar/timeline drag-and-drop with optimistic UI
+  const handleCalendarDateChange = useCallback(async (payload: CalendarDateChangePayload) => {
+    const dateFieldName = effectiveSettings.calendarDateField;
+    const endDateFieldName = effectiveSettings.calendarEndDateField;
+    if (!dateFieldName) {return;}
+
+    const fields: Record<string, string> = { [dateFieldName]: payload.newDate };
+    if (endDateFieldName && payload.newEndDate) {
+      fields[endDateFieldName] = payload.newEndDate;
+    }
+
+    // Optimistic update
+    setEntries((prev) => prev.map((e) => {
+      if (safeEntryId(e) !== payload.entryId) {return e;}
+      const updated = { ...e, [dateFieldName]: payload.newDate };
+      if (endDateFieldName && payload.newEndDate) {updated[endDateFieldName] = payload.newEndDate;}
+      return updated;
+    }));
+
+    try {
+      await fetch(
+        `/api/workspace/objects/${encodeURIComponent(data.object.name)}/entries/${encodeURIComponent(payload.entryId)}`,
+        { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields }) },
+      );
+    } catch { /* rollback happens on next SSE refresh */ }
+  }, [effectiveSettings, data.object.name]);
+
+  const handleTimelineDateChange = useCallback(async (payload: TimelineDateChangePayload) => {
+    const startFieldName = effectiveSettings.timelineStartField;
+    const endFieldName = effectiveSettings.timelineEndField;
+    if (!startFieldName) {return;}
+
+    const fields: Record<string, string> = { [startFieldName]: payload.newStartDate };
+    if (endFieldName) {
+      fields[endFieldName] = payload.newEndDate;
+    }
+
+    setEntries((prev) => prev.map((e) => {
+      if (safeEntryId(e) !== payload.entryId) {return e;}
+      const updated = { ...e, [startFieldName]: payload.newStartDate };
+      if (endFieldName) {updated[endFieldName] = payload.newEndDate;}
+      return updated;
+    }));
+
+    try {
+      await fetch(
+        `/api/workspace/objects/${encodeURIComponent(data.object.name)}/entries/${encodeURIComponent(payload.entryId)}`,
+        { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields }) },
+      );
+    } catch { /* rollback happens on next SSE refresh */ }
+  }, [effectiveSettings, data.object.name]);
+
   const displayFieldCandidates = data.fields.filter(
     (f) => !["relation", "boolean", "richtext"].includes(f.type),
   );
@@ -2461,6 +2700,13 @@ function ObjectView({
     () => members?.map((m) => ({ id: m.id, name: m.name })),
     [members],
   );
+
+  // Include synthetic timestamp columns so view settings pickers can find date fields
+  const fieldsWithTimestamps = useMemo(() => [
+    ...data.fields,
+    { id: "created_at", name: "created_at", type: "date" } as typeof data.fields[number],
+    { id: "updated_at", name: "updated_at", type: "date" } as typeof data.fields[number],
+  ], [data.fields]);
 
   return (
     <div className="p-6">
@@ -2570,7 +2816,7 @@ function ObjectView({
         )}
       </div>
 
-      {/* Filter bar */}
+      {/* View switcher + Filter bar */}
       <div
         className="mb-4 py-3 px-4 rounded-lg border"
         style={{
@@ -2578,6 +2824,15 @@ function ObjectView({
           background: "var(--color-surface)",
         }}
       >
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <ViewTypeSwitcher value={currentViewType} onChange={handleViewTypeChange} />
+          <ViewSettingsPopover
+            viewType={currentViewType}
+            settings={effectiveSettings}
+            fields={fieldsWithTimestamps}
+            onSettingsChange={handleViewSettingsChange}
+          />
+        </div>
         <ObjectFilterBar
           fields={data.fields}
           filters={filters}
@@ -2592,8 +2847,8 @@ function ObjectView({
         />
       </div>
 
-      {/* Table or Kanban */}
-      {data.object.default_view === "kanban" ? (
+      {/* View renderer */}
+      {currentViewType === "kanban" && (
         <ObjectKanban
           objectName={data.object.name}
           fields={data.fields}
@@ -2604,7 +2859,8 @@ function ObjectView({
           onEntryClick={onOpenEntry ? (entryId) => onOpenEntry(data.object.name, entryId) : undefined}
           onRefresh={handleRefresh}
         />
-      ) : (
+      )}
+      {currentViewType === "table" && (
         <ObjectTable
           objectName={data.object.name}
           fields={data.fields}
@@ -2625,6 +2881,58 @@ function ObjectView({
             onPageSizeChange: handlePageSizeChange,
           }}
           onServerSearch={handleServerSearch}
+        />
+      )}
+      {currentViewType === "calendar" && (
+        <ObjectCalendar
+          objectName={data.object.name}
+          fields={data.fields}
+          entries={filteredEntries}
+          dateField={effectiveSettings.calendarDateField ?? ""}
+          endDateField={effectiveSettings.calendarEndDateField}
+          mode={effectiveSettings.calendarMode ?? "month"}
+          onModeChange={(mode) => handleViewSettingsChange({ ...effectiveSettings, calendarMode: mode })}
+          members={members}
+          onEntryClick={onOpenEntry ? (entryId) => onOpenEntry(data.object.name, entryId) : undefined}
+          onEntryDateChange={handleCalendarDateChange}
+        />
+      )}
+      {currentViewType === "timeline" && (
+        <ObjectTimeline
+          objectName={data.object.name}
+          fields={data.fields}
+          entries={filteredEntries}
+          startDateField={effectiveSettings.timelineStartField ?? ""}
+          endDateField={effectiveSettings.timelineEndField}
+          groupField={effectiveSettings.timelineGroupField}
+          zoom={effectiveSettings.timelineZoom ?? "week"}
+          onZoomChange={(zoom) => handleViewSettingsChange({ ...effectiveSettings, timelineZoom: zoom })}
+          members={members}
+          onEntryClick={onOpenEntry ? (entryId) => onOpenEntry(data.object.name, entryId) : undefined}
+          onEntryDateChange={handleTimelineDateChange}
+        />
+      )}
+      {currentViewType === "gallery" && (
+        <ObjectGallery
+          objectName={data.object.name}
+          fields={data.fields}
+          entries={filteredEntries}
+          titleField={effectiveSettings.galleryTitleField}
+          coverField={effectiveSettings.galleryCoverField}
+          members={members}
+          relationLabels={data.relationLabels}
+          onEntryClick={onOpenEntry ? (entryId) => onOpenEntry(data.object.name, entryId) : undefined}
+        />
+      )}
+      {currentViewType === "list" && (
+        <ObjectList
+          objectName={data.object.name}
+          fields={data.fields}
+          entries={filteredEntries}
+          titleField={effectiveSettings.listTitleField}
+          subtitleField={effectiveSettings.listSubtitleField}
+          members={members}
+          onEntryClick={onOpenEntry ? (entryId) => onOpenEntry(data.object.name, entryId) : undefined}
         />
       )}
     </div>

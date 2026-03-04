@@ -886,7 +886,18 @@ export function ObjectFilterBar({
 								active={activeViewName === view.name}
 							>
 								<span className="flex-1 truncate">{view.name}</span>
-								{view.filters && (
+								{view.view_type && view.view_type !== "table" && (
+									<span
+										className="text-[9px] px-1.5 py-0.5 rounded ml-1 capitalize"
+										style={{
+											background: "var(--color-surface-hover)",
+											color: "var(--color-text-muted)",
+										}}
+									>
+										{view.view_type}
+									</span>
+								)}
+								{view.filters && view.filters.rules.length > 0 && (
 									<span
 										className="text-[10px] ml-1"
 										style={{ color: "var(--color-text-muted)" }}
