@@ -142,7 +142,9 @@
 
 /* Disable iframe pointer events during sidebar resize so the
    drag isn't swallowed by embedded content (e.g. PDF viewer). */
-body.resizing iframe { pointer-events: none; }
+body.resizing iframe {
+  pointer-events: none;
+}
 
 /* ============================================================
    Fonts — Bookerly (local)
@@ -359,8 +361,8 @@ a,
   margin-bottom: 0.25em;
 }
 
-.workspace-prose li > ul,
-.workspace-prose li > ol {
+.workspace-prose li>ul,
+.workspace-prose li>ol {
   margin-top: 0.25em;
   margin-bottom: 0;
 }
@@ -521,12 +523,7 @@ a,
   margin-top: 0.25em;
 }
 
-.editor-content-area
-  .tiptap
-  ul[data-type="taskList"]
-  li
-  label
-  input[type="checkbox"] {
+.editor-content-area .tiptap ul[data-type="taskList"] li label input[type="checkbox"] {
   appearance: none;
   width: 1em;
   height: 1em;
@@ -536,22 +533,12 @@ a,
   position: relative;
 }
 
-.editor-content-area
-  .tiptap
-  ul[data-type="taskList"]
-  li
-  label
-  input[type="checkbox"]:checked {
+.editor-content-area .tiptap ul[data-type="taskList"] li label input[type="checkbox"]:checked {
   background: var(--color-accent);
   border-color: var(--color-accent);
 }
 
-.editor-content-area
-  .tiptap
-  ul[data-type="taskList"]
-  li
-  label
-  input[type="checkbox"]:checked::after {
+.editor-content-area .tiptap ul[data-type="taskList"] li label input[type="checkbox"]:checked::after {
   content: "";
   position: absolute;
   left: 3px;
@@ -563,7 +550,7 @@ a,
   transform: rotate(45deg);
 }
 
-.editor-content-area .tiptap ul[data-type="taskList"] li > div {
+.editor-content-area .tiptap ul[data-type="taskList"] li>div {
   flex: 1;
 }
 
@@ -771,6 +758,411 @@ a,
   cursor: not-allowed;
 }
 
+/* ========================================================================
+   Rich Document Editor (DOCX / TXT)
+   ======================================================================== */
+
+.rich-doc-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--color-bg);
+}
+
+.rich-doc-editor--compact {
+  height: 100%;
+}
+
+/* Top bar */
+.rich-doc-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  flex-shrink: 0;
+  gap: 0.75rem;
+}
+
+.rich-doc-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.rich-doc-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.rich-doc-filename {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Toolbar */
+.rich-doc-toolbar {
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 0.35rem 0.75rem;
+}
+
+.rich-doc-toolbar-minimal {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 0.35rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.rich-doc-txt-hint {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  opacity: 0.7;
+}
+
+/* Paragraph style dropdown */
+.rich-doc-style-dropdown {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  min-width: 110px;
+  justify-content: space-between;
+  transition: background 0.1s;
+}
+
+.rich-doc-style-dropdown:hover {
+  background: var(--color-surface-hover);
+}
+
+.rich-doc-style-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  margin-top: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+  min-width: 180px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.rich-doc-style-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.4rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+
+.rich-doc-style-option:hover {
+  background: var(--color-surface-hover);
+}
+
+.rich-doc-style-option--active {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+}
+
+/* Color palette */
+.rich-doc-color-palette {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  margin-top: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 3px;
+  width: 228px;
+}
+
+.rich-doc-color-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s;
+}
+
+.rich-doc-color-swatch:hover {
+  transform: scale(1.25);
+  z-index: 1;
+}
+
+/* Scrollable editor area */
+.rich-doc-scroll {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--color-bg);
+}
+
+/* Page-like centered area */
+.rich-doc-page {
+  max-width: 816px;
+  margin: 2rem auto;
+  background: var(--color-main-bg, #fff);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 3rem 4rem;
+  min-height: calc(100vh - 200px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.rich-doc-editor--compact .rich-doc-page {
+  margin: 0.5rem;
+  padding: 1.5rem 2rem;
+  min-height: auto;
+  border: none;
+  box-shadow: none;
+  max-width: none;
+}
+
+.rich-doc-page--txt {
+  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+
+.rich-doc-page .tiptap {
+  outline: none;
+  min-height: 200px;
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: var(--color-text);
+}
+
+.rich-doc-page .tiptap:focus {
+  outline: none;
+}
+
+.rich-doc-page .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--color-text-muted);
+  pointer-events: none;
+  height: 0;
+  opacity: 0.5;
+}
+
+.rich-doc-page .tiptap h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 1.5rem 0 0.75rem;
+  line-height: 1.2;
+}
+
+.rich-doc-page .tiptap h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.5rem;
+  line-height: 1.3;
+}
+
+.rich-doc-page .tiptap h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 1rem 0 0.5rem;
+  line-height: 1.35;
+}
+
+.rich-doc-page .tiptap h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 1rem 0 0.4rem;
+  line-height: 1.4;
+}
+
+.rich-doc-page .tiptap h5 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0.8rem 0 0.3rem;
+}
+
+.rich-doc-page .tiptap h6 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0.8rem 0 0.3rem;
+  color: var(--color-text-muted);
+}
+
+.rich-doc-page .tiptap p {
+  margin: 0.4rem 0;
+}
+
+.rich-doc-page .tiptap ul,
+.rich-doc-page .tiptap ol {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.rich-doc-page .tiptap blockquote {
+  border-left: 3px solid var(--color-accent);
+  padding-left: 1rem;
+  margin: 0.75rem 0;
+  color: var(--color-text-muted);
+}
+
+.rich-doc-page .tiptap pre {
+  background: var(--color-surface);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+}
+
+.rich-doc-page .tiptap code {
+  background: var(--color-surface);
+  border-radius: 3px;
+  padding: 0.15rem 0.3rem;
+  font-size: 0.85em;
+}
+
+.rich-doc-page .tiptap pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.rich-doc-page .tiptap hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 1.5rem 0;
+}
+
+.rich-doc-page .tiptap mark {
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* Tables */
+.rich-doc-page .tiptap table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+
+.rich-doc-page .tiptap th,
+.rich-doc-page .tiptap td {
+  border: 1px solid var(--color-border);
+  padding: 0.5em 0.75em;
+  position: relative;
+}
+
+.rich-doc-page .tiptap th {
+  background: var(--color-surface-hover);
+  font-weight: 600;
+}
+
+.rich-doc-page .tiptap .selectedCell {
+  background: var(--color-accent-light);
+}
+
+/* Task list */
+.rich-doc-page .tiptap ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.rich-doc-page .tiptap ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+
+.rich-doc-page .tiptap ul[data-type="taskList"] li label {
+  flex-shrink: 0;
+  margin-top: 0.25em;
+}
+
+.rich-doc-page .tiptap ul[data-type="taskList"] li>div {
+  flex: 1;
+}
+
+/* Images */
+.rich-doc-page .tiptap .editor-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.rich-doc-page .tiptap .editor-image.ProseMirror-selectednode {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Links */
+.rich-doc-page .tiptap a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* Status bar */
+.rich-doc-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 1rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.rich-doc-statusbar-sep {
+  width: 1px;
+  height: 0.75rem;
+  background: var(--color-border);
+}
+
+.rich-doc-statusbar-mode {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.6;
+}
+
 /* --- Edit / Read mode toggle --- */
 
 .editor-mode-toggle {
@@ -904,11 +1296,11 @@ a,
   font-family: "Bookerly", Georgia, "Times New Roman", serif;
 }
 
-.chat-prose > *:first-child {
+.chat-prose>*:first-child {
   margin-top: 0;
 }
 
-.chat-prose > *:last-child {
+.chat-prose>*:last-child {
   margin-bottom: 0;
 }
 
@@ -987,12 +1379,12 @@ a,
   margin-bottom: 0.2em;
 }
 
-.chat-prose li > p {
+.chat-prose li>p {
   margin-bottom: 0.25em;
 }
 
-.chat-prose li > ul,
-.chat-prose li > ol {
+.chat-prose li>ul,
+.chat-prose li>ol {
   margin-top: 0.2em;
   margin-bottom: 0;
 }
@@ -1254,6 +1646,7 @@ a,
 }
 
 @media (prefers-color-scheme: light) {
+
   .shiki,
   .shiki span {
     color: var(--shiki-light) !important;
@@ -1299,18 +1692,33 @@ a,
 }
 
 @keyframes drawer-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes drawer-slide-left {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(0); }
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
 }
 
 @keyframes drawer-slide-right {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
 }
 
 .drawer-left {
@@ -1322,6 +1730,98 @@ a,
 }
 
 /* Prevent horizontal overflow on mobile */
-html, body {
+html,
+body {
   overflow-x: hidden;
+}
+
+/* ============================================================
+   Spreadsheet Editor — react-spreadsheet theme overrides
+   ============================================================ */
+
+.spreadsheet-editor-grid.Spreadsheet {
+  --background-color: var(--color-bg);
+  --text-color: var(--color-text);
+  --readonly-text-color: var(--color-text-muted);
+  --outline-color: var(--color-accent);
+  --outline-background-color: var(--color-accent-light);
+  --border-color: var(--color-border);
+  --header-background-color: var(--color-surface);
+  --elevation: var(--shadow-md);
+
+  display: block;
+  width: 100%;
+  min-width: 100%;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.spreadsheet-editor-grid.Spreadsheet--dark-mode {
+  --background-color: var(--color-bg);
+  --text-color: var(--color-text);
+  --readonly-text-color: var(--color-text-muted);
+  --border-color: var(--color-border);
+  --header-background-color: var(--color-surface);
+}
+
+.spreadsheet-editor-grid .Spreadsheet__table {
+  width: 100%;
+  table-layout: auto;
+}
+
+.spreadsheet-editor-grid .Spreadsheet__cell,
+.spreadsheet-editor-grid .Spreadsheet__header {
+  min-width: 80px;
+  min-height: 28px;
+  height: 28px;
+  max-height: 28px;
+  padding: 4px 8px;
+  font-size: 12px;
+  border-color: var(--color-border);
+}
+
+.spreadsheet-editor-grid .Spreadsheet__header {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.spreadsheet-editor-grid .Spreadsheet__header--selected {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.spreadsheet-editor-grid .Spreadsheet__active-cell {
+  border-color: var(--color-accent);
+  border-width: 2px;
+}
+
+.spreadsheet-editor-grid .Spreadsheet__active-cell--edit {
+  background: var(--color-bg);
+  box-shadow: var(--shadow-md);
+}
+
+.spreadsheet-editor-grid .Spreadsheet__floating-rect--selected {
+  background: var(--color-accent-light);
+  border-color: var(--color-accent);
+}
+
+.spreadsheet-editor-grid .Spreadsheet__floating-rect--copied {
+  border-color: var(--color-accent);
+}
+
+.spreadsheet-editor-grid .Spreadsheet__data-editor input {
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--color-text);
+  padding: 4px 8px;
+}
+
+.spreadsheet-editor-grid .Spreadsheet__data-viewer,
+.spreadsheet-editor-grid .Spreadsheet__data-editor input {
+  padding: 4px 8px;
 }
