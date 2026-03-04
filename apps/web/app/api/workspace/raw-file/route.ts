@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { safeResolvePath, resolveWorkspaceRoot } from "@/lib/workspace";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { safeResolvePath, safeResolveNewPath, resolveWorkspaceRoot, isSystemFile } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -35,6 +35,9 @@ const MIME_MAP: Record<string, string> = {
 	pdf: "application/pdf",
 	html: "text/html",
 	htm: "text/html",
+	docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	doc: "application/msword",
+	txt: "text/plain",
 };
 
 /**
@@ -120,5 +123,43 @@ export async function GET(req: Request) {
 		});
 	} catch {
 		return new Response("Read error", { status: 500 });
+	}
+}
+
+/**
+ * POST /api/workspace/raw-file?path=...
+ * Saves binary data to a workspace file. Used by the spreadsheet editor
+ * to write XLSX and other binary formats back to disk.
+ */
+export async function POST(req: Request) {
+	const url = new URL(req.url);
+	const path = url.searchParams.get("path");
+
+	if (!path || typeof path !== "string") {
+		return new Response("Missing path", { status: 400 });
+	}
+
+	if (isSystemFile(path)) {
+		return Response.json({ error: "Cannot modify system file" }, { status: 403 });
+	}
+
+	const absPath = safeResolveNewPath(path);
+	if (!absPath) {
+		return Response.json(
+			{ error: "Invalid path or path traversal rejected" },
+			{ status: 400 },
+		);
+	}
+
+	try {
+		const buffer = Buffer.from(await req.arrayBuffer());
+		mkdirSync(dirname(absPath), { recursive: true });
+		writeFileSync(absPath, buffer);
+		return Response.json({ ok: true, path });
+	} catch (err) {
+		return Response.json(
+			{ error: err instanceof Error ? err.message : "Write failed" },
+			{ status: 500 },
+		);
 	}
 }
