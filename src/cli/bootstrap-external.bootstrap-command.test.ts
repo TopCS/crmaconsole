@@ -47,7 +47,7 @@ function createWebProfilesResponse(params?: {
   payload?: { profiles?: unknown[]; activeProfile?: string };
 }): Response {
   const status = params?.status ?? 200;
-  const payload = params?.payload ?? { profiles: [], activeProfile: "ironclaw" };
+  const payload = params?.payload ?? { profiles: [], activeProfile: "dench" };
   return {
     status,
     json: async () => payload,
@@ -56,12 +56,13 @@ function createWebProfilesResponse(params?: {
 
 function createTempStateDir(): string {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const dir = path.join(os.tmpdir(), `ironclaw-bootstrap-${suffix}`);
+  const dir = path.join(os.tmpdir(), `denchclaw-bootstrap-${suffix}`);
   mkdirSync(dir, { recursive: true });
   return dir;
 }
 
 function writeBootstrapFixtures(stateDir: string): void {
+  mkdirSync(stateDir, { recursive: true });
   const config = {
     agents: {
       defaults: {
@@ -137,6 +138,7 @@ async function withForcedStdinTty<T>(isTTY: boolean, fn: () => Promise<T>): Prom
 describe("bootstrapCommand always-onboard behavior", () => {
   const originalEnv = { ...process.env };
   const spawnMock = vi.mocked(spawn);
+  let homeDir = "";
   let stateDir = "";
   let spawnCalls: SpawnCall[] = [];
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -148,7 +150,8 @@ describe("bootstrapCommand always-onboard behavior", () => {
   let alwaysHealthFail = false;
 
   beforeEach(() => {
-    stateDir = createTempStateDir();
+    homeDir = createTempStateDir();
+    stateDir = path.join(homeDir, ".openclaw-dench");
     writeBootstrapFixtures(stateDir);
     spawnCalls = [];
     forceGlobalMissing = false;
@@ -158,7 +161,10 @@ describe("bootstrapCommand always-onboard behavior", () => {
     alwaysHealthFail = false;
     process.env = {
       ...originalEnv,
-      OPENCLAW_PROFILE: "ironclaw",
+      HOME: homeDir,
+      USERPROFILE: homeDir,
+      OPENCLAW_HOME: homeDir,
+      OPENCLAW_PROFILE: "dench",
       OPENCLAW_STATE_DIR: stateDir,
       VITEST: "true",
     };
@@ -256,7 +262,7 @@ describe("bootstrapCommand always-onboard behavior", () => {
 
   afterEach(() => {
     process.env = originalEnv;
-    rmSync(stateDir, { recursive: true, force: true });
+    rmSync(homeDir || stateDir, { recursive: true, force: true });
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -284,7 +290,7 @@ describe("bootstrapCommand always-onboard behavior", () => {
     expect(onboardCalls[0]?.args).toEqual(
       expect.arrayContaining([
         "--profile",
-        "ironclaw",
+        "dench",
         "onboard",
         "--install-daemon",
         "--non-interactive",
@@ -296,13 +302,13 @@ describe("bootstrapCommand always-onboard behavior", () => {
     expect(summary.onboarded).toBe(true);
   });
 
-  it("accepts bootstrap --profile and propagates it to onboard subprocesses", async () => {
+  it("ignores bootstrap --profile override and keeps dench profile (prevents profile drift)", async () => {
     const runtime: RuntimeEnv = {
       log: vi.fn(),
       error: vi.fn(),
       exit: vi.fn(),
     };
-    process.env.OPENCLAW_PROFILE = "ironclaw";
+    process.env.OPENCLAW_PROFILE = "dench";
 
     const summary = await bootstrapCommand(
       {
@@ -317,8 +323,9 @@ describe("bootstrapCommand always-onboard behavior", () => {
     const onboardCall = spawnCalls.find(
       (call) => call.command === "openclaw" && call.args.includes("onboard"),
     );
-    expect(onboardCall?.args).toEqual(expect.arrayContaining(["--profile", "team-a"]));
-    expect(summary.profile).toBe("team-a");
+    expect(onboardCall?.args).toEqual(expect.arrayContaining(["--profile", "dench"]));
+    expect(onboardCall?.args.includes("team-a")).toBe(false);
+    expect(summary.profile).toBe("dench");
   });
 
   it("adds --reset to onboarding args when --force-onboard is requested", async () => {
@@ -485,8 +492,8 @@ describe("bootstrapCommand always-onboard behavior", () => {
     expect(summary.workspaceSeed?.reason).toBe("already-exists");
     expect(readFileSync(workspaceDbPath, "utf-8")).toBe("existing-db-content");
     const identityContent = readFileSync(identityPath, "utf-8");
-    expect(identityContent).toContain("You are **Ironclaw**");
-    expect(identityContent).toContain("~skills/crm/SKILL.md");
+    expect(identityContent).toContain("You are **DenchClaw**");
+    expect(identityContent).toContain(path.join(workspaceDir, "skills", "crm", "SKILL.md"));
     expect(identityContent).not.toContain("# stale identity");
   });
 
@@ -529,18 +536,18 @@ describe("bootstrapCommand always-onboard behavior", () => {
     const identityPath = path.join(managedWorkspace, "IDENTITY.md");
     expect(existsSync(identityPath)).toBe(true);
     const identityContent = readFileSync(identityPath, "utf-8");
-    expect(identityContent).toContain("You are **Ironclaw**");
-    expect(identityContent).toContain("~skills/crm/SKILL.md");
+    expect(identityContent).toContain("You are **DenchClaw**");
+    expect(identityContent).toContain(path.join(managedWorkspace, "skills", "crm", "SKILL.md"));
   });
 
-  it("installs CRM skill into managed profile skills directory (keeps it out of editable workspace)", async () => {
+  it("installs CRM skill into managed workspace skills directory (prevents state-root drift)", async () => {
     const runtime: RuntimeEnv = {
       log: vi.fn(),
       error: vi.fn(),
       exit: vi.fn(),
     };
-    const targetSkill = path.join(stateDir, "skills", "crm", "SKILL.md");
-    const workspaceSkill = path.join(stateDir, "workspace", "skills", "crm", "SKILL.md");
+    const targetSkill = path.join(stateDir, "workspace", "skills", "crm", "SKILL.md");
+    const legacySkill = path.join(stateDir, "skills", "crm", "SKILL.md");
     expect(existsSync(targetSkill)).toBe(false);
 
     await bootstrapCommand(
@@ -553,7 +560,7 @@ describe("bootstrapCommand always-onboard behavior", () => {
     );
 
     expect(existsSync(targetSkill)).toBe(true);
-    expect(existsSync(workspaceSkill)).toBe(false);
+    expect(existsSync(legacySkill)).toBe(false);
     expect(readFileSync(targetSkill, "utf-8")).toContain("name: database-crm-system");
   });
 
@@ -563,7 +570,7 @@ describe("bootstrapCommand always-onboard behavior", () => {
       error: vi.fn(),
       exit: vi.fn(),
     };
-    const targetDir = path.join(stateDir, "skills", "crm");
+    const targetDir = path.join(stateDir, "workspace", "skills", "crm");
     const targetSkill = path.join(targetDir, "SKILL.md");
     mkdirSync(targetDir, { recursive: true });
     writeFileSync(targetSkill, "name: crm\n# custom\n");
@@ -609,17 +616,83 @@ describe("bootstrapCommand always-onboard behavior", () => {
     expect(workspaceConfigSetCalls.length).toBeGreaterThan(0);
     const lastArgs = workspaceConfigSetCalls.at(-1)?.args ?? [];
     expect(lastArgs).toEqual(
-      expect.arrayContaining([
-        "--profile",
-        "ironclaw",
-        "config",
-        "set",
-        "agents.defaults.workspace",
-      ]),
+      expect.arrayContaining(["--profile", "dench", "config", "set", "agents.defaults.workspace"]),
     );
     const configuredWorkspace = lastArgs.at(-1) ?? "";
-    expect(configuredWorkspace).toContain(path.join(".openclaw-ironclaw", "workspace"));
-    expect(configuredWorkspace).not.toContain("workspace-ironclaw");
+    expect(configuredWorkspace).toContain(path.join(".openclaw-dench", "workspace"));
+    expect(configuredWorkspace).not.toContain("workspace-dench");
+  });
+
+  it("forces tools.profile to full during bootstrap (prevents messaging-only tool drift)", async () => {
+    const runtime: RuntimeEnv = {
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: vi.fn(),
+    };
+
+    await bootstrapCommand(
+      {
+        nonInteractive: true,
+        noOpen: true,
+        skipUpdate: true,
+      },
+      runtime,
+    );
+
+    const toolsProfileSetCalls = spawnCalls.filter(
+      (call) =>
+        call.command === "openclaw" &&
+        call.args.includes("config") &&
+        call.args.includes("set") &&
+        call.args.includes("tools.profile"),
+    );
+
+    expect(toolsProfileSetCalls.length).toBeGreaterThan(0);
+    const lastArgs = toolsProfileSetCalls.at(-1)?.args ?? [];
+    expect(lastArgs).toEqual(
+      expect.arrayContaining(["--profile", "dench", "config", "set", "tools.profile", "full"]),
+    );
+    expect(lastArgs).not.toContain("messaging");
+  });
+
+  it("reapplies tools.profile full on repeated bootstrap runs (setup/restart safety)", async () => {
+    const runtime: RuntimeEnv = {
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: vi.fn(),
+    };
+
+    await bootstrapCommand(
+      {
+        nonInteractive: true,
+        noOpen: true,
+        skipUpdate: true,
+      },
+      runtime,
+    );
+    await bootstrapCommand(
+      {
+        nonInteractive: true,
+        noOpen: true,
+        skipUpdate: true,
+      },
+      runtime,
+    );
+
+    const toolsProfileSetCalls = spawnCalls.filter(
+      (call) =>
+        call.command === "openclaw" &&
+        call.args.includes("config") &&
+        call.args.includes("set") &&
+        call.args.includes("tools.profile"),
+    );
+
+    expect(toolsProfileSetCalls).toHaveLength(2);
+    for (const call of toolsProfileSetCalls) {
+      expect(call.args).toEqual(
+        expect.arrayContaining(["--profile", "dench", "config", "set", "tools.profile", "full"]),
+      );
+    }
   });
 
   it("keeps CRM in managed skills even when workspace path is custom", async () => {
@@ -641,8 +714,8 @@ describe("bootstrapCommand always-onboard behavior", () => {
         gateway: { mode: "local" },
       }),
     );
-    const managedSkill = path.join(stateDir, "skills", "crm", "SKILL.md");
-    const workspaceSkill = path.join(customWorkspace, "skills", "crm", "SKILL.md");
+    const managedWorkspaceSkill = path.join(stateDir, "workspace", "skills", "crm", "SKILL.md");
+    const customWorkspaceSkill = path.join(customWorkspace, "skills", "crm", "SKILL.md");
 
     await bootstrapCommand(
       {
@@ -653,10 +726,8 @@ describe("bootstrapCommand always-onboard behavior", () => {
       runtime,
     );
 
-    expect(existsSync(managedSkill)).toBe(true);
-    expect(existsSync(workspaceSkill)).toBe(false);
-    const managedWorkspaceSkill = path.join(stateDir, "workspace", "skills", "crm", "SKILL.md");
     expect(existsSync(managedWorkspaceSkill)).toBe(true);
+    expect(existsSync(customWorkspaceSkill)).toBe(false);
   });
 
   it("uses inherited stdio for onboarding in interactive mode (shows wizard prompts)", async () => {
@@ -778,11 +849,21 @@ describe("bootstrapCommand always-onboard behavior", () => {
       (call) =>
         call.command === "openclaw" && call.args.includes("gateway") && call.args.includes("start"),
     );
+    const toolsProfileSetCall = spawnCalls.find(
+      (call) =>
+        call.command === "openclaw" &&
+        call.args.includes("config") &&
+        call.args.includes("set") &&
+        call.args.includes("tools.profile"),
+    );
 
     expect(doctorFixCalled).toBe(true);
     expect(gatewayStopCalled).toBe(true);
     expect(gatewayInstallCalled).toBe(true);
     expect(gatewayStartCalled).toBe(true);
+    expect(toolsProfileSetCall?.args).toEqual(
+      expect.arrayContaining(["--profile", "dench", "config", "set", "tools.profile", "full"]),
+    );
     expect(summary.gatewayReachable).toBe(true);
     expect(summary.gatewayAutoFix?.attempted).toBe(true);
     expect(summary.gatewayAutoFix?.recovered).toBe(true);
@@ -798,7 +879,7 @@ describe("bootstrapCommand always-onboard behavior", () => {
         }
         return createWebProfilesResponse({
           status: 200,
-          payload: { profiles: [], activeProfile: "ironclaw" },
+          payload: { profiles: [], activeProfile: "dench" },
         });
       }
       if (url.includes("127.0.0.1:3101/api/profiles")) {

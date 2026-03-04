@@ -13,16 +13,17 @@ import { theme } from "../terminal/theme.js";
 import { applyCliProfileEnv } from "./profile.js";
 import { seedWorkspaceFromAssets, type WorkspaceSeedResult } from "./workspace-seed.js";
 
-const DEFAULT_IRONCLAW_PROFILE = "ironclaw";
-const IRONCLAW_STATE_DIRNAME = ".openclaw-ironclaw";
+const DEFAULT_DENCHCLAW_PROFILE = "dench";
+const DENCHCLAW_STATE_DIRNAME = ".openclaw-dench";
 const DEFAULT_GATEWAY_PORT = 18789;
-const IRONCLAW_GATEWAY_PORT_START = 19001;
+const DENCHCLAW_GATEWAY_PORT_START = 19001;
 const MAX_PORT_SCAN_ATTEMPTS = 100;
 const DEFAULT_WEB_APP_PORT = 3100;
 const WEB_APP_PROBE_ATTEMPTS = 20;
 const WEB_APP_PROBE_DELAY_MS = 750;
 const DEFAULT_BOOTSTRAP_ROLLOUT_STAGE = "default";
 const DEFAULT_GATEWAY_LAUNCH_AGENT_LABEL = "ai.openclaw.gateway";
+const REQUIRED_TOOLS_PROFILE = "full";
 
 type BootstrapRolloutStage = "internal" | "beta" | "default";
 type BootstrapCheckStatus = "pass" | "warn" | "fail";
@@ -267,13 +268,13 @@ export function resolveBootstrapRolloutStage(
   env: NodeJS.ProcessEnv = process.env,
 ): BootstrapRolloutStage {
   return normalizeBootstrapRolloutStage(
-    env.IRONCLAW_BOOTSTRAP_ROLLOUT ?? env.OPENCLAW_BOOTSTRAP_ROLLOUT,
+    env.DENCHCLAW_BOOTSTRAP_ROLLOUT ?? env.OPENCLAW_BOOTSTRAP_ROLLOUT,
   );
 }
 
 export function isLegacyFallbackEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return (
-    isTruthyEnvValue(env.IRONCLAW_BOOTSTRAP_LEGACY_FALLBACK) ||
+    isTruthyEnvValue(env.DENCHCLAW_BOOTSTRAP_LEGACY_FALLBACK) ||
     isTruthyEnvValue(env.OPENCLAW_BOOTSTRAP_LEGACY_FALLBACK)
   );
 }
@@ -302,7 +303,7 @@ function firstNonEmptyLine(...values: Array<string | undefined>): string | undef
 function resolveProfileStateDir(profile: string, env: NodeJS.ProcessEnv = process.env): string {
   void profile;
   const home = resolveRequiredHomeDir(env, os.homedir);
-  return path.join(home, IRONCLAW_STATE_DIRNAME);
+  return path.join(home, DENCHCLAW_STATE_DIRNAME);
 }
 
 function resolveGatewayLaunchAgentLabel(profile: string): string {
@@ -374,6 +375,15 @@ async function ensureSubagentDefaults(openclawCommand: string, profile: string):
       errorMessage: `Failed to set ${key}=${value}.`,
     });
   }
+}
+
+async function ensureToolsProfile(openclawCommand: string, profile: string): Promise<void> {
+  await runOpenClawOrThrow({
+    openclawCommand,
+    args: ["--profile", profile, "config", "set", "tools.profile", REQUIRED_TOOLS_PROFILE],
+    timeoutMs: 10_000,
+    errorMessage: `Failed to set tools.profile=${REQUIRED_TOOLS_PROFILE}.`,
+  });
 }
 
 async function probeForWebApp(port: number): Promise<boolean> {
@@ -923,11 +933,11 @@ function remediationForGatewayFailure(
   if (normalized.includes("address already in use") || normalized.includes("eaddrinuse")) {
     return `Port ${port} is busy. The bootstrap will auto-assign an available port, or you can explicitly specify one with \`--gateway-port <port>\`.`;
   }
-  return `Run \`openclaw --profile ${profile} doctor --fix\` and retry \`ironclaw bootstrap --profile ${profile} --force-onboard\`.`;
+  return `Run \`openclaw --profile ${profile} doctor --fix\` and retry \`denchclaw bootstrap --profile ${profile} --force-onboard\`.`;
 }
 
 function remediationForWebUiFailure(port: number): string {
-  return `Web UI did not respond on ${port}. Ensure the apps/web directory exists and rerun with \`ironclaw bootstrap --web-port <port>\` if needed.`;
+  return `Web UI did not respond on ${port}. Ensure the apps/web directory exists and rerun with \`denchclaw bootstrap --web-port <port>\` if needed.`;
 }
 
 function describeWorkspaceSeedResult(result: WorkspaceSeedResult): string {
@@ -1077,15 +1087,15 @@ export function buildBootstrapDiagnostics(params: {
     );
   }
 
-  if (params.profile === DEFAULT_IRONCLAW_PROFILE) {
+  if (params.profile === DEFAULT_DENCHCLAW_PROFILE) {
     checks.push(createCheck("profile", "pass", `Profile pinned: ${params.profile}.`));
   } else {
     checks.push(
       createCheck(
         "profile",
         "fail",
-        `Ironclaw profile drift detected (${params.profile}).`,
-        `Ironclaw requires \`--profile ${DEFAULT_IRONCLAW_PROFILE}\`. Re-run bootstrap to repair environment defaults.`,
+        `DenchClaw profile drift detected (${params.profile}).`,
+        `DenchClaw requires \`--profile ${DEFAULT_DENCHCLAW_PROFILE}\`. Re-run bootstrap to repair environment defaults.`,
       ),
     );
   }
@@ -1118,7 +1128,7 @@ export function buildBootstrapDiagnostics(params: {
         "agent-auth",
         "fail",
         authCheck.detail,
-        `Run \`openclaw --profile ${DEFAULT_IRONCLAW_PROFILE} onboard --install-daemon\` to configure API keys.`,
+        `Run \`openclaw --profile ${DEFAULT_DENCHCLAW_PROFILE} onboard --install-daemon\` to configure API keys.`,
       ),
     );
   }
@@ -1136,7 +1146,7 @@ export function buildBootstrapDiagnostics(params: {
     );
   }
 
-  const expectedStateDir = resolveProfileStateDir(DEFAULT_IRONCLAW_PROFILE, env);
+  const expectedStateDir = resolveProfileStateDir(DEFAULT_DENCHCLAW_PROFILE, env);
   const usesPinnedStateDir = path.resolve(stateDir) === path.resolve(expectedStateDir);
   if (usesPinnedStateDir) {
     checks.push(createCheck("state-isolation", "pass", `State dir pinned: ${stateDir}.`));
@@ -1146,13 +1156,13 @@ export function buildBootstrapDiagnostics(params: {
         "state-isolation",
         "fail",
         `Unexpected state dir: ${stateDir}.`,
-        `Ironclaw requires \`${expectedStateDir}\`. Re-run bootstrap to restore pinned defaults.`,
+        `DenchClaw requires \`${expectedStateDir}\`. Re-run bootstrap to restore pinned defaults.`,
       ),
     );
   }
 
   const launchAgentLabel = resolveGatewayLaunchAgentLabel(params.profile);
-  const expectedLaunchAgentLabel = resolveGatewayLaunchAgentLabel(DEFAULT_IRONCLAW_PROFILE);
+  const expectedLaunchAgentLabel = resolveGatewayLaunchAgentLabel(DEFAULT_DENCHCLAW_PROFILE);
   if (launchAgentLabel === expectedLaunchAgentLabel) {
     checks.push(createCheck("daemon-label", "pass", `Gateway service label: ${launchAgentLabel}.`));
   } else {
@@ -1161,7 +1171,7 @@ export function buildBootstrapDiagnostics(params: {
         "daemon-label",
         "fail",
         `Gateway service label mismatch (${launchAgentLabel}).`,
-        `Ironclaw requires launch agent label ${expectedLaunchAgentLabel}.`,
+        `DenchClaw requires launch agent label ${expectedLaunchAgentLabel}.`,
       ),
     );
   }
@@ -1172,14 +1182,14 @@ export function buildBootstrapDiagnostics(params: {
       params.rolloutStage === "default" ? "pass" : "warn",
       `Bootstrap rollout stage: ${params.rolloutStage}${params.legacyFallbackEnabled ? " (legacy fallback enabled)" : ""}.`,
       params.rolloutStage === "beta"
-        ? "Enable beta cutover by setting IRONCLAW_BOOTSTRAP_BETA_OPT_IN=1."
+        ? "Enable beta cutover by setting DENCHCLAW_BOOTSTRAP_BETA_OPT_IN=1."
         : undefined,
     ),
   );
 
-  const migrationSuiteOk = isTruthyEnvValue(env.IRONCLAW_BOOTSTRAP_MIGRATION_SUITE_OK);
-  const onboardingE2EOk = isTruthyEnvValue(env.IRONCLAW_BOOTSTRAP_ONBOARDING_E2E_OK);
-  const enforceCutoverGates = isTruthyEnvValue(env.IRONCLAW_BOOTSTRAP_ENFORCE_SAFETY_GATES);
+  const migrationSuiteOk = isTruthyEnvValue(env.DENCHCLAW_BOOTSTRAP_MIGRATION_SUITE_OK);
+  const onboardingE2EOk = isTruthyEnvValue(env.DENCHCLAW_BOOTSTRAP_ONBOARDING_E2E_OK);
+  const enforceCutoverGates = isTruthyEnvValue(env.DENCHCLAW_BOOTSTRAP_ENFORCE_SAFETY_GATES);
   const cutoverGatePassed = migrationSuiteOk && onboardingE2EOk;
   checks.push(
     createCheck(
@@ -1188,7 +1198,7 @@ export function buildBootstrapDiagnostics(params: {
       `Cutover gate: migrationSuite=${migrationSuiteOk ? "pass" : "missing"}, onboardingE2E=${onboardingE2EOk ? "pass" : "missing"}.`,
       cutoverGatePassed
         ? undefined
-        : "Run migration contracts + onboarding E2E and set IRONCLAW_BOOTSTRAP_MIGRATION_SUITE_OK=1 and IRONCLAW_BOOTSTRAP_ONBOARDING_E2E_OK=1 before full cutover.",
+        : "Run migration contracts + onboarding E2E and set DENCHCLAW_BOOTSTRAP_MIGRATION_SUITE_OK=1 and DENCHCLAW_BOOTSTRAP_ONBOARDING_E2E_OK=1 before full cutover.",
     ),
   );
 
@@ -1297,14 +1307,14 @@ export async function bootstrapCommand(
   } else if (await isPortAvailable(DEFAULT_GATEWAY_PORT)) {
     gatewayPort = DEFAULT_GATEWAY_PORT;
   } else {
-    // Default port is taken, find an available one starting from Ironclaw range
+    // Default port is taken, find an available one starting from DenchClaw range
     const availablePort = await findAvailablePort(
-      IRONCLAW_GATEWAY_PORT_START,
+      DENCHCLAW_GATEWAY_PORT_START,
       MAX_PORT_SCAN_ATTEMPTS,
     );
     if (!availablePort) {
       throw new Error(
-        `Could not find an available gateway port between ${IRONCLAW_GATEWAY_PORT_START} and ${IRONCLAW_GATEWAY_PORT_START + MAX_PORT_SCAN_ATTEMPTS}. ` +
+        `Could not find an available gateway port between ${DENCHCLAW_GATEWAY_PORT_START} and ${DENCHCLAW_GATEWAY_PORT_START + MAX_PORT_SCAN_ATTEMPTS}. ` +
           `Please specify a port explicitly with --gateway-port.`,
       );
     }
@@ -1373,6 +1383,9 @@ export async function bootstrapCommand(
   // Persist the assigned port so all runtime clients (including web) resolve
   // the same gateway target on subsequent requests.
   await ensureGatewayPort(openclawCommand, profile, gatewayPort);
+  // DenchClaw requires the full tool profile; onboarding defaults can drift to
+  // messaging-only, so enforce this on every bootstrap run.
+  await ensureToolsProfile(openclawCommand, profile);
 
   await ensureSubagentDefaults(openclawCommand, profile);
 
@@ -1476,7 +1489,7 @@ export async function bootstrapCommand(
     }
     logBootstrapChecklist(diagnostics, runtime);
     runtime.log("");
-    runtime.log(theme.heading("IronClaw ready"));
+    runtime.log(theme.heading("DenchClaw ready"));
     runtime.log(`Profile: ${profile}`);
     runtime.log(`OpenClaw CLI: ${installResult.version ?? "detected"}`);
     runtime.log(`Gateway: ${gatewayProbe.ok ? "reachable" : "check failed"}`);
