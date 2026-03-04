@@ -192,9 +192,7 @@ export function DataTable<TData, TValue>({
 	const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(initialColumnVisibility ?? {});
 	// Sync column visibility when the prop changes (e.g. loading a saved view)
 	useEffect(() => {
-		if (initialColumnVisibility) {
-			setColumnVisibility(initialColumnVisibility);
-		}
+		setColumnVisibility(initialColumnVisibility ?? {});
 	}, [initialColumnVisibility]);
 	const [internalRowSelection, setInternalRowSelection] = useState<Record<string, boolean>>({});
 	const [showColumnsMenu, setShowColumnsMenu] = useState(false);

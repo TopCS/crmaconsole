@@ -180,6 +180,7 @@ function EditableCell({
 	members,
 	relationLabels,
 	onNavigate,
+	onLocalValueChange,
 	onSaved,
 }: {
 	value: unknown;
@@ -190,6 +191,7 @@ function EditableCell({
 	members?: Array<{ id: string; name: string }>;
 	relationLabels?: Record<string, Record<string, string>>;
 	onNavigate?: (objectName: string) => void;
+	onLocalValueChange?: (value: string) => void;
 	onSaved?: () => void;
 }) {
 	const [editing, setEditing] = useState(false);
@@ -212,6 +214,7 @@ function EditableCell({
 	const isRelation = field.type === "relation" && !!field.related_object_name;
 
 	const save = useCallback(async (val: string) => {
+		onLocalValueChange?.(val);
 		try {
 			await fetch(`/api/workspace/objects/${encodeURIComponent(objectName)}/entries/${encodeURIComponent(entryId)}`, {
 				method: "PATCH",
@@ -220,7 +223,7 @@ function EditableCell({
 			});
 			onSaved?.();
 		} catch { /* ignore */ }
-	}, [objectName, entryId, fieldName, onSaved]);
+	}, [objectName, entryId, fieldName, onLocalValueChange, onSaved]);
 
 	const handleChange = (val: string) => {
 		setLocalValue(val);
@@ -385,6 +388,25 @@ export function ObjectTable({
 }: ObjectTableProps) {
 	const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
 	const [showAddModal, setShowAddModal] = useState(false);
+	const [localEntries, setLocalEntries] = useState<EntryRow[]>(entries as EntryRow[]);
+
+	// Keep local rows aligned with server-paginated updates.
+	useEffect(() => {
+		setLocalEntries(entries as EntryRow[]);
+	}, [entries]);
+
+	const updateLocalEntryField = useCallback((entryId: string, fieldName: string, value: string) => {
+		setLocalEntries((prev) =>
+			prev.map((entry) => {
+				const eid = entry.entry_id;
+				const currentEntryId = String(
+					eid != null && typeof eid === "object" ? JSON.stringify(eid) : (eid ?? ""),
+				);
+				if (currentEntryId !== entryId) {return entry;}
+				return { ...entry, [fieldName]: value };
+			}),
+		);
+	}, []);
 
 	const activeReverseRelations = useMemo(() => {
 		if (!reverseRelations) {return [];}
@@ -440,6 +462,7 @@ export function ObjectTable({
 						members={members}
 						relationLabels={relationLabels}
 						onNavigate={onNavigateToObject}
+						onLocalValueChange={(value) => updateLocalEntryField(entryId, field.name, value)}
 						onSaved={onRefresh}
 					/>
 				);
@@ -485,7 +508,7 @@ export function ObjectTable({
 	const handleBulkDelete = useCallback(async () => {
 		const selectedIds = Object.keys(rowSelection)
 			.filter((k) => rowSelection[k])
-			.map((idx) => safeString(entries[Number(idx)]?.entry_id))
+			.map((idx) => safeString(localEntries[Number(idx)]?.entry_id))
 			.filter(Boolean);
 
 		if (selectedIds.length === 0) {return;}
@@ -500,7 +523,7 @@ export function ObjectTable({
 			setRowSelection({});
 			onRefresh?.();
 		} catch { /* ignore */ }
-	}, [rowSelection, entries, objectName, onRefresh]);
+	}, [rowSelection, localEntries, objectName, onRefresh]);
 
 	// Single delete handler
 	const handleDeleteEntry = useCallback(async (entry: EntryRow) => {
@@ -574,7 +597,7 @@ export function ObjectTable({
 	<>
 		<DataTable
 			columns={columns}
-			data={entries as EntryRow[]}
+			data={localEntries}
 			enableSorting
 			enableGlobalFilter
 			enableRowSelection

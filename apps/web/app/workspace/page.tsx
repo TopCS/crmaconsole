@@ -2223,6 +2223,10 @@ function ObjectView({
   const [serverSearch, setServerSearch] = useState("");
   const [sortRules, _setSortRules] = useState<SortRule[] | undefined>(undefined);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasActiveServerQuery =
+    filters.rules.length > 0 ||
+    ((sortRules?.length ?? 0) > 0) ||
+    serverSearch.trim().length > 0;
 
   // Column visibility: maps field IDs to boolean (false = hidden)
   const [viewColumns, setViewColumns] = useState<string[] | undefined>(undefined);
@@ -2279,10 +2283,16 @@ function ObjectView({
     }
   }, [serverPage, serverPageSize, filters, sortRules, serverSearch, data.object.name]);
 
-  // Sync initial data from props (when parent refreshes via SSE)
+  // Sync incoming object data. If a server query is active (filters/search/sort),
+  // re-fetch with the active query instead of showing unfiltered parent entries.
   useEffect(() => {
+    if (hasActiveServerQuery) {
+      void fetchEntries();
+      return;
+    }
     setEntries(data.entries);
     setTotalCount(data.totalCount ?? data.entries.length);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to parent data updates
   }, [data.entries, data.totalCount]);
 
   // Sync saved views when data changes (e.g. SSE refresh from AI editing .object.yaml)
