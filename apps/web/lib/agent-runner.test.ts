@@ -314,6 +314,7 @@ describe("agent-runner", () => {
 		it("falls back to config gateway port when env port is stale", async () => {
 			const MockWs = installMockWsModule();
 			delete process.env.DENCHCLAW_WEB_FORCE_LEGACY_STREAM;
+			process.env.OPENCLAW_HOME = "/tmp/__ironclaw_agent_runner_test_no_config";
 			process.env.OPENCLAW_GATEWAY_PORT = "19001";
 			MockWs.failOpenForUrls.add("ws://127.0.0.1:19001/");
 

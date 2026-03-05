@@ -2,6 +2,7 @@ import { defineConfig } from "tsdown";
 
 const env = {
   NODE_ENV: "production",
+  POSTHOG_KEY: process.env.POSTHOG_KEY || "",
 };
 
 export default defineConfig([

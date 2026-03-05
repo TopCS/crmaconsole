@@ -18,6 +18,8 @@
 set -euo pipefail
 
 PACKAGE_NAME="denchclaw"
+ALIAS_PACKAGE_NAME="dench"
+ALIAS_PACKAGE_DIR="packages/dench"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
@@ -230,6 +232,14 @@ if [[ "$SKIP_TESTS" != true ]] && [[ "$SKIP_BUILD" != true ]]; then
   pnpm test
 fi
 
+# ── telemetry ────────────────────────────────────────────────────────────────
+
+if [[ -z "${POSTHOG_KEY:-}" ]]; then
+  echo "warning: POSTHOG_KEY not set — telemetry will be disabled in this build"
+fi
+export POSTHOG_KEY="${POSTHOG_KEY:-}"
+export NEXT_PUBLIC_POSTHOG_KEY="${POSTHOG_KEY:-}"
+
 # ── build ────────────────────────────────────────────────────────────────────
 
 # The `prepack` script (triggered by `npm publish`) runs the DenchClaw build chain:
@@ -252,19 +262,40 @@ fi
 echo "publishing ${PACKAGE_NAME}@${VERSION}..."
 npm publish --access public --tag latest "${NPM_FLAGS[@]}"
 
+# ── publish alias package (dench → denchclaw) ────────────────────────────────
+
+ALIAS_DIR="${ROOT_DIR}/${ALIAS_PACKAGE_DIR}"
+if [[ -d "$ALIAS_DIR" ]]; then
+  # Pin the alias package version and its denchclaw dependency to this release.
+  node -e "
+    const fs = require('fs');
+    const pkg = JSON.parse(fs.readFileSync('${ALIAS_DIR}/package.json', 'utf-8'));
+    pkg.version = '${VERSION}';
+    pkg.dependencies.denchclaw = '^${VERSION}';
+    fs.writeFileSync('${ALIAS_DIR}/package.json', JSON.stringify(pkg, null, 2) + '\n');
+  "
+  echo "publishing ${ALIAS_PACKAGE_NAME}@${VERSION}..."
+  if (cd "$ALIAS_DIR" && npm publish --access public --tag latest "${NPM_FLAGS[@]}"); then
+    echo "published ${ALIAS_PACKAGE_NAME}@${VERSION}"
+  else
+    echo "warning: failed to publish ${ALIAS_PACKAGE_NAME}@${VERSION} (non-fatal)"
+    echo "         npx ${PACKAGE_NAME} still works; ${ALIAS_PACKAGE_NAME} alias is optional"
+  fi
+fi
+
 # Verify published npx flows for both CLI aliases.
 if [[ "$SKIP_NPX_SMOKE" != true ]]; then
   echo "verifying npx binaries..."
   verify_npx_command "$VERSION" "npx denchclaw" \
     npx --yes "${PACKAGE_NAME}@${VERSION}" --version
-  verify_npx_command "$VERSION" "npx dench" \
-    npx --yes --package "${PACKAGE_NAME}@${VERSION}" dench --version
+  verify_npx_command "$VERSION" "npx dench (via dench package)" \
+    npx --yes "${ALIAS_PACKAGE_NAME}@${VERSION}" --version
   verify_npx_invocation "npx dench update --help" \
-    npx --yes --package "${PACKAGE_NAME}@${VERSION}" dench update --help
+    npx --yes "${ALIAS_PACKAGE_NAME}@${VERSION}" update --help
   verify_npx_invocation "npx dench start --help" \
-    npx --yes --package "${PACKAGE_NAME}@${VERSION}" dench start --help
+    npx --yes "${ALIAS_PACKAGE_NAME}@${VERSION}" start --help
   verify_npx_invocation "npx dench stop --help" \
-    npx --yes --package "${PACKAGE_NAME}@${VERSION}" dench stop --help
+    npx --yes "${ALIAS_PACKAGE_NAME}@${VERSION}" stop --help
 fi
 
 # Verify the standalone web app was included in the published package.
@@ -277,5 +308,5 @@ if [[ ! -f "$STANDALONE_SERVER" ]]; then
 fi
 
 echo ""
-echo "published ${PACKAGE_NAME}@${VERSION}"
-echo "install:  npm i -g ${PACKAGE_NAME}"
+echo "published ${PACKAGE_NAME}@${VERSION} + ${ALIAS_PACKAGE_NAME}@${VERSION}"
+echo "install:  npm i -g ${PACKAGE_NAME}  (or: npm i -g ${ALIAS_PACKAGE_NAME})"
