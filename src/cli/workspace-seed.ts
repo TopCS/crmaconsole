@@ -124,7 +124,7 @@ Your browser automation behavior is defined by the Browser skill at:
 
 ## Links
 
-- Website: https://denchclaw.sh
+- Website: https://denchclaw.com
 - GitHub: https://github.com/DenchHQ/denchclaw
 - Skills Store: https://skills.sh
 

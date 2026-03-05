@@ -4,7 +4,7 @@ import {
   writeFileSync,
   readFileSync,
 } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import {
   discoverWorkspaces,
   setUIActiveWorkspace,
@@ -16,9 +16,13 @@ import {
   ensureAgentInConfig,
 } from "@/lib/workspace";
 import {
+  BOOTSTRAP_TEMPLATE_CONTENT,
+  type BootstrapTemplateName,
+} from "@/lib/workspace-bootstrap-templates";
+import {
   seedWorkspaceFromAssets,
   buildDenchClawIdentity,
-} from "@repo/cli/workspace-seed";
+} from "@/lib/workspace-seed";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -37,15 +41,8 @@ const BOOTSTRAP_FILENAMES = [
   "BOOTSTRAP.md",
 ] as const;
 
-const FALLBACK_CONTENT: Record<string, string> = {
-  "AGENTS.md": "# AGENTS.md - Your Workspace\n\nThis folder is home. Treat it that way.\n",
-  "SOUL.md": "# SOUL.md - Who You Are\n\nDescribe the personality and behavior of your agent here.\n",
-  "TOOLS.md": "# TOOLS.md - Local Notes\n\nSkills define how tools work. This file is for your specifics.\n",
-  "IDENTITY.md": "# IDENTITY.md - Who Am I?\n\nFill this in during your first conversation.\n",
-  "USER.md": "# USER.md - About Your Human\n\nDescribe yourself and how you'd like the agent to interact with you.\n",
-  "HEARTBEAT.md": "# HEARTBEAT.md\n\n# Keep this file empty (or with only comments) to skip heartbeat API calls.\n",
-  "BOOTSTRAP.md": "# BOOTSTRAP.md - Hello, World\n\nYou just woke up. Time to figure out who you are.\n",
-};
+const ROOT_MARKER = join("assets", "seed", "workspace.duckdb");
+const TEMPLATE_DIR = join("assets", "seed", "templates");
 
 const WORKSPACE_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 
@@ -62,22 +59,24 @@ function stripFrontMatter(content: string): string {
 
 /** Try multiple candidate paths to find the monorepo root. */
 function resolveProjectRoot(): string | null {
-  const marker = join("docs", "reference", "templates", "AGENTS.md");
-  const cwd = process.cwd();
-
-  // CWD is the repo root (standalone builds)
-  if (existsSync(join(cwd, marker))) {return cwd;}
-
-  // CWD is apps/web/ (dev mode)
-  const fromApps = resolve(cwd, "..", "..");
-  if (existsSync(join(fromApps, marker))) {return fromApps;}
+  let dir = process.cwd();
+  for (let index = 0; index < 10; index += 1) {
+    if (existsSync(join(dir, "package.json")) && existsSync(join(dir, ROOT_MARKER))) {
+      return dir;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
 
   return null;
 }
 
 function loadTemplateContent(filename: string, projectRoot: string | null): string {
   if (projectRoot) {
-    const templatePath = join(projectRoot, "docs", "reference", "templates", filename);
+    const templatePath = join(projectRoot, TEMPLATE_DIR, filename);
     try {
       const raw = readFileSync(templatePath, "utf-8");
       return stripFrontMatter(raw);
@@ -85,7 +84,7 @@ function loadTemplateContent(filename: string, projectRoot: string | null): stri
       // fall through to fallback
     }
   }
-  return FALLBACK_CONTENT[filename] ?? "";
+  return BOOTSTRAP_TEMPLATE_CONTENT[filename as BootstrapTemplateName] ?? "";
 }
 
 // ---------------------------------------------------------------------------

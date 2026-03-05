@@ -591,13 +591,13 @@ export function WorkspaceSidebar({
 				style={{ borderColor: "var(--color-border)" }}
 			>
 				<a
-					href="https://denchclaw.sh"
+					href="https://denchclaw.com"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm"
 					style={{ color: "var(--color-text-muted)" }}
 				>
-					denchclaw.sh
+					denchclaw.com
 				</a>
 				<div className="flex items-center gap-0.5">
 					{onToggleHidden && (

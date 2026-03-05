@@ -13,19 +13,19 @@ describe("normalizeWindowsArgv", () => {
 
   it("removes duplicated node executable arguments on windows", () => {
     const execPath = "C:\\Program Files\\nodejs\\node.exe";
-    const argv = ["node", execPath, "C:\\repo\\openclaw.mjs", execPath, "status"];
+    const argv = ["node", execPath, "C:\\repo\\denchclaw.mjs", execPath, "status"];
 
     expect(
       normalizeWindowsArgv(argv, {
         platform: "win32",
         execPath,
       }),
-    ).toEqual(["node", "C:\\repo\\openclaw.mjs", "status"]);
+    ).toEqual(["node", "C:\\repo\\denchclaw.mjs", "status"]);
   });
 
   it("strips control chars and wrapping quotes before exec-path matching", () => {
     const execPath = "C:\\Program Files\\nodejs\\node.exe";
-    const argv = ["node", `"\u0000${execPath}\u0000"`, "C:\\repo\\openclaw.mjs", "status"];
+    const argv = ["node", `"\u0000${execPath}\u0000"`, "C:\\repo\\denchclaw.mjs", "status"];
 
     expect(
       normalizeWindowsArgv(argv, {
@@ -33,6 +33,6 @@ describe("normalizeWindowsArgv", () => {
         execPath,
         existsSync: () => true,
       }),
-    ).toEqual(["node", "C:\\repo\\openclaw.mjs", "status"]);
+    ).toEqual(["node", "C:\\repo\\denchclaw.mjs", "status"]);
   });
 });

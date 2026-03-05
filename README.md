@@ -24,7 +24,7 @@
 </p>
 
 <p align="center">
-  <a href="https://denchclaw.sh">Website</a> · <a href="https://docs.openclaw.ai">Docs</a> · <a href="https://github.com/openclaw/openclaw">OpenClaw Framework</a> · <a href="https://discord.gg/clawd">Discord</a> · <a href="https://clawhub.com">Skills Store</a>
+  <a href="https://denchclaw.com">Website</a> · <a href="https://docs.openclaw.ai">Docs</a> · <a href="https://github.com/openclaw/openclaw">OpenClaw Framework</a> · <a href="https://discord.gg/clawd">Discord</a> · <a href="https://clawhub.com">Skills Store</a>
 </p>
 
 ---

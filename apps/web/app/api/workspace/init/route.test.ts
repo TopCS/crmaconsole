@@ -112,7 +112,8 @@ describe("POST /api/workspace/init", () => {
     const workspaceDir = join(STATE_DIR, "workspace-work");
     vi.mocked(existsSync).mockImplementation((p) => {
       const s = String(p);
-      if (s.endsWith("docs/reference/templates/AGENTS.md")) {return true;}
+      if (s.endsWith("package.json")) {return true;}
+      if (s.endsWith("assets/seed/workspace.duckdb")) {return true;}
       if (s.endsWith("skills/crm/SKILL.md")) {return true;}
       return false;
     });
@@ -143,7 +144,8 @@ describe("POST /api/workspace/init", () => {
 
     vi.mocked(existsSync).mockImplementation((p) => {
       const s = String(p);
-      if (s.endsWith("docs/reference/templates/AGENTS.md")) {return true;}
+      if (s.endsWith("package.json")) {return true;}
+      if (s.endsWith("assets/seed/workspace.duckdb")) {return true;}
       return false;
     });
 

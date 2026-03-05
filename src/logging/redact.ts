@@ -1,4 +1,4 @@
-import type { LoggingConfig } from "../config/types.base.js";
+import type { LoggingConfig } from "./config.js";
 
 function resolveNodeRequire(): ((id: string) => NodeJS.Require) | null {
   const getBuiltinModule = (

@@ -1,7 +1,15 @@
 import fs from "node:fs";
 import json5 from "json5";
 import { resolveConfigPath } from "../config/paths.js";
-import type { LoggingConfig } from "../config/types.base.js";
+
+export type LoggingConfig = {
+  level?: "silent" | "fatal" | "error" | "warn" | "info" | "debug" | "trace";
+  file?: string;
+  consoleLevel?: "silent" | "fatal" | "error" | "warn" | "info" | "debug" | "trace";
+  consoleStyle?: "pretty" | "compact" | "json";
+  redactSensitive?: "off" | "tools";
+  redactPatterns?: string[];
+};
 
 type LoggingConfigOrUndefined = LoggingConfig | undefined;
 

@@ -1,9 +1,0 @@
-{
-  "id": "denchclaw-auth",
-  "providers": ["denchclaw"],
-  "configSchema": {
-    "type": "object",
-    "additionalProperties": false,
-    "properties": {}
-  }
-}
