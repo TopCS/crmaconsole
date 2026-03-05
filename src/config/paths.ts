@@ -199,6 +199,7 @@ export function resolveDefaultConfigCandidates(
 }
 
 export const DEFAULT_GATEWAY_PORT = 18789;
+export const DENCHCLAW_DEFAULT_GATEWAY_PORT = 19001;
 
 /**
  * Gateway lock directory (ephemeral).
@@ -254,6 +255,10 @@ export function resolveGatewayPort(
     if (configPort > 0) {
       return configPort;
     }
+  }
+  const profile = env.OPENCLAW_PROFILE?.trim();
+  if (profile === "dench") {
+    return DENCHCLAW_DEFAULT_GATEWAY_PORT;
   }
   return DEFAULT_GATEWAY_PORT;
 }

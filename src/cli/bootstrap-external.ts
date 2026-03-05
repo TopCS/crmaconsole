@@ -1,5 +1,5 @@
 import { spawn, type StdioOptions } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { confirm, isCancel, spinner } from "@clack/prompts";
@@ -20,7 +20,6 @@ import {
 import { seedWorkspaceFromAssets, type WorkspaceSeedResult } from "./workspace-seed.js";
 
 const DEFAULT_DENCHCLAW_PROFILE = "dench";
-const DEFAULT_GATEWAY_PORT = 18789;
 const DENCHCLAW_GATEWAY_PORT_START = 19001;
 const MAX_PORT_SCAN_ATTEMPTS = 100;
 const DEFAULT_BOOTSTRAP_ROLLOUT_STAGE = "default";
@@ -44,7 +43,8 @@ export type BootstrapCheck = {
     | "state-isolation"
     | "daemon-label"
     | "rollout-stage"
-    | "cutover-gates";
+    | "cutover-gates"
+    | "posthog-analytics";
   status: BootstrapCheckStatus;
   detail: string;
   remediation?: string;
@@ -303,6 +303,37 @@ async function findAvailablePort(
   return undefined;
 }
 
+/**
+ * Port 18789 belongs to the host OpenClaw installation.  A persisted config
+ * that drifted to that value (e.g. bootstrap ran while OpenClaw was down)
+ * must be rejected to prevent service hijack on launchd restart.
+ */
+export function isPersistedPortAcceptable(port: number | undefined): port is number {
+  return typeof port === "number" && port > 0 && port !== 18789;
+}
+
+export function readExistingGatewayPort(stateDir: string): number | undefined {
+  for (const name of ["openclaw.json", "config.json"]) {
+    try {
+      const raw = JSON.parse(readFileSync(path.join(stateDir, name), "utf-8")) as {
+        gateway?: { port?: unknown };
+      };
+      const port =
+        typeof raw.gateway?.port === "number"
+          ? raw.gateway.port
+          : typeof raw.gateway?.port === "string"
+            ? Number.parseInt(raw.gateway.port, 10)
+            : undefined;
+      if (typeof port === "number" && Number.isFinite(port) && port > 0) {
+        return port;
+      }
+    } catch {
+      // Config file missing or malformed — try next candidate.
+    }
+  }
+  return undefined;
+}
+
 function normalizeBootstrapRolloutStage(raw: string | undefined): BootstrapRolloutStage {
   const normalized = raw?.trim().toLowerCase();
   if (normalized === "internal" || normalized === "beta" || normalized === "default") {
@@ -353,6 +384,48 @@ function resolveGatewayLaunchAgentLabel(profile: string): string {
     return DEFAULT_GATEWAY_LAUNCH_AGENT_LABEL;
   }
   return `ai.openclaw.${normalized}`;
+}
+
+async function installBundledPlugins(params: {
+  openclawCommand: string;
+  profile: string;
+  stateDir: string;
+  posthogKey: string;
+}): Promise<boolean> {
+  try {
+    const pluginSrc = path.join(resolveCliPackageRoot(), "extensions", "posthog-analytics");
+    if (!existsSync(pluginSrc)) return false;
+
+    const pluginDest = path.join(params.stateDir, "extensions", "posthog-analytics");
+    mkdirSync(path.dirname(pluginDest), { recursive: true });
+    cpSync(pluginSrc, pluginDest, { recursive: true, force: true });
+
+    if (params.posthogKey) {
+      await runOpenClawOrThrow({
+        openclawCommand: params.openclawCommand,
+        args: [
+          "--profile", params.profile,
+          "config", "set",
+          "plugins.entries.posthog-analytics.enabled", "true",
+        ],
+        timeoutMs: 30_000,
+        errorMessage: "Failed to enable posthog-analytics plugin.",
+      });
+      await runOpenClawOrThrow({
+        openclawCommand: params.openclawCommand,
+        args: [
+          "--profile", params.profile,
+          "config", "set",
+          "plugins.entries.posthog-analytics.config.apiKey", params.posthogKey,
+        ],
+        timeoutMs: 30_000,
+        errorMessage: "Failed to set posthog-analytics API key.",
+      });
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function ensureGatewayModeLocal(openclawCommand: string, profile: string): Promise<void> {
@@ -1257,6 +1330,7 @@ export function buildBootstrapDiagnostics(params: {
   legacyFallbackEnabled: boolean;
   stateDir?: string;
   env?: NodeJS.ProcessEnv;
+  posthogPluginInstalled?: boolean;
 }): BootstrapDiagnostics {
   const env = params.env ?? process.env;
   const checks: BootstrapCheck[] = [];
@@ -1395,6 +1469,18 @@ export function buildBootstrapDiagnostics(params: {
     ),
   );
 
+  if (params.posthogPluginInstalled != null) {
+    checks.push(
+      createCheck(
+        "posthog-analytics",
+        params.posthogPluginInstalled ? "pass" : "warn",
+        params.posthogPluginInstalled
+          ? "PostHog analytics plugin installed."
+          : "PostHog analytics plugin not installed (POSTHOG_KEY missing or extension not bundled).",
+      ),
+    );
+  }
+
   return {
     rolloutStage: params.rolloutStage,
     legacyFallbackEnabled: params.legacyFallbackEnabled,
@@ -1528,35 +1614,45 @@ export async function bootstrapCommand(
     });
   }
 
-  // Determine gateway port: use explicit override, or find available port
+  // Determine gateway port: use explicit override, honour previously persisted
+  // port, or find an available one in the DenchClaw range (19001+).
+  // NEVER claim OpenClaw's default port (18789) — that belongs to the host
+  // OpenClaw installation and sharing it causes port-hijack on restart.
   const explicitPort = parseOptionalPort(opts.gatewayPort);
   let gatewayPort: number;
   let portAutoAssigned = false;
 
   if (explicitPort) {
     gatewayPort = explicitPort;
-  } else if (await isPortAvailable(DEFAULT_GATEWAY_PORT)) {
-    gatewayPort = DEFAULT_GATEWAY_PORT;
   } else {
-    // Default port is taken, find an available one starting from DenchClaw range
-    const availablePort = await findAvailablePort(
-      DENCHCLAW_GATEWAY_PORT_START,
-      MAX_PORT_SCAN_ATTEMPTS,
-    );
-    if (!availablePort) {
-      throw new Error(
-        `Could not find an available gateway port between ${DENCHCLAW_GATEWAY_PORT_START} and ${DENCHCLAW_GATEWAY_PORT_START + MAX_PORT_SCAN_ATTEMPTS}. ` +
-          `Please specify a port explicitly with --gateway-port.`,
+    const existingPort = readExistingGatewayPort(stateDir);
+    if (
+      isPersistedPortAcceptable(existingPort) &&
+      (await isPortAvailable(existingPort))
+    ) {
+      gatewayPort = existingPort;
+    } else if (await isPortAvailable(DENCHCLAW_GATEWAY_PORT_START)) {
+      gatewayPort = DENCHCLAW_GATEWAY_PORT_START;
+    } else {
+      const availablePort = await findAvailablePort(
+        DENCHCLAW_GATEWAY_PORT_START + 1,
+        MAX_PORT_SCAN_ATTEMPTS,
       );
+      if (!availablePort) {
+        throw new Error(
+          `Could not find an available gateway port between ${DENCHCLAW_GATEWAY_PORT_START} and ${DENCHCLAW_GATEWAY_PORT_START + MAX_PORT_SCAN_ATTEMPTS}. ` +
+            `Please specify a port explicitly with --gateway-port.`,
+        );
+      }
+      gatewayPort = availablePort;
+      portAutoAssigned = true;
     }
-    gatewayPort = availablePort;
-    portAutoAssigned = true;
   }
 
   if (portAutoAssigned && !opts.json) {
     runtime.log(
       theme.muted(
-        `Default gateway port ${DEFAULT_GATEWAY_PORT} is in use. Using auto-assigned port ${gatewayPort}.`,
+        `Default gateway port ${DENCHCLAW_GATEWAY_PORT_START} is in use. Using auto-assigned port ${gatewayPort}.`,
       ),
     );
   }
@@ -1604,6 +1700,13 @@ export async function bootstrapCommand(
   const workspaceSeed = seedWorkspaceFromAssets({
     workspaceDir,
     packageRoot,
+  });
+
+  const posthogPluginInstalled = await installBundledPlugins({
+    openclawCommand,
+    profile,
+    stateDir,
+    posthogKey: process.env.POSTHOG_KEY || "",
   });
 
   const postOnboardSpinner = !opts.json ? spinner() : null;
@@ -1674,6 +1777,7 @@ export async function bootstrapCommand(
     rolloutStage,
     legacyFallbackEnabled,
     stateDir,
+    posthogPluginInstalled,
   });
 
   const shouldOpen = !opts.noOpen && !opts.json;
