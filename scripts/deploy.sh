@@ -264,6 +264,7 @@ npm publish --access public --tag latest "${NPM_FLAGS[@]}"
 
 # ── publish alias package (dench → denchclaw) ────────────────────────────────
 
+ALIAS_PUBLISHED=false
 ALIAS_DIR="${ROOT_DIR}/${ALIAS_PACKAGE_DIR}"
 if [[ -d "$ALIAS_DIR" ]]; then
   # Pin the alias package version and its denchclaw dependency to this release.
@@ -275,7 +276,8 @@ if [[ -d "$ALIAS_DIR" ]]; then
     fs.writeFileSync('${ALIAS_DIR}/package.json', JSON.stringify(pkg, null, 2) + '\n');
   "
   echo "publishing ${ALIAS_PACKAGE_NAME}@${VERSION}..."
-  if (cd "$ALIAS_DIR" && npm publish --access public --tag latest "${NPM_FLAGS[@]}"); then
+  if (cd "$ALIAS_DIR" && npm publish --access public --tag latest "${NPM_FLAGS[@]}" 2>/dev/null); then
+    ALIAS_PUBLISHED=true
     echo "published ${ALIAS_PACKAGE_NAME}@${VERSION}"
   else
     echo "warning: failed to publish ${ALIAS_PACKAGE_NAME}@${VERSION} (non-fatal)"
@@ -288,14 +290,16 @@ if [[ "$SKIP_NPX_SMOKE" != true ]]; then
   echo "verifying npx binaries..."
   verify_npx_command "$VERSION" "npx denchclaw" \
     npx --yes "${PACKAGE_NAME}@${VERSION}" --version
-  verify_npx_command "$VERSION" "npx dench (via dench package)" \
-    npx --yes "${ALIAS_PACKAGE_NAME}@${VERSION}" --version
+  if [[ "$ALIAS_PUBLISHED" == true ]]; then
+    verify_npx_command "$VERSION" "npx dench (via dench package)" \
+      npx --yes "${ALIAS_PACKAGE_NAME}@${VERSION}" --version
+  fi
   verify_npx_invocation "npx denchclaw update --help" \
-    npx --yes "${ALIAS_PACKAGE_NAME}@${VERSION}" update --help
+    npx --yes "${PACKAGE_NAME}@${VERSION}" update --help
   verify_npx_invocation "npx denchclaw start --help" \
-    npx --yes "${ALIAS_PACKAGE_NAME}@${VERSION}" start --help
+    npx --yes "${PACKAGE_NAME}@${VERSION}" start --help
   verify_npx_invocation "npx denchclaw stop --help" \
-    npx --yes "${ALIAS_PACKAGE_NAME}@${VERSION}" stop --help
+    npx --yes "${PACKAGE_NAME}@${VERSION}" stop --help
 fi
 
 # Verify the standalone web app was included in the published package.
@@ -308,5 +312,10 @@ if [[ ! -f "$STANDALONE_SERVER" ]]; then
 fi
 
 echo ""
-echo "published ${PACKAGE_NAME}@${VERSION} + ${ALIAS_PACKAGE_NAME}@${VERSION}"
-echo "install:  npm i -g ${PACKAGE_NAME}  (or: npm i -g ${ALIAS_PACKAGE_NAME})"
+if [[ "$ALIAS_PUBLISHED" == true ]]; then
+  echo "published ${PACKAGE_NAME}@${VERSION} + ${ALIAS_PACKAGE_NAME}@${VERSION}"
+  echo "install:  npm i -g ${PACKAGE_NAME}  (or: npm i -g ${ALIAS_PACKAGE_NAME})"
+else
+  echo "published ${PACKAGE_NAME}@${VERSION}"
+  echo "install:  npm i -g ${PACKAGE_NAME}"
+fi
