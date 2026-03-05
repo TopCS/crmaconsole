@@ -6,6 +6,7 @@ import {
   setUIActiveWorkspace,
   setDefaultAgentInConfig,
 } from "@/lib/workspace";
+import { trackServer } from "@/lib/telemetry";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,6 +48,7 @@ export async function POST(req: Request) {
 
   setUIActiveWorkspace(requestedWorkspace);
   setDefaultAgentInConfig(requestedWorkspace);
+  trackServer("workspace_switched");
   const activeWorkspace = getActiveWorkspaceName();
   const selected = discoverWorkspaces().find((workspace) => workspace.name === activeWorkspace) ?? null;
   return Response.json({

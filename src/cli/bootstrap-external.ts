@@ -5,6 +5,8 @@ import process from "node:process";
 import { confirm, isCancel, spinner } from "@clack/prompts";
 import { isTruthyEnvValue } from "../infra/env.js";
 import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
+import { readTelemetryConfig, markNoticeShown } from "../telemetry/config.js";
+import { track } from "../telemetry/telemetry.js";
 import { stylePromptMessage } from "../terminal/prompt-style.js";
 import { theme } from "../terminal/theme.js";
 import { VERSION } from "../version.js";
@@ -1475,6 +1477,26 @@ export async function bootstrapCommand(
     runtime.log(theme.warn(appliedProfile.warning));
   }
 
+  const bootstrapStartTime = Date.now();
+  track("cli_bootstrap_started", { version: VERSION });
+
+  if (!opts.json) {
+    const telemetryCfg = readTelemetryConfig();
+    if (!telemetryCfg.noticeShown) {
+      runtime.log(
+        theme.muted(
+          "DenchClaw collects anonymous telemetry to improve the product.\n" +
+            "No personal data is ever collected. Disable anytime:\n" +
+            "  denchclaw telemetry disable\n" +
+            "  DENCHCLAW_TELEMETRY_DISABLED=1\n" +
+            "  DO_NOT_TRACK=1\n" +
+            "Learn more: https://github.com/openclaw/openclaw/blob/main/TELEMETRY.md\n",
+        ),
+      );
+      markNoticeShown();
+    }
+  }
+
   const installResult = await ensureOpenClawCliAvailable({
     stateDir,
     showProgress: !opts.json,
@@ -1743,6 +1765,14 @@ export async function bootstrapCommand(
     webOpened: opened,
     diagnostics,
   };
+  track("cli_bootstrap_completed", {
+    duration_ms: Date.now() - bootstrapStartTime,
+    workspace_created: Boolean(workspaceSeed),
+    gateway_reachable: gatewayProbe.ok,
+    web_reachable: webReachable,
+    version: VERSION,
+  });
+
   if (opts.json) {
     runtime.log(JSON.stringify(summary, null, 2));
   }

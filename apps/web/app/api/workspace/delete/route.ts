@@ -5,6 +5,7 @@ import {
   resolveWorkspaceRoot,
   setUIActiveWorkspace,
 } from "@/lib/workspace";
+import { trackServer } from "@/lib/telemetry";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -57,6 +58,8 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
+
+  trackServer("workspace_deleted");
 
   const remaining = discoverWorkspaces();
   const previousActive = getActiveWorkspaceName();

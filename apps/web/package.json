@@ -53,6 +53,7 @@
     "monaco-editor": "^0.55.1",
     "next": "^15.3.3",
     "posthog-js": "^1.358.1",
+    "posthog-node": "^5.27.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",

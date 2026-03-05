@@ -23,6 +23,7 @@ import {
   seedWorkspaceFromAssets,
   buildDenchClawIdentity,
 } from "@/lib/workspace-seed";
+import { trackServer } from "@/lib/telemetry";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -206,6 +207,8 @@ export async function POST(req: Request) {
   // Switch the UI to the new workspace.
   setUIActiveWorkspace(workspaceName);
   const activeWorkspace = getActiveWorkspaceName();
+
+  trackServer("workspace_created", { has_seed: seedBootstrap });
 
   return Response.json({
     workspace: workspaceName,

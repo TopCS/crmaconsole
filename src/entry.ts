@@ -106,6 +106,7 @@ if (!ensureExperimentalWarningSuppressed()) {
 
   import("./cli/run-main.js")
     .then(({ runCli }) => runCli(process.argv))
+    .then(() => import("./telemetry/telemetry.js").then(({ shutdownTelemetry }) => shutdownTelemetry()))
     .catch((error) => {
       console.error(
         "[denchclaw] Failed to start CLI:",

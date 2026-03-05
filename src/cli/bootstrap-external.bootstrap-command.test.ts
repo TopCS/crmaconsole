@@ -36,6 +36,17 @@ vi.mock("node:child_process", async (importOriginal) => {
   };
 });
 
+vi.mock("./web-runtime.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./web-runtime.js")>();
+  return {
+    ...actual,
+    ensureManagedWebRuntime: async (params: { port: number }) => {
+      const result = await actual.probeWebRuntime(params.port);
+      return { ready: result.ok, reason: result.reason };
+    },
+  };
+});
+
 type SpawnCall = {
   command: string;
   args: string[];

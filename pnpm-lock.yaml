@@ -186,6 +186,9 @@ importers:
       posthog-js:
         specifier: ^1.358.1
         version: 1.358.1
+      posthog-node:
+        specifier: ^5.27.1
+        version: 5.27.1
       react:
         specifier: ^19.1.0
         version: 19.2.4

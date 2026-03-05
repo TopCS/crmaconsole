@@ -5,6 +5,7 @@
  * Works for both parent sessions (by sessionId) and subagent sessions (by sessionKey).
  */
 import { abortRun, getActiveRun } from "@/lib/active-runs";
+import { trackServer } from "@/lib/telemetry";
 
 export const runtime = "nodejs";
 
@@ -24,5 +25,8 @@ export async function POST(req: Request) {
 	const canAbort =
 		run?.status === "running" || run?.status === "waiting-for-subagents";
 	const aborted = canAbort ? abortRun(runKey) : false;
+	if (aborted) {
+		trackServer("chat_stopped");
+	}
 	return Response.json({ aborted });
 }

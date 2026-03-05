@@ -11,6 +11,7 @@ import {
 	reactivateSubscribeRun,
 	type SseEvent,
 } from "@/lib/active-runs";
+import { trackServer } from "@/lib/telemetry";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { resolveOpenClawStateDir } from "@/lib/workspace";
@@ -58,6 +59,11 @@ export async function POST(req: Request) {
 	if (!userText.trim()) {
 		return new Response("No message provided", { status: 400 });
 	}
+
+	trackServer("chat_message_sent", {
+		message_length: userText.length,
+		is_subagent: typeof sessionKey === "string" && sessionKey.includes(":subagent:"),
+	});
 
 	const isSubagentSession = typeof sessionKey === "string" && sessionKey.includes(":subagent:");
 
