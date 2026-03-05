@@ -1,6 +1,6 @@
 {
   "name": "denchclaw",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "AI-powered CRM platform with multi-channel agent gateway, DuckDB workspace, and knowledge management",
   "keywords": [],
   "homepage": "https://github.com/openclaw/openclaw#readme",
@@ -45,12 +45,16 @@
     "prepack": "pnpm build && pnpm web:build && pnpm web:prepack",
     "start": "node denchclaw.mjs",
     "test": "pnpm test:cli && pnpm --dir apps/web test",
-    "test:cli": "vitest run --config vitest.unit.config.ts src/cli/run-main.test.ts src/cli/bootstrap-external.test.ts src/cli/bootstrap-external.bootstrap-command.test.ts src/cli/workspace-seed.test.ts src/cli/web-runtime.test.ts src/cli/web-runtime-command.test.ts",
+    "test:cli": "vitest run --config vitest.unit.config.ts src/cli/run-main.test.ts src/cli/bootstrap-external.test.ts src/cli/bootstrap-external.bootstrap-command.test.ts src/cli/workspace-seed.test.ts src/cli/web-runtime.test.ts src/cli/web-runtime-command.test.ts src/cli/flatten-standalone-deps.test.ts",
     "test:web": "pnpm --dir apps/web test",
     "web:build": "pnpm --dir apps/web build",
     "web:dev": "pnpm --dir apps/web dev",
     "web:install": "pnpm --dir apps/web install",
-    "web:prepack": "cp -r apps/web/public apps/web/.next/standalone/apps/web/public && cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static"
+    "web:prepack": "cp -r apps/web/public apps/web/.next/standalone/apps/web/public && cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static && node scripts/flatten-standalone-deps.mjs",
+    "deploy": "set -a && source .env && set +a && bash scripts/deploy.sh",
+    "deploy:major": "set -a && source .env && set +a && bash scripts/deploy.sh --bump major",
+    "deploy:minor": "set -a && source .env && set +a && bash scripts/deploy.sh --bump minor",
+    "deploy:patch": "set -a && source .env && set +a && bash scripts/deploy.sh --bump patch"
   },
   "dependencies": {
     "@clack/prompts": "^1.0.1",
