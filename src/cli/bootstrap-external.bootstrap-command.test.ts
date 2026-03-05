@@ -881,7 +881,8 @@ describe("bootstrapCommand always-onboard behavior", () => {
     expect(onboardCalls).toHaveLength(1);
     expect(onboardCalls[0]?.options?.stdio).toBe("inherit");
     expect(onboardCalls[0]?.args).not.toContain("--non-interactive");
-    expect(onboardCalls[0]?.args).not.toContain("--accept-risk");
+    expect(onboardCalls[0]?.args).toContain("--accept-risk");
+    expect(onboardCalls[0]?.args).toContain("--skip-ui");
   });
 
   it("does not call gateway install/start fallback when onboarding is always used", async () => {
