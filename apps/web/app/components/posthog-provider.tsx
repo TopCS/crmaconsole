@@ -1,6 +1,7 @@
 "use client";
 
 import posthog from "posthog-js";
+import { PostHogProvider as PHProvider } from "posthog-js/react";
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
@@ -28,13 +29,9 @@ function initPostHog(anonymousId: string) {
   initialized = true;
 }
 
-export function PostHogPageviewTracker({ anonymousId }: { anonymousId: string }) {
+function PageviewTracker() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-
-  useEffect(() => {
-    initPostHog(anonymousId);
-  }, []);
 
   useEffect(() => {
     if (!initialized) return;
@@ -43,4 +40,25 @@ export function PostHogPageviewTracker({ anonymousId }: { anonymousId: string })
   }, [pathname, searchParams]);
 
   return null;
+}
+
+export function PostHogProvider({
+  anonymousId,
+  children,
+}: {
+  anonymousId: string;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    initPostHog(anonymousId);
+  }, [anonymousId]);
+
+  if (!POSTHOG_KEY) return <>{children}</>;
+
+  return (
+    <PHProvider client={posthog}>
+      <PageviewTracker />
+      {children}
+    </PHProvider>
+  );
 }

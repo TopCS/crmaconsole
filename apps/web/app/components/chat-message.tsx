@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { UIMessage } from "ai";
+import { useThumbSurvey } from "posthog-js/react/surveys";
 import { memo, useCallback, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Components } from "react-markdown";
@@ -688,58 +689,56 @@ function createMarkdownComponents(
 /* ─── Feedback buttons (thumbs up / down) ─── */
 
 const POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY || "";
+const FEEDBACK_SURVEY_ID = "019cc021-a8bf-0000-d41d-b82956ef7e6a";
 
 function FeedbackButtons({ messageId, sessionId }: { messageId: string; sessionId?: string | null }) {
-	const [sentiment, setSentiment] = useState<"positive" | "negative" | null>(null);
-	const [submitting, setSubmitting] = useState(false);
+	const revealTrace = useCallback((sid: string | null | undefined, mid: string) => {
+		if (!sid) return;
+		fetch("/api/feedback", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ sessionId: sid, messageId: mid }),
+		}).catch(() => {});
+	}, []);
 
-	const handleFeedback = useCallback(async (value: "positive" | "negative") => {
-		const next = sentiment === value ? null : value;
-		setSentiment(next);
-		setSubmitting(true);
-		try {
-			await fetch("/api/feedback", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ messageId, sessionId, sentiment: next }),
-			});
-		} catch { /* fail silently */ }
-		setSubmitting(false);
-	}, [sentiment, messageId, sessionId]);
+	const { respond, response, triggerRef } = useThumbSurvey({
+		surveyId: FEEDBACK_SURVEY_ID,
+		properties: {
+			$ai_trace_id: sessionId,
+			message_id: messageId,
+		},
+		onResponse: () => revealTrace(sessionId, messageId),
+	});
 
-	if (!POSTHOG_KEY) return null;
-
-	const btnBase = "p-1 rounded-md transition-colors disabled:opacity-30";
+	const btnBase = "p-1 rounded-md transition-colors";
 
 	return (
-		<div className="flex items-center gap-0.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+		<div ref={triggerRef} className="flex items-center gap-0.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
 			<button
 				type="button"
-				disabled={submitting}
-				onClick={() => handleFeedback("positive")}
+				onClick={() => respond("up")}
 				className={btnBase}
 				style={{
-					color: sentiment === "positive" ? "var(--color-accent)" : "var(--color-text-muted)",
+					color: response === "up" ? "var(--color-accent)" : "var(--color-text-muted)",
 				}}
 				title="Good response"
 				aria-label="Thumbs up"
 			>
-				<svg width="14" height="14" viewBox="0 0 24 24" fill={sentiment === "positive" ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+				<svg width="14" height="14" viewBox="0 0 24 24" fill={response === "up" ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 					<path d="M7 10v12" /><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
 				</svg>
 			</button>
 			<button
 				type="button"
-				disabled={submitting}
-				onClick={() => handleFeedback("negative")}
+				onClick={() => respond("down")}
 				className={btnBase}
 				style={{
-					color: sentiment === "negative" ? "var(--color-error, #ef4444)" : "var(--color-text-muted)",
+					color: response === "down" ? "var(--color-error, #ef4444)" : "var(--color-text-muted)",
 				}}
 				title="Bad response"
 				aria-label="Thumbs down"
 			>
-				<svg width="14" height="14" viewBox="0 0 24 24" fill={sentiment === "negative" ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+				<svg width="14" height="14" viewBox="0 0 24 24" fill={response === "down" ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 					<path d="M17 14V2" /><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
 				</svg>
 			</button>
@@ -976,7 +975,7 @@ export const ChatMessage = memo(function ChatMessage({ message, isStreaming, onS
 			);
 			})}
 			</AnimatePresence>
-			{!isStreaming && <FeedbackButtons messageId={message.id} sessionId={sessionId} />}
+			{!isStreaming && POSTHOG_KEY && <FeedbackButtons messageId={message.id} sessionId={sessionId} />}
 		</div>
 	);
 });
