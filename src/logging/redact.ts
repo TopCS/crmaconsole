@@ -1,4 +1,4 @@
-import type { OpenClawConfig } from "../config/config.js";
+import type { LoggingConfig } from "./config.js";
 
 function resolveNodeRequire(): ((id: string) => NodeJS.Require) | null {
   const getBuiltinModule = (
@@ -128,11 +128,11 @@ function redactText(text: string, patterns: RegExp[]): string {
 }
 
 function resolveConfigRedaction(): RedactOptions {
-  let cfg: OpenClawConfig["logging"] | undefined;
+  let cfg: LoggingConfig | undefined;
   try {
     const loaded = requireConfig?.("../config/config.js") as
       | {
-          loadConfig?: () => OpenClawConfig;
+          loadConfig?: () => { logging?: LoggingConfig };
         }
       | undefined;
     cfg = loaded?.loadConfig?.().logging;

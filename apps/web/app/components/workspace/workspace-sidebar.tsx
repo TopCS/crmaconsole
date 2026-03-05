@@ -40,18 +40,18 @@ type WorkspaceSidebarProps = {
 	mobile?: boolean;
 	/** Close the mobile drawer. */
 	onClose?: () => void;
-	/** Active workspace profile name (null = default). */
-	activeProfile?: string | null;
 	/** Fixed width in px when not mobile (overrides default 260). */
 	width?: number;
-	/** Called after the user switches to a different profile. */
-	onProfileSwitch?: () => void;
 	/** Whether hidden (dot) files/folders are currently shown. */
 	showHidden?: boolean;
 	/** Toggle hidden files visibility. */
 	onToggleHidden?: () => void;
 	/** Called when the user clicks the collapse/hide sidebar button. */
 	onCollapse?: () => void;
+  /** Active workspace hint used by the switcher. */
+  activeWorkspace?: string | null;
+  /** Called after workspace switches or workspace creation so parent can refresh state. */
+  onWorkspaceChanged?: () => void;
 };
 
 function HomeIcon() {
@@ -406,16 +406,16 @@ export function WorkspaceSidebar({
 	onExternalDrop,
 	mobile,
 	onClose,
-	activeProfile,
-	onProfileSwitch,
 	showHidden,
 	onToggleHidden,
 	width: widthProp,
 	onCollapse,
+  activeWorkspace,
+  onWorkspaceChanged,
 }: WorkspaceSidebarProps) {
 	const isBrowsing = browseDir != null;
-	const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
 	const width = mobile ? "280px" : (widthProp ?? 260);
+	const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
 
 	const sidebar = (
 		<aside
@@ -491,48 +491,52 @@ export function WorkspaceSidebar({
 								<polyline points="9 22 9 12 15 12 15 22" />
 							</svg>
 						</button>
-						<ProfileSwitcher
-							onProfileSwitch={onProfileSwitch}
-							onCreateWorkspace={() => setShowCreateWorkspace(true)}
-							activeProfileHint={activeProfile}
-							trigger={({ isOpen, onClick, activeProfile: profileName, switching }) => (
-								<button
-									type="button"
-									onClick={onClick}
-									disabled={switching}
-									className="flex-1 min-w-0 w-full flex items-center justify-between gap-1.5 text-left rounded-lg py-1 px-1.5 transition-colors hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-50"
-									title="Switch workspace profile"
-								>
-									<div className="min-w-0 truncate">
-										<div
-											className="text-[13px] font-semibold truncate text-stone-700 dark:text-stone-200"
+						<div className="flex-1 min-w-0 px-1.5">
+							<div className="text-[13px] font-semibold truncate text-stone-700 dark:text-stone-200">
+								{orgName || "Workspace"}
+							</div>
+							<div className="mt-1">
+								<ProfileSwitcher
+									activeWorkspaceHint={activeWorkspace ?? null}
+									onWorkspaceSwitch={() => {
+										onWorkspaceChanged?.();
+									}}
+									onWorkspaceDelete={() => {
+										onWorkspaceChanged?.();
+									}}
+									onCreateWorkspace={() => {
+										setCreateWorkspaceOpen(true);
+									}}
+									trigger={({ onClick, activeWorkspace: workspaceName, switching }) => (
+										<button
+											type="button"
+											onClick={onClick}
+											disabled={switching}
+											className="text-[11px] flex items-center gap-1 truncate w-full transition-colors"
+											style={{ color: "var(--color-text-muted)" }}
+											title="Switch workspace"
 										>
-											{orgName || "Workspace"}
-										</div>
-										<div
-											className="text-[11px] flex items-center gap-1 truncate text-stone-400 dark:text-stone-500"
-										>
-											<span>Ironclaw</span>
-											{profileName && profileName !== "default" && (
-												<span
-													className="px-1 py-0.5 rounded text-[10px] shrink-0 bg-stone-200 text-stone-500 dark:bg-stone-700 dark:text-stone-400"
-												>
-													{profileName}
-												</span>
-											)}
-										</div>
-									</div>
-									<svg
-										className={`w-3 h-3 shrink-0 transition-transform text-stone-400 ${isOpen ? "rotate-180" : ""}`}
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-									>
-										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-									</svg>
-								</button>
-							)}
-						/>
+											<span>Workspace</span>
+											<span className="px-1 py-0.5 rounded text-[10px] shrink-0 bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300">
+												{workspaceName || "-"}
+											</span>
+											<svg
+												width="10"
+												height="10"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												strokeWidth="2"
+												strokeLinecap="round"
+												strokeLinejoin="round"
+											>
+												<path d="m6 9 6 6 6-6" />
+											</svg>
+										</button>
+									)}
+								/>
+							</div>
+						</div>
 					</>
 				)}
 				{onCollapse && (
@@ -550,13 +554,6 @@ export function WorkspaceSidebar({
 					</button>
 				)}
 			</div>
-
-			{/* Create workspace dialog */}
-			<CreateWorkspaceDialog
-				isOpen={showCreateWorkspace}
-				onClose={() => setShowCreateWorkspace(false)}
-				onCreated={onProfileSwitch}
-			/>
 
 			{/* File search */}
 			{onFileSearchSelect && (
@@ -594,13 +591,13 @@ export function WorkspaceSidebar({
 				style={{ borderColor: "var(--color-border)" }}
 			>
 				<a
-					href="https://ironclaw.sh"
+					href="https://denchclaw.com"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm"
 					style={{ color: "var(--color-text-muted)" }}
 				>
-					ironclaw.sh
+					denchclaw.com
 				</a>
 				<div className="flex items-center gap-0.5">
 					{onToggleHidden && (
@@ -643,14 +640,36 @@ export function WorkspaceSidebar({
 		</aside>
 	);
 
-    if (!mobile) { return sidebar; }
+	if (!mobile) {
+		return (
+			<>
+				{sidebar}
+				<CreateWorkspaceDialog
+					isOpen={createWorkspaceOpen}
+					onClose={() => setCreateWorkspaceOpen(false)}
+					onCreated={() => {
+						onWorkspaceChanged?.();
+					}}
+				/>
+			</>
+		);
+	}
 
 	return (
-		<div className="drawer-backdrop" onClick={() => void onClose?.()}>
-			{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-			<div onClick={(e) => e.stopPropagation()} className="fixed inset-y-0 left-0 z-50">
-				{sidebar}
+		<>
+			<div className="drawer-backdrop" onClick={() => void onClose?.()}>
+				{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+				<div onClick={(e) => e.stopPropagation()} className="fixed inset-y-0 left-0 z-50">
+					{sidebar}
+				</div>
 			</div>
-		</div>
+			<CreateWorkspaceDialog
+				isOpen={createWorkspaceOpen}
+				onClose={() => setCreateWorkspaceOpen(false)}
+				onCreated={() => {
+					onWorkspaceChanged?.();
+				}}
+			/>
+		</>
 	);
 }

@@ -1,6 +1,7 @@
 import { duckdbQuery } from "@/lib/workspace";
 import { buildFilterClauses, injectFilters, checkSqlSafety } from "@/lib/report-filters";
 import type { FilterEntry } from "@/lib/report-filters";
+import { trackServer } from "@/lib/telemetry";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -44,6 +45,7 @@ export async function POST(req: Request) {
 
   try {
     const rows = duckdbQuery(finalSql);
+    trackServer("report_executed");
     return Response.json({ rows, sql: finalSql });
   } catch (err) {
     return Response.json(

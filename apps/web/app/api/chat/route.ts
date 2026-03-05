@@ -9,9 +9,9 @@ import {
 	persistUserMessage,
 	persistSubscribeUserMessage,
 	reactivateSubscribeRun,
-	sendSubagentFollowUp,
 	type SseEvent,
 } from "@/lib/active-runs";
+import { trackServer } from "@/lib/telemetry";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { resolveOpenClawStateDir } from "@/lib/workspace";
@@ -60,6 +60,11 @@ export async function POST(req: Request) {
 		return new Response("No message provided", { status: 400 });
 	}
 
+	trackServer("chat_message_sent", {
+		message_length: userText.length,
+		is_subagent: typeof sessionKey === "string" && sessionKey.includes(":subagent:"),
+	});
+
 	const isSubagentSession = typeof sessionKey === "string" && sessionKey.includes(":subagent:");
 
 	if (!isSubagentSession && sessionId && hasActiveRun(sessionId)) {
@@ -100,10 +105,7 @@ export async function POST(req: Request) {
 			id: lastUserMessage.id,
 			text: userText,
 		});
-		reactivateSubscribeRun(sessionKey);
-		if (!sendSubagentFollowUp(sessionKey, agentMessage)) {
-			return new Response("Failed to send subagent message", { status: 500 });
-		}
+		reactivateSubscribeRun(sessionKey, agentMessage);
 	} else if (sessionId && lastUserMessage) {
 		persistUserMessage(sessionId, {
 			id: lastUserMessage.id,
@@ -144,6 +146,9 @@ export async function POST(req: Request) {
 						try { controller.close(); } catch { /* already closed */ }
 						return;
 					}
+					// Skip custom event types not in the AI SDK v6 data stream schema;
+					// they're only consumed by the reconnection parser (processEvent).
+					if (event.type === "tool-output-partial") {return;}
 					try {
 						const json = JSON.stringify(event);
 						controller.enqueue(encoder.encode(`data: ${json}\n\n`));

@@ -49,6 +49,13 @@ export async function POST(req: Request) {
     );
   }
 
+  if (isSystemFile(relPath)) {
+    return Response.json(
+      { error: "Cannot modify system file" },
+      { status: 403 },
+    );
+  }
+
   // Use safeResolveNewPath (not safeResolvePath) because the file may not exist yet
   const absPath = safeResolveNewPath(relPath);
   if (!absPath) {

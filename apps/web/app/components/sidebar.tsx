@@ -2,8 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { FileManagerTree } from "./workspace/file-manager-tree";
-import { ProfileSwitcher } from "./workspace/profile-switcher";
-import { CreateWorkspaceDialog } from "./workspace/create-workspace-dialog";
 
 // --- Types ---
 
@@ -353,9 +351,8 @@ export function Sidebar({
   const [mainMemory, setMainMemory] = useState<string | null>(null);
   const [dailyLogs, setDailyLogs] = useState<MemoryFile[]>([]);
   const [workspaceTree, setWorkspaceTree] = useState<TreeNode[]>([]);
+  const [activeWorkspace, setActiveWorkspace] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
-  const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
 
   const toggleSection = (section: SidebarSection) => {
     setOpenSections((prev) => {
@@ -366,27 +363,24 @@ export function Sidebar({
     });
   };
 
-  // Full sidebar re-fetch after profile switch or workspace creation
-  const handleProfileSwitch = useCallback(() => {
-    setSidebarRefreshKey((k) => k + 1);
-  }, []);
-
-  // Fetch sidebar data (re-runs when refreshKey or sidebarRefreshKey changes)
+  // Fetch sidebar data
   useEffect(() => {
     async function load() {
       setLoading(true);
       try {
-        const [webSessionsRes, skillsRes, memoriesRes, workspaceRes] = await Promise.all([
+        const [webSessionsRes, skillsRes, memoriesRes, workspaceRes, workspaceListRes] = await Promise.all([
           fetch("/api/web-sessions").then((r) => r.json()),
           fetch("/api/skills").then((r) => r.json()),
           fetch("/api/memories").then((r) => r.json()),
           fetch("/api/workspace/tree").then((r) => r.json()).catch(() => ({ tree: [] })),
+          fetch("/api/workspace/list").then((r) => r.json()).catch(() => ({ activeWorkspace: null })),
         ]);
         setWebSessions(webSessionsRes.sessions ?? []);
         setSkills(skillsRes.skills ?? []);
         setMainMemory(memoriesRes.mainMemory ?? null);
         setDailyLogs(memoriesRes.dailyLogs ?? []);
         setWorkspaceTree(workspaceRes.tree ?? []);
+        setActiveWorkspace((workspaceListRes.activeWorkspace ?? null) as string | null);
       } catch (err) {
         console.error("Failed to load sidebar data:", err);
       } finally {
@@ -394,7 +388,7 @@ export function Sidebar({
       }
     }
     void load();
-  }, [refreshKey, sidebarRefreshKey]);
+  }, [refreshKey]);
 
   const refreshWorkspace = useCallback(async () => {
     try {
@@ -412,7 +406,7 @@ export function Sidebar({
       <div className="px-4 py-3 border-b border-[var(--color-border)]">
         <div className="flex items-center justify-between mb-1.5">
           <h1 className="text-base font-bold flex items-center gap-2">
-            <span>Ironclaw</span>
+            <span>DenchClaw</span>
           </h1>
           <button
             onClick={onNewSession}
@@ -434,19 +428,10 @@ export function Sidebar({
             </svg>
           </button>
         </div>
-        <ProfileSwitcher
-          onProfileSwitch={handleProfileSwitch}
-          onCreateWorkspace={() => setShowCreateWorkspace(true)}
-          activeProfileHint={String(sidebarRefreshKey)}
-        />
+        <p className="text-xs text-[var(--color-text-muted)]">
+          Workspace: {activeWorkspace ?? "none"}
+        </p>
       </div>
-
-      {/* Create workspace dialog */}
-      <CreateWorkspaceDialog
-        isOpen={showCreateWorkspace}
-        onClose={() => setShowCreateWorkspace(false)}
-        onCreated={handleProfileSwitch}
-      />
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto py-2 space-y-1">

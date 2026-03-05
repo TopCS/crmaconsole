@@ -1,163 +1,156 @@
-import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { formatCliCommand } from "./command-format.js";
-import { applyCliProfileEnv, parseCliProfileArgs } from "./profile.js";
+import { applyCliProfileEnv, parseCliProfileArgs, DENCHCLAW_PROFILE } from "./profile.js";
 
 describe("parseCliProfileArgs", () => {
-  it("leaves gateway --dev for subcommands", () => {
-    const res = parseCliProfileArgs([
-      "node",
-      "ironclaw",
-      "gateway",
-      "--dev",
-      "--allow-unconfigured",
-    ]);
-    if (!res.ok) {
-      throw new Error(res.error);
+  it("returns default profile parsing when no args are provided", () => {
+    expect(parseCliProfileArgs(["node", "denchclaw"])).toEqual({
+      ok: true,
+      profile: null,
+      argv: ["node", "denchclaw"],
+    });
+  });
+
+  it("parses --profile and strips profile flags before command execution", () => {
+    expect(parseCliProfileArgs(["node", "denchclaw", "--profile", "dev", "chat"])).toEqual({
+      ok: true,
+      profile: "dev",
+      argv: ["node", "denchclaw", "chat"],
+    });
+
+    expect(parseCliProfileArgs(["node", "denchclaw", "--profile=team-a", "status"])).toEqual({
+      ok: true,
+      profile: "team-a",
+      argv: ["node", "denchclaw", "status"],
+    });
+  });
+
+  it("rejects missing and invalid profile inputs", () => {
+    expect(parseCliProfileArgs(["node", "denchclaw", "--profile"])).toEqual({
+      ok: false,
+      error: "--profile requires a value",
+    });
+
+    expect(parseCliProfileArgs(["node", "denchclaw", "--profile", "bad profile"])).toEqual({
+      ok: false,
+      error: 'Invalid --profile (use letters, numbers, "_", "-" only)',
+    });
+  });
+
+  it("allows --dev and --profile together (DenchClaw forces dench anyway)", () => {
+    const result = parseCliProfileArgs(["node", "denchclaw", "--dev", "--profile", "team-a"]);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.profile).toBe("team-a");
     }
-    expect(res.profile).toBeNull();
-    expect(res.argv).toEqual(["node", "ironclaw", "gateway", "--dev", "--allow-unconfigured"]);
   });
 
-  it("still accepts global --dev before subcommand", () => {
-    const res = parseCliProfileArgs(["node", "ironclaw", "--dev", "gateway"]);
-    if (!res.ok) {
-      throw new Error(res.error);
-    }
-    expect(res.profile).toBe("dev");
-    expect(res.argv).toEqual(["node", "ironclaw", "gateway"]);
-  });
-
-  it("parses --profile value and strips it", () => {
-    const res = parseCliProfileArgs(["node", "ironclaw", "--profile", "work", "status"]);
-    if (!res.ok) {
-      throw new Error(res.error);
-    }
-    expect(res.profile).toBe("work");
-    expect(res.argv).toEqual(["node", "ironclaw", "status"]);
-  });
-
-  it("rejects missing profile value", () => {
-    const res = parseCliProfileArgs(["node", "ironclaw", "--profile"]);
-    expect(res.ok).toBe(false);
-  });
-
-  it("rejects combining --dev with --profile (dev first)", () => {
-    const res = parseCliProfileArgs(["node", "ironclaw", "--dev", "--profile", "work", "status"]);
-    expect(res.ok).toBe(false);
-  });
-
-  it("rejects combining --dev with --profile (profile first)", () => {
-    const res = parseCliProfileArgs(["node", "ironclaw", "--profile", "work", "--dev", "status"]);
-    expect(res.ok).toBe(false);
+  it("stops profile parsing once command path begins", () => {
+    expect(parseCliProfileArgs(["node", "denchclaw", "chat", "--profile", "dev"])).toEqual({
+      ok: true,
+      profile: null,
+      argv: ["node", "denchclaw", "chat", "--profile", "dev"],
+    });
   });
 });
 
 describe("applyCliProfileEnv", () => {
-  it("fills env defaults for dev profile", () => {
+  it("always forces dench profile regardless of requested profile (single profile enforcement)", () => {
     const env: Record<string, string | undefined> = {};
-    applyCliProfileEnv({
+    const result = applyCliProfileEnv({
+      profile: "team-a",
+      env,
+      homedir: () => "/tmp/home",
+    });
+
+    expect(result.effectiveProfile).toBe(DENCHCLAW_PROFILE);
+    expect(env.OPENCLAW_PROFILE).toBe(DENCHCLAW_PROFILE);
+    expect(env.OPENCLAW_STATE_DIR).toBe("/tmp/home/.openclaw-dench");
+    expect(env.OPENCLAW_CONFIG_PATH).toBe("/tmp/home/.openclaw-dench/openclaw.json");
+  });
+
+  it("emits warning when non-dench profile is requested (prevents silent override)", () => {
+    const env: Record<string, string | undefined> = {};
+    const result = applyCliProfileEnv({
+      profile: "team-a",
+      env,
+      homedir: () => "/tmp/home",
+    });
+
+    expect(result.warning).toBeDefined();
+    expect(result.warning).toContain("team-a");
+    expect(result.warning).toContain(DENCHCLAW_PROFILE);
+    expect(result.requestedProfile).toBe("team-a");
+  });
+
+  it("no warning when dench profile is requested (normal path)", () => {
+    const env: Record<string, string | undefined> = {};
+    const result = applyCliProfileEnv({
+      profile: DENCHCLAW_PROFILE,
+      env,
+      homedir: () => "/tmp/home",
+    });
+
+    expect(result.warning).toBeUndefined();
+    expect(result.effectiveProfile).toBe(DENCHCLAW_PROFILE);
+  });
+
+  it("no warning when no profile is specified (default path)", () => {
+    const env: Record<string, string | undefined> = {};
+    const result = applyCliProfileEnv({
+      env,
+      homedir: () => "/tmp/home",
+    });
+
+    expect(result.warning).toBeUndefined();
+    expect(result.effectiveProfile).toBe(DENCHCLAW_PROFILE);
+  });
+
+  it("always overwrites OPENCLAW_STATE_DIR to pinned path (prevents state drift)", () => {
+    const env: Record<string, string | undefined> = {
+      OPENCLAW_STATE_DIR: "/custom/state",
+      OPENCLAW_CONFIG_PATH: "/custom/state/openclaw.json",
+    };
+    const result = applyCliProfileEnv({
       profile: "dev",
       env,
-      homedir: () => "/home/peter",
+      homedir: () => "/tmp/home",
     });
-    const expectedStateDir = path.join(path.resolve("/home/peter"), ".openclaw-dev");
-    expect(env.OPENCLAW_PROFILE).toBe("dev");
-    expect(env.OPENCLAW_STATE_DIR).toBe(expectedStateDir);
-    expect(env.OPENCLAW_CONFIG_PATH).toBe(path.join(expectedStateDir, "openclaw.json"));
-    expect(env.OPENCLAW_GATEWAY_PORT).toBe("19001");
+
+    expect(env.OPENCLAW_STATE_DIR).toBe("/tmp/home/.openclaw-dench");
+    expect(env.OPENCLAW_CONFIG_PATH).toBe("/tmp/home/.openclaw-dench/openclaw.json");
+    expect(result.stateDir).toBe("/tmp/home/.openclaw-dench");
   });
 
-  it("does not override explicit env values", () => {
+  it("picks up OPENCLAW_PROFILE from env when no explicit profile is passed", () => {
     const env: Record<string, string | undefined> = {
-      OPENCLAW_STATE_DIR: "/custom",
-      OPENCLAW_GATEWAY_PORT: "19099",
+      OPENCLAW_PROFILE: "from-env",
     };
-    applyCliProfileEnv({
-      profile: "dev",
+    const result = applyCliProfileEnv({
       env,
-      homedir: () => "/home/peter",
-    });
-    expect(env.OPENCLAW_STATE_DIR).toBe("/custom");
-    expect(env.OPENCLAW_GATEWAY_PORT).toBe("19099");
-    expect(env.OPENCLAW_CONFIG_PATH).toBe(path.join("/custom", "openclaw.json"));
-  });
-
-  it("uses OPENCLAW_HOME when deriving profile state dir", () => {
-    const env: Record<string, string | undefined> = {
-      OPENCLAW_HOME: "/srv/openclaw-home",
-      HOME: "/home/other",
-    };
-    applyCliProfileEnv({
-      profile: "work",
-      env,
-      homedir: () => "/home/fallback",
+      homedir: () => "/tmp/home",
     });
 
-    const resolvedHome = path.resolve("/srv/openclaw-home");
-    expect(env.OPENCLAW_STATE_DIR).toBe(path.join(resolvedHome, ".openclaw-work"));
-    expect(env.OPENCLAW_CONFIG_PATH).toBe(
-      path.join(resolvedHome, ".openclaw-work", "openclaw.json"),
-    );
-  });
-});
-
-describe("formatCliCommand", () => {
-  it("returns command unchanged when no profile is set", () => {
-    expect(formatCliCommand("ironclaw doctor --fix", {})).toBe("ironclaw doctor --fix");
+    expect(result.requestedProfile).toBe("from-env");
+    expect(result.effectiveProfile).toBe(DENCHCLAW_PROFILE);
+    expect(result.warning).toContain("from-env");
   });
 
-  it("returns command unchanged when profile is default", () => {
-    expect(formatCliCommand("ironclaw doctor --fix", { OPENCLAW_PROFILE: "default" })).toBe(
-      "ironclaw doctor --fix",
-    );
-  });
+  it("both root and bootstrap-local profile forms resolve to same state dir", () => {
+    const rootEnv: Record<string, string | undefined> = {};
+    const bootstrapLocalEnv: Record<string, string | undefined> = {};
+    applyCliProfileEnv({
+      profile: "team-a",
+      env: rootEnv,
+      homedir: () => "/tmp/home",
+    });
+    applyCliProfileEnv({
+      profile: "team-a",
+      env: bootstrapLocalEnv,
+      homedir: () => "/tmp/home",
+    });
 
-  it("returns command unchanged when profile is Default (case-insensitive)", () => {
-    expect(formatCliCommand("ironclaw doctor --fix", { OPENCLAW_PROFILE: "Default" })).toBe(
-      "ironclaw doctor --fix",
-    );
-  });
-
-  it("returns command unchanged when profile is invalid", () => {
-    expect(formatCliCommand("ironclaw doctor --fix", { OPENCLAW_PROFILE: "bad profile" })).toBe(
-      "ironclaw doctor --fix",
-    );
-  });
-
-  it("returns command unchanged when --profile is already present", () => {
-    expect(
-      formatCliCommand("ironclaw --profile work doctor --fix", { OPENCLAW_PROFILE: "work" }),
-    ).toBe("ironclaw --profile work doctor --fix");
-  });
-
-  it("returns command unchanged when --dev is already present", () => {
-    expect(formatCliCommand("ironclaw --dev doctor", { OPENCLAW_PROFILE: "dev" })).toBe(
-      "ironclaw --dev doctor",
-    );
-  });
-
-  it("inserts --profile flag when profile is set", () => {
-    expect(formatCliCommand("ironclaw doctor --fix", { OPENCLAW_PROFILE: "work" })).toBe(
-      "ironclaw --profile work doctor --fix",
-    );
-  });
-
-  it("trims whitespace from profile", () => {
-    expect(formatCliCommand("ironclaw doctor --fix", { OPENCLAW_PROFILE: "  jbopenclaw  " })).toBe(
-      "ironclaw --profile jbopenclaw doctor --fix",
-    );
-  });
-
-  it("handles command with no args after ironclaw", () => {
-    expect(formatCliCommand("ironclaw", { OPENCLAW_PROFILE: "test" })).toBe(
-      "ironclaw --profile test",
-    );
-  });
-
-  it("handles pnpm wrapper", () => {
-    expect(formatCliCommand("pnpm ironclaw doctor", { OPENCLAW_PROFILE: "work" })).toBe(
-      "pnpm ironclaw --profile work doctor",
-    );
+    expect(rootEnv.OPENCLAW_PROFILE).toBe(bootstrapLocalEnv.OPENCLAW_PROFILE);
+    expect(rootEnv.OPENCLAW_STATE_DIR).toBe(bootstrapLocalEnv.OPENCLAW_STATE_DIR);
+    expect(rootEnv.OPENCLAW_CONFIG_PATH).toBe(bootstrapLocalEnv.OPENCLAW_CONFIG_PATH);
   });
 });

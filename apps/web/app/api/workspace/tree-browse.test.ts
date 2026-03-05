@@ -17,6 +17,8 @@ vi.mock("node:os", () => ({
 // Mock workspace
 vi.mock("@/lib/workspace", () => ({
   resolveWorkspaceRoot: vi.fn(() => null),
+  resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw-dench"),
+  getActiveWorkspaceName: vi.fn(() => null),
   parseSimpleYaml: vi.fn(() => ({})),
   duckdbQueryAll: vi.fn(() => []),
   duckdbQueryAllAsync: vi.fn(async () => []),
@@ -55,6 +57,8 @@ describe("Workspace Tree & Browse API", () => {
     }));
     vi.mock("@/lib/workspace", () => ({
       resolveWorkspaceRoot: vi.fn(() => null),
+      resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw-dench"),
+      getActiveWorkspaceName: vi.fn(() => null),
       parseSimpleYaml: vi.fn(() => ({})),
       duckdbQueryAll: vi.fn(() => []),
       duckdbQueryAllAsync: vi.fn(async () => []),
@@ -74,15 +78,18 @@ describe("Workspace Tree & Browse API", () => {
   describe("GET /api/workspace/tree", () => {
     it("returns tree with exists=false when no workspace root", async () => {
       const { GET } = await import("./tree/route.js");
-      const res = await GET();
+      const req = new Request("http://localhost/api/workspace/tree");
+      const res = await GET(req);
       const json = await res.json();
       expect(json.exists).toBe(false);
       expect(json.tree).toEqual([]);
+      expect(json.workspace).toBeNull();
     });
 
     it("returns tree with workspace files", async () => {
-      const { resolveWorkspaceRoot } = await import("@/lib/workspace");
+      const { resolveWorkspaceRoot, getActiveWorkspaceName } = await import("@/lib/workspace");
       vi.mocked(resolveWorkspaceRoot).mockReturnValue("/ws");
+      vi.mocked(getActiveWorkspaceName).mockReturnValue("default");
       const { readdirSync: mockReaddir, existsSync: mockExists } = await import("node:fs");
       vi.mocked(mockExists).mockReturnValue(true);
       vi.mocked(mockReaddir).mockImplementation((dir) => {
@@ -96,10 +103,12 @@ describe("Workspace Tree & Browse API", () => {
       });
 
       const { GET } = await import("./tree/route.js");
-      const res = await GET();
+      const req = new Request("http://localhost/api/workspace/tree");
+      const res = await GET(req);
       const json = await res.json();
       expect(json.exists).toBe(true);
       expect(json.tree.length).toBeGreaterThan(0);
+      expect(json.workspace).toBe("default");
     });
 
     it("includes workspaceRoot in response", async () => {
@@ -109,9 +118,72 @@ describe("Workspace Tree & Browse API", () => {
       vi.mocked(mockExists).mockReturnValue(true);
 
       const { GET } = await import("./tree/route.js");
-      const res = await GET();
+      const req = new Request("http://localhost/api/workspace/tree");
+      const res = await GET(req);
       const json = await res.json();
       expect(json.workspaceRoot).toBe("/ws");
+    });
+
+    it("includes root IDENTITY.md in the workspace tree", async () => {
+      const { resolveWorkspaceRoot } = await import("@/lib/workspace");
+      vi.mocked(resolveWorkspaceRoot).mockReturnValue("/ws");
+      const { readdirSync: mockReaddir, existsSync: mockExists } = await import("node:fs");
+      vi.mocked(mockExists).mockImplementation((p) => String(p) === "/ws");
+      vi.mocked(mockReaddir).mockImplementation((dir) => {
+        if (String(dir) === "/ws") {
+          return [
+            makeDirent("IDENTITY.md", false),
+            makeDirent("notes.md", false),
+          ] as unknown as Dirent[];
+        }
+        return [] as unknown as Dirent[];
+      });
+
+      const { GET } = await import("./tree/route.js");
+      const req = new Request("http://localhost/api/workspace/tree");
+      const res = await GET(req);
+      const json = await res.json();
+      const paths = (json.tree as Array<{ path: string }>).map((n) => n.path);
+      expect(paths).toContain("IDENTITY.md");
+      expect(paths).toContain("notes.md");
+    });
+
+    it("omits managed crm skill from the virtual skills folder", async () => {
+      const { resolveWorkspaceRoot } = await import("@/lib/workspace");
+      vi.mocked(resolveWorkspaceRoot).mockReturnValue("/ws");
+      const { readdirSync: mockReaddir, existsSync: mockExists } = await import("node:fs");
+      vi.mocked(mockExists).mockImplementation((p) => {
+        const value = String(p);
+        return (
+          value === "/ws" ||
+          value === "/ws/skills" ||
+          value === "/ws/skills/alpha/SKILL.md" ||
+          value === "/ws/skills/crm/SKILL.md"
+        );
+      });
+      vi.mocked(mockReaddir).mockImplementation((dir) => {
+        if (String(dir) === "/ws") {
+          return [] as unknown as Dirent[];
+        }
+        if (String(dir) === "/ws/skills") {
+          return [
+            makeDirent("alpha", true),
+            makeDirent("crm", true),
+          ] as unknown as Dirent[];
+        }
+        return [] as unknown as Dirent[];
+      });
+
+      const { GET } = await import("./tree/route.js");
+      const req = new Request("http://localhost/api/workspace/tree");
+      const res = await GET(req);
+      const json = await res.json();
+      const skillsFolder = (json.tree as Array<{ path: string; children?: Array<{ path: string }> }>).find(
+        (node) => node.path === "~skills",
+      );
+      const skillPaths = (skillsFolder?.children ?? []).map((child) => child.path);
+      expect(skillPaths).toContain("~skills/alpha/SKILL.md");
+      expect(skillPaths).not.toContain("~skills/crm/SKILL.md");
     });
   });
 
@@ -167,6 +239,31 @@ describe("Workspace Tree & Browse API", () => {
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.items).toBeDefined();
+    });
+
+    it("includes root IDENTITY.md in sidebar file suggestions", async () => {
+      const { resolveWorkspaceRoot } = await import("@/lib/workspace");
+      vi.mocked(resolveWorkspaceRoot).mockReturnValue("/ws");
+      const { existsSync: mockExists, readdirSync: mockReaddir } = await import("node:fs");
+      vi.mocked(mockExists).mockReturnValue(true);
+      vi.mocked(mockReaddir).mockImplementation((dir) => {
+        if (String(dir) === "/ws") {
+          return [
+            makeDirent("IDENTITY.md", false),
+            makeDirent("doc.md", false),
+          ] as unknown as Dirent[];
+        }
+        return [] as unknown as Dirent[];
+      });
+
+      const { GET } = await import("./suggest-files/route.js");
+      const req = new Request("http://localhost/api/workspace/suggest-files");
+      const res = await GET(req);
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      const names = (json.items as Array<{ name: string }>).map((item) => item.name);
+      expect(names).toContain("doc.md");
+      expect(names).toContain("IDENTITY.md");
     });
   });
 

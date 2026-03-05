@@ -1,0 +1,24 @@
+{
+  "name": "dench",
+  "version": "2.0.5",
+  "description": "Shorthand alias for denchclaw — AI-powered CRM platform CLI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openclaw/openclaw.git",
+    "directory": "packages/dench"
+  },
+  "bin": {
+    "dench": "dench.mjs"
+  },
+  "files": [
+    "dench.mjs"
+  ],
+  "type": "module",
+  "dependencies": {
+    "denchclaw": "^2.0.5"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

@@ -1,8 +1,7 @@
 import util from "node:util";
-import type { OpenClawConfig } from "../config/types.js";
 import { isVerbose } from "../globals.js";
 import { stripAnsi } from "../terminal/ansi.js";
-import { readLoggingConfig } from "./config.js";
+import { readLoggingConfig, type LoggingConfig } from "./config.js";
 import { type LogLevel, normalizeLogLevel } from "./levels.js";
 import { getLogger, type LoggerSettings } from "./logger.js";
 import { loggingState } from "./state.js";
@@ -37,12 +36,12 @@ function resolveNodeRequire(): ((id: string) => NodeJS.Require) | null {
 }
 
 const requireConfig = resolveNodeRequire()?.(import.meta.url) ?? null;
-type ConsoleConfigLoader = () => OpenClawConfig["logging"] | undefined;
+type ConsoleConfigLoader = () => LoggingConfig | undefined;
 const loadConfigFallbackDefault: ConsoleConfigLoader = () => {
   try {
     const loaded = requireConfig?.("../config/config.js") as
       | {
-          loadConfig?: () => OpenClawConfig;
+          loadConfig?: () => { logging?: LoggingConfig };
         }
       | undefined;
     return loaded?.loadConfig?.().logging;
@@ -77,7 +76,7 @@ function normalizeConsoleStyle(style?: string): ConsoleStyle {
 }
 
 function resolveConsoleSettings(): ConsoleSettings {
-  let cfg: OpenClawConfig["logging"] | undefined =
+  let cfg: LoggingConfig | undefined =
     (loggingState.overrideSettings as LoggerSettings | null) ?? readLoggingConfig();
   if (!cfg) {
     if (loggingState.resolvingConsoleSettings) {

@@ -11,6 +11,7 @@ vi.mock("@/lib/workspace", () => ({
   duckdbQueryOnFile: vi.fn(() => []),
   duckdbExecOnFile: vi.fn(() => true),
   findDuckDBForObject: vi.fn(() => null),
+  getObjectViews: vi.fn(() => ({ views: [], activeView: null })),
   parseRelationValue: vi.fn((v: string | null) => (v ? [v] : [])),
   resolveDuckdbBin: vi.fn(() => null),
   discoverDuckDBPaths: vi.fn(() => []),
@@ -27,6 +28,7 @@ describe("Workspace Objects API", () => {
       duckdbQueryOnFile: vi.fn(() => []),
       duckdbExecOnFile: vi.fn(() => true),
       findDuckDBForObject: vi.fn(() => null),
+      getObjectViews: vi.fn(() => ({ views: [], activeView: null })),
       parseRelationValue: vi.fn((v: string | null) => (v ? [v] : [])),
       resolveDuckdbBin: vi.fn(() => null),
       discoverDuckDBPaths: vi.fn(() => []),
@@ -116,6 +118,64 @@ describe("Workspace Objects API", () => {
       const json = await res.json();
       expect(json.object).toBeDefined();
       expect(json.fields).toBeDefined();
+    });
+
+    it("returns saved views and active view from object yaml metadata", async () => {
+      const {
+        findDuckDBForObject,
+        duckdbQueryOnFile,
+        resolveDuckdbBin,
+        discoverDuckDBPaths,
+        getObjectViews,
+      } = await import("@/lib/workspace");
+
+      vi.mocked(findDuckDBForObject).mockReturnValue("/ws/workspace.duckdb");
+      vi.mocked(resolveDuckdbBin).mockReturnValue("/opt/homebrew/bin/duckdb");
+      vi.mocked(discoverDuckDBPaths).mockReturnValue(["/ws/workspace.duckdb"]);
+      vi.mocked(getObjectViews).mockReturnValue({
+        views: [
+          {
+            name: "Important",
+            filters: {
+              id: "root",
+              conjunction: "and",
+              rules: [
+                { id: "rule-1", field: "Status", operator: "is", value: "Important" },
+              ],
+            },
+            columns: ["Name", "Status"],
+          },
+        ],
+        activeView: "Important",
+        viewSettings: undefined,
+      });
+
+      let queryCall = 0;
+      vi.mocked(duckdbQueryOnFile).mockImplementation(() => {
+        queryCall += 1;
+        if (queryCall === 1) {
+          return [{ id: "obj1", name: "leads", description: "Leads object", icon: "star" }];
+        }
+        if (queryCall === 2) {
+          return [{ id: "f1", name: "name", type: "text", sort_order: 0 }];
+        }
+        if (queryCall === 3) {
+          return [];
+        }
+        return [];
+      });
+
+      const { GET } = await import("./objects/[name]/route.js");
+      const res = await GET(
+        new Request("http://localhost/api/workspace/objects/leads"),
+        { params: Promise.resolve({ name: "leads" }) },
+      );
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.savedViews).toHaveLength(1);
+      expect(json.savedViews[0].name).toBe("Important");
+      expect(json.activeView).toBe("Important");
     });
 
     it("accepts underscored names", async () => {

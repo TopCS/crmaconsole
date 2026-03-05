@@ -1,4 +1,5 @@
 import { duckdbExecOnFile, duckdbQueryOnFile, findDuckDBForObject } from "@/lib/workspace";
+import { trackServer } from "@/lib/telemetry";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -92,6 +93,8 @@ export async function POST(
 			);
 		}
 	}
+
+	trackServer("object_entry_created");
 
 	return Response.json({ entryId, ok: true }, { status: 201 });
 }

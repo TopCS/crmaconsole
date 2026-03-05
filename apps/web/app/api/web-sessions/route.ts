@@ -1,5 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { trackServer } from "@/lib/telemetry";
 import { type WebSessionMeta, ensureDir, readIndex, writeIndex } from "./shared";
 
 export { type WebSessionMeta };
@@ -40,6 +41,8 @@ export async function POST(req: Request) {
 
   const dir = ensureDir();
   writeFileSync(`${dir}/${id}.jsonl`, "");
+
+  trackServer("session_created");
 
   return Response.json({ session });
 }

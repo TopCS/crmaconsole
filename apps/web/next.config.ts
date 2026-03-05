@@ -13,13 +13,21 @@ const nextConfig: NextConfig = {
   // instead of resolving through pnpm's virtual store symlinks.
   outputFileTracingRoot: path.join(import.meta.dirname, "..", ".."),
 
-  // Allow long-running API routes for agent streaming
-  serverExternalPackages: [],
+  // Externalize packages with native addons so webpack doesn't break them
+  serverExternalPackages: ["ws", "bufferutil", "utf-8-validate"],
 
   // Transpile ESM-only packages so webpack can bundle them
   transpilePackages: ["react-markdown", "remark-gfm"],
 
-  webpack: (config, { dev }) => {
+  webpack: (config, { dev, isServer }) => {
+    if (!isServer) {
+      // html-to-docx references Node-only modules that should not be resolved in browser bundles.
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        encoding: false,
+      };
+    }
     if (dev) {
       config.watchOptions = {
         ...config.watchOptions,
@@ -29,6 +37,7 @@ const nextConfig: NextConfig = {
           "**/dist/**",
           "**/.next/**",
           path.join(homedir(), ".openclaw", "**"),
+          path.join(homedir(), ".openclaw-*", "**"),
         ],
         poll: 1500,
       };

@@ -1,34 +1,59 @@
-import { setUIActiveProfile, getEffectiveProfile, resolveWorkspaceRoot, resolveOpenClawStateDir } from "@/lib/workspace";
+import {
+  discoverWorkspaces,
+  getActiveWorkspaceName,
+  resolveOpenClawStateDir,
+  resolveWorkspaceRoot,
+  setUIActiveWorkspace,
+} from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function POST(req: Request) {
-  const body = (await req.json()) as { profile?: string };
-  const profileName = body.profile?.trim();
+const WORKSPACE_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 
-  if (!profileName) {
-    return Response.json({ error: "Missing profile name" }, { status: 400 });
+function normalizeSwitchWorkspace(raw: unknown): string | null {
+  if (typeof raw !== "string") {
+    return null;
   }
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (!WORKSPACE_NAME_RE.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
+}
 
-  // Validate profile name: letters, numbers, hyphens, underscores only
-  if (profileName !== "default" && !/^[a-zA-Z0-9_-]+$/.test(profileName)) {
+export async function POST(req: Request) {
+  const body = (await req.json().catch(() => ({}))) as { workspace?: unknown; profile?: unknown };
+  const requestedWorkspace = normalizeSwitchWorkspace(body.workspace ?? body.profile);
+  if (!requestedWorkspace) {
     return Response.json(
-      { error: "Invalid profile name. Use letters, numbers, hyphens, or underscores." },
+      { error: "Invalid workspace name. Use letters, numbers, hyphens, or underscores." },
       { status: 400 },
     );
   }
 
-  // "default" clears the override
-  setUIActiveProfile(profileName === "default" ? null : profileName);
+  const discovered = discoverWorkspaces();
+  const availableNames = new Set(discovered.map((workspace) => workspace.name));
+  if (!availableNames.has(requestedWorkspace)) {
+    return Response.json(
+      { error: `Workspace '${requestedWorkspace}' was not found.` },
+      { status: 404 },
+    );
+  }
 
-  const activeProfile = getEffectiveProfile();
-  const workspaceRoot = resolveWorkspaceRoot();
-  const stateDir = resolveOpenClawStateDir();
-
+  setUIActiveWorkspace(requestedWorkspace);
+  const activeWorkspace = getActiveWorkspaceName();
+  const selected = discoverWorkspaces().find((workspace) => workspace.name === activeWorkspace) ?? null;
   return Response.json({
-    activeProfile: activeProfile || "default",
-    workspaceRoot,
-    stateDir,
+    activeWorkspace,
+    stateDir: resolveOpenClawStateDir(),
+    workspaceRoot: resolveWorkspaceRoot(),
+    workspace: selected,
+    // Backward-compat response fields while clients migrate.
+    activeProfile: activeWorkspace,
+    profile: selected,
   });
 }

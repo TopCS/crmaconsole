@@ -34,7 +34,10 @@ const SKIP_DIRS = new Set([
 ]);
 
 /** List entries in a directory, sorted folders-first then alphabetically. */
-function listDir(absDir: string, filter?: string): SuggestItem[] {
+function listDir(
+	absDir: string,
+	filter?: string,
+): SuggestItem[] {
 	let entries: Dirent[];
 	try {
 		entries = readdirSync(absDir, { withFileTypes: true });
@@ -43,7 +46,6 @@ function listDir(absDir: string, filter?: string): SuggestItem[] {
 	}
 
 	const lowerFilter = filter?.toLowerCase();
-
 	const sorted = entries
 		.filter((e) => !e.name.startsWith("."))
 		.filter((e) => !(e.isDirectory() && SKIP_DIRS.has(e.name)))
@@ -94,7 +96,6 @@ function searchFiles(
 	}
 
 	const lowerQuery = query.toLowerCase();
-
 	for (const entry of entries) {
 		if (results.length >= maxResults) {return;}
 		if (entry.name.startsWith(".")) {continue;}

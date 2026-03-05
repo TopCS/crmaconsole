@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { type ColumnDef, type CellContext } from "@tanstack/react-table";
 import { DataTable, type RowAction } from "./data-table";
 import { RelationSelect } from "./relation-select";
+import { FormattedFieldValue } from "./formatted-field-value";
 
 /* ─── Types ─── */
 
@@ -44,6 +45,7 @@ type ObjectTableProps = {
 	relationLabels?: Record<string, Record<string, string>>;
 	reverseRelations?: ReverseRelation[];
 	onNavigateToObject?: (objectName: string) => void;
+	onNavigateToEntry?: (objectName: string, entryId: string) => void;
 	onEntryClick?: (entryId: string) => void;
 	onRefresh?: () => void;
 	/** Column visibility state keyed by field ID. */
@@ -55,6 +57,9 @@ type ObjectTableProps = {
 };
 
 type EntryRow = Record<string, unknown> & { entry_id?: string };
+
+const CREATED_AT_KEYS = ["created_at", "Created", "createdAt", "created"] as const;
+const UPDATED_AT_KEYS = ["updated_at", "Updated", "updatedAt", "updated"] as const;
 
 /* ─── Helpers ─── */
 
@@ -79,6 +84,36 @@ function parseRelationValue(value: string | null | undefined): string[] {
 		} catch { /* not JSON */ }
 	}
 	return [trimmed];
+}
+
+function inputTypeForField(fieldType: string): React.HTMLInputTypeAttribute {
+	switch (fieldType) {
+		case "number":
+			return "number";
+		case "date":
+			return "date";
+		case "email":
+			return "email";
+		case "phone":
+			return "tel";
+		case "url":
+			return "url";
+		default:
+			return "text";
+	}
+}
+
+function resolveEntryMetaValue(
+	entry: Record<string, unknown>,
+	candidateKeys: readonly string[],
+): unknown {
+	for (const key of candidateKeys) {
+		const value = entry[key];
+		if (value !== null && value !== undefined && value !== "") {
+			return value;
+		}
+	}
+	return undefined;
 }
 
 /* ─── Cell Renderers (read-only display) ─── */
@@ -119,11 +154,12 @@ function UserCell({ value, members }: { value: unknown; members?: Array<{ id: st
 }
 
 function RelationCell({
-	value, field, relationLabels, onNavigate,
+	value, field, relationLabels, onNavigateObject, onNavigateEntry,
 }: {
 	value: unknown; field: Field;
 	relationLabels?: Record<string, Record<string, string>>;
-	onNavigate?: (objectName: string) => void;
+	onNavigateObject?: (objectName: string) => void;
+	onNavigateEntry?: (objectName: string, entryId: string) => void;
 }) {
 	const fieldLabels = relationLabels?.[field.name];
 	const ids = parseRelationValue(String(value));
@@ -133,8 +169,17 @@ function RelationCell({
 			{ids.map((id) => (
 				<span
 					key={id}
-					onClick={(e) => { if (field.related_object_name && onNavigate) { e.stopPropagation(); onNavigate(field.related_object_name); } }}
-					className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${field.related_object_name && onNavigate ? "cursor-pointer" : ""}`}
+					onClick={(e) => {
+						if (!field.related_object_name) {return;}
+						if (!onNavigateEntry && !onNavigateObject) {return;}
+						e.stopPropagation();
+						if (onNavigateEntry) {
+							onNavigateEntry(field.related_object_name, id);
+							return;
+						}
+						onNavigateObject?.(field.related_object_name);
+					}}
+					className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${field.related_object_name && (onNavigateEntry || onNavigateObject) ? "cursor-pointer" : ""}`}
 					style={{ background: "var(--color-chip-document)", color: "var(--color-chip-document-text)", border: "1px solid var(--color-border)" }}
 				>
 					<span className="truncate max-w-[180px]">{fieldLabels?.[id] ?? id}</span>
@@ -144,10 +189,11 @@ function RelationCell({
 	);
 }
 
-function ReverseRelationCell({ links, sourceObjectName, onNavigate }: {
+function ReverseRelationCell({ links, sourceObjectName, onNavigateObject, onNavigateEntry }: {
 	links: Array<{ id: string; label: string }>;
 	sourceObjectName: string;
-	onNavigate?: (objectName: string) => void;
+	onNavigateObject?: (objectName: string) => void;
+	onNavigateEntry?: (objectName: string, entryId: string) => void;
 }) {
 	if (!links || links.length === 0) {return <span style={{ color: "var(--color-text-muted)", opacity: 0.5 }}>--</span>;}
 	const display = links.slice(0, 5);
@@ -157,8 +203,16 @@ function ReverseRelationCell({ links, sourceObjectName, onNavigate }: {
 			{display.map((link) => (
 				<span
 					key={link.id}
-					onClick={(e) => { e.stopPropagation(); onNavigate?.(sourceObjectName); }}
-					className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium cursor-pointer"
+					onClick={(e) => {
+						if (!onNavigateEntry && !onNavigateObject) {return;}
+						e.stopPropagation();
+						if (onNavigateEntry) {
+							onNavigateEntry(sourceObjectName, link.id);
+							return;
+						}
+						onNavigateObject?.(sourceObjectName);
+					}}
+					className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${onNavigateEntry || onNavigateObject ? "cursor-pointer" : ""}`}
 					style={{ background: "var(--color-chip-database)", color: "var(--color-chip-database-text)", border: "1px solid var(--color-border)" }}
 				>
 					<span className="truncate max-w-[180px]">{link.label}</span>
@@ -179,7 +233,9 @@ function EditableCell({
 	field,
 	members,
 	relationLabels,
-	onNavigate,
+	onNavigateObject,
+	onNavigateEntry,
+	onLocalValueChange,
 	onSaved,
 }: {
 	value: unknown;
@@ -189,7 +245,9 @@ function EditableCell({
 	field: Field;
 	members?: Array<{ id: string; name: string }>;
 	relationLabels?: Record<string, Record<string, string>>;
-	onNavigate?: (objectName: string) => void;
+	onNavigateObject?: (objectName: string) => void;
+	onNavigateEntry?: (objectName: string, entryId: string) => void;
+	onLocalValueChange?: (value: string) => void;
 	onSaved?: () => void;
 }) {
 	const [editing, setEditing] = useState(false);
@@ -212,6 +270,7 @@ function EditableCell({
 	const isRelation = field.type === "relation" && !!field.related_object_name;
 
 	const save = useCallback(async (val: string) => {
+		onLocalValueChange?.(val);
 		try {
 			await fetch(`/api/workspace/objects/${encodeURIComponent(objectName)}/entries/${encodeURIComponent(entryId)}`, {
 				method: "PATCH",
@@ -220,7 +279,7 @@ function EditableCell({
 			});
 			onSaved?.();
 		} catch { /* ignore */ }
-	}, [objectName, entryId, fieldName, onSaved]);
+	}, [objectName, entryId, fieldName, onLocalValueChange, onSaved]);
 
 	const handleChange = (val: string) => {
 		setLocalValue(val);
@@ -303,7 +362,7 @@ function EditableCell({
 			editInput = (
 				<input
 					ref={inputRef as React.RefObject<HTMLInputElement>}
-					type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+					type={inputTypeForField(field.type)}
 					value={localValue}
 					onChange={(e) => handleChange(e.target.value)}
 					onBlur={handleBlur}
@@ -337,7 +396,13 @@ function EditableCell({
 				className="cursor-cell min-h-[1.5em]"
 				title="Double-click to edit"
 			>
-				<RelationCell value={initialValue} field={field} relationLabels={relationLabels} onNavigate={onNavigate} />
+				<RelationCell
+					value={initialValue}
+					field={field}
+					relationLabels={relationLabels}
+					onNavigateObject={onNavigateObject}
+					onNavigateEntry={onNavigateEntry}
+				/>
 			</div>
 		);
 	}
@@ -354,14 +419,8 @@ function EditableCell({
 				<EnumBadge value={safeString(displayValue)} enumValues={field.enum_values} enumColors={field.enum_colors} />
 			) : field.type === "boolean" ? (
 				<BooleanCell value={displayValue} />
-			) : field.type === "email" ? (
-				<a href={`mailto:${safeString(displayValue)}`} className="underline underline-offset-2" style={{ color: "var(--color-accent)" }} onClick={(e) => e.stopPropagation()}>
-					{safeString(displayValue)}
-				</a>
-			) : field.type === "number" ? (
-				<span className="tabular-nums">{safeString(displayValue)}</span>
 			) : (
-				<span className="truncate block max-w-[300px]">{safeString(displayValue)}</span>
+				<FormattedFieldValue value={displayValue} fieldType={field.type} mode="table" />
 			)}
 		</div>
 	);
@@ -377,6 +436,7 @@ export function ObjectTable({
 	relationLabels,
 	reverseRelations,
 	onNavigateToObject,
+	onNavigateToEntry,
 	onEntryClick,
 	onRefresh,
 	columnVisibility,
@@ -385,6 +445,25 @@ export function ObjectTable({
 }: ObjectTableProps) {
 	const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
 	const [showAddModal, setShowAddModal] = useState(false);
+	const [localEntries, setLocalEntries] = useState<EntryRow[]>(entries as EntryRow[]);
+
+	// Keep local rows aligned with server-paginated updates.
+	useEffect(() => {
+		setLocalEntries(entries as EntryRow[]);
+	}, [entries]);
+
+	const updateLocalEntryField = useCallback((entryId: string, fieldName: string, value: string) => {
+		setLocalEntries((prev) =>
+			prev.map((entry) => {
+				const eid = entry.entry_id;
+				const currentEntryId = String(
+					eid != null && typeof eid === "object" ? JSON.stringify(eid) : (eid ?? ""),
+				);
+				if (currentEntryId !== entryId) {return entry;}
+				return { ...entry, [fieldName]: value };
+			}),
+		);
+	}, []);
 
 	const activeReverseRelations = useMemo(() => {
 		if (!reverseRelations) {return [];}
@@ -439,7 +518,9 @@ export function ObjectTable({
 						field={field}
 						members={members}
 						relationLabels={relationLabels}
-						onNavigate={onNavigateToObject}
+						onNavigateObject={onNavigateToObject}
+						onNavigateEntry={onNavigateToEntry}
+						onLocalValueChange={(value) => updateLocalEntryField(entryId, field.name, value)}
 						onSaved={onRefresh}
 					/>
 				);
@@ -447,6 +528,38 @@ export function ObjectTable({
 			size: field.type === "richtext" ? 300 : field.type === "relation" ? 200 : 180,
 			enableSorting: true,
 		}));
+
+		cols.push({
+			id: "created_at",
+			accessorFn: (row) => resolveEntryMetaValue(row, CREATED_AT_KEYS),
+			meta: { label: "Created", fieldName: "created_at" },
+			header: () => (
+				<span className="flex items-center gap-1" style={{ color: "var(--color-text-muted)" }}>
+					Created
+				</span>
+			),
+			cell: (info: CellContext<EntryRow, unknown>) => (
+				<FormattedFieldValue value={info.getValue()} fieldType="date" mode="table" />
+			),
+			size: 190,
+			enableSorting: true,
+		});
+
+		cols.push({
+			id: "updated_at",
+			accessorFn: (row) => resolveEntryMetaValue(row, UPDATED_AT_KEYS),
+			meta: { label: "Updated", fieldName: "updated_at" },
+			header: () => (
+				<span className="flex items-center gap-1" style={{ color: "var(--color-text-muted)" }}>
+					Updated
+				</span>
+			),
+			cell: (info: CellContext<EntryRow, unknown>) => (
+				<FormattedFieldValue value={info.getValue()} fieldType="date" mode="table" />
+			),
+			size: 190,
+			enableSorting: true,
+		});
 
 		// Add reverse relation columns
 		for (const rr of activeReverseRelations) {
@@ -466,7 +579,14 @@ export function ObjectTable({
 					const eid = info.row.original.entry_id;
 					const entryId = String(eid != null && typeof eid === "object" ? JSON.stringify(eid) : (eid ?? ""));
 					const links = rr.entries[entryId] ?? [];
-					return <ReverseRelationCell links={links} sourceObjectName={rr.sourceObjectName} onNavigate={onNavigateToObject} />;
+					return (
+						<ReverseRelationCell
+							links={links}
+							sourceObjectName={rr.sourceObjectName}
+							onNavigateObject={onNavigateToObject}
+							onNavigateEntry={onNavigateToEntry}
+						/>
+					);
 				},
 				enableSorting: false,
 				size: 200,
@@ -474,7 +594,7 @@ export function ObjectTable({
 		}
 
 		return cols;
-	}, [fields, activeReverseRelations, objectName, members, relationLabels, onNavigateToObject, onRefresh]);
+	}, [fields, activeReverseRelations, objectName, members, relationLabels, onNavigateToObject, onNavigateToEntry, onRefresh]);
 
 	// Add entry handler — opens modal instead of creating empty entry
 	const handleAdd = useCallback(() => {
@@ -485,7 +605,7 @@ export function ObjectTable({
 	const handleBulkDelete = useCallback(async () => {
 		const selectedIds = Object.keys(rowSelection)
 			.filter((k) => rowSelection[k])
-			.map((idx) => safeString(entries[Number(idx)]?.entry_id))
+			.map((idx) => safeString(localEntries[Number(idx)]?.entry_id))
 			.filter(Boolean);
 
 		if (selectedIds.length === 0) {return;}
@@ -500,7 +620,7 @@ export function ObjectTable({
 			setRowSelection({});
 			onRefresh?.();
 		} catch { /* ignore */ }
-	}, [rowSelection, entries, objectName, onRefresh]);
+	}, [rowSelection, localEntries, objectName, onRefresh]);
 
 	// Single delete handler
 	const handleDeleteEntry = useCallback(async (entry: EntryRow) => {
@@ -544,8 +664,9 @@ export function ObjectTable({
 	// Column reorder handler
 	const handleColumnReorder = useCallback(
 		async (newOrder: string[]) => {
-			// Map column IDs back to field IDs (exclude select, actions, and reverse relations)
-			const fieldIds = newOrder.filter((id) => !id.startsWith("rev_") && id !== "select" && id !== "actions");
+			// Persist only real object field IDs (ignore synthetic/system columns).
+			const fieldIdSet = new Set(fields.map((field) => field.id));
+			const fieldIds = newOrder.filter((id) => fieldIdSet.has(id));
 			try {
 				await fetch(`/api/workspace/objects/${encodeURIComponent(objectName)}/fields/reorder`, {
 					method: "PATCH",
@@ -554,7 +675,7 @@ export function ObjectTable({
 				});
 			} catch { /* ignore */ }
 		},
-		[objectName],
+		[objectName, fields],
 	);
 
 	// Bulk actions toolbar
@@ -574,7 +695,7 @@ export function ObjectTable({
 	<>
 		<DataTable
 			columns={columns}
-			data={entries as EntryRow[]}
+			data={localEntries}
 			enableSorting
 			enableGlobalFilter
 			enableRowSelection
@@ -781,7 +902,7 @@ function AddEntryModal({
 									</select>
 								) : (
 									<input
-										type={field.type === "number" ? "number" : field.type === "date" ? "date" : field.type === "email" ? "email" : "text"}
+										type={inputTypeForField(field.type)}
 										value={values[field.name] ?? ""}
 										onChange={(e) => updateField(field.name, e.target.value)}
 										className="w-full px-3 py-2 text-sm rounded-lg outline-none"

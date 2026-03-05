@@ -1,6 +1,7 @@
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { resolveWorkspaceRoot, safeResolveNewPath } from "@/lib/workspace";
+import { trackServer } from "@/lib/telemetry";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -63,6 +64,7 @@ export async function POST(req: Request) {
     mkdirSync(dirname(absPath), { recursive: true });
     const buffer = Buffer.from(await file.arrayBuffer());
     writeFileSync(absPath, buffer);
+    trackServer("file_uploaded");
     return Response.json({ ok: true, path: relPath });
   } catch (err) {
     return Response.json(

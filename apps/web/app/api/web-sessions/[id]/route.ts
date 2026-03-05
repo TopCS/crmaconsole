@@ -1,6 +1,7 @@
 import { readFileSync, existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { resolveWebChatDir } from "@/lib/workspace";
+import { enrichSubagentSessionFromTranscript } from "@/lib/active-runs";
 import { readIndex, writeIndex } from "../shared";
 
 export const dynamic = "force-dynamic";
@@ -17,12 +18,20 @@ export type ChatLine = {
   timestamp: string;
 };
 
+/**
+ * For subagent sessions whose persisted parts lack tool-invocation entries,
+ * backfill from the gateway's on-disk session transcript (which always
+ * stores the full conversation including tool calls).
+ */
 /** GET /api/web-sessions/[id] — read all messages for a web chat session */
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  if (id.includes(":subagent:")) {
+    enrichSubagentSessionFromTranscript(id);
+  }
   const filePath = join(resolveWebChatDir(), `${id}.jsonl`);
 
   if (!existsSync(filePath)) {

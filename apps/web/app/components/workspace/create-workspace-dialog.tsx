@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { DirectoryPickerModal } from "./directory-picker-modal";
 
 type CreateWorkspaceDialogProps = {
   isOpen: boolean;
@@ -10,14 +9,14 @@ type CreateWorkspaceDialogProps = {
 };
 
 function shortenPath(p: string): string {
-  return p.replace(/^\/Users\/[^/]+/, "~").replace(/^\/home\/[^/]+/, "~");
+  return p
+    .replace(/^\/Users\/[^/]+/, "~")
+    .replace(/^\/home\/[^/]+/, "~")
+    .replace(/^[A-Za-z]:[/\\]Users[/\\][^/\\]+/, "~");
 }
 
 export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWorkspaceDialogProps) {
-  const [profileName, setProfileName] = useState("");
-  const [customPath, setCustomPath] = useState("");
-  const [useCustomPath, setUseCustomPath] = useState(false);
-  const [showDirPicker, setShowDirPicker] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState("");
   const [seedBootstrap, setSeedBootstrap] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,29 +27,26 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWork
   // Focus input on open
   useEffect(() => {
     if (isOpen) {
-      setProfileName("");
-      setCustomPath("");
-      setUseCustomPath(false);
-      setShowDirPicker(false);
+      setWorkspaceName("");
       setError(null);
       setResult(null);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [isOpen]);
 
-  // Close on Escape (only if dir picker is not open)
+  // Close on Escape.
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && !showDirPicker) {onClose();}
+      if (e.key === "Escape") {onClose();}
     }
     if (isOpen) {
       document.addEventListener("keydown", handleKey);
       return () => document.removeEventListener("keydown", handleKey);
     }
-  }, [isOpen, onClose, showDirPicker]);
+  }, [isOpen, onClose]);
 
   const handleCreate = async () => {
-    const name = profileName.trim();
+    const name = workspaceName.trim();
     if (!name) {
       setError("Please enter a workspace name.");
       return;
@@ -65,12 +61,9 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWork
 
     try {
       const body: Record<string, unknown> = {
-        profile: name,
+        workspace: name,
         seedBootstrap,
       };
-      if (useCustomPath && customPath.trim()) {
-        body.path = customPath.trim();
-      }
 
       const res = await fetch("/api/workspace/init", {
         method: "POST",
@@ -161,7 +154,7 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWork
                   border: "1px solid var(--color-border)",
                 }}
               >
-                {result.workspaceDir.replace(/^\/Users\/[^/]+/, "~")}
+                {shortenPath(result.workspaceDir)}
               </code>
               {result.seededFiles.length > 0 && (
                 <p
@@ -186,9 +179,9 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWork
                 <input
                   ref={inputRef}
                   type="text"
-                  value={profileName}
+                  value={workspaceName}
                   onChange={(e) => {
-                    setProfileName(e.target.value);
+                    setWorkspaceName(e.target.value);
                     setError(null);
                   }}
                   onKeyDown={(e) => {
@@ -206,93 +199,12 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWork
                   className="text-xs mt-1"
                   style={{ color: "var(--color-text-muted)" }}
                 >
-                  This creates a new profile with its own workspace directory.
+                  This creates a workspace under ~/.openclaw-dench/workspace-{"{name}"}.
                 </p>
               </div>
 
-              {/* Custom path toggle */}
-              <div>
-                <button
-                  onClick={() => setUseCustomPath(!useCustomPath)}
-                  className="flex items-center gap-2 text-xs transition-colors hover:opacity-80"
-                  style={{ color: "var(--color-text-muted)" }}
-                >
-                  <svg
-                    className={`w-3.5 h-3.5 transition-transform ${useCustomPath ? "rotate-90" : ""}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                  Custom directory path
-                </button>
-
-                {useCustomPath && (
-                  <div className="mt-2 space-y-2">
-                    {customPath ? (
-                      <div
-                        className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg"
-                        style={{
-                          background: "var(--color-bg)",
-                          border: "1px solid var(--color-border)",
-                        }}
-                      >
-                        <div
-                          className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
-                          style={{ background: "rgba(245, 158, 11, 0.12)", color: "#f59e0b" }}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
-                          </svg>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate" style={{ color: "var(--color-text)" }}>
-                            {customPath.split("/").pop()}
-                          </p>
-                          <p className="text-[11px] truncate" style={{ color: "var(--color-text-muted)" }} title={customPath}>
-                            {shortenPath(customPath)}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => setShowDirPicker(true)}
-                          className="px-2 py-1 text-xs rounded-md transition-colors hover:opacity-80"
-                          style={{ color: "var(--color-accent)" }}
-                        >
-                          Change
-                        </button>
-                        <button
-                          onClick={() => setCustomPath("")}
-                          className="p-1 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
-                          style={{ color: "var(--color-text-muted)" }}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                            <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setShowDirPicker(true)}
-                        className="w-full flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm transition-colors hover:opacity-90"
-                        style={{
-                          background: "var(--color-bg)",
-                          border: "1px dashed var(--color-border-strong)",
-                          color: "var(--color-text-muted)",
-                        }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
-                        </svg>
-                        Browse for a directory...
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-
               {/* Bootstrap toggle */}
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className="flex items-center gap-2 cursor-pointer hidden">
                 <input
                   type="checkbox"
                   checked={seedBootstrap}
@@ -307,7 +219,6 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWork
                   Seed bootstrap files and workspace database
                 </span>
               </label>
-
               {error && (
                 <p
                   className="text-sm px-3 py-2 rounded-lg"
@@ -350,7 +261,7 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWork
               </button>
               <button
                 onClick={() => void handleCreate()}
-                disabled={creating || !profileName.trim()}
+                disabled={creating || !workspaceName.trim()}
                 className="px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
                 style={{
                   background: "var(--color-accent)",
@@ -363,14 +274,6 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWork
           )}
         </div>
       </div>
-
-      {/* Directory picker modal */}
-      <DirectoryPickerModal
-        open={showDirPicker}
-        onClose={() => setShowDirPicker(false)}
-        onSelect={(path) => setCustomPath(path)}
-        startDir="~"
-      />
     </div>
   );
 }

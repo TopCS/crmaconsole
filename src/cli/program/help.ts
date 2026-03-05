@@ -7,18 +7,17 @@ import { formatCliBannerLine, hasEmittedCliBanner } from "../banner.js";
 import { replaceCliName, resolveCliName } from "../cli-name.js";
 import { getCoreCliCommandsWithSubcommands } from "./command-registry.js";
 import type { ProgramContext } from "./context.js";
-import { getSubCliCommandsWithSubcommands } from "./register.subclis.js";
 
 const CLI_NAME = resolveCliName();
 const CLI_NAME_PATTERN = escapeRegExp(CLI_NAME);
-const ROOT_COMMANDS_WITH_SUBCOMMANDS = new Set([
-  ...getCoreCliCommandsWithSubcommands(),
-  ...getSubCliCommandsWithSubcommands(),
-]);
+const ROOT_COMMANDS_WITH_SUBCOMMANDS = new Set(getCoreCliCommandsWithSubcommands());
 const ROOT_COMMANDS_HINT =
   "Hint: commands suffixed with * have subcommands. Run <command> --help for details.";
 
 const EXAMPLES = [
+  ["openclaw start --web-port 3100", "Start the managed web runtime without replacing assets."],
+  ["openclaw update", "Refresh the managed web runtime and enforce major upgrade gates."],
+  ["openclaw stop --web-port 3100", "Stop only the managed web runtime on a specific port."],
   ["openclaw models --help", "Show detailed help for the models command."],
   [
     "openclaw channels login --verbose",
@@ -29,7 +28,10 @@ const EXAMPLES = [
     "Send via your web session and print JSON result.",
   ],
   ["openclaw gateway --port 18789", "Run the WebSocket Gateway locally."],
-  ["openclaw --dev gateway", "Run a dev Gateway (isolated state/config) on ws://127.0.0.1:19001."],
+  [
+    "openclaw --profile team-a gateway",
+    "Compatibility flag example: warns and still runs with --profile dench.",
+  ],
   ["openclaw gateway --force", "Kill anything bound to the default gateway port, then start it."],
   ["openclaw gateway ...", "Gateway control via WebSocket."],
   [
@@ -49,12 +51,9 @@ export function configureProgramHelp(program: Command, ctx: ProgramContext) {
     .version(ctx.programVersion)
     .option(
       "--dev",
-      "Dev profile: isolate state under ~/.openclaw-dev, default gateway port 19001, and shift derived ports (browser/canvas)",
+      "Compatibility flag; DenchClaw always uses --profile dench and ~/.openclaw-dench",
     )
-    .option(
-      "--profile <name>",
-      "Use a named profile (isolates OPENCLAW_STATE_DIR/OPENCLAW_CONFIG_PATH under ~/.openclaw-<name>)",
-    );
+    .option("--profile <name>", "Compatibility flag; non-dench values are ignored with a warning");
 
   program.option("--no-color", "Disable ANSI colors", false);
   program.helpOption("-h, --help", "Display help for command");

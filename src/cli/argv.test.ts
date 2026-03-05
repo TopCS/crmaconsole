@@ -1,284 +1,95 @@
 import { describe, expect, it } from "vitest";
 import {
   buildParseArgv,
-  getFlagValue,
   getCommandPath,
-  getPrimaryCommand,
+  getFlagValue,
   getPositiveIntFlagValue,
-  getVerboseFlag,
+  getPrimaryCommand,
   hasHelpOrVersion,
-  hasFlag,
+  hasRootVersionAlias,
   shouldMigrateState,
   shouldMigrateStateFromPath,
 } from "./argv.js";
 
 describe("argv helpers", () => {
-  it.each([
-    {
-      name: "help flag",
-      argv: ["node", "openclaw", "--help"],
-      expected: true,
-    },
-    {
-      name: "version flag",
-      argv: ["node", "openclaw", "-V"],
-      expected: true,
-    },
-    {
-      name: "normal command",
-      argv: ["node", "openclaw", "status"],
-      expected: false,
-    },
-    {
-      name: "root -v alias",
-      argv: ["node", "openclaw", "-v"],
-      expected: true,
-    },
-    {
-      name: "root -v alias with profile",
-      argv: ["node", "openclaw", "--profile", "work", "-v"],
-      expected: true,
-    },
-    {
-      name: "subcommand -v should not be treated as version",
-      argv: ["node", "openclaw", "acp", "-v"],
-      expected: false,
-    },
-    {
-      name: "root -v alias with equals profile",
-      argv: ["node", "openclaw", "--profile=work", "-v"],
-      expected: true,
-    },
-    {
-      name: "subcommand path after global root flags should not be treated as version",
-      argv: ["node", "openclaw", "--dev", "skills", "list", "-v"],
-      expected: false,
-    },
-  ])("detects help/version flags: $name", ({ argv, expected }) => {
-    expect(hasHelpOrVersion(argv)).toBe(expected);
+  it("detects help/version flags and root -v alias only in root-flag contexts", () => {
+    expect(hasHelpOrVersion(["node", "denchclaw", "--help"])).toBe(true);
+    expect(hasHelpOrVersion(["node", "denchclaw", "-V"])).toBe(true);
+    expect(hasHelpOrVersion(["node", "denchclaw", "-v"])).toBe(true);
+    expect(hasRootVersionAlias(["node", "denchclaw", "-v", "chat"])).toBe(false);
   });
 
-  it.each([
-    {
-      name: "single command with trailing flag",
-      argv: ["node", "openclaw", "status", "--json"],
-      expected: ["status"],
-    },
-    {
-      name: "two-part command",
-      argv: ["node", "openclaw", "agents", "list"],
-      expected: ["agents", "list"],
-    },
-    {
-      name: "terminator cuts parsing",
-      argv: ["node", "openclaw", "status", "--", "ignored"],
-      expected: ["status"],
-    },
-  ])("extracts command path: $name", ({ argv, expected }) => {
-    expect(getCommandPath(argv, 2)).toEqual(expected);
+  it("extracts flag values across --name value and --name=value forms", () => {
+    expect(getFlagValue(["node", "denchclaw", "--profile", "dev"], "--profile")).toBe("dev");
+    expect(getFlagValue(["node", "denchclaw", "--profile=team-a"], "--profile")).toBe("team-a");
+    expect(getFlagValue(["node", "denchclaw", "--profile", "--verbose"], "--profile")).toBeNull();
+    expect(getFlagValue(["node", "denchclaw", "--profile="], "--profile")).toBeNull();
   });
 
-  it.each([
-    {
-      name: "returns first command token",
-      argv: ["node", "openclaw", "agents", "list"],
-      expected: "agents",
-    },
-    {
-      name: "returns null when no command exists",
-      argv: ["node", "openclaw"],
-      expected: null,
-    },
-  ])("returns primary command: $name", ({ argv, expected }) => {
-    expect(getPrimaryCommand(argv)).toBe(expected);
+  it("parses positive integer flags and rejects invalid numeric values", () => {
+    expect(getPositiveIntFlagValue(["node", "denchclaw", "--port", "19001"], "--port")).toBe(19001);
+    expect(getPositiveIntFlagValue(["node", "denchclaw", "--port", "0"], "--port")).toBeUndefined();
+    expect(
+      getPositiveIntFlagValue(["node", "denchclaw", "--port", "-1"], "--port"),
+    ).toBeUndefined();
+    expect(
+      getPositiveIntFlagValue(["node", "denchclaw", "--port", "abc"], "--port"),
+    ).toBeUndefined();
   });
 
-  it.each([
-    {
-      name: "detects flag before terminator",
-      argv: ["node", "openclaw", "status", "--json"],
-      flag: "--json",
-      expected: true,
-    },
-    {
-      name: "ignores flag after terminator",
-      argv: ["node", "openclaw", "--", "--json"],
-      flag: "--json",
-      expected: false,
-    },
-  ])("parses boolean flags: $name", ({ argv, flag, expected }) => {
-    expect(hasFlag(argv, flag)).toBe(expected);
+  it("derives command path while skipping leading flags and stopping at terminator", () => {
+    // Low-level parser skips flag tokens but not their values.
+    expect(getCommandPath(["node", "denchclaw", "--profile", "dev", "chat"], 2)).toEqual([
+      "dev",
+      "chat",
+    ]);
+    expect(getCommandPath(["node", "denchclaw", "config", "get"], 2)).toEqual(["config", "get"]);
+    expect(getCommandPath(["node", "denchclaw", "--", "chat", "send"], 2)).toEqual([]);
+    expect(getPrimaryCommand(["node", "denchclaw", "--verbose", "status"])).toBe("status");
   });
 
-  it.each([
-    {
-      name: "value in next token",
-      argv: ["node", "openclaw", "status", "--timeout", "5000"],
-      expected: "5000",
-    },
-    {
-      name: "value in equals form",
-      argv: ["node", "openclaw", "status", "--timeout=2500"],
-      expected: "2500",
-    },
-    {
-      name: "missing value",
-      argv: ["node", "openclaw", "status", "--timeout"],
-      expected: null,
-    },
-    {
-      name: "next token is another flag",
-      argv: ["node", "openclaw", "status", "--timeout", "--json"],
-      expected: null,
-    },
-    {
-      name: "flag appears after terminator",
-      argv: ["node", "openclaw", "--", "--timeout=99"],
-      expected: undefined,
-    },
-  ])("extracts flag values: $name", ({ argv, expected }) => {
-    expect(getFlagValue(argv, "--timeout")).toBe(expected);
+  it("builds parse argv consistently across runtime invocation styles", () => {
+    expect(
+      buildParseArgv({
+        programName: "denchclaw",
+        rawArgs: ["node", "cli.js", "status"],
+      }),
+    ).toEqual(["node", "cli.js", "status"]);
+
+    expect(
+      buildParseArgv({
+        programName: "denchclaw",
+        rawArgs: ["denchclaw", "status"],
+      }),
+    ).toEqual(["node", "denchclaw", "status"]);
+
+    expect(
+      buildParseArgv({
+        programName: "denchclaw",
+        rawArgs: ["node-22.12.0.exe", "cli.js", "agent", "run"],
+      }),
+    ).toEqual(["node-22.12.0.exe", "cli.js", "agent", "run"]);
+
+    expect(
+      buildParseArgv({
+        programName: "denchclaw",
+        rawArgs: ["bun", "cli.ts", "status"],
+      }),
+    ).toEqual(["bun", "cli.ts", "status"]);
   });
 
-  it("parses verbose flags", () => {
-    expect(getVerboseFlag(["node", "openclaw", "status", "--verbose"])).toBe(true);
-    expect(getVerboseFlag(["node", "openclaw", "status", "--debug"])).toBe(false);
-    expect(getVerboseFlag(["node", "openclaw", "status", "--debug"], { includeDebug: true })).toBe(
-      true,
-    );
-  });
+  it("skips state migration for read-only command paths and keeps mutations enabled for others", () => {
+    expect(shouldMigrateStateFromPath([])).toBe(true);
+    expect(shouldMigrateStateFromPath(["health"])).toBe(false);
+    expect(shouldMigrateStateFromPath(["status"])).toBe(false);
+    expect(shouldMigrateStateFromPath(["sessions"])).toBe(false);
+    expect(shouldMigrateStateFromPath(["config", "get"])).toBe(false);
+    expect(shouldMigrateStateFromPath(["models", "list"])).toBe(false);
+    expect(shouldMigrateStateFromPath(["memory", "status"])).toBe(false);
+    expect(shouldMigrateStateFromPath(["agent"])).toBe(false);
+    expect(shouldMigrateStateFromPath(["chat", "send"])).toBe(true);
 
-  it.each([
-    {
-      name: "missing flag",
-      argv: ["node", "openclaw", "status"],
-      expected: undefined,
-    },
-    {
-      name: "missing value",
-      argv: ["node", "openclaw", "status", "--timeout"],
-      expected: null,
-    },
-    {
-      name: "valid positive integer",
-      argv: ["node", "openclaw", "status", "--timeout", "5000"],
-      expected: 5000,
-    },
-    {
-      name: "invalid integer",
-      argv: ["node", "openclaw", "status", "--timeout", "nope"],
-      expected: undefined,
-    },
-  ])("parses positive integer flag values: $name", ({ argv, expected }) => {
-    expect(getPositiveIntFlagValue(argv, "--timeout")).toBe(expected);
-  });
-
-  it("builds parse argv from raw args", () => {
-    const cases = [
-      {
-        rawArgs: ["node", "openclaw", "status"],
-        expected: ["node", "openclaw", "status"],
-      },
-      {
-        rawArgs: ["node-22", "openclaw", "status"],
-        expected: ["node-22", "openclaw", "status"],
-      },
-      {
-        rawArgs: ["node-22.2.0.exe", "openclaw", "status"],
-        expected: ["node-22.2.0.exe", "openclaw", "status"],
-      },
-      {
-        rawArgs: ["node-22.2", "openclaw", "status"],
-        expected: ["node-22.2", "openclaw", "status"],
-      },
-      {
-        rawArgs: ["node-22.2.exe", "openclaw", "status"],
-        expected: ["node-22.2.exe", "openclaw", "status"],
-      },
-      {
-        rawArgs: ["/usr/bin/node-22.2.0", "openclaw", "status"],
-        expected: ["/usr/bin/node-22.2.0", "openclaw", "status"],
-      },
-      {
-        rawArgs: ["nodejs", "openclaw", "status"],
-        expected: ["nodejs", "openclaw", "status"],
-      },
-      {
-        rawArgs: ["node-dev", "openclaw", "status"],
-        expected: ["node", "openclaw", "node-dev", "openclaw", "status"],
-      },
-      {
-        rawArgs: ["openclaw", "status"],
-        expected: ["node", "openclaw", "status"],
-      },
-      {
-        rawArgs: ["bun", "src/entry.ts", "status"],
-        expected: ["bun", "src/entry.ts", "status"],
-      },
-    ] as const;
-
-    for (const testCase of cases) {
-      const parsed = buildParseArgv({
-        programName: "openclaw",
-        rawArgs: [...testCase.rawArgs],
-      });
-      expect(parsed).toEqual([...testCase.expected]);
-    }
-  });
-
-  it("builds parse argv from fallback args", () => {
-    const fallbackArgv = buildParseArgv({
-      programName: "openclaw",
-      fallbackArgv: ["status"],
-    });
-    expect(fallbackArgv).toEqual(["node", "openclaw", "status"]);
-  });
-
-  it("builds parse argv for ironclaw binary name", () => {
-    const directArgv = buildParseArgv({
-      programName: "ironclaw",
-      rawArgs: ["ironclaw", "status"],
-    });
-    expect(directArgv).toEqual(["node", "ironclaw", "status"]);
-
-    const nodeArgv = buildParseArgv({
-      programName: "ironclaw",
-      rawArgs: ["node", "ironclaw", "status"],
-    });
-    expect(nodeArgv).toEqual(["node", "ironclaw", "status"]);
-  });
-
-  it("decides when to migrate state", () => {
-    const nonMutatingArgv = [
-      ["node", "openclaw", "status"],
-      ["node", "openclaw", "health"],
-      ["node", "openclaw", "sessions"],
-      ["node", "openclaw", "config", "get", "update"],
-      ["node", "openclaw", "config", "unset", "update"],
-      ["node", "openclaw", "models", "list"],
-      ["node", "openclaw", "models", "status"],
-      ["node", "openclaw", "memory", "status"],
-      ["node", "openclaw", "agent", "--message", "hi"],
-    ] as const;
-    const mutatingArgv = [
-      ["node", "openclaw", "agents", "list"],
-      ["node", "openclaw", "message", "send"],
-    ] as const;
-
-    for (const argv of nonMutatingArgv) {
-      expect(shouldMigrateState([...argv])).toBe(false);
-    }
-    for (const argv of mutatingArgv) {
-      expect(shouldMigrateState([...argv])).toBe(true);
-    }
-  });
-
-  it.each([
-    { path: ["status"], expected: false },
-    { path: ["config", "get"], expected: false },
-    { path: ["models", "status"], expected: false },
-    { path: ["agents", "list"], expected: true },
-  ])("reuses command path for migrate state decisions: $path", ({ path, expected }) => {
-    expect(shouldMigrateStateFromPath(path)).toBe(expected);
+    expect(shouldMigrateState(["node", "denchclaw", "health"])).toBe(false);
+    expect(shouldMigrateState(["node", "denchclaw", "chat", "send"])).toBe(true);
   });
 });

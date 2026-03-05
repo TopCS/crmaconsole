@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, dirname, resolve, normalize } from "node:path";
-import { resolveOpenClawStateDir, resolveWorkspaceRoot } from "@/lib/workspace";
+import { resolveWorkspaceRoot } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -10,8 +10,10 @@ export const runtime = "nodejs";
  * Returns null if the path is invalid or tries to escape.
  */
 function resolveVirtualPath(virtualPath: string): string | null {
-  const stateDir = resolveOpenClawStateDir();
-  const workspaceDir = resolveWorkspaceRoot() ?? join(stateDir, "workspace");
+  const workspaceDir = resolveWorkspaceRoot();
+  if (!workspaceDir) {
+    return null;
+  }
 
   if (virtualPath.startsWith("~skills/")) {
     // ~skills/<skillName>/SKILL.md
@@ -27,18 +29,12 @@ function resolveVirtualPath(virtualPath: string): string | null {
       return null;
     }
 
-    // Check workspace skills first, then managed skills
-    const candidates = [
-      join(workspaceDir, "skills", skillName, "SKILL.md"),
-      join(stateDir, "skills", skillName, "SKILL.md"),
-    ];
-    for (const candidate of candidates) {
-      if (existsSync(candidate)) {
-        return candidate;
-      }
+    const skillPath = join(workspaceDir, "skills", skillName, "SKILL.md");
+    if (existsSync(skillPath)) {
+      return skillPath;
     }
-    // Default to workspace skills dir for new files
-    return candidates[0];
+    // Default to workspace skills dir for new files.
+    return skillPath;
   }
 
   if (virtualPath.startsWith("~memories/")) {
@@ -83,11 +79,12 @@ function resolveVirtualPath(virtualPath: string): string | null {
  * Double-check that the resolved path stays within expected directories.
  */
 function isSafePath(absPath: string): boolean {
-  const stateDir = resolveOpenClawStateDir();
-  const workspaceDir = resolveWorkspaceRoot() ?? join(stateDir, "workspace");
+  const workspaceDir = resolveWorkspaceRoot();
+  if (!workspaceDir) {
+    return false;
+  }
   const normalized = normalize(resolve(absPath));
   const allowed = [
-    normalize(join(stateDir, "skills")),
     normalize(join(workspaceDir, "skills")),
     normalize(workspaceDir),
   ];

@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { Dirent } from "node:fs";
+
+vi.mock("@/lib/workspace", () => ({
+  discoverWorkspaces: vi.fn(() => []),
+  getActiveWorkspaceName: vi.fn(() => null),
+  resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw-dench"),
+  resolveWorkspaceRoot: vi.fn(() => null),
+  setUIActiveWorkspace: vi.fn(),
+}));
 
 vi.mock("node:fs", () => ({
   existsSync: vi.fn(() => false),
@@ -9,204 +16,185 @@ vi.mock("node:fs", () => ({
   mkdirSync: vi.fn(),
 }));
 
-vi.mock("node:child_process", () => ({
-  execSync: vi.fn(() => ""),
-  exec: vi.fn(
-    (
-      _cmd: string,
-      _opts: unknown,
-      cb: (err: Error | null, result: { stdout: string }) => void,
-    ) => {
-      cb(null, { stdout: "" });
-    },
-  ),
-}));
-
-vi.mock("node:os", () => ({
-  homedir: vi.fn(() => "/home/testuser"),
-}));
-
-import { join } from "node:path";
-
-function makeDirent(name: string, isDir: boolean): Dirent {
-  return {
-    name,
-    isDirectory: () => isDir,
-    isFile: () => !isDir,
-    isBlockDevice: () => false,
-    isCharacterDevice: () => false,
-    isFIFO: () => false,
-    isSocket: () => false,
-    isSymbolicLink: () => false,
-    path: "",
-    parentPath: "",
-  } as Dirent;
-}
-
 describe("profiles API", () => {
   const originalEnv = { ...process.env };
-  const STATE_DIR = join("/home/testuser", ".openclaw");
+  const STATE_DIR = "/home/testuser/.openclaw-dench";
 
   beforeEach(() => {
     vi.resetModules();
     vi.restoreAllMocks();
     process.env = { ...originalEnv };
-    delete process.env.OPENCLAW_PROFILE;
     delete process.env.OPENCLAW_HOME;
     delete process.env.OPENCLAW_WORKSPACE;
-    delete process.env.OPENCLAW_STATE_DIR;
-
-    vi.mock("node:fs", () => ({
-      existsSync: vi.fn(() => false),
-      readFileSync: vi.fn(() => ""),
-      readdirSync: vi.fn(() => []),
-      writeFileSync: vi.fn(),
-      mkdirSync: vi.fn(),
-    }));
-    vi.mock("node:child_process", () => ({
-      execSync: vi.fn(() => ""),
-      exec: vi.fn(
-        (
-          _cmd: string,
-          _opts: unknown,
-          cb: (err: Error | null, result: { stdout: string }) => void,
-        ) => {
-          cb(null, { stdout: "" });
-        },
-      ),
-    }));
-    vi.mock("node:os", () => ({
-      homedir: vi.fn(() => "/home/testuser"),
-    }));
   });
 
   afterEach(() => {
     process.env = originalEnv;
   });
 
-  // ─── GET /api/profiles ────────────────────────────────────────────
+  it("lists discovered workspaces with gateway metadata", async () => {
+    const workspace = await import("@/lib/workspace");
+    const { existsSync, readFileSync } = await import("node:fs");
+    const mockExists = vi.mocked(existsSync);
+    const mockReadFile = vi.mocked(readFileSync);
 
-  describe("GET /api/profiles", () => {
-    async function callGet() {
-      const { GET } = await import("./route.js");
-      return GET();
-    }
+    vi.mocked(workspace.discoverWorkspaces).mockReturnValue([
+      {
+        name: "main",
+        stateDir: STATE_DIR,
+        workspaceDir: `${STATE_DIR}/workspace-main`,
+        isActive: false,
+        hasConfig: true,
+      },
+      {
+        name: "work",
+        stateDir: STATE_DIR,
+        workspaceDir: `${STATE_DIR}/workspace-work`,
+        isActive: true,
+        hasConfig: true,
+      },
+    ]);
+    vi.mocked(workspace.getActiveWorkspaceName).mockReturnValue("work");
 
-    it("returns profiles list with default profile", async () => {
-      const response = await callGet();
-      expect(response.status).toBe(200);
-      const json = await response.json();
-      expect(json.profiles).toBeDefined();
-      expect(json.profiles.length).toBeGreaterThanOrEqual(1);
-      expect(json.profiles[0].name).toBe("default");
+    mockExists.mockImplementation((p) => {
+      const s = String(p);
+      return s.endsWith("openclaw.json");
+    });
+    mockReadFile.mockImplementation((p) => {
+      const s = String(p);
+      if (s.includes("openclaw.json")) {
+        return JSON.stringify({ gateway: { mode: "local", port: 18789 } }) as never;
+      }
+      return "" as never;
     });
 
-    it("returns activeProfile", async () => {
-      const response = await callGet();
-      const json = await response.json();
-      expect(json.activeProfile).toBe("default");
-    });
+    const { GET } = await import("./route.js");
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const json = await response.json();
 
-    it("returns stateDir", async () => {
-      const response = await callGet();
-      const json = await response.json();
-      expect(json.stateDir).toBe(STATE_DIR);
-    });
+    expect(json.activeWorkspace).toBe("work");
+    expect(json.activeProfile).toBe("work");
+    expect(json.workspaces).toHaveLength(2);
+    expect(json.profiles).toHaveLength(2);
 
-    it("discovers workspace-<name> directories", async () => {
-      const { existsSync: es, readdirSync: rds } = await import("node:fs");
-      vi.mocked(es).mockImplementation((p) => {
-        const s = String(p);
-        return (
-          s === STATE_DIR ||
-          s === join(STATE_DIR, "workspace-dev")
-        );
-      });
-      vi.mocked(rds).mockReturnValue([
-        makeDirent("workspace-dev", true),
-      ] as unknown as Dirent[]);
-
-      const response = await callGet();
-      const json = await response.json();
-      const names = json.profiles.map((p: { name: string }) => p.name);
-      expect(names).toContain("dev");
+    const work = json.workspaces.find((w: { name: string }) => w.name === "work");
+    expect(work).toMatchObject({
+      name: "work",
+      stateDir: STATE_DIR,
+      isActive: true,
+      gateway: { mode: "local", port: 18789, url: "ws://127.0.0.1:18789" },
     });
   });
 
-  // ─── POST /api/profiles/switch ────────────────────────────────────
+  it("includes bootstrap-root workspace as default", async () => {
+    const workspace = await import("@/lib/workspace");
+    const { existsSync, readFileSync } = await import("node:fs");
+    const mockExists = vi.mocked(existsSync);
+    const mockReadFile = vi.mocked(readFileSync);
 
-  describe("POST /api/profiles/switch", () => {
-    async function callSwitch(body: Record<string, unknown>) {
-      const { POST } = await import("./switch/route.js");
-      const req = new Request("http://localhost/api/profiles/switch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      return POST(req);
-    }
+    vi.mocked(workspace.discoverWorkspaces).mockReturnValue([
+      {
+        name: "default",
+        stateDir: STATE_DIR,
+        workspaceDir: `${STATE_DIR}/workspace`,
+        isActive: true,
+        hasConfig: true,
+      },
+    ]);
+    vi.mocked(workspace.getActiveWorkspaceName).mockReturnValue("default");
 
-    it("switches to named profile", async () => {
-      const { writeFileSync: wfs } = await import("node:fs");
-      const { existsSync: es } = await import("node:fs");
-      vi.mocked(es).mockReturnValue(true);
-
-      const response = await callSwitch({ profile: "work" });
-      expect(response.status).toBe(200);
-      const json = await response.json();
-      expect(json.activeProfile).toBe("work");
-
-      const writeCalls = vi.mocked(wfs).mock.calls;
-      const stateWrite = writeCalls.find((c) =>
-        (c[0] as string).includes(".ironclaw-ui-state.json"),
-      );
-      expect(stateWrite).toBeDefined();
+    mockExists.mockImplementation((p) => String(p).endsWith("openclaw.json"));
+    mockReadFile.mockImplementation((p) => {
+      if (String(p).includes("openclaw.json")) {
+        return JSON.stringify({ gateway: { mode: "local", port: 19001 } }) as never;
+      }
+      return "" as never;
     });
 
-    it("'default' clears the override", async () => {
-      const { existsSync: es } = await import("node:fs");
-      vi.mocked(es).mockReturnValue(true);
+    const { GET } = await import("./route.js");
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const json = await response.json();
 
-      const response = await callSwitch({ profile: "default" });
-      expect(response.status).toBe(200);
-      const json = await response.json();
-      expect(json.activeProfile).toBe("default");
+    expect(json.activeWorkspace).toBe("default");
+    expect(json.activeProfile).toBe("default");
+    expect(json.workspaces).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "default",
+          workspaceDir: `${STATE_DIR}/workspace`,
+          gateway: { mode: "local", port: 19001, url: "ws://127.0.0.1:19001" },
+        }),
+      ]),
+    );
+  });
+
+  it("switches to an existing workspace", async () => {
+    const workspace = await import("@/lib/workspace");
+    vi.mocked(workspace.discoverWorkspaces)
+      .mockReturnValueOnce([
+        {
+          name: "work",
+          stateDir: STATE_DIR,
+          workspaceDir: `${STATE_DIR}/workspace-work`,
+          isActive: false,
+          hasConfig: true,
+        },
+      ])
+      .mockReturnValueOnce([
+        {
+          name: "work",
+          stateDir: STATE_DIR,
+          workspaceDir: `${STATE_DIR}/workspace-work`,
+          isActive: true,
+          hasConfig: true,
+        },
+      ]);
+    vi.mocked(workspace.getActiveWorkspaceName).mockReturnValue("work");
+    vi.mocked(workspace.resolveOpenClawStateDir).mockReturnValue(STATE_DIR);
+    vi.mocked(workspace.resolveWorkspaceRoot).mockReturnValue(`${STATE_DIR}/workspace-work`);
+
+    const { POST } = await import("./switch/route.js");
+    const req = new Request("http://localhost/api/profiles/switch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "work" }),
     });
 
-    it("rejects missing profile name", async () => {
-      const response = await callSwitch({});
-      expect(response.status).toBe(400);
-      const json = await response.json();
-      expect(json.error).toContain("Missing profile name");
+    const response = await POST(req);
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.activeWorkspace).toBe("work");
+    expect(json.activeProfile).toBe("work");
+    expect(json.stateDir).toBe(STATE_DIR);
+    expect(json.workspaceRoot).toBe(`${STATE_DIR}/workspace-work`);
+    expect(json.workspace.name).toBe("work");
+    expect(workspace.setUIActiveWorkspace).toHaveBeenCalledWith("work");
+  });
+
+  it("rejects invalid names", async () => {
+    const { POST } = await import("./switch/route.js");
+    const req = new Request("http://localhost/api/profiles/switch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "../bad" }),
     });
+    const response = await POST(req);
+    expect(response.status).toBe(400);
+  });
 
-    it("rejects invalid profile name characters", async () => {
-      const response = await callSwitch({ profile: "bad name!" });
-      expect(response.status).toBe(400);
-      const json = await response.json();
-      expect(json.error).toContain("Invalid profile name");
+  it("returns 404 for unknown workspace", async () => {
+    const workspace = await import("@/lib/workspace");
+    vi.mocked(workspace.discoverWorkspaces).mockReturnValue([]);
+
+    const { POST } = await import("./switch/route.js");
+    const req = new Request("http://localhost/api/profiles/switch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "nonexistent" }),
     });
-
-    it("returns workspace root after switching", async () => {
-      const { existsSync: es } = await import("node:fs");
-      const wsDir = join(STATE_DIR, "workspace-dev");
-      vi.mocked(es).mockImplementation((p) => {
-        const s = String(p);
-        return s === wsDir || s.includes(".openclaw");
-      });
-
-      const response = await callSwitch({ profile: "dev" });
-      const json = await response.json();
-      expect(json.workspaceRoot).toBeDefined();
-    });
-
-    it("returns stateDir in response", async () => {
-      const { existsSync: es } = await import("node:fs");
-      vi.mocked(es).mockReturnValue(true);
-
-      const response = await callSwitch({ profile: "test" });
-      const json = await response.json();
-      expect(json.stateDir).toBe(STATE_DIR);
-    });
+    const response = await POST(req);
+    expect(response.status).toBe(404);
   });
 });

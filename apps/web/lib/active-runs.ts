@@ -8,7 +8,6 @@
  *  - Messages are written to persistent sessions as they arrive.
  *  - New HTTP connections can re-attach to a running stream.
  */
-import { type ChildProcess, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { join } from "node:path";
 import {
@@ -17,12 +16,14 @@ import {
 	existsSync,
 	mkdirSync,
 } from "node:fs";
-import { resolveWebChatDir, resolveOpenClawStateDir } from "./workspace";
+import { resolveWebChatDir, resolveOpenClawStateDir, resolveActiveAgentId } from "./workspace";
 import {
+	type AgentProcessHandle,
 	type AgentEvent,
 	spawnAgentProcess,
 	spawnAgentSubscribeProcess,
-	resolvePackageRoot,
+	spawnAgentStartForSession,
+	callGatewayRpc,
 	extractToolResult,
 	buildToolOutput,
 	parseAgentErrorMessage,
@@ -59,7 +60,7 @@ type AccumulatedMessage = {
 
 export type ActiveRun = {
 	sessionId: string;
-	childProcess: ChildProcess;
+	childProcess: AgentProcessHandle;
 	eventBuffer: SseEvent[];
 	subscribers: Set<RunSubscriber>;
 	accumulated: AccumulatedMessage;
@@ -74,7 +75,11 @@ export type ActiveRun = {
 	/** @internal last globalSeq seen from the gateway event stream */
 	lastGlobalSeq: number;
 	/** @internal subscribe child process for waiting-for-subagents continuation */
-	_subscribeProcess?: ChildProcess | null;
+	_subscribeProcess?: AgentProcessHandle | null;
+	/** @internal retry timer for subscribe stream restarts */
+	_subscribeRetryTimer?: ReturnType<typeof setTimeout> | null;
+	/** @internal consecutive subscribe restart attempts without a received event */
+	_subscribeRetryAttempt?: number;
 	/** Full gateway session key (used for subagent subscribe-only runs) */
 	sessionKey?: string;
 	/** Parent web session ID (for subagent runs) */
@@ -89,6 +94,8 @@ export type ActiveRun = {
 	_lifecycleEnded?: boolean;
 	/** Safety timer to finalize if subscribe process hangs after lifecycle/end */
 	_finalizeTimer?: ReturnType<typeof setTimeout> | null;
+	/** @internal short reconciliation window before waiting-run completion */
+	_waitingFinalizeTimer?: ReturnType<typeof setTimeout> | null;
 };
 
 // ── Constants ──
@@ -96,6 +103,10 @@ export type ActiveRun = {
 const PERSIST_INTERVAL_MS = 2_000;
 const CLEANUP_GRACE_MS = 30_000;
 const SUBSCRIBE_CLEANUP_GRACE_MS = 24 * 60 * 60_000;
+const SUBSCRIBE_RETRY_BASE_MS = 300;
+const SUBSCRIBE_RETRY_MAX_MS = 5_000;
+const SUBSCRIBE_LIFECYCLE_END_GRACE_MS = 750;
+const WAITING_FINALIZE_RECONCILE_MS = 5_000;
 
 const SILENT_REPLY_TOKEN = "NO_REPLY";
 
@@ -112,6 +123,58 @@ function isLeakedSilentReplyToken(text: string): boolean {
 	if (new RegExp(`^${SILENT_REPLY_TOKEN}\\W*$`).test(t)) {return true;}
 	if (SILENT_REPLY_TOKEN.startsWith(t) && t.length >= 2 && t.length < SILENT_REPLY_TOKEN.length) {return true;}
 	return false;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return null;
+	}
+	return value as Record<string, unknown>;
+}
+
+function resolveModelLabel(provider: unknown, model: unknown): string | null {
+	if (typeof model !== "string" || !model.trim()) { return null; }
+	const m = model.trim();
+	if (typeof provider === "string" && provider.trim()) {
+		const p = provider.trim();
+		return m.toLowerCase().startsWith(`${p.toLowerCase()}/`) ? m : `${p}/${m}`;
+	}
+	return m;
+}
+
+function extractAssistantTextFromChatPayload(
+	data: Record<string, unknown> | undefined,
+): string {
+	if (!data) {
+		return "";
+	}
+	const state = typeof data.state === "string" ? data.state : "";
+	if (state !== "final") {
+		return "";
+	}
+	const message = asRecord(data.message);
+	if (!message || message.role !== "assistant") {
+		return "";
+	}
+	const content = message.content;
+	if (typeof content === "string") {
+		return content;
+	}
+	if (!Array.isArray(content)) {
+		return "";
+	}
+	const chunks: string[] = [];
+	for (const part of content) {
+		const rec = asRecord(part);
+		if (!rec) {
+			continue;
+		}
+		const type = typeof rec.type === "string" ? rec.type : "";
+		if ((type === "text" || type === "output_text") && typeof rec.text === "string") {
+			chunks.push(rec.text);
+		}
+	}
+	return chunks.join("");
 }
 // Evaluated per-call so it tracks profile switches at runtime.
 function webChatDir(): string { return resolveWebChatDir(); }
@@ -223,7 +286,7 @@ export function subscribeToRun(
  * Reactivate a completed subscribe-only run for a follow-up message.
  * Resets status to "running" and restarts the subscribe stream.
  */
-export function reactivateSubscribeRun(sessionKey: string): boolean {
+export function reactivateSubscribeRun(sessionKey: string, message?: string): boolean {
 	const run = activeRuns.get(sessionKey);
 	if (!run?.isSubscribeOnly) {return false;}
 	if (run.status === "running") {return true;}
@@ -231,6 +294,9 @@ export function reactivateSubscribeRun(sessionKey: string): boolean {
 	run.status = "running";
 	run._lifecycleEnded = false;
 	if (run._finalizeTimer) {clearTimeout(run._finalizeTimer); run._finalizeTimer = null;}
+	clearWaitingFinalizeTimer(run);
+	resetSubscribeRetryState(run);
+	stopSubscribeProcess(run);
 
 	run.accumulated = {
 		id: `assistant-${sessionKey}-${Date.now()}`,
@@ -238,7 +304,12 @@ export function reactivateSubscribeRun(sessionKey: string): boolean {
 		parts: [],
 	};
 
-	const newChild = spawnAgentSubscribeProcess(sessionKey, run.lastGlobalSeq);
+	// When a follow-up message is provided, use start mode so the `agent`
+	// RPC streams ALL events (including tool events) on the same connection.
+	// In passive subscribe mode, tool events are not broadcast by the gateway.
+	const newChild = message
+		? spawnAgentStartForSession(message, sessionKey)
+		: spawnAgentSubscribeProcess(sessionKey, run.lastGlobalSeq);
 	run._subscribeProcess = newChild;
 	run.childProcess = newChild;
 	wireSubscribeOnlyProcess(run, newChild, sessionKey);
@@ -251,24 +322,21 @@ export function reactivateSubscribeRun(sessionKey: string): boolean {
  */
 export function sendSubagentFollowUp(sessionKey: string, message: string): boolean {
 	try {
-		const root = resolvePackageRoot();
-		const devScript = join(root, "scripts", "run-node.mjs");
-		const prodScript = join(root, "openclaw.mjs");
-		const scriptPath = existsSync(devScript) ? devScript : prodScript;
-		const child = spawn(
-			"node",
-			[
-				scriptPath, "gateway", "call", "agent",
-				"--params", JSON.stringify({
-					message, sessionKey,
-					idempotencyKey: `follow-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-					deliver: false, channel: "webchat", lane: "subagent", timeout: 0,
-				}),
-				"--json", "--timeout", "10000",
-			],
-			{ cwd: root, env: { ...process.env }, stdio: "ignore", detached: true },
-		);
-		child.unref();
+		void callGatewayRpc(
+			"agent",
+			{
+				message,
+				sessionKey,
+				idempotencyKey: `follow-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+				deliver: false,
+				channel: "webchat",
+				lane: "subagent",
+				timeout: 0,
+			},
+			{ timeoutMs: 10_000 },
+		).catch(() => {
+			// Best effort.
+		});
 		return true;
 	} catch {
 		return false;
@@ -277,7 +345,8 @@ export function sendSubagentFollowUp(sessionKey: string, message: string): boole
 
 /**
  * Persist a user message for a subscribe-only (subagent) run.
- * Emits a user-message event so reconnecting clients see the message.
+ * Emits a user-message event so reconnecting clients see the message,
+ * and writes the message to the session JSONL file on disk.
  */
 export function persistSubscribeUserMessage(
 	sessionKey: string,
@@ -285,15 +354,40 @@ export function persistSubscribeUserMessage(
 ): boolean {
 	const run = activeRuns.get(sessionKey);
 	if (!run) {return false;}
+	const msgId = msg.id ?? `user-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 	const event: SseEvent = {
 		type: "user-message",
-		id: msg.id ?? `user-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+		id: msgId,
 		text: msg.text,
 	};
 	run.eventBuffer.push(event);
 	for (const sub of run.subscribers) {
 		try { sub(event); } catch { /* ignore */ }
 	}
+
+	// Write the user message to the session JSONL (same as persistUserMessage
+	// does for parent sessions) so it survives page reloads.
+	try {
+		ensureDir();
+		const fp = join(webChatDir(), `${sessionKey}.jsonl`);
+		if (!existsSync(fp)) {writeFileSync(fp, "");}
+		const content = readFileSync(fp, "utf-8");
+		const lines = content.split("\n").filter((l) => l.trim());
+		const alreadySaved = lines.some((l) => {
+			try { return JSON.parse(l).id === msgId; } catch { return false; }
+		});
+		if (!alreadySaved) {
+			const line = JSON.stringify({
+				id: msgId,
+				role: "user",
+				content: msg.text,
+				parts: [{ type: "text", text: msg.text }],
+				timestamp: new Date().toISOString(),
+			});
+			writeFileSync(fp, [...lines, line].join("\n") + "\n");
+		}
+	} catch { /* best effort */ }
+
 	schedulePersist(run);
 	return true;
 }
@@ -307,6 +401,7 @@ export function abortRun(sessionId: string): boolean {
 	// false and the next user message isn't rejected with 409.
 	const wasWaiting = run.status === "waiting-for-subagents";
 	run.status = "error";
+	clearWaitingFinalizeTimer(run);
 
 	// Clean up waiting subscribe process if present.
 	stopSubscribeProcess(run);
@@ -359,34 +454,12 @@ export function abortRun(sessionId: string): boolean {
  */
 function sendGatewayAbort(sessionId: string): void {
 	try {
-		const root = resolvePackageRoot();
-		const devScript = join(root, "scripts", "run-node.mjs");
-		const prodScript = join(root, "openclaw.mjs");
-		const scriptPath = existsSync(devScript) ? devScript : prodScript;
-
-		const sessionKey = `agent:main:web:${sessionId}`;
-		const child = spawn(
-			"node",
-			[
-				scriptPath,
-				"gateway",
-				"call",
-				"chat.abort",
-				"--params",
-				JSON.stringify({ sessionKey }),
-				"--json",
-				"--timeout",
-				"4000",
-			],
-			{
-				cwd: root,
-				env: { ...process.env },
-				stdio: "ignore",
-				detached: true,
+		const sessionKey = `agent:${resolveActiveAgentId()}:web:${sessionId}`;
+		void callGatewayRpc("chat.abort", { sessionKey }, { timeoutMs: 4_000 }).catch(
+			() => {
+				// Best effort; don't let abort failures break the stop flow.
 			},
 		);
-		// Let the abort process run independently — don't block on it.
-		child.unref();
 	} catch {
 		// Best-effort; don't let abort failures break the stop flow.
 	}
@@ -430,6 +503,9 @@ export function startRun(params: {
 		_persistTimer: null,
 		_lastPersistedAt: 0,
 		lastGlobalSeq: 0,
+		_subscribeRetryTimer: null,
+		_subscribeRetryAttempt: 0,
+		_waitingFinalizeTimer: null,
 	};
 
 	activeRuns.set(sessionId, run);
@@ -469,6 +545,15 @@ export function startSubscribeRun(params: {
 		return activeRuns.get(sessionKey)!;
 	}
 
+	// Patch verbose level BEFORE spawning the subscribe process so tool
+	// events are generated for events that occur after this point.
+	// The subscribe process also patches, but this gives us a head start.
+	void callGatewayRpc(
+		"sessions.patch",
+		{ key: sessionKey, verboseLevel: "full", reasoningLevel: "on" },
+		{ timeoutMs: 4_000 },
+	).catch(() => {});
+
 	const abortController = new AbortController();
 	const subscribeChild = spawnAgentSubscribeProcess(sessionKey, 0);
 
@@ -496,11 +581,90 @@ export function startSubscribeRun(params: {
 		isSubscribeOnly: true,
 		_lifecycleEnded: false,
 		_finalizeTimer: null,
+		_subscribeRetryTimer: null,
+		_subscribeRetryAttempt: 0,
+		_waitingFinalizeTimer: null,
 	};
 
 	activeRuns.set(sessionKey, run);
 	wireSubscribeOnlyProcess(run, subscribeChild, sessionKey);
 	return run;
+}
+
+type TranscriptToolPart = {
+	type: "tool-invocation";
+	toolCallId: string;
+	toolName: string;
+	args: Record<string, unknown>;
+	result?: Record<string, unknown>;
+};
+
+function readLatestTranscriptToolParts(
+	sessionKey: string,
+): { sessionId: string; tools: TranscriptToolPart[] } | null {
+	const stateDir = resolveOpenClawStateDir();
+	const agentId = resolveActiveAgentId();
+	const sessionsJsonPath = join(stateDir, "agents", agentId, "sessions", "sessions.json");
+	if (!existsSync(sessionsJsonPath)) { return null; }
+	const sessions = JSON.parse(readFileSync(sessionsJsonPath, "utf-8")) as Record<string, Record<string, unknown>>;
+	const sessionData = sessions[sessionKey];
+	const sessionId = typeof sessionData?.sessionId === "string" ? sessionData.sessionId : null;
+	if (!sessionId) { return null; }
+	const transcriptPath = join(stateDir, "agents", agentId, "sessions", `${sessionId}.jsonl`);
+	if (!existsSync(transcriptPath)) { return null; }
+
+	const entries = readFileSync(transcriptPath, "utf-8")
+		.split("\n").filter((l) => l.trim())
+		.map((l) => { try { return JSON.parse(l); } catch { return null; } })
+		.filter(Boolean) as Array<Record<string, unknown>>;
+
+	const toolResults = new Map<string, Record<string, unknown>>();
+	let latestToolCalls: TranscriptToolPart[] = [];
+
+	for (const entry of entries) {
+		if (entry.type !== "message") { continue; }
+		const msg = entry.message as Record<string, unknown> | undefined;
+		if (!msg) { continue; }
+		const role = typeof msg.role === "string" ? msg.role : "";
+		const content = msg.content;
+
+		if (role === "toolResult" && typeof msg.toolCallId === "string") {
+			const text = Array.isArray(content)
+				? (content as Array<Record<string, unknown>>)
+					.filter((c) => c.type === "text" && typeof c.text === "string")
+					.map((c) => c.text as string).join("\n")
+				: typeof content === "string" ? content : "";
+			toolResults.set(msg.toolCallId, { text: text.slice(0, 500) });
+			continue;
+		}
+
+		if (role !== "assistant" || !Array.isArray(content)) { continue; }
+		const calls: TranscriptToolPart[] = [];
+		for (const part of content as Array<Record<string, unknown>>) {
+			if (part.type === "toolCall" && typeof part.id === "string" && typeof part.name === "string") {
+				calls.push({
+					type: "tool-invocation",
+					toolCallId: part.id,
+					toolName: part.name,
+					args: (part.arguments as Record<string, unknown>) ?? {},
+				});
+			}
+		}
+		if (calls.length > 0) {
+			latestToolCalls = calls;
+		}
+	}
+
+	if (latestToolCalls.length === 0) {
+		return null;
+	}
+
+	const withResults = latestToolCalls.map((tool) => {
+		const result = toolResults.get(tool.toolCallId);
+		return result ? { ...tool, result } : tool;
+	});
+
+	return { sessionId, tools: withResults };
 }
 
 /**
@@ -510,7 +674,7 @@ export function startSubscribeRun(params: {
  */
 function wireSubscribeOnlyProcess(
 	run: ActiveRun,
-	child: ChildProcess,
+	child: AgentProcessHandle,
 	sessionKey: string,
 ): void {
 	let idCounter = 0;
@@ -519,10 +683,15 @@ function wireSubscribeOnlyProcess(
 
 	let currentTextId = "";
 	let currentReasoningId = "";
+	let currentStatusReasoningLabel: string | null = null;
 	let textStarted = false;
 	let reasoningStarted = false;
 	let statusReasoningActive = false;
 	let agentErrorReported = false;
+	const liveStats = {
+		assistantChunks: 0,
+		toolStartCount: 0,
+	};
 
 	let accTextIdx = -1;
 	let accReasoningIdx = -1;
@@ -570,6 +739,7 @@ function wireSubscribeOnlyProcess(
 			reasoningStarted = false;
 			statusReasoningActive = false;
 		}
+		currentStatusReasoningLabel = null;
 		accReasoningIdx = -1;
 	};
 
@@ -586,6 +756,9 @@ function wireSubscribeOnlyProcess(
 	};
 
 	const openStatusReasoning = (label: string) => {
+		if (statusReasoningActive && currentStatusReasoningLabel === label) {
+			return;
+		}
 		closeReasoning();
 		closeText();
 		currentReasoningId = nextId("status");
@@ -593,9 +766,77 @@ function wireSubscribeOnlyProcess(
 		emit({ type: "reasoning-delta", id: currentReasoningId, delta: label });
 		reasoningStarted = true;
 		statusReasoningActive = true;
+		currentStatusReasoningLabel = label;
+	};
+
+	const maybeBackfillLiveToolsFromTranscript = (_reason: "assistant-chunk" | "lifecycle-end") => {
+		if (liveStats.toolStartCount > 0) {
+			return;
+		}
+		const bundle = readLatestTranscriptToolParts(sessionKey);
+		if (!bundle) {
+			return;
+		}
+
+		for (const tool of bundle.tools) {
+			const existingIdx = accToolMap.get(tool.toolCallId);
+			if (existingIdx === undefined) {
+				closeReasoning();
+				closeText();
+				emit({
+					type: "tool-input-start",
+					toolCallId: tool.toolCallId,
+					toolName: tool.toolName,
+				});
+				emit({
+					type: "tool-input-available",
+					toolCallId: tool.toolCallId,
+					toolName: tool.toolName,
+					input: tool.args ?? {},
+				});
+				run.accumulated.parts.push({
+					type: "tool-invocation",
+					toolCallId: tool.toolCallId,
+					toolName: tool.toolName,
+					args: tool.args ?? {},
+				});
+				accToolMap.set(tool.toolCallId, run.accumulated.parts.length - 1);
+			}
+
+			if (!tool.result) {
+				continue;
+			}
+
+			const idx = accToolMap.get(tool.toolCallId);
+			if (idx === undefined) {
+				continue;
+			}
+			const part = run.accumulated.parts[idx];
+			if (part.type !== "tool-invocation" || part.result) {
+				continue;
+			}
+			part.result = tool.result;
+			emit({
+				type: "tool-output-available",
+				toolCallId: tool.toolCallId,
+				output: tool.result,
+			});
+		}
 	};
 
 	const processEvent = (ev: AgentEvent) => {
+		const isLifecycleEndEvent =
+			ev.event === "agent" &&
+			ev.stream === "lifecycle" &&
+			ev.data?.phase === "end";
+		if (!isLifecycleEndEvent) {
+			if (run._finalizeTimer) {
+				clearTimeout(run._finalizeTimer);
+				run._finalizeTimer = null;
+			}
+			run._lifecycleEnded = false;
+		}
+
 		if (ev.event === "agent" && ev.stream === "lifecycle" && ev.data?.phase === "start") {
 			openStatusReasoning("Preparing response...");
 		}
@@ -619,6 +860,13 @@ function wireSubscribeOnlyProcess(
 			const textFallback = !delta && typeof ev.data?.text === "string" ? ev.data.text : undefined;
 			const chunk = delta ?? textFallback;
 			if (chunk) {
+				liveStats.assistantChunks += 1;
+				if (
+					liveStats.toolStartCount === 0 &&
+					(liveStats.assistantChunks === 1 || liveStats.assistantChunks % 40 === 0)
+				) {
+					maybeBackfillLiveToolsFromTranscript("assistant-chunk");
+				}
 				closeReasoning();
 				if (!textStarted) {
 					currentTextId = nextId("text");
@@ -627,6 +875,22 @@ function wireSubscribeOnlyProcess(
 				}
 				emit({ type: "text-delta", id: currentTextId, delta: chunk });
 				accAppendText(chunk);
+			}
+			const mediaUrls = ev.data?.mediaUrls;
+			if (Array.isArray(mediaUrls)) {
+				for (const url of mediaUrls) {
+					if (typeof url === "string" && url.trim()) {
+						closeReasoning();
+						if (!textStarted) {
+							currentTextId = nextId("text");
+							emit({ type: "text-start", id: currentTextId });
+							textStarted = true;
+						}
+						const md = `\n![media](${url.trim()})\n`;
+						emit({ type: "text-delta", id: currentTextId, delta: md });
+						accAppendText(md);
+					}
+				}
 			}
 			if (typeof ev.data?.stopReason === "string" && ev.data.stopReason === "error" && typeof ev.data?.errorMessage === "string" && !agentErrorReported) {
 				agentErrorReported = true;
@@ -638,8 +902,8 @@ function wireSubscribeOnlyProcess(
 			const phase = typeof ev.data?.phase === "string" ? ev.data.phase : undefined;
 			const toolCallId = typeof ev.data?.toolCallId === "string" ? ev.data.toolCallId : "";
 			const toolName = typeof ev.data?.name === "string" ? ev.data.name : "";
-
 			if (phase === "start") {
+				liveStats.toolStartCount += 1;
 				closeReasoning();
 				closeText();
 				const args = ev.data?.args && typeof ev.data.args === "object" ? (ev.data.args as Record<string, unknown>) : {};
@@ -647,12 +911,25 @@ function wireSubscribeOnlyProcess(
 				emit({ type: "tool-input-available", toolCallId, toolName, input: args });
 				run.accumulated.parts.push({ type: "tool-invocation", toolCallId, toolName, args });
 				accToolMap.set(toolCallId, run.accumulated.parts.length - 1);
+			} else if (phase === "update") {
+				const partialResult = extractToolResult(ev.data?.partialResult);
+				if (partialResult) {
+					const output = buildToolOutput(partialResult);
+					emit({ type: "tool-output-partial", toolCallId, output });
+				}
 			} else if (phase === "result") {
 				const isError = ev.data?.isError === true;
 				const result = extractToolResult(ev.data?.result);
 				if (isError) {
 					const errorText = result?.text || (result?.details?.error as string | undefined) || "Tool execution failed";
 					emit({ type: "tool-output-error", toolCallId, errorText });
+					const idx = accToolMap.get(toolCallId);
+					if (idx !== undefined) {
+						const part = run.accumulated.parts[idx];
+						if (part.type === "tool-invocation") {
+							part.errorText = errorText;
+						}
+					}
 				} else {
 					const output = buildToolOutput(result);
 					emit({ type: "tool-output-available", toolCallId, output });
@@ -665,19 +942,54 @@ function wireSubscribeOnlyProcess(
 			}
 		}
 
+		if (ev.event === "agent" && ev.stream === "lifecycle" && (ev.data?.phase === "fallback" || ev.data?.phase === "fallback_cleared")) {
+			const data = ev.data;
+			const selected = resolveModelLabel(data?.selectedProvider, data?.selectedModel)
+				?? resolveModelLabel(data?.fromProvider, data?.fromModel);
+			const active = resolveModelLabel(data?.activeProvider, data?.activeModel)
+				?? resolveModelLabel(data?.toProvider, data?.toModel);
+			if (selected && active) {
+				const isClear = data?.phase === "fallback_cleared";
+				const reason = typeof data?.reasonSummary === "string" ? data.reasonSummary
+					: typeof data?.reason === "string" ? data.reason : undefined;
+				const label = isClear
+					? `Restored to ${selected}`
+					: `Switched to ${active}${reason ? ` (${reason})` : ""}`;
+				openStatusReasoning(label);
+			}
+		}
+
 		if (ev.event === "agent" && ev.stream === "compaction") {
 			const phase = typeof ev.data?.phase === "string" ? ev.data.phase : undefined;
 			if (phase === "start") { openStatusReasoning("Optimizing session context..."); }
 			else if (phase === "end") {
 				if (statusReasoningActive) {
 					if (ev.data?.willRetry === true) {
-						emit({ type: "reasoning-delta", id: currentReasoningId, delta: "\nRetrying with compacted context..." });
+						const retryDelta = "\nRetrying with compacted context...";
+						emit({ type: "reasoning-delta", id: currentReasoningId, delta: retryDelta });
+						accAppendReasoning(retryDelta);
 					} else { closeReasoning(); }
 				}
 			}
 		}
 
+		if (ev.event === "chat") {
+			const finalText = extractAssistantTextFromChatPayload(ev.data);
+			if (finalText) {
+				closeReasoning();
+				if (!textStarted) {
+					currentTextId = nextId("text");
+					emit({ type: "text-start", id: currentTextId });
+					textStarted = true;
+				}
+				emit({ type: "text-delta", id: currentTextId, delta: finalText });
+				accAppendText(finalText);
+				closeText();
+			}
+		}
+
 		if (ev.event === "agent" && ev.stream === "lifecycle" && ev.data?.phase === "end") {
+			maybeBackfillLiveToolsFromTranscript("lifecycle-end");
 			closeReasoning();
 			closeText();
 			run._lifecycleEnded = true;
@@ -685,7 +997,7 @@ function wireSubscribeOnlyProcess(
 			run._finalizeTimer = setTimeout(() => {
 				run._finalizeTimer = null;
 				if (run.status === "running") { finalizeSubscribeRun(run); }
-			}, 5_000);
+			}, SUBSCRIBE_LIFECYCLE_END_GRACE_MS);
 		}
 
 		if (ev.event === "agent" && ev.stream === "lifecycle" && ev.data?.phase === "error" && !agentErrorReported) {
@@ -714,25 +1026,31 @@ function wireSubscribeOnlyProcess(
 			if (gSeq <= run.lastGlobalSeq) { return; }
 			run.lastGlobalSeq = gSeq;
 		}
+		if ((run._subscribeRetryAttempt ?? 0) > 0) {
+			resetSubscribeRetryState(run);
+		}
 		processEvent(ev);
 	});
 
 	child.on("close", () => {
-		if (run._subscribeProcess === child) { run._subscribeProcess = null; }
+		if (run._subscribeProcess !== child) {
+			return;
+		}
+		run._subscribeProcess = null;
 		if (run.status !== "running") { return; }
 		if (run._lifecycleEnded) {
 			if (run._finalizeTimer) { clearTimeout(run._finalizeTimer); run._finalizeTimer = null; }
 			finalizeSubscribeRun(run);
 			return;
 		}
-		setTimeout(() => {
+		scheduleSubscribeRestart(run, () => {
 			if (run.status === "running" && !run._subscribeProcess) {
 				const newChild = spawnAgentSubscribeProcess(sessionKey, run.lastGlobalSeq);
 				run._subscribeProcess = newChild;
 				run.childProcess = newChild;
 				wireSubscribeOnlyProcess(run, newChild, sessionKey);
 			}
-		}, 300);
+		});
 	});
 
 	child.on("error", (err) => {
@@ -749,6 +1067,8 @@ function wireSubscribeOnlyProcess(
 function finalizeSubscribeRun(run: ActiveRun, status: "completed" | "error" = "completed"): void {
 	if (run.status !== "running") { return; }
 	if (run._finalizeTimer) { clearTimeout(run._finalizeTimer); run._finalizeTimer = null; }
+	clearWaitingFinalizeTimer(run);
+	resetSubscribeRetryState(run);
 
 	run.status = status;
 	flushPersistence(run);
@@ -760,10 +1080,131 @@ function finalizeSubscribeRun(run: ActiveRun, status: "completed" | "error" = "c
 
 	stopSubscribeProcess(run);
 
+	const hasToolParts = run.accumulated.parts.some((p) => p.type === "tool-invocation");
+
+	// Deferred enrichment: after the gateway writes the transcript (2s delay),
+	// backfill tool-invocation parts from the transcript into the web-chat JSONL.
+	if (run.isSubscribeOnly && run.sessionKey && !hasToolParts) {
+		const sessionKey = run.sessionKey;
+		setTimeout(() => { deferredTranscriptEnrich(sessionKey); }, 2_000);
+	}
+
 	const grace = run.isSubscribeOnly ? SUBSCRIBE_CLEANUP_GRACE_MS : CLEANUP_GRACE_MS;
 	setTimeout(() => {
 		if (activeRuns.get(run.sessionId) === run) { cleanupRun(run.sessionId); }
 	}, grace);
+}
+
+/**
+ * Deferred enrichment: reads the gateway's session transcript and backfills
+ * tool-invocation parts into the web-chat JSONL for a subagent session.
+ * Matches tools to assistant messages by text content to avoid index-mapping issues.
+ */
+function deferredTranscriptEnrich(sessionKey: string): void {
+	try {
+		const stateDir = resolveOpenClawStateDir();
+		const agentId = resolveActiveAgentId();
+		const sessionsJsonPath = join(stateDir, "agents", agentId, "sessions", "sessions.json");
+		if (!existsSync(sessionsJsonPath)) {return;}
+
+		const sessions = JSON.parse(readFileSync(sessionsJsonPath, "utf-8")) as Record<string, Record<string, unknown>>;
+		const sessionData = sessions[sessionKey];
+		const sessionId = typeof sessionData?.sessionId === "string" ? sessionData.sessionId : null;
+		if (!sessionId) {return;}
+
+		const transcriptPath = join(stateDir, "agents", agentId, "sessions", `${sessionId}.jsonl`);
+		if (!existsSync(transcriptPath)) {return;}
+
+		// Build text→tools map from transcript
+		const entries = readFileSync(transcriptPath, "utf-8")
+			.split("\n").filter((l) => l.trim())
+			.map((l) => { try { return JSON.parse(l); } catch { return null; } })
+			.filter(Boolean) as Array<Record<string, unknown>>;
+
+		const toolResults = new Map<string, Record<string, unknown>>();
+		let pendingTools: Array<Record<string, unknown>> = [];
+		const textToTools = new Map<string, Array<Record<string, unknown>>>();
+
+		for (const entry of entries) {
+			if (entry.type !== "message") {continue;}
+			const msg = entry.message as Record<string, unknown> | undefined;
+			if (!msg) {continue;}
+			const content = msg.content;
+			if (msg.role === "user") { pendingTools = []; }
+			if (msg.role === "toolResult" && typeof msg.toolCallId === "string") {
+				const text = Array.isArray(content)
+					? (content as Array<Record<string, unknown>>)
+						.filter((c) => c.type === "text" && typeof c.text === "string")
+						.map((c) => c.text as string).join("\n")
+					: typeof content === "string" ? content : "";
+				toolResults.set(msg.toolCallId, { text: text.slice(0, 500) });
+			}
+			if (msg.role !== "assistant" || !Array.isArray(content)) {continue;}
+			for (const part of content as Array<Record<string, unknown>>) {
+				if (part.type === "toolCall" && typeof part.id === "string" && typeof part.name === "string") {
+					pendingTools.push({
+						type: "tool-invocation", toolCallId: part.id,
+						toolName: part.name, args: (part.arguments as Record<string, unknown>) ?? {},
+					});
+				}
+			}
+			const textParts = (content as Array<Record<string, unknown>>)
+				.filter((c) => c.type === "text" && typeof c.text === "string")
+				.map((c) => (c.text as string).trim()).filter(Boolean);
+			if (textParts.length > 0 && pendingTools.length > 0) {
+				const key = textParts.join("\n").slice(0, 200);
+				if (key.length >= 10) {
+					const toolsWithResults = pendingTools.map((tp) => {
+						const result = toolResults.get(tp.toolCallId as string);
+						return result ? { ...tp, result } : tp;
+					});
+					textToTools.set(key, toolsWithResults);
+					pendingTools = [];
+				}
+			}
+		}
+
+		if (textToTools.size === 0) {return;}
+
+		// Read and enrich web-chat JSONL
+		const fp = join(webChatDir(), `${sessionKey}.jsonl`);
+		if (!existsSync(fp)) {return;}
+		const lines = readFileSync(fp, "utf-8").split("\n").filter((l) => l.trim());
+		const messages = lines.map((l) => { try { return JSON.parse(l) as Record<string, unknown>; } catch { return null; } }).filter(Boolean) as Array<Record<string, unknown>>;
+
+		let changed = false;
+		const enriched = messages.map((m) => {
+			if (m.role !== "assistant") {return m;}
+			const parts = (m.parts as Array<Record<string, unknown>>) ?? [{ type: "text", text: m.content }];
+			if (parts.some((p) => p.type === "tool-invocation")) {return m;}
+			const msgText = parts
+				.filter((p) => p.type === "text" && typeof p.text === "string")
+				.map((p) => (p.text as string).trim()).filter(Boolean)
+				.join("\n").slice(0, 200);
+			if (msgText.length < 10) {return m;}
+			const tools = textToTools.get(msgText);
+			if (!tools || tools.length === 0) {return m;}
+			const textP = parts.filter((p) => p.type === "text");
+			const otherP = parts.filter((p) => p.type !== "text");
+			changed = true;
+			return { ...m, parts: [...otherP, ...tools, ...textP] };
+		});
+
+		if (changed) {
+			writeFileSync(fp, enriched.map((m) => JSON.stringify(m)).join("\n") + "\n");
+		}
+	} catch { /* best effort */ }
+}
+
+/**
+ * Opportunistic on-read backfill for subagent sessions.
+ * This is safe to call repeatedly; enrichment is idempotent.
+ */
+export function enrichSubagentSessionFromTranscript(sessionKey: string): void {
+	if (!sessionKey.includes(":subagent:")) {
+		return;
+	}
+	deferredTranscriptEnrich(sessionKey);
 }
 
 // ── Persistence helpers (called from route to persist user messages) ──
@@ -869,10 +1310,12 @@ function wireChildProcess(run: ActiveRun): void {
 
 	let currentTextId = "";
 	let currentReasoningId = "";
+	let currentStatusReasoningLabel: string | null = null;
 	let textStarted = false;
 	let reasoningStarted = false;
 	let everSentText = false;
 	let statusReasoningActive = false;
+	let waitingStatusAnnounced = false;
 	let agentErrorReported = false;
 	const stderrChunks: string[] = [];
 
@@ -918,6 +1361,7 @@ function wireChildProcess(run: ActiveRun): void {
 			reasoningStarted = false;
 			statusReasoningActive = false;
 		}
+		currentStatusReasoningLabel = null;
 		accReasoningIdx = -1;
 	};
 
@@ -939,6 +1383,9 @@ function wireChildProcess(run: ActiveRun): void {
 	};
 
 	const openStatusReasoning = (label: string) => {
+		if (statusReasoningActive && currentStatusReasoningLabel === label) {
+			return;
+		}
 		closeReasoning();
 		closeText();
 		currentReasoningId = nextId("status");
@@ -950,6 +1397,7 @@ function wireChildProcess(run: ActiveRun): void {
 		});
 		reasoningStarted = true;
 		statusReasoningActive = true;
+		currentStatusReasoningLabel = label;
 		accAppendReasoning(label);
 	};
 
@@ -965,10 +1413,26 @@ function wireChildProcess(run: ActiveRun): void {
 		everSentText = true;
 	};
 
+	const emitAssistantFinalText = (text: string) => {
+		if (!text) {
+			return;
+		}
+		closeReasoning();
+		if (!textStarted) {
+			currentTextId = nextId("text");
+			emit({ type: "text-start", id: currentTextId });
+			textStarted = true;
+		}
+		everSentText = true;
+		emit({ type: "text-delta", id: currentTextId, delta: text });
+		accAppendText(text);
+		closeText();
+	};
+
 	// ── Parse stdout JSON lines ──
 
 	const rl = createInterface({ input: child.stdout! });
-	const parentSessionKey = `agent:main:web:${run.sessionId}`;
+	const parentSessionKey = `agent:${resolveActiveAgentId()}:web:${run.sessionId}`;
 	// Prevent unhandled 'error' events on the readline interface.
 	// When the child process fails to start (e.g. ENOENT — missing script)
 	// the stdout pipe is destroyed and readline re-emits the error.  Without
@@ -1112,6 +1576,12 @@ function wireChildProcess(run: ActiveRun): void {
 					args,
 				});
 				accToolMap.set(toolCallId, run.accumulated.parts.length - 1);
+			} else if (phase === "update") {
+				const partialResult = extractToolResult(ev.data?.partialResult);
+				if (partialResult) {
+					const output = buildToolOutput(partialResult);
+					emit({ type: "tool-output-partial", toolCallId, output });
+				}
 			} else if (phase === "result") {
 				const isError = ev.data?.isError === true;
 				const result = extractToolResult(ev.data?.result);
@@ -1163,6 +1633,37 @@ function wireChildProcess(run: ActiveRun): void {
 						});
 					}
 				}
+			}
+		}
+
+		// Model fallback events
+		if (
+			ev.event === "agent" &&
+			ev.stream === "lifecycle" &&
+			(ev.data?.phase === "fallback" || ev.data?.phase === "fallback_cleared")
+		) {
+			const data = ev.data;
+			const selected = resolveModelLabel(data?.selectedProvider, data?.selectedModel)
+				?? resolveModelLabel(data?.fromProvider, data?.fromModel);
+			const active = resolveModelLabel(data?.activeProvider, data?.activeModel)
+				?? resolveModelLabel(data?.toProvider, data?.toModel);
+			if (selected && active) {
+				const isClear = data?.phase === "fallback_cleared";
+				const reason = typeof data?.reasonSummary === "string" ? data.reasonSummary
+					: typeof data?.reason === "string" ? data.reason : undefined;
+				const label = isClear
+					? `Restored to ${selected}`
+					: `Switched to ${active}${reason ? ` (${reason})` : ""}`;
+				openStatusReasoning(label);
+			}
+		}
+
+		// Chat final events can include assistant turns from runs outside
+		// the original parent process (e.g. subagent announce follow-ups).
+		if (ev.event === "chat") {
+			const text = extractAssistantTextFromChatPayload(ev.data);
+			if (text) {
+				emitAssistantFinalText(text);
 			}
 		}
 
@@ -1236,13 +1737,55 @@ function wireChildProcess(run: ActiveRun): void {
 			if (gSeq <= run.lastGlobalSeq) {return;}
 			run.lastGlobalSeq = gSeq;
 		}
+
+		const showWaitingStatus = () => {
+			if (!waitingStatusAnnounced) {
+				openStatusReasoning("Waiting for subagent results...");
+				waitingStatusAnnounced = true;
+			}
+			flushPersistence(run);
+		};
+
+		const scheduleWaitingCompletionCheck = () => {
+			clearWaitingFinalizeTimer(run);
+			run._waitingFinalizeTimer = setTimeout(() => {
+				run._waitingFinalizeTimer = null;
+				if (run.status !== "waiting-for-subagents") {
+					return;
+				}
+				if (hasRunningSubagentsForParent(run.sessionId)) {
+					showWaitingStatus();
+					return;
+				}
+				finalizeWaitingRun(run);
+			}, WAITING_FINALIZE_RECONCILE_MS);
+		};
+
+		// Any new parent event means waiting completion should be reconsidered
+		// from this point forward, not from a prior end/final checkpoint.
+		clearWaitingFinalizeTimer(run);
+
 		processParentEvent(ev);
 		if (ev.stream === "lifecycle" && ev.data?.phase === "end") {
 			if (hasRunningSubagentsForParent(run.sessionId)) {
-				openStatusReasoning("Waiting for subagent results...");
-				flushPersistence(run);
+				clearWaitingFinalizeTimer(run);
+				showWaitingStatus();
 			} else {
-				finalizeWaitingRun(run);
+				scheduleWaitingCompletionCheck();
+			}
+		}
+		if (ev.event === "chat") {
+			const payload = ev.data;
+			const state = typeof payload?.state === "string" ? payload.state : "";
+			const message = asRecord(payload?.message);
+			const role = typeof message?.role === "string" ? message.role : "";
+			if (state === "final" && role === "assistant") {
+				if (hasRunningSubagentsForParent(run.sessionId)) {
+					clearWaitingFinalizeTimer(run);
+					showWaitingStatus();
+				} else {
+					scheduleWaitingCompletionCheck();
+				}
 			}
 		}
 	};
@@ -1324,7 +1867,10 @@ function wireChildProcess(run: ActiveRun): void {
 		if (exitedClean && hasRunningSubagents) {
 			run.status = "waiting-for-subagents";
 
-			openStatusReasoning("Waiting for subagent results...");
+			if (!waitingStatusAnnounced) {
+				openStatusReasoning("Waiting for subagent results...");
+				waitingStatusAnnounced = true;
+			}
 			flushPersistence(run);
 			startParentSubscribeStream(run, parentSessionKey, processParentSubscribeEvent);
 			return;
@@ -1361,7 +1907,8 @@ function wireChildProcess(run: ActiveRun): void {
 		if (run.status !== "running") {return;}
 
 		console.error("[active-runs] Child process error:", err);
-		emitError(`Failed to start agent: ${err.message}`);
+		const message = err instanceof Error ? err.message : String(err);
+		emitError(`Failed to start agent: ${message}`);
 		run.status = "error";
 		flushPersistence(run);
 		for (const sub of run.subscribers) {
@@ -1407,20 +1954,24 @@ function startParentSubscribeStream(
 		if (ev.sessionKey && ev.sessionKey !== parentSessionKey) {
 			return;
 		}
+		if ((run._subscribeRetryAttempt ?? 0) > 0) {
+			resetSubscribeRetryState(run);
+		}
 		onEvent(ev);
 	});
 
 	child.on("close", () => {
-		if (run._subscribeProcess === child) {
-			run._subscribeProcess = null;
+		if (run._subscribeProcess !== child) {
+			return;
 		}
+		run._subscribeProcess = null;
 		if (run.status !== "waiting-for-subagents") {return;}
 		// If still waiting, restart subscribe stream from the latest cursor.
-		setTimeout(() => {
+		scheduleSubscribeRestart(run, () => {
 			if (run.status === "waiting-for-subagents" && !run._subscribeProcess) {
 				startParentSubscribeStream(run, parentSessionKey, onEvent);
 			}
-		}, 300);
+		});
 	});
 
 	child.on("error", (err) => {
@@ -1433,6 +1984,8 @@ function startParentSubscribeStream(
 }
 
 function stopSubscribeProcess(run: ActiveRun): void {
+	clearSubscribeRetryTimer(run);
+	clearWaitingFinalizeTimer(run);
 	if (!run._subscribeProcess) {return;}
 	try {
 		run._subscribeProcess.kill("SIGTERM");
@@ -1453,6 +2006,8 @@ function finalizeWaitingRun(run: ActiveRun): void {
 	if (run.status !== "waiting-for-subagents") {return;}
 
 	run.status = "completed";
+	clearWaitingFinalizeTimer(run);
+	resetSubscribeRetryState(run);
 
 	stopSubscribeProcess(run);
 
@@ -1468,6 +2023,43 @@ function finalizeWaitingRun(run: ActiveRun): void {
 			cleanupRun(run.sessionId);
 		}
 	}, CLEANUP_GRACE_MS);
+}
+
+function clearWaitingFinalizeTimer(run: ActiveRun): void {
+	if (!run._waitingFinalizeTimer) {
+		return;
+	}
+	clearTimeout(run._waitingFinalizeTimer);
+	run._waitingFinalizeTimer = null;
+}
+
+function clearSubscribeRetryTimer(run: ActiveRun): void {
+	if (!run._subscribeRetryTimer) {
+		return;
+	}
+	clearTimeout(run._subscribeRetryTimer);
+	run._subscribeRetryTimer = null;
+}
+
+function resetSubscribeRetryState(run: ActiveRun): void {
+	run._subscribeRetryAttempt = 0;
+	clearSubscribeRetryTimer(run);
+}
+
+function scheduleSubscribeRestart(run: ActiveRun, restart: () => void): void {
+	if (run._subscribeRetryTimer) {
+		return;
+	}
+	const attempt = run._subscribeRetryAttempt ?? 0;
+	const delay = Math.min(
+		SUBSCRIBE_RETRY_MAX_MS,
+		SUBSCRIBE_RETRY_BASE_MS * 2 ** attempt,
+	);
+	run._subscribeRetryAttempt = attempt + 1;
+	run._subscribeRetryTimer = setTimeout(() => {
+		run._subscribeRetryTimer = null;
+		restart();
+	}, delay);
 }
 
 // ── Debounced persistence ──
@@ -1574,6 +2166,7 @@ function cleanupRun(sessionId: string) {
 	const run = activeRuns.get(sessionId);
 	if (!run) {return;}
 	if (run._persistTimer) {clearTimeout(run._persistTimer);}
+	clearWaitingFinalizeTimer(run);
 	stopSubscribeProcess(run);
 	activeRuns.delete(sessionId);
 }

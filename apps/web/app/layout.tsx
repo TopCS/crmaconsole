@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
+import { PostHogPageviewTracker } from "./components/posthog-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Ironclaw",
+  title: "DenchClaw",
   description:
     "AI Workspace with an agent that connects to your apps and does the work for you",
 };
@@ -38,7 +40,12 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <Suspense fallback={null}>
+          <PostHogPageviewTracker />
+        </Suspense>
+        {children}
+      </body>
     </html>
   );
 }
