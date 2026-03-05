@@ -503,7 +503,7 @@ export function installManagedWebRuntime(params: {
 
   mkdirSync(runtimeDir, { recursive: true });
   rmSync(runtimeAppDir, { recursive: true, force: true });
-  cpSync(sourceAppDir, runtimeAppDir, { recursive: true, force: true });
+  cpSync(sourceAppDir, runtimeAppDir, { recursive: true, force: true, dereference: true });
 
   const manifest: ManagedWebRuntimeManifest = {
     schemaVersion: 1,
