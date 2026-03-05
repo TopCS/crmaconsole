@@ -5,6 +5,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   buildBootstrapDiagnostics,
   checkAgentAuth,
+  isPersistedPortAcceptable,
+  readExistingGatewayPort,
   resolveBootstrapRolloutStage,
   isLegacyFallbackEnabled,
   type BootstrapDiagnostics,
@@ -67,8 +69,8 @@ describe("bootstrap-external diagnostics", () => {
     profile: "dench",
     openClawCliAvailable: true,
     openClawVersion: "2026.3.1",
-    gatewayPort: 18789,
-    gatewayUrl: "ws://127.0.0.1:18789",
+    gatewayPort: 19001,
+    gatewayUrl: "ws://127.0.0.1:19001",
     gatewayProbe: { ok: true as const },
     webPort: 3100,
     webReachable: true,
@@ -291,5 +293,116 @@ describe("bootstrap-external rollout env helpers", () => {
     expect(isLegacyFallbackEnabled({ DENCHCLAW_BOOTSTRAP_LEGACY_FALLBACK: "1" })).toBe(true);
     expect(isLegacyFallbackEnabled({ OPENCLAW_BOOTSTRAP_LEGACY_FALLBACK: "true" })).toBe(true);
     expect(isLegacyFallbackEnabled({})).toBe(false);
+  });
+});
+
+describe("readExistingGatewayPort", () => {
+  let stateDir: string;
+
+  beforeEach(() => {
+    stateDir = createTempStateDir();
+  });
+
+  afterEach(() => {
+    rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it("reads numeric port from openclaw.json (normal config path)", () => {
+    writeConfig(stateDir, { gateway: { port: 19001 } });
+    expect(readExistingGatewayPort(stateDir)).toBe(19001);
+  });
+
+  it("falls back to config.json when openclaw.json is absent (legacy config support)", () => {
+    writeFileSync(
+      path.join(stateDir, "config.json"),
+      JSON.stringify({ gateway: { port: 19005 } }),
+    );
+    expect(readExistingGatewayPort(stateDir)).toBe(19005);
+  });
+
+  it("prefers openclaw.json over config.json when both exist (config precedence)", () => {
+    writeConfig(stateDir, { gateway: { port: 19001 } });
+    writeFileSync(
+      path.join(stateDir, "config.json"),
+      JSON.stringify({ gateway: { port: 19099 } }),
+    );
+    expect(readExistingGatewayPort(stateDir)).toBe(19001);
+  });
+
+  it("returns undefined when no config files exist (fresh install)", () => {
+    expect(readExistingGatewayPort(stateDir)).toBeUndefined();
+  });
+
+  it("returns undefined when config has no gateway section (incomplete config)", () => {
+    writeConfig(stateDir, { agents: {} });
+    expect(readExistingGatewayPort(stateDir)).toBeUndefined();
+  });
+
+  it("parses string port values (handles config.set serialization)", () => {
+    writeConfig(stateDir, { gateway: { port: "19001" } });
+    expect(readExistingGatewayPort(stateDir)).toBe(19001);
+  });
+
+  it("rejects zero and negative ports (invalid port values)", () => {
+    writeConfig(stateDir, { gateway: { port: 0 } });
+    expect(readExistingGatewayPort(stateDir)).toBeUndefined();
+
+    writeConfig(stateDir, { gateway: { port: -1 } });
+    expect(readExistingGatewayPort(stateDir)).toBeUndefined();
+  });
+
+  it("returns undefined for malformed JSON (handles corrupt config gracefully)", () => {
+    writeFileSync(path.join(stateDir, "openclaw.json"), "not valid json{{{");
+    expect(readExistingGatewayPort(stateDir)).toBeUndefined();
+  });
+
+  it("returns 18789 when config has it (reader does not filter; caller must guard)", () => {
+    writeConfig(stateDir, { gateway: { port: 18789 } });
+    expect(readExistingGatewayPort(stateDir)).toBe(18789);
+  });
+});
+
+describe("isPersistedPortAcceptable", () => {
+  let stateDir: string;
+
+  beforeEach(() => {
+    stateDir = createTempStateDir();
+  });
+
+  afterEach(() => {
+    rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it("rejects 18789 (prevents OpenClaw port hijack on launchd restart)", () => {
+    expect(isPersistedPortAcceptable(18789)).toBe(false);
+  });
+
+  it("accepts DenchClaw's own port range (normal operation)", () => {
+    expect(isPersistedPortAcceptable(19001)).toBe(true);
+    expect(isPersistedPortAcceptable(19002)).toBe(true);
+    expect(isPersistedPortAcceptable(19100)).toBe(true);
+  });
+
+  it("rejects undefined (no persisted port to reuse)", () => {
+    expect(isPersistedPortAcceptable(undefined)).toBe(false);
+  });
+
+  it("rejects zero and negative values (invalid ports)", () => {
+    expect(isPersistedPortAcceptable(0)).toBe(false);
+    expect(isPersistedPortAcceptable(-1)).toBe(false);
+  });
+
+  it("rejects corrupted 18789 from config (end-to-end: read + guard prevents port hijack)", () => {
+    writeConfig(stateDir, { gateway: { port: 18789 } });
+    const port = readExistingGatewayPort(stateDir);
+    expect(port).toBe(18789);
+    expect(isPersistedPortAcceptable(port)).toBe(false);
+  });
+
+  it("accepts valid 19001 from config (end-to-end: read + guard allows DenchClaw port)", () => {
+    writeConfig(stateDir, { gateway: { port: 19001 } });
+    const port = readExistingGatewayPort(stateDir);
+    expect(port).toBe(19001);
+    expect(isPersistedPortAcceptable(port)).toBe(true);
   });
 });

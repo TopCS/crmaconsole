@@ -63,7 +63,7 @@ describe("profiles API", () => {
     mockReadFile.mockImplementation((p) => {
       const s = String(p);
       if (s.includes("openclaw.json")) {
-        return JSON.stringify({ gateway: { mode: "local", port: 18789 } }) as never;
+        return JSON.stringify({ gateway: { mode: "local", port: 19001 } }) as never;
       }
       return "" as never;
     });
@@ -83,7 +83,7 @@ describe("profiles API", () => {
       name: "work",
       stateDir: STATE_DIR,
       isActive: true,
-      gateway: { mode: "local", port: 18789, url: "ws://127.0.0.1:18789" },
+      gateway: { mode: "local", port: 19001, url: "ws://127.0.0.1:19001" },
     });
   });
 

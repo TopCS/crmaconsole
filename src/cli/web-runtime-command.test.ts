@@ -28,7 +28,7 @@ const webRuntimeMocks = vi.hoisted(() => ({
     deployedAt: "2026-01-01T00:00:00.000Z",
     sourceStandaloneServer: "/tmp/server.js",
     lastPort: 3100,
-    lastGatewayPort: 18789,
+    lastGatewayPort: 19001,
   })),
   resolveCliPackageRoot: vi.fn(() => "/tmp/pkg"),
   resolveManagedWebRuntimeServerPath: vi.fn(() => "/tmp/.openclaw-dench/web-runtime/app/server.js"),
@@ -143,7 +143,7 @@ describe("updateWebRuntimeCommand", () => {
       deployedAt: "2026-01-01T00:00:00.000Z",
       sourceStandaloneServer: "/tmp/server.js",
       lastPort: 3100,
-      lastGatewayPort: 18789,
+      lastGatewayPort: 19001,
     }));
     webRuntimeMocks.startManagedWebRuntime.mockReset();
     webRuntimeMocks.startManagedWebRuntime.mockImplementation(() => ({
@@ -325,11 +325,37 @@ describe("startWebRuntimeCommand", () => {
     expect(webRuntimeMocks.startManagedWebRuntime).toHaveBeenCalledWith({
       stateDir: "/tmp/.openclaw-dench",
       port: 3100,
-      gatewayPort: 18789,
+      gatewayPort: 19001,
     });
     expect(webRuntimeMocks.ensureManagedWebRuntime).not.toHaveBeenCalled();
     expect(spawnMock).not.toHaveBeenCalled();
     expect(summary.started).toBe(true);
+  });
+
+  it("falls back to DenchClaw port 19001 when manifest has no lastGatewayPort (prevents 18789 hijack)", async () => {
+    webRuntimeMocks.readManagedWebRuntimeManifest.mockReturnValue({
+      schemaVersion: 1,
+      deployedDenchVersion: "2.1.0",
+      deployedAt: "2026-01-01T00:00:00.000Z",
+      sourceStandaloneServer: "/tmp/server.js",
+      lastPort: 3100,
+    });
+    const runtime = runtimeStub();
+    await startWebRuntimeCommand({ webPort: "3100" }, runtime);
+
+    expect(webRuntimeMocks.startManagedWebRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({ gatewayPort: 19001 }),
+    );
+  });
+
+  it("falls back to DenchClaw port 19001 when manifest is null (fresh install, prevents 18789 hijack)", async () => {
+    webRuntimeMocks.readManagedWebRuntimeManifest.mockReturnValue(null);
+    const runtime = runtimeStub();
+    await startWebRuntimeCommand({ webPort: "3100" }, runtime);
+
+    expect(webRuntimeMocks.startManagedWebRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({ gatewayPort: 19001 }),
+    );
   });
 });
 
@@ -378,7 +404,7 @@ describe("restartWebRuntimeCommand", () => {
     expect(webRuntimeMocks.startManagedWebRuntime).toHaveBeenCalledWith({
       stateDir: "/tmp/.openclaw-dench",
       port: 3100,
-      gatewayPort: 18789,
+      gatewayPort: 19001,
     });
     expect(webRuntimeMocks.ensureManagedWebRuntime).not.toHaveBeenCalled();
     expect(summary.started).toBe(true);

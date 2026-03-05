@@ -199,7 +199,7 @@ describe("agent-runner", () => {
 	describe("buildConnectParams", () => {
 		it("uses a client.id that the Gateway actually accepts (prevents connect rejection)", async () => {
 			const { buildConnectParams } = await import("./agent-runner.js");
-			const params = buildConnectParams({ url: "ws://127.0.0.1:18789" }) as {
+			const params = buildConnectParams({ url: "ws://127.0.0.1:19001" }) as {
 				client: { id: string; mode: string };
 			};
 			expect(VALID_GATEWAY_CLIENT_IDS.has(params.client.id)).toBe(true);
@@ -207,7 +207,7 @@ describe("agent-runner", () => {
 
 		it("uses a client.mode the Gateway accepts (prevents schema validation failure)", async () => {
 			const { buildConnectParams } = await import("./agent-runner.js");
-			const params = buildConnectParams({ url: "ws://127.0.0.1:18789" }) as {
+			const params = buildConnectParams({ url: "ws://127.0.0.1:19001" }) as {
 				client: { id: string; mode: string };
 			};
 			expect(VALID_GATEWAY_CLIENT_MODES.has(params.client.mode)).toBe(true);
@@ -216,7 +216,7 @@ describe("agent-runner", () => {
 		it("includes auth.token when settings have a token", async () => {
 			const { buildConnectParams } = await import("./agent-runner.js");
 			const params = buildConnectParams({
-				url: "ws://127.0.0.1:18789",
+				url: "ws://127.0.0.1:19001",
 				token: "secret-token",
 			}) as { auth?: { token?: string; password?: string } };
 			expect(params.auth?.token).toBe("secret-token");
@@ -225,7 +225,7 @@ describe("agent-runner", () => {
 		it("includes auth.password when settings have a password", async () => {
 			const { buildConnectParams } = await import("./agent-runner.js");
 			const params = buildConnectParams({
-				url: "ws://127.0.0.1:18789",
+				url: "ws://127.0.0.1:19001",
 				password: "secret-pass",
 			}) as { auth?: { token?: string; password?: string } };
 			expect(params.auth?.password).toBe("secret-pass");
@@ -233,7 +233,7 @@ describe("agent-runner", () => {
 
 		it("omits auth when no token or password is set", async () => {
 			const { buildConnectParams } = await import("./agent-runner.js");
-			const params = buildConnectParams({ url: "ws://127.0.0.1:18789" }) as {
+			const params = buildConnectParams({ url: "ws://127.0.0.1:19001" }) as {
 				auth?: unknown;
 			};
 			expect(params.auth).toBeUndefined();
@@ -241,7 +241,7 @@ describe("agent-runner", () => {
 
 		it("requests protocol version 3 (current Gateway protocol)", async () => {
 			const { buildConnectParams } = await import("./agent-runner.js");
-			const params = buildConnectParams({ url: "ws://127.0.0.1:18789" }) as {
+			const params = buildConnectParams({ url: "ws://127.0.0.1:19001" }) as {
 				minProtocol: number;
 				maxProtocol: number;
 			};
@@ -251,7 +251,7 @@ describe("agent-runner", () => {
 
 		it("uses backend mode so sessions.patch is allowed", async () => {
 			const { buildConnectParams } = await import("./agent-runner.js");
-			const params = buildConnectParams({ url: "ws://127.0.0.1:18789" }) as {
+			const params = buildConnectParams({ url: "ws://127.0.0.1:19001" }) as {
 				client: { mode: string };
 			};
 			expect(params.client.mode).toBe("backend");
@@ -259,7 +259,7 @@ describe("agent-runner", () => {
 
 		it("advertises tool-events capability for tool stream parity", async () => {
 			const { buildConnectParams } = await import("./agent-runner.js");
-			const params = buildConnectParams({ url: "ws://127.0.0.1:18789" }) as {
+			const params = buildConnectParams({ url: "ws://127.0.0.1:19001" }) as {
 				caps?: string[];
 			};
 			expect(Array.isArray(params.caps)).toBe(true);
