@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import { getPrimaryCommand } from "../argv.js";
 import type { ProgramContext } from "./context.js";
 import { registerBootstrapCommand } from "./register.bootstrap.js";
+import { registerRestartCommand } from "./register.restart.js";
 import { registerStartCommand } from "./register.start.js";
 import { registerStopCommand } from "./register.stop.js";
 import { registerTelemetryCommand } from "./register.telemetry.js";
@@ -46,6 +47,13 @@ const CORE_CLI_ENTRIES: CoreCliEntry[] = [
     description: "Start Dench managed web runtime",
     register: ({ program }) => {
       registerStartCommand(program);
+    },
+  },
+  {
+    name: "restart",
+    description: "Restart Dench managed web runtime",
+    register: ({ program }) => {
+      registerRestartCommand(program);
     },
   },
   {

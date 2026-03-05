@@ -75,6 +75,7 @@ vi.mock("./web-runtime.js", () => ({
 }));
 
 import {
+  restartWebRuntimeCommand,
   startWebRuntimeCommand,
   stopWebRuntimeCommand,
   updateWebRuntimeCommand,
@@ -303,7 +304,7 @@ describe("startWebRuntimeCommand", () => {
     });
     const runtime = runtimeStub();
 
-    await expect(startWebRuntimeCommand({}, runtime)).rejects.toThrow("dench update");
+    await expect(startWebRuntimeCommand({}, runtime)).rejects.toThrow("npx denchclaw update");
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
@@ -329,5 +330,68 @@ describe("startWebRuntimeCommand", () => {
     expect(webRuntimeMocks.ensureManagedWebRuntime).not.toHaveBeenCalled();
     expect(spawnMock).not.toHaveBeenCalled();
     expect(summary.started).toBe(true);
+  });
+});
+
+describe("restartWebRuntimeCommand", () => {
+  beforeEach(() => {
+    webRuntimeMocks.ensureManagedWebRuntime.mockClear();
+    webRuntimeMocks.stopManagedWebRuntime.mockReset();
+    webRuntimeMocks.stopManagedWebRuntime.mockImplementation(
+      async () =>
+        ({
+          port: 3100,
+          stoppedPids: [1234],
+          skippedForeignPids: [],
+        }) as { port: number; stoppedPids: number[]; skippedForeignPids: number[] },
+    );
+    webRuntimeMocks.startManagedWebRuntime.mockReset();
+    webRuntimeMocks.startManagedWebRuntime.mockImplementation(() => ({
+      started: true,
+      pid: 7788,
+      runtimeServerPath: "/tmp/.openclaw-dench/web-runtime/app/server.js",
+    }));
+    webRuntimeMocks.waitForWebRuntime.mockReset();
+    webRuntimeMocks.waitForWebRuntime.mockImplementation(
+      async () =>
+        ({ ok: true, reason: "profiles payload shape is valid" }) as {
+          ok: boolean;
+          reason: string;
+        },
+    );
+  });
+
+  it("stops and restarts managed runtime (same stop+start lifecycle as start command)", async () => {
+    const runtime = runtimeStub();
+    const summary = await restartWebRuntimeCommand(
+      {
+        webPort: "3100",
+      },
+      runtime,
+    );
+
+    expect(webRuntimeMocks.stopManagedWebRuntime).toHaveBeenCalledWith({
+      stateDir: "/tmp/.openclaw-dench",
+      port: 3100,
+      includeLegacyStandalone: true,
+    });
+    expect(webRuntimeMocks.startManagedWebRuntime).toHaveBeenCalledWith({
+      stateDir: "/tmp/.openclaw-dench",
+      port: 3100,
+      gatewayPort: 18789,
+    });
+    expect(webRuntimeMocks.ensureManagedWebRuntime).not.toHaveBeenCalled();
+    expect(summary.started).toBe(true);
+  });
+
+  it("outputs restart heading instead of start (distinct user-facing label)", async () => {
+    const runtime = runtimeStub();
+    await restartWebRuntimeCommand({}, runtime);
+
+    const logCalls = (runtime.log as ReturnType<typeof vi.fn>).mock.calls.map(
+      ([msg]: [string]) => msg,
+    );
+    expect(logCalls.some((msg) => typeof msg === "string" && msg.includes("restart"))).toBe(true);
+    expect(logCalls.some((msg) => typeof msg === "string" && /\bstart\b/.test(msg) && !msg.includes("restart"))).toBe(false);
   });
 });

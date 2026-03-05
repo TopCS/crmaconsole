@@ -171,7 +171,7 @@ async function runOpenClawUpdateWithProgress(openclawCommand: string): Promise<v
   throw new Error(
     detail
       ? `OpenClaw update failed.\n${detail}`
-      : "OpenClaw update failed. Fix this before running `dench update` again.",
+      : "OpenClaw update failed. Fix this before running `npx denchclaw update` again.",
   );
 }
 
@@ -399,9 +399,20 @@ export async function stopWebRuntimeCommand(
   return summary;
 }
 
+export type RestartWebRuntimeOptions = StartWebRuntimeOptions;
+export type RestartWebRuntimeSummary = StartWebRuntimeSummary;
+
+export async function restartWebRuntimeCommand(
+  opts: RestartWebRuntimeOptions,
+  runtime: RuntimeEnv = defaultRuntime,
+): Promise<RestartWebRuntimeSummary> {
+  return startWebRuntimeCommand(opts, runtime, "restart");
+}
+
 export async function startWebRuntimeCommand(
   opts: StartWebRuntimeOptions,
   runtime: RuntimeEnv = defaultRuntime,
+  label: "start" | "restart" = "start",
 ): Promise<StartWebRuntimeSummary> {
   const appliedProfile = applyCliProfileEnv({ profile: opts.profile });
   const profile = appliedProfile.effectiveProfile;
@@ -436,7 +447,7 @@ export async function startWebRuntimeCommand(
     throw new Error(
       [
         `Managed web runtime is missing at ${runtimeServerPath}.`,
-        "Run `dench update` (or `dench bootstrap`) to install/update the web runtime first.",
+        "Run `npx denchclaw update` (or `npx denchclaw`) to install/update the web runtime first.",
       ].join(" "),
     );
   }
@@ -457,7 +468,7 @@ export async function startWebRuntimeCommand(
   }
 
   runtime.log("");
-  runtime.log(theme.heading("Dench web start"));
+  runtime.log(theme.heading(`Dench web ${label}`));
   runtime.log(`Profile: ${profile}`);
   runtime.log(`Web port: ${selectedPort}`);
   runtime.log(`Restarted managed web runtime: ${summary.started ? "yes" : "no"}`);

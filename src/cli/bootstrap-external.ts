@@ -1122,14 +1122,14 @@ function remediationForGatewayFailure(
   if (normalized.includes("address already in use") || normalized.includes("eaddrinuse")) {
     return `Port ${port} is busy. The bootstrap will auto-assign an available port, or you can explicitly specify one with \`--gateway-port <port>\`.`;
   }
-  return `Run \`openclaw --profile ${profile} doctor --fix\` and retry \`denchclaw bootstrap --profile ${profile} --force-onboard\`.`;
+  return `Run \`openclaw --profile ${profile} doctor --fix\` and retry \`npx denchclaw bootstrap\`.`;
 }
 
 function remediationForWebUiFailure(port: number): string {
   return [
     `Web UI did not respond on ${port}.`,
-    `Run \`dench update --web-port ${port}\` to refresh the managed web runtime.`,
-    `If the port is stuck, run \`dench stop --web-port ${port}\` first.`,
+    `Run \`npx denchclaw update --web-port ${port}\` to refresh the managed web runtime.`,
+    `If the port is stuck, run \`npx denchclaw stop --web-port ${port}\` first.`,
   ].join(" ");
 }
 
@@ -1478,24 +1478,25 @@ export async function bootstrapCommand(
   }
 
   const bootstrapStartTime = Date.now();
-  track("cli_bootstrap_started", { version: VERSION });
 
   if (!opts.json) {
     const telemetryCfg = readTelemetryConfig();
     if (!telemetryCfg.noticeShown) {
       runtime.log(
         theme.muted(
-          "DenchClaw collects anonymous telemetry to improve the product.\n" +
+          "Dench collects anonymous telemetry to improve the product.\n" +
             "No personal data is ever collected. Disable anytime:\n" +
-            "  denchclaw telemetry disable\n" +
+            "  npx denchclaw telemetry disable\n" +
             "  DENCHCLAW_TELEMETRY_DISABLED=1\n" +
             "  DO_NOT_TRACK=1\n" +
-            "Learn more: https://github.com/openclaw/openclaw/blob/main/TELEMETRY.md\n",
+            "Learn more: https://github.com/DenchHQ/DenchClaw/blob/main/TELEMETRY.md\n",
         ),
       );
       markNoticeShown();
     }
   }
+
+  track("cli_bootstrap_started", { version: VERSION });
 
   const installResult = await ensureOpenClawCliAvailable({
     stateDir,
@@ -1578,11 +1579,11 @@ export async function bootstrapCommand(
     onboardArgv.push("--reset");
   }
   if (nonInteractive) {
-    onboardArgv.push("--non-interactive", "--accept-risk");
+    onboardArgv.push("--non-interactive");
   }
-  if (opts.noOpen) {
-    onboardArgv.push("--skip-ui");
-  }
+
+  onboardArgv.push("--accept-risk", "--skip-ui");
+
   if (nonInteractive) {
     await runOpenClawOrThrow({
       openclawCommand,
@@ -1605,21 +1606,29 @@ export async function bootstrapCommand(
     packageRoot,
   });
 
+  const postOnboardSpinner = !opts.json ? spinner() : null;
+  postOnboardSpinner?.start("Finalizing configuration…");
+
   // Ensure gateway.mode=local so the gateway never drifts to remote mode.
   // Keep this post-onboard so we normalize any wizard defaults.
   await ensureGatewayModeLocal(openclawCommand, profile);
+  postOnboardSpinner?.message("Configuring gateway port…");
   // Persist the assigned port so all runtime clients (including web) resolve
   // the same gateway target on subsequent requests.
   await ensureGatewayPort(openclawCommand, profile, gatewayPort);
+  postOnboardSpinner?.message("Setting tools profile…");
   // DenchClaw requires the full tool profile; onboarding defaults can drift to
   // messaging-only, so enforce this on every bootstrap run.
   await ensureToolsProfile(openclawCommand, profile);
 
+  postOnboardSpinner?.message("Configuring subagent defaults…");
   await ensureSubagentDefaults(openclawCommand, profile);
 
+  postOnboardSpinner?.message("Probing gateway health…");
   let gatewayProbe = await probeGateway(openclawCommand, profile, gatewayPort);
   let gatewayAutoFix: GatewayAutoFixResult | undefined;
   if (!gatewayProbe.ok) {
+    postOnboardSpinner?.message("Gateway unreachable, attempting auto-fix…");
     gatewayAutoFix = await attemptGatewayAutoFix({
       openclawCommand,
       profile,
@@ -1638,6 +1647,7 @@ export async function bootstrapCommand(
   }
   const gatewayUrl = `ws://127.0.0.1:${gatewayPort}`;
   const preferredWebPort = parseOptionalPort(opts.webPort) ?? DEFAULT_WEB_APP_PORT;
+  postOnboardSpinner?.message(`Starting web runtime on port ${preferredWebPort}…`);
   const webRuntimeStatus = await ensureManagedWebRuntime({
     stateDir,
     packageRoot,
@@ -1645,6 +1655,11 @@ export async function bootstrapCommand(
     port: preferredWebPort,
     gatewayPort,
   });
+  postOnboardSpinner?.stop(
+    webRuntimeStatus.ready
+      ? "Post-onboard setup complete."
+      : "Post-onboard setup complete (web runtime unhealthy).",
+  );
   const webReachable = webRuntimeStatus.ready;
   const webUrl = `http://localhost:${preferredWebPort}`;
   const diagnostics = buildBootstrapDiagnostics({

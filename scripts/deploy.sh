@@ -290,11 +290,11 @@ if [[ "$SKIP_NPX_SMOKE" != true ]]; then
     npx --yes "${PACKAGE_NAME}@${VERSION}" --version
   verify_npx_command "$VERSION" "npx dench (via dench package)" \
     npx --yes "${ALIAS_PACKAGE_NAME}@${VERSION}" --version
-  verify_npx_invocation "npx dench update --help" \
+  verify_npx_invocation "npx denchclaw update --help" \
     npx --yes "${ALIAS_PACKAGE_NAME}@${VERSION}" update --help
-  verify_npx_invocation "npx dench start --help" \
+  verify_npx_invocation "npx denchclaw start --help" \
     npx --yes "${ALIAS_PACKAGE_NAME}@${VERSION}" start --help
-  verify_npx_invocation "npx dench stop --help" \
+  verify_npx_invocation "npx denchclaw stop --help" \
     npx --yes "${ALIAS_PACKAGE_NAME}@${VERSION}" stop --help
 fi
 
