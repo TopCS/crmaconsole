@@ -3,24 +3,40 @@ import { redactMessages } from "./privacy.js";
 import type { TraceEntry, ToolSpanEntry } from "./types.js";
 
 /**
- * Tracks in-flight trace and span state per agent run.
- * Each `runId` maps to one trace containing zero or more tool spans.
+ * Resolve a stable session key from the hook context.
+ * OpenClaw assigns different `runId` values to different hook phases
+ * in the same agent loop, so we use sessionId/sessionKey as the
+ * stable key for trace indexing.
+ */
+export function resolveSessionKey(ctx: {
+  sessionId?: string;
+  sessionKey?: string;
+  runId?: string;
+}): string {
+  return ctx.sessionId ?? ctx.sessionKey ?? ctx.runId ?? "unknown";
+}
+
+/**
+ * Tracks in-flight trace and span state per session.
+ * Each session has at most one active agent run at a time
+ * (OpenClaw serializes runs per session), so sessionId is
+ * a stable key across all hooks in the same agent loop.
  */
 export class TraceContextManager {
   private traces = new Map<string, TraceEntry>();
 
-  startTrace(sessionId: string, runId: string): void {
-    this.traces.set(runId, {
+  startTrace(sessionKey: string, runId: string): void {
+    this.traces.set(sessionKey, {
       traceId: randomUUID(),
-      sessionId,
+      sessionId: sessionKey,
       runId,
       startedAt: Date.now(),
       toolSpans: [],
     });
   }
 
-  setModel(runId: string, model: string): void {
-    const t = this.traces.get(runId);
+  setModel(sessionKey: string, model: string): void {
+    const t = this.traces.get(sessionKey);
     if (!t) return;
     t.model = model;
     const slashIdx = model.indexOf("/");
@@ -29,14 +45,14 @@ export class TraceContextManager {
     }
   }
 
-  setInput(runId: string, messages: unknown, privacyMode: boolean): void {
-    const t = this.traces.get(runId);
+  setInput(sessionKey: string, messages: unknown, privacyMode: boolean): void {
+    const t = this.traces.get(sessionKey);
     if (!t) return;
     t.input = privacyMode ? redactMessages(messages) : messages;
   }
 
-  startToolSpan(runId: string, toolName: string, params?: unknown): void {
-    const t = this.traces.get(runId);
+  startToolSpan(sessionKey: string, toolName: string, params?: unknown): void {
+    const t = this.traces.get(sessionKey);
     if (!t) return;
     t.toolSpans.push({
       toolName,
@@ -46,8 +62,8 @@ export class TraceContextManager {
     });
   }
 
-  endToolSpan(runId: string, toolName: string, result?: unknown): void {
-    const t = this.traces.get(runId);
+  endToolSpan(sessionKey: string, toolName: string, result?: unknown): void {
+    const t = this.traces.get(sessionKey);
     if (!t) return;
     for (let i = t.toolSpans.length - 1; i >= 0; i--) {
       const span = t.toolSpans[i];
@@ -63,26 +79,25 @@ export class TraceContextManager {
     }
   }
 
-  getTrace(runId: string): TraceEntry | undefined {
-    return this.traces.get(runId);
+  getTrace(sessionKey: string): TraceEntry | undefined {
+    return this.traces.get(sessionKey);
   }
 
-  getModel(runId: string): string | undefined {
-    return this.traces.get(runId)?.model;
+  getModel(sessionKey: string): string | undefined {
+    return this.traces.get(sessionKey)?.model;
   }
 
-  getLastToolSpan(runId: string): ToolSpanEntry | undefined {
-    const t = this.traces.get(runId);
+  getLastToolSpan(sessionKey: string): ToolSpanEntry | undefined {
+    const t = this.traces.get(sessionKey);
     if (!t || t.toolSpans.length === 0) return undefined;
     return t.toolSpans[t.toolSpans.length - 1];
   }
 
-  endTrace(runId: string): void {
-    const t = this.traces.get(runId);
+  endTrace(sessionKey: string): void {
+    const t = this.traces.get(sessionKey);
     if (t) {
       t.endedAt = Date.now();
     }
-    // Clean up after a short delay to allow final event emission.
-    setTimeout(() => this.traces.delete(runId), 5_000);
+    setTimeout(() => this.traces.delete(sessionKey), 5_000);
   }
 }

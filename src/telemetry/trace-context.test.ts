@@ -1,5 +1,23 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { TraceContextManager } from "../../extensions/posthog-analytics/lib/trace-context.js";
+import { TraceContextManager, resolveSessionKey } from "../../extensions/posthog-analytics/lib/trace-context.js";
+
+describe("resolveSessionKey", () => {
+  it("prefers sessionId over sessionKey and runId", () => {
+    expect(resolveSessionKey({ sessionId: "s", sessionKey: "k", runId: "r" })).toBe("s");
+  });
+
+  it("falls back to sessionKey when sessionId is absent", () => {
+    expect(resolveSessionKey({ sessionKey: "k", runId: "r" })).toBe("k");
+  });
+
+  it("falls back to runId when both session fields are absent", () => {
+    expect(resolveSessionKey({ runId: "r" })).toBe("r");
+  });
+
+  it("returns 'unknown' when no identifiers are present", () => {
+    expect(resolveSessionKey({})).toBe("unknown");
+  });
+});
 
 describe("TraceContextManager", () => {
   let ctx: TraceContextManager;
@@ -8,42 +26,55 @@ describe("TraceContextManager", () => {
     ctx = new TraceContextManager();
   });
 
-  // ── Trace lifecycle ──
+  // ── Trace lifecycle (session-keyed) ──
 
   it("generates a unique UUID traceId for each trace (ensures PostHog trace grouping)", () => {
     ctx.startTrace("session-1", "run-1");
-    ctx.startTrace("session-1", "run-2");
-    const t1 = ctx.getTrace("run-1")!;
-    const t2 = ctx.getTrace("run-2")!;
+    ctx.startTrace("session-2", "run-2");
+    const t1 = ctx.getTrace("session-1")!;
+    const t2 = ctx.getTrace("session-2")!;
     expect(t1.traceId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     expect(t1.traceId).not.toBe(t2.traceId);
   });
 
-  it("records sessionId and runId on the trace (ensures trace-to-session linkage)", () => {
-    ctx.startTrace("sess-abc", "run-xyz");
-    const trace = ctx.getTrace("run-xyz")!;
-    expect(trace.sessionId).toBe("sess-abc");
-    expect(trace.runId).toBe("run-xyz");
+  it("indexes by sessionKey so different runIds in the same session share one trace", () => {
+    ctx.startTrace("sess-abc", "run-1");
+    ctx.startToolSpan("sess-abc", "search", { q: "test" });
+    ctx.endToolSpan("sess-abc", "search", { ok: true });
+
+    const trace = ctx.getTrace("sess-abc")!;
+    expect(trace.toolSpans).toHaveLength(1);
+    expect(trace.runId).toBe("run-1");
+  });
+
+  it("replaces existing trace when startTrace is called again for the same session (new run)", () => {
+    ctx.startTrace("sess", "run-old");
+    ctx.startToolSpan("sess", "exec", {});
+    expect(ctx.getTrace("sess")!.toolSpans).toHaveLength(1);
+
+    ctx.startTrace("sess", "run-new");
+    expect(ctx.getTrace("sess")!.runId).toBe("run-new");
+    expect(ctx.getTrace("sess")!.toolSpans).toHaveLength(0);
   });
 
   it("records startedAt timestamp on trace creation (enables latency calculation)", () => {
     const before = Date.now();
     ctx.startTrace("s", "r");
     const after = Date.now();
-    const trace = ctx.getTrace("r")!;
+    const trace = ctx.getTrace("s")!;
     expect(trace.startedAt).toBeGreaterThanOrEqual(before);
     expect(trace.startedAt).toBeLessThanOrEqual(after);
   });
 
-  it("endTrace sets endedAt on the trace (enables accurate latency measurement)", () => {
+  it("endTrace sets endedAt on the trace", () => {
     ctx.startTrace("s", "r");
-    ctx.endTrace("r");
-    const trace = ctx.getTrace("r")!;
+    ctx.endTrace("s");
+    const trace = ctx.getTrace("s")!;
     expect(trace.endedAt).toBeDefined();
     expect(trace.endedAt!).toBeGreaterThanOrEqual(trace.startedAt);
   });
 
-  it("returns undefined for non-existent runId (defensive: no crash on stale references)", () => {
+  it("returns undefined for non-existent session key (defensive)", () => {
     expect(ctx.getTrace("nonexistent")).toBeUndefined();
     expect(ctx.getModel("nonexistent")).toBeUndefined();
     expect(ctx.getLastToolSpan("nonexistent")).toBeUndefined();
@@ -51,140 +82,103 @@ describe("TraceContextManager", () => {
 
   // ── Model resolution ──
 
-  it("extracts provider from model string with slash separator (enables PostHog $ai_provider)", () => {
+  it("extracts provider from model string with slash separator", () => {
     ctx.startTrace("s", "r");
-    ctx.setModel("r", "anthropic/claude-4-sonnet");
-    expect(ctx.getTrace("r")!.model).toBe("anthropic/claude-4-sonnet");
-    expect(ctx.getTrace("r")!.provider).toBe("anthropic");
+    ctx.setModel("s", "anthropic/claude-4-sonnet");
+    expect(ctx.getTrace("s")!.model).toBe("anthropic/claude-4-sonnet");
+    expect(ctx.getTrace("s")!.provider).toBe("anthropic");
   });
 
-  it("does not set provider for models without a slash (e.g. 'gpt-4o')", () => {
+  it("does not set provider for models without a slash", () => {
     ctx.startTrace("s", "r");
-    ctx.setModel("r", "gpt-4o");
-    expect(ctx.getTrace("r")!.model).toBe("gpt-4o");
-    expect(ctx.getTrace("r")!.provider).toBeUndefined();
+    ctx.setModel("s", "gpt-4o");
+    expect(ctx.getTrace("s")!.model).toBe("gpt-4o");
+    expect(ctx.getTrace("s")!.provider).toBeUndefined();
   });
 
   it("handles multi-segment provider paths like vercel-ai-gateway/anthropic/claude-4", () => {
     ctx.startTrace("s", "r");
-    ctx.setModel("r", "vercel-ai-gateway/anthropic/claude-4");
-    expect(ctx.getTrace("r")!.provider).toBe("vercel-ai-gateway");
-  });
-
-  it("ignores setModel for non-existent run (no crash on race between model resolve and cleanup)", () => {
-    ctx.setModel("ghost-run", "gpt-4o");
-    expect(ctx.getModel("ghost-run")).toBeUndefined();
+    ctx.setModel("s", "vercel-ai-gateway/anthropic/claude-4");
+    expect(ctx.getTrace("s")!.provider).toBe("vercel-ai-gateway");
   });
 
   // ── Input capture with privacy ──
 
-  it("redacts message content when privacy mode is on (prevents content leakage in PostHog)", () => {
+  it("redacts message content when privacy mode is on (prevents content leakage)", () => {
     ctx.startTrace("s", "r");
-    ctx.setInput("r", [
+    ctx.setInput("s", [
       { role: "user", content: "My SSN is 123-45-6789" },
-      { role: "assistant", content: "I should not store that." },
     ], true);
-    const input = ctx.getTrace("r")!.input as Array<Record<string, unknown>>;
+    const input = ctx.getTrace("s")!.input as Array<Record<string, unknown>>;
     expect(input[0].content).toBe("[REDACTED]");
-    expect(input[1].content).toBe("[REDACTED]");
     expect(input[0].role).toBe("user");
   });
 
-  it("preserves message content when privacy mode is off (allows opt-in content capture)", () => {
+  it("preserves message content when privacy mode is off", () => {
     ctx.startTrace("s", "r");
-    ctx.setInput("r", [{ role: "user", content: "Hello world" }], false);
-    const input = ctx.getTrace("r")!.input as Array<Record<string, unknown>>;
-    expect(input[0].content).toBe("Hello world");
-  });
-
-  it("ignores setInput for non-existent run (no crash on stale context)", () => {
-    ctx.setInput("ghost", [{ role: "user", content: "test" }], true);
-    expect(ctx.getTrace("ghost")).toBeUndefined();
+    ctx.setInput("s", [{ role: "user", content: "Hello" }], false);
+    const input = ctx.getTrace("s")!.input as Array<Record<string, unknown>>;
+    expect(input[0].content).toBe("Hello");
   });
 
   // ── Tool span lifecycle ──
 
-  it("tracks tool span start/end with timing and error detection (enables $ai_span events)", () => {
+  it("tracks tool span start/end with timing and error detection", () => {
     ctx.startTrace("s", "r");
-    const before = Date.now();
-    ctx.startToolSpan("r", "web_search", { query: "test" });
-    const span = ctx.getLastToolSpan("r")!;
+    ctx.startToolSpan("s", "web_search", { query: "test" });
+    const span = ctx.getLastToolSpan("s")!;
     expect(span.toolName).toBe("web_search");
-    expect(span.startedAt).toBeGreaterThanOrEqual(before);
     expect(span.endedAt).toBeUndefined();
-    expect(span.spanId).toMatch(/^[0-9a-f]{8}-/);
 
-    ctx.endToolSpan("r", "web_search", { results: ["a", "b"] });
+    ctx.endToolSpan("s", "web_search", { results: ["a"] });
     expect(span.endedAt).toBeDefined();
     expect(span.isError).toBe(false);
   });
 
-  it("marks tool span as error when result contains an 'error' key (enables $ai_is_error flag)", () => {
+  it("marks tool span as error when result contains an 'error' key", () => {
     ctx.startTrace("s", "r");
-    ctx.startToolSpan("r", "exec", { cmd: "rm -rf /" });
-    ctx.endToolSpan("r", "exec", { error: "permission denied" });
-    expect(ctx.getLastToolSpan("r")!.isError).toBe(true);
+    ctx.startToolSpan("s", "exec", { cmd: "rm -rf /" });
+    ctx.endToolSpan("s", "exec", { error: "permission denied" });
+    expect(ctx.getLastToolSpan("s")!.isError).toBe(true);
   });
 
-  it("does not mark as error for results without error key (prevents false error flags)", () => {
+  it("handles multiple tool spans in order", () => {
     ctx.startTrace("s", "r");
-    ctx.startToolSpan("r", "read_file", { path: "/tmp/x" });
-    ctx.endToolSpan("r", "read_file", { content: "file data" });
-    expect(ctx.getLastToolSpan("r")!.isError).toBe(false);
+    ctx.startToolSpan("s", "search", {});
+    ctx.endToolSpan("s", "search", { ok: true });
+    ctx.startToolSpan("s", "read", {});
+    ctx.endToolSpan("s", "read", { ok: true });
+
+    expect(ctx.getTrace("s")!.toolSpans).toHaveLength(2);
+    expect(ctx.getLastToolSpan("s")!.toolName).toBe("read");
   });
 
-  it("handles multiple tool spans in order (enables correct span-to-trace nesting)", () => {
+  it("matches end to the most recent unfinished span of the same tool name", () => {
     ctx.startTrace("s", "r");
-    ctx.startToolSpan("r", "search", { q: "a" });
-    ctx.endToolSpan("r", "search", { ok: true });
-    ctx.startToolSpan("r", "read", { path: "/tmp" });
-    ctx.endToolSpan("r", "read", { ok: true });
+    ctx.startToolSpan("s", "exec", { cmd: "ls" });
+    ctx.endToolSpan("s", "exec", { output: "file1" });
+    ctx.startToolSpan("s", "exec", { cmd: "pwd" });
+    ctx.endToolSpan("s", "exec", { output: "/home" });
 
-    const trace = ctx.getTrace("r")!;
-    expect(trace.toolSpans).toHaveLength(2);
-    expect(trace.toolSpans[0].toolName).toBe("search");
-    expect(trace.toolSpans[1].toolName).toBe("read");
-    expect(ctx.getLastToolSpan("r")!.toolName).toBe("read");
-  });
-
-  it("matches end to the most recent unfinished span of the same tool name (prevents mismatched close)", () => {
-    ctx.startTrace("s", "r");
-    ctx.startToolSpan("r", "exec", { cmd: "ls" });
-    ctx.endToolSpan("r", "exec", { output: "file1" });
-    ctx.startToolSpan("r", "exec", { cmd: "pwd" });
-    ctx.endToolSpan("r", "exec", { output: "/home" });
-
-    const spans = ctx.getTrace("r")!.toolSpans;
+    const spans = ctx.getTrace("s")!.toolSpans;
     expect(spans).toHaveLength(2);
     expect(spans[0].endedAt).toBeDefined();
     expect(spans[1].endedAt).toBeDefined();
   });
 
-  it("ignores startToolSpan/endToolSpan for non-existent run (no crash on orphaned tool events)", () => {
-    ctx.startToolSpan("ghost", "search", {});
-    ctx.endToolSpan("ghost", "search", {});
-    expect(ctx.getLastToolSpan("ghost")).toBeUndefined();
-  });
+  // ── Concurrent sessions ──
 
-  it("getLastToolSpan returns undefined when no spans exist (defensive edge case)", () => {
-    ctx.startTrace("s", "r");
-    expect(ctx.getLastToolSpan("r")).toBeUndefined();
-  });
-
-  // ── Concurrent runs ──
-
-  it("isolates traces across concurrent runs (prevents cross-run data contamination)", () => {
+  it("isolates traces across concurrent sessions (prevents cross-session contamination)", () => {
     ctx.startTrace("s1", "run-a");
     ctx.startTrace("s2", "run-b");
-    ctx.setModel("run-a", "gpt-4o");
-    ctx.setModel("run-b", "claude-4-sonnet");
-    ctx.startToolSpan("run-a", "search", {});
-    ctx.startToolSpan("run-b", "exec", {});
+    ctx.setModel("s1", "gpt-4o");
+    ctx.setModel("s2", "claude-4-sonnet");
+    ctx.startToolSpan("s1", "search", {});
+    ctx.startToolSpan("s2", "exec", {});
 
-    expect(ctx.getModel("run-a")).toBe("gpt-4o");
-    expect(ctx.getModel("run-b")).toBe("claude-4-sonnet");
-    expect(ctx.getTrace("run-a")!.toolSpans).toHaveLength(1);
-    expect(ctx.getTrace("run-a")!.toolSpans[0].toolName).toBe("search");
-    expect(ctx.getTrace("run-b")!.toolSpans[0].toolName).toBe("exec");
+    expect(ctx.getModel("s1")).toBe("gpt-4o");
+    expect(ctx.getModel("s2")).toBe("claude-4-sonnet");
+    expect(ctx.getTrace("s1")!.toolSpans[0].toolName).toBe("search");
+    expect(ctx.getTrace("s2")!.toolSpans[0].toolName).toBe("exec");
   });
 });

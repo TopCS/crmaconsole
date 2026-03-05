@@ -14,24 +14,65 @@ function getAnonymousId(): string {
 }
 
 /**
+ * Extract tool call names from the messages array provided by agent_end.
+ * Works regardless of privacy mode since tool names are metadata, not content.
+ */
+export function extractToolNamesFromMessages(messages: unknown): string[] {
+  if (!Array.isArray(messages)) return [];
+  const names: string[] = [];
+  for (const msg of messages) {
+    if (!msg || typeof msg !== "object") continue;
+    const m = msg as Record<string, unknown>;
+
+    // OpenAI format: assistant message with tool_calls array
+    if (Array.isArray(m.tool_calls)) {
+      for (const tc of m.tool_calls) {
+        const name = (tc as any)?.function?.name ?? (tc as any)?.name;
+        if (typeof name === "string" && name) names.push(name);
+      }
+    }
+    // Anthropic format: content blocks with type "tool_use"
+    if (Array.isArray(m.content)) {
+      for (const block of m.content) {
+        if ((block as any)?.type === "tool_use" && typeof (block as any)?.name === "string") {
+          names.push((block as any).name);
+        }
+        if ((block as any)?.type === "tool-call" && typeof (block as any)?.toolName === "string") {
+          names.push((block as any).toolName);
+        }
+      }
+    }
+    // Tool result messages have a "name" field with the tool name
+    if (m.role === "tool" && typeof m.name === "string") {
+      names.push(m.name);
+    }
+  }
+  return [...new Set(names)];
+}
+
+/**
  * Emit a `$ai_generation` event from the agent_end hook data.
  */
 export function emitGeneration(
   ph: PostHogClient,
   traceCtx: TraceContextManager,
-  ctx: any,
+  sessionKey: string,
   event: any,
   privacyMode: boolean,
 ): void {
   try {
-    const trace = traceCtx.getTrace(ctx.runId);
+    const trace = traceCtx.getTrace(sessionKey);
     if (!trace) return;
 
-    const latency = trace.startedAt
-      ? (Date.now() - trace.startedAt) / 1_000
-      : undefined;
+    const latency = event.durationMs != null
+      ? event.durationMs / 1_000
+      : trace.startedAt
+        ? (Date.now() - trace.startedAt) / 1_000
+        : undefined;
 
-    const toolNames = trace.toolSpans.map((s) => s.toolName);
+    const spanToolNames = trace.toolSpans.map((s) => s.toolName);
+    const messageToolNames = extractToolNamesFromMessages(event.messages);
+    const allToolNames = [...new Set([...spanToolNames, ...messageToolNames])];
 
     const properties: Record<string, unknown> = {
       $ai_trace_id: trace.traceId,
@@ -39,19 +80,26 @@ export function emitGeneration(
       $ai_model: trace.model ?? event.model ?? "unknown",
       $ai_provider: trace.provider ?? event.provider,
       $ai_latency: latency,
-      $ai_tools: toolNames.length > 0 ? toolNames : undefined,
+      $ai_tools: allToolNames.length > 0
+        ? allToolNames.map((name) => ({ type: "function", function: { name } }))
+        : undefined,
       $ai_stream: event.stream,
       $ai_temperature: event.temperature,
-      $ai_is_error: Boolean(event.error),
+      $ai_is_error: event.success === false || Boolean(event.error),
     };
 
     if (event.usage) {
-      properties.$ai_input_tokens = event.usage.inputTokens ?? event.usage.input_tokens;
-      properties.$ai_output_tokens = event.usage.outputTokens ?? event.usage.output_tokens;
+      const inputTokens = event.usage.inputTokens ?? event.usage.input_tokens;
+      const outputTokens = event.usage.outputTokens ?? event.usage.output_tokens;
+      if (inputTokens != null && inputTokens > 0) properties.$ai_input_tokens = inputTokens;
+      if (outputTokens != null && outputTokens > 0) properties.$ai_output_tokens = outputTokens;
     }
 
     if (event.cost) {
-      properties.$ai_total_cost_usd = event.cost.totalUsd ?? event.cost.total_usd;
+      const cost = event.cost.totalUsd ?? event.cost.total_usd;
+      if (cost != null && cost > 0) {
+        properties.$ai_total_cost_usd = cost;
+      }
     }
 
     properties.$ai_input = sanitizeForCapture(trace.input, privacyMode);
@@ -82,18 +130,20 @@ export function emitGeneration(
 export function emitToolSpan(
   ph: PostHogClient,
   traceCtx: TraceContextManager,
-  runId: string,
+  sessionKey: string,
   event: any,
   privacyMode: boolean,
 ): void {
   try {
-    const trace = traceCtx.getTrace(runId);
-    const span = traceCtx.getLastToolSpan(runId);
+    const trace = traceCtx.getTrace(sessionKey);
+    const span = traceCtx.getLastToolSpan(sessionKey);
     if (!trace || !span) return;
 
     const latency = span.startedAt && span.endedAt
       ? (span.endedAt - span.startedAt) / 1_000
-      : undefined;
+      : event.durationMs != null
+        ? event.durationMs / 1_000
+        : undefined;
 
     const properties: Record<string, unknown> = {
       $ai_trace_id: trace.traceId,
@@ -126,10 +176,10 @@ export function emitToolSpan(
 export function emitTrace(
   ph: PostHogClient,
   traceCtx: TraceContextManager,
-  ctx: any,
+  sessionKey: string,
 ): void {
   try {
-    const trace = traceCtx.getTrace(ctx.runId);
+    const trace = traceCtx.getTrace(sessionKey);
     if (!trace) return;
 
     const latency = trace.startedAt

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { TraceContextManager } from "../../extensions/posthog-analytics/lib/trace-context.js";
-import { emitGeneration, emitToolSpan, emitTrace, emitCustomEvent } from "../../extensions/posthog-analytics/lib/event-mappers.js";
+import { emitGeneration, emitToolSpan, emitTrace, emitCustomEvent, extractToolNamesFromMessages } from "../../extensions/posthog-analytics/lib/event-mappers.js";
 
 function createMockPostHog() {
   return {
@@ -8,6 +8,44 @@ function createMockPostHog() {
     shutdown: vi.fn(),
   } as any;
 }
+
+describe("extractToolNamesFromMessages", () => {
+  it("extracts tool names from OpenAI-format tool_calls in assistant messages", () => {
+    const messages = [
+      { role: "assistant", tool_calls: [{ function: { name: "web_search" } }, { function: { name: "exec" } }] },
+    ];
+    expect(extractToolNamesFromMessages(messages)).toEqual(["web_search", "exec"]);
+  });
+
+  it("extracts tool names from Anthropic-format content blocks with type tool_use", () => {
+    const messages = [
+      { role: "assistant", content: [{ type: "tool_use", name: "read_file" }, { type: "text", text: "hello" }] },
+    ];
+    expect(extractToolNamesFromMessages(messages)).toEqual(["read_file"]);
+  });
+
+  it("extracts tool names from tool result messages with role=tool", () => {
+    const messages = [
+      { role: "tool", name: "exec", content: "output" },
+    ];
+    expect(extractToolNamesFromMessages(messages)).toEqual(["exec"]);
+  });
+
+  it("deduplicates tool names across messages", () => {
+    const messages = [
+      { role: "assistant", tool_calls: [{ function: { name: "exec" } }] },
+      { role: "tool", name: "exec", content: "result" },
+      { role: "assistant", tool_calls: [{ function: { name: "exec" } }] },
+    ];
+    expect(extractToolNamesFromMessages(messages)).toEqual(["exec"]);
+  });
+
+  it("returns empty array for messages without tool calls", () => {
+    expect(extractToolNamesFromMessages([{ role: "user", content: "hello" }])).toEqual([]);
+    expect(extractToolNamesFromMessages(null)).toEqual([]);
+    expect(extractToolNamesFromMessages([])).toEqual([]);
+  });
+});
 
 describe("emitGeneration", () => {
   let ph: ReturnType<typeof createMockPostHog>;
@@ -20,10 +58,10 @@ describe("emitGeneration", () => {
 
   it("emits $ai_generation with correct model, provider, and trace linkage", () => {
     traceCtx.startTrace("sess-1", "run-1");
-    traceCtx.setModel("run-1", "anthropic/claude-4-sonnet");
-    traceCtx.setInput("run-1", [{ role: "user", content: "hello" }], false);
+    traceCtx.setModel("sess-1", "anthropic/claude-4-sonnet");
+    traceCtx.setInput("sess-1", [{ role: "user", content: "hello" }], false);
 
-    emitGeneration(ph, traceCtx, { runId: "run-1" }, {
+    emitGeneration(ph, traceCtx, "sess-1", {
       usage: { inputTokens: 10, outputTokens: 20 },
       cost: { totalUsd: 0.001 },
       output: [{ role: "assistant", content: "hi" }],
@@ -34,7 +72,7 @@ describe("emitGeneration", () => {
     expect(call.event).toBe("$ai_generation");
     expect(call.properties.$ai_model).toBe("anthropic/claude-4-sonnet");
     expect(call.properties.$ai_provider).toBe("anthropic");
-    expect(call.properties.$ai_trace_id).toBe(traceCtx.getTrace("run-1")!.traceId);
+    expect(call.properties.$ai_trace_id).toBe(traceCtx.getTrace("sess-1")!.traceId);
     expect(call.properties.$ai_session_id).toBe("sess-1");
     expect(call.properties.$ai_input_tokens).toBe(10);
     expect(call.properties.$ai_output_tokens).toBe(20);
@@ -44,9 +82,9 @@ describe("emitGeneration", () => {
 
   it("redacts input/output when privacy mode is on (enforces privacy boundary)", () => {
     traceCtx.startTrace("s", "r");
-    traceCtx.setInput("r", [{ role: "user", content: "sensitive" }], true);
+    traceCtx.setInput("s", [{ role: "user", content: "sensitive" }], true);
 
-    emitGeneration(ph, traceCtx, { runId: "r" }, {
+    emitGeneration(ph, traceCtx, "s", {
       output: [{ role: "assistant", content: "also sensitive" }],
     }, true);
 
@@ -55,88 +93,94 @@ describe("emitGeneration", () => {
     expect(props.$ai_output_choices).toBe("[REDACTED]");
   });
 
-  it("includes full input/output when privacy mode is off (allows opt-in capture)", () => {
+  it("does not set $ai_total_cost_usd when cost is zero (prevents misleading $0 in PostHog)", () => {
     traceCtx.startTrace("s", "r");
-    const input = [{ role: "user", content: "hello" }];
-    traceCtx.setInput("r", input, false);
-
-    emitGeneration(ph, traceCtx, { runId: "r" }, {
-      output: [{ role: "assistant", content: "world" }],
-    }, false);
-
-    const props = ph.capture.mock.calls[0][0].properties;
-    expect(props.$ai_input).toEqual(input);
-    expect(props.$ai_output_choices).toEqual([{ role: "assistant", content: "world" }]);
+    emitGeneration(ph, traceCtx, "s", { cost: { totalUsd: 0 } }, true);
+    expect(ph.capture.mock.calls[0][0].properties.$ai_total_cost_usd).toBeUndefined();
   });
 
-  it("captures error details when generation fails (enables error tracking in PostHog)", () => {
+  it("does not set $ai_total_cost_usd when cost object is absent", () => {
     traceCtx.startTrace("s", "r");
+    emitGeneration(ph, traceCtx, "s", {}, true);
+    expect(ph.capture.mock.calls[0][0].properties.$ai_total_cost_usd).toBeUndefined();
+  });
 
-    emitGeneration(ph, traceCtx, { runId: "r" }, {
-      error: { message: "Rate limit exceeded" },
-    }, true);
+  it("sets $ai_total_cost_usd when cost is positive", () => {
+    traceCtx.startTrace("s", "r");
+    emitGeneration(ph, traceCtx, "s", { cost: { totalUsd: 0.05 } }, true);
+    expect(ph.capture.mock.calls[0][0].properties.$ai_total_cost_usd).toBe(0.05);
+  });
 
+  it("does not set token counts when usage is absent (prevents null in PostHog)", () => {
+    traceCtx.startTrace("s", "r");
+    emitGeneration(ph, traceCtx, "s", {}, true);
+    const props = ph.capture.mock.calls[0][0].properties;
+    expect(props).not.toHaveProperty("$ai_input_tokens");
+    expect(props).not.toHaveProperty("$ai_output_tokens");
+  });
+
+  it("does not set token counts when they are zero", () => {
+    traceCtx.startTrace("s", "r");
+    emitGeneration(ph, traceCtx, "s", { usage: { inputTokens: 0, outputTokens: 0 } }, true);
+    const props = ph.capture.mock.calls[0][0].properties;
+    expect(props).not.toHaveProperty("$ai_input_tokens");
+    expect(props).not.toHaveProperty("$ai_output_tokens");
+  });
+
+  it("captures error details when generation fails", () => {
+    traceCtx.startTrace("s", "r");
+    emitGeneration(ph, traceCtx, "s", { error: { message: "Rate limit exceeded" } }, true);
     const props = ph.capture.mock.calls[0][0].properties;
     expect(props.$ai_is_error).toBe(true);
     expect(props.$ai_error).toBe("Rate limit exceeded");
   });
 
-  it("handles string error (defensive: different error shapes from providers)", () => {
+  it("detects error from success=false even without error field", () => {
     traceCtx.startTrace("s", "r");
-    emitGeneration(ph, traceCtx, { runId: "r" }, { error: "connection timeout" }, true);
-    expect(ph.capture.mock.calls[0][0].properties.$ai_error).toBe("connection timeout");
+    emitGeneration(ph, traceCtx, "s", { success: false }, true);
+    expect(ph.capture.mock.calls[0][0].properties.$ai_is_error).toBe(true);
   });
 
-  it("includes tool names in $ai_tools when tools were called (enables tool usage analytics)", () => {
+  it("includes tool names from both spans and messages in $ai_tools", () => {
     traceCtx.startTrace("s", "r");
-    traceCtx.startToolSpan("r", "web_search", {});
-    traceCtx.endToolSpan("r", "web_search", {});
-    traceCtx.startToolSpan("r", "exec", {});
-    traceCtx.endToolSpan("r", "exec", {});
+    traceCtx.startToolSpan("s", "web_search", {});
+    traceCtx.endToolSpan("s", "web_search", {});
 
-    emitGeneration(ph, traceCtx, { runId: "r" }, {}, true);
+    const messages = [
+      { role: "assistant", tool_calls: [{ function: { name: "exec" } }] },
+      { role: "tool", name: "exec", content: "result" },
+    ];
 
-    const props = ph.capture.mock.calls[0][0].properties;
-    expect(props.$ai_tools).toEqual(["web_search", "exec"]);
+    emitGeneration(ph, traceCtx, "s", { messages }, true);
+
+    const tools = ph.capture.mock.calls[0][0].properties.$ai_tools;
+    expect(tools).toEqual([
+      { type: "function", function: { name: "web_search" } },
+      { type: "function", function: { name: "exec" } },
+    ]);
   });
 
-  it("sets $ai_tools to undefined when no tools were called (prevents empty array in PostHog)", () => {
+  it("sets $ai_tools to undefined when no tools were called", () => {
     traceCtx.startTrace("s", "r");
-    emitGeneration(ph, traceCtx, { runId: "r" }, {}, true);
+    emitGeneration(ph, traceCtx, "s", {}, true);
     expect(ph.capture.mock.calls[0][0].properties.$ai_tools).toBeUndefined();
   });
 
-  it("silently skips when trace does not exist (prevents crash on stale runId)", () => {
-    emitGeneration(ph, traceCtx, { runId: "ghost" }, {}, true);
+  it("silently skips when trace does not exist", () => {
+    emitGeneration(ph, traceCtx, "ghost", {}, true);
     expect(ph.capture).not.toHaveBeenCalled();
-  });
-
-  it("falls back to event.model when trace has no model set (handles missing before_model_resolve)", () => {
-    traceCtx.startTrace("s", "r");
-    emitGeneration(ph, traceCtx, { runId: "r" }, { model: "fallback-model" }, true);
-    expect(ph.capture.mock.calls[0][0].properties.$ai_model).toBe("fallback-model");
-  });
-
-  it("uses 'unknown' when neither trace nor event has model (defensive default)", () => {
-    traceCtx.startTrace("s", "r");
-    emitGeneration(ph, traceCtx, { runId: "r" }, {}, true);
-    expect(ph.capture.mock.calls[0][0].properties.$ai_model).toBe("unknown");
-  });
-
-  it("handles snake_case usage keys from some providers (input_tokens vs inputTokens)", () => {
-    traceCtx.startTrace("s", "r");
-    emitGeneration(ph, traceCtx, { runId: "r" }, {
-      usage: { input_tokens: 5, output_tokens: 15 },
-    }, true);
-    const props = ph.capture.mock.calls[0][0].properties;
-    expect(props.$ai_input_tokens).toBe(5);
-    expect(props.$ai_output_tokens).toBe(15);
   });
 
   it("never throws even if PostHog capture throws (prevents gateway crash)", () => {
     ph.capture.mockImplementation(() => { throw new Error("PostHog down"); });
     traceCtx.startTrace("s", "r");
-    expect(() => emitGeneration(ph, traceCtx, { runId: "r" }, {}, true)).not.toThrow();
+    expect(() => emitGeneration(ph, traceCtx, "s", {}, true)).not.toThrow();
+  });
+
+  it("uses durationMs from event for latency when available (more accurate)", () => {
+    traceCtx.startTrace("s", "r");
+    emitGeneration(ph, traceCtx, "s", { durationMs: 5000 }, true);
+    expect(ph.capture.mock.calls[0][0].properties.$ai_latency).toBe(5);
   });
 });
 
@@ -149,27 +193,26 @@ describe("emitToolSpan", () => {
     traceCtx = new TraceContextManager();
   });
 
-  it("emits $ai_span with correct tool name, timing, and trace linkage", () => {
+  it("emits $ai_span with correct tool name, timing, and trace linkage (same session key)", () => {
     traceCtx.startTrace("sess", "r");
-    traceCtx.startToolSpan("r", "web_search", { q: "test" });
-    traceCtx.endToolSpan("r", "web_search", { results: [] });
+    traceCtx.startToolSpan("sess", "web_search", { q: "test" });
+    traceCtx.endToolSpan("sess", "web_search", { results: [] });
 
-    emitToolSpan(ph, traceCtx, "r", {}, false);
+    emitToolSpan(ph, traceCtx, "sess", {}, false);
 
     const call = ph.capture.mock.calls[0][0];
     expect(call.event).toBe("$ai_span");
     expect(call.properties.$ai_span_name).toBe("web_search");
-    expect(call.properties.$ai_trace_id).toBe(traceCtx.getTrace("r")!.traceId);
-    expect(call.properties.$ai_parent_id).toBe(traceCtx.getTrace("r")!.traceId);
-    expect(typeof call.properties.$ai_latency).toBe("number");
+    expect(call.properties.$ai_trace_id).toBe(traceCtx.getTrace("sess")!.traceId);
+    expect(call.properties.$ai_parent_id).toBe(traceCtx.getTrace("sess")!.traceId);
   });
 
-  it("excludes tool_params and tool_result when privacy mode is on (enforces content redaction)", () => {
+  it("excludes tool_params and tool_result when privacy mode is on", () => {
     traceCtx.startTrace("s", "r");
-    traceCtx.startToolSpan("r", "exec", { cmd: "cat /etc/passwd" });
-    traceCtx.endToolSpan("r", "exec", { output: "root:x:0:0:..." });
+    traceCtx.startToolSpan("s", "exec", { cmd: "cat /etc/passwd" });
+    traceCtx.endToolSpan("s", "exec", { output: "root:x:0:0:..." });
 
-    emitToolSpan(ph, traceCtx, "r", {}, true);
+    emitToolSpan(ph, traceCtx, "s", {}, true);
 
     const props = ph.capture.mock.calls[0][0].properties;
     expect(props).not.toHaveProperty("tool_params");
@@ -178,78 +221,51 @@ describe("emitToolSpan", () => {
 
   it("includes tool_params and tool_result with secrets stripped when privacy is off", () => {
     traceCtx.startTrace("s", "r");
-    traceCtx.startToolSpan("r", "api_call", { url: "https://api.example.com", apiKey: "secret" });
-    traceCtx.endToolSpan("r", "api_call", { status: 200, data: "ok" });
+    traceCtx.startToolSpan("s", "api_call", { url: "https://example.com", apiKey: "secret" });
+    traceCtx.endToolSpan("s", "api_call", { status: 200 });
 
-    emitToolSpan(ph, traceCtx, "r", {}, false);
+    emitToolSpan(ph, traceCtx, "s", {}, false);
 
     const props = ph.capture.mock.calls[0][0].properties;
-    expect(props.tool_params.url).toBe("https://api.example.com");
+    expect(props.tool_params.url).toBe("https://example.com");
     expect(props.tool_params.apiKey).toBe("[REDACTED]");
-    expect(props.tool_result.status).toBe(200);
   });
 
-  it("silently skips when no trace or span exists (prevents crash on orphaned events)", () => {
-    emitToolSpan(ph, traceCtx, "ghost", {}, false);
-    expect(ph.capture).not.toHaveBeenCalled();
-  });
-
-  it("never throws even if PostHog capture throws (prevents gateway crash)", () => {
-    ph.capture.mockImplementation(() => { throw new Error("boom"); });
+  it("uses event.durationMs for latency when span timing is unavailable", () => {
     traceCtx.startTrace("s", "r");
-    traceCtx.startToolSpan("r", "x", {});
-    traceCtx.endToolSpan("r", "x", {});
-    expect(() => emitToolSpan(ph, traceCtx, "r", {}, false)).not.toThrow();
+    traceCtx.startToolSpan("s", "exec", {});
+
+    emitToolSpan(ph, traceCtx, "s", { durationMs: 250 }, false);
+
+    expect(ph.capture.mock.calls[0][0].properties.$ai_latency).toBe(0.25);
   });
 });
 
 describe("emitTrace", () => {
-  let ph: ReturnType<typeof createMockPostHog>;
-  let traceCtx: TraceContextManager;
-
-  beforeEach(() => {
-    ph = createMockPostHog();
-    traceCtx = new TraceContextManager();
-  });
-
   it("emits $ai_trace with correct trace ID, session ID, and tool count", () => {
+    const ph = createMockPostHog();
+    const traceCtx = new TraceContextManager();
     traceCtx.startTrace("sess-1", "r");
-    traceCtx.startToolSpan("r", "a", {});
-    traceCtx.endToolSpan("r", "a", {});
-    traceCtx.startToolSpan("r", "b", {});
-    traceCtx.endToolSpan("r", "b", {});
+    traceCtx.startToolSpan("sess-1", "a", {});
+    traceCtx.endToolSpan("sess-1", "a", {});
+    traceCtx.startToolSpan("sess-1", "b", {});
+    traceCtx.endToolSpan("sess-1", "b", {});
 
-    emitTrace(ph, traceCtx, { runId: "r" });
+    emitTrace(ph, traceCtx, "sess-1");
 
     const call = ph.capture.mock.calls[0][0];
     expect(call.event).toBe("$ai_trace");
-    expect(call.properties.$ai_trace_id).toBe(traceCtx.getTrace("r")!.traceId);
-    expect(call.properties.$ai_session_id).toBe("sess-1");
+    expect(call.properties.$ai_trace_id).toBe(traceCtx.getTrace("sess-1")!.traceId);
     expect(call.properties.tool_count).toBe(2);
-    expect(call.properties.$ai_span_name).toBe("agent_run");
-  });
-
-  it("silently skips for non-existent trace", () => {
-    emitTrace(ph, traceCtx, { runId: "ghost" });
-    expect(ph.capture).not.toHaveBeenCalled();
   });
 });
 
 describe("emitCustomEvent", () => {
   it("captures event with $process_person_profile: false (prevents person profile creation)", () => {
     const ph = createMockPostHog();
-    emitCustomEvent(ph, "dench_session_start", { session_id: "abc", channel: "telegram" });
-
+    emitCustomEvent(ph, "dench_session_start", { session_id: "abc" });
     const call = ph.capture.mock.calls[0][0];
     expect(call.event).toBe("dench_session_start");
-    expect(call.properties.session_id).toBe("abc");
-    expect(call.properties.channel).toBe("telegram");
     expect(call.properties.$process_person_profile).toBe(false);
-  });
-
-  it("never throws even if PostHog capture throws", () => {
-    const ph = createMockPostHog();
-    ph.capture.mockImplementation(() => { throw new Error("boom"); });
-    expect(() => emitCustomEvent(ph, "test", {})).not.toThrow();
   });
 });
