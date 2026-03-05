@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stripSecrets, redactMessages, sanitizeForCapture } from "../../extensions/posthog-analytics/lib/privacy.js";
+import { stripSecrets, redactMessages, sanitizeForCapture, redactMessagesStructured, redactOutputChoicesStructured, sanitizeMessages, sanitizeOutputChoices } from "../../extensions/posthog-analytics/lib/privacy.js";
 
 // ---------------------------------------------------------------------------
 // stripSecrets — security-critical: prevents credential leakage
@@ -206,5 +206,136 @@ describe("sanitizeForCapture", () => {
     ) as Record<string, unknown>;
     expect(result.apiKey).toBe("[REDACTED]");
     expect(result.data).toBe("visible");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// redactMessagesStructured — preserves message/tool structure in privacy mode
+// ---------------------------------------------------------------------------
+
+describe("redactMessagesStructured", () => {
+  it("preserves role and ordering while redacting text content (enables PostHog conversation view)", () => {
+    const messages = [
+      { role: "user", content: "secret question" },
+      { role: "assistant", content: "secret answer" },
+      { role: "user", content: "follow-up" },
+    ];
+    const result = redactMessagesStructured(messages) as Array<Record<string, unknown>>;
+    expect(result).toHaveLength(3);
+    expect(result[0]).toEqual({ role: "user", content: "[REDACTED]" });
+    expect(result[1]).toEqual({ role: "assistant", content: "[REDACTED]" });
+    expect(result[2]).toEqual({ role: "user", content: "[REDACTED]" });
+  });
+
+  it("preserves tool_calls[].function.name while redacting arguments (tool type visible in privacy mode)", () => {
+    const messages = [
+      {
+        role: "assistant",
+        content: "Let me run that.",
+        tool_calls: [
+          { id: "call_1", type: "function", function: { name: "exec", arguments: '{"cmd":"ls -la"}' } },
+          { id: "call_2", type: "function", function: { name: "read", arguments: '{"path":"/etc/passwd"}' } },
+        ],
+      },
+    ];
+    const result = redactMessagesStructured(messages) as Array<Record<string, unknown>>;
+    expect(result[0].role).toBe("assistant");
+    expect(result[0].content).toBe("[REDACTED]");
+    const tc = result[0].tool_calls as Array<Record<string, unknown>>;
+    expect(tc).toHaveLength(2);
+    expect((tc[0] as any).function.name).toBe("exec");
+    expect((tc[0] as any).function.arguments).toBe("[REDACTED]");
+    expect((tc[1] as any).function.name).toBe("read");
+  });
+
+  it("preserves Anthropic toolCall content blocks with name visible (type visible regardless of privacy)", () => {
+    const messages = [
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Running command..." },
+          { type: "toolCall", id: "tc1", name: "exec", arguments: { command: "ls" } },
+        ],
+      },
+    ];
+    const result = redactMessagesStructured(messages) as Array<Record<string, unknown>>;
+    const blocks = result[0].content as Array<Record<string, unknown>>;
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toEqual({ type: "text", text: "[REDACTED]" });
+    expect(blocks[1].type).toBe("toolCall");
+    expect(blocks[1].name).toBe("exec");
+    expect(blocks[1].arguments).toBe("[REDACTED]");
+  });
+
+  it("preserves tool result metadata (name, tool_call_id) while redacting content", () => {
+    const messages = [
+      { role: "tool", name: "exec", tool_call_id: "call_1", content: "file1.txt\nfile2.txt" },
+    ];
+    const result = redactMessagesStructured(messages) as Array<Record<string, unknown>>;
+    expect(result[0].role).toBe("tool");
+    expect(result[0].name).toBe("exec");
+    expect(result[0].tool_call_id).toBe("call_1");
+    expect(result[0].content).toBe("[REDACTED]");
+  });
+
+  it("preserves model and provider metadata on assistant messages", () => {
+    const messages = [
+      { role: "assistant", content: "hello", model: "claude-4", provider: "anthropic" },
+    ];
+    const result = redactMessagesStructured(messages) as Array<Record<string, unknown>>;
+    expect(result[0].model).toBe("claude-4");
+    expect(result[0].provider).toBe("anthropic");
+    expect(result[0].content).toBe("[REDACTED]");
+  });
+
+  it("returns non-array input unchanged", () => {
+    expect(redactMessagesStructured(null)).toBe(null);
+    expect(redactMessagesStructured("string")).toBe("string");
+  });
+});
+
+describe("redactOutputChoicesStructured", () => {
+  it("preserves tool_calls[].function.name while redacting text and arguments", () => {
+    const choices = [
+      {
+        role: "assistant",
+        content: "Here you go",
+        tool_calls: [{ id: "c1", type: "function", function: { name: "web_search", arguments: '{"q":"test"}' } }],
+      },
+    ];
+    const result = redactOutputChoicesStructured(choices) as Array<Record<string, unknown>>;
+    expect(result[0].content).toBe("[REDACTED]");
+    const tc = result[0].tool_calls as Array<Record<string, unknown>>;
+    expect((tc[0] as any).function.name).toBe("web_search");
+    expect((tc[0] as any).function.arguments).toBe("[REDACTED]");
+  });
+
+  it("sets content to null when original content is null (no-text tool-only responses)", () => {
+    const choices = [
+      { role: "assistant", content: null, tool_calls: [{ id: "c1", type: "function", function: { name: "exec" } }] },
+    ];
+    const result = redactOutputChoicesStructured(choices) as Array<Record<string, unknown>>;
+    expect(result[0].content).toBe(null);
+  });
+});
+
+describe("sanitizeMessages", () => {
+  it("uses structural redaction when privacy is on (preserves role/tool structure)", () => {
+    const messages = [
+      { role: "user", content: "secret" },
+      { role: "assistant", content: "response", tool_calls: [{ id: "c", type: "function", function: { name: "exec", arguments: "{}" } }] },
+    ];
+    const result = sanitizeMessages(messages, true) as Array<Record<string, unknown>>;
+    expect(result[0].role).toBe("user");
+    expect(result[0].content).toBe("[REDACTED]");
+    expect(result[1].role).toBe("assistant");
+    const tc = result[1].tool_calls as any[];
+    expect(tc[0].function.name).toBe("exec");
+  });
+
+  it("uses secret stripping when privacy is off (preserves full content)", () => {
+    const messages = [{ role: "user", content: "hello" }];
+    const result = sanitizeMessages(messages, false) as Array<Record<string, unknown>>;
+    expect(result[0].content).toBe("hello");
   });
 });
