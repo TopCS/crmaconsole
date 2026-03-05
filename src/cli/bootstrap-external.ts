@@ -444,6 +444,21 @@ async function installBundledPlugins(params: {
         errorMessage: "Failed to set posthog-analytics API key.",
       });
     }
+
+    // Restart the gateway so it loads the new/updated plugin.
+    // On first bootstrap the gateway isn't running yet, so this
+    // is a harmless no-op caught by the outer try/catch.
+    try {
+      await runOpenClawOrThrow({
+        openclawCommand: params.openclawCommand,
+        args: ["--profile", params.profile, "gateway", "restart"],
+        timeoutMs: 60_000,
+        errorMessage: "Failed to restart gateway after plugin install.",
+      });
+    } catch {
+      // Gateway may not be running yet (first bootstrap) — ignore.
+    }
+
     return true;
   } catch {
     return false;
