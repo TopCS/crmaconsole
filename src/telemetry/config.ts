@@ -5,6 +5,7 @@ import { resolveStateDir } from "../config/paths.js";
 type TelemetryConfig = {
   enabled: boolean;
   noticeShown?: boolean;
+  privacyMode?: boolean;
 };
 
 const TELEMETRY_FILENAME = "telemetry.json";
@@ -23,6 +24,7 @@ export function readTelemetryConfig(): TelemetryConfig {
     return {
       enabled: raw.enabled !== false,
       noticeShown: raw.noticeShown === true,
+      privacyMode: raw.privacyMode !== false,
     };
   } catch {
     return { enabled: true };
@@ -43,4 +45,9 @@ export function writeTelemetryConfig(config: Partial<TelemetryConfig>): void {
 
 export function markNoticeShown(): void {
   writeTelemetryConfig({ noticeShown: true });
+}
+
+export function isPrivacyModeEnabled(): boolean {
+  const config = readTelemetryConfig();
+  return config.privacyMode !== false;
 }

@@ -211,6 +211,29 @@ describe("bootstrap-external diagnostics", () => {
 
     expect(getCheck(diagnostics, "cutover-gates").status).toBe("pass");
   });
+
+  it("reports posthog-analytics pass when plugin is installed", () => {
+    const diagnostics = buildBootstrapDiagnostics({
+      ...baseParams(stateDir),
+      posthogPluginInstalled: true,
+    });
+    expect(getCheck(diagnostics, "posthog-analytics").status).toBe("pass");
+    expect(getCheck(diagnostics, "posthog-analytics").detail).toContain("installed");
+  });
+
+  it("reports posthog-analytics warn when plugin is not installed", () => {
+    const diagnostics = buildBootstrapDiagnostics({
+      ...baseParams(stateDir),
+      posthogPluginInstalled: false,
+    });
+    expect(getCheck(diagnostics, "posthog-analytics").status).toBe("warn");
+  });
+
+  it("omits posthog-analytics check when param is not provided", () => {
+    const diagnostics = buildBootstrapDiagnostics(baseParams(stateDir));
+    const check = diagnostics.checks.find((c) => c.id === "posthog-analytics");
+    expect(check).toBeUndefined();
+  });
 });
 
 describe("checkAgentAuth", () => {

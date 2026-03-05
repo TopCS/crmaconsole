@@ -128,7 +128,12 @@ export function shouldDelegateToGlobalOpenClaw(
     return false;
   }
   return (
-    primary !== "bootstrap" && primary !== "update" && primary !== "stop" && primary !== "start"
+    primary !== "bootstrap" &&
+    primary !== "update" &&
+    primary !== "stop" &&
+    primary !== "start" &&
+    primary !== "restart" &&
+    primary !== "telemetry"
   );
 }
 

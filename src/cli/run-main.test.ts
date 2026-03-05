@@ -58,13 +58,21 @@ describe("run-main delegation and path guards", () => {
     expect(shouldEnsureCliPath(["node", "denchclaw", "chat", "send"])).toBe(true);
   });
 
-  it("delegates non-bootstrap commands by default and never delegates bootstrap", () => {
+  it("delegates non-core commands to OpenClaw and never delegates core CLI commands", () => {
     expect(shouldDelegateToGlobalOpenClaw(["node", "denchclaw", "chat"])).toBe(true);
     expect(shouldDelegateToGlobalOpenClaw(["node", "denchclaw", "bootstrap"])).toBe(false);
     expect(shouldDelegateToGlobalOpenClaw(["node", "denchclaw", "update"])).toBe(false);
     expect(shouldDelegateToGlobalOpenClaw(["node", "denchclaw", "stop"])).toBe(false);
     expect(shouldDelegateToGlobalOpenClaw(["node", "denchclaw", "start"])).toBe(false);
+    expect(shouldDelegateToGlobalOpenClaw(["node", "denchclaw", "restart"])).toBe(false);
+    expect(shouldDelegateToGlobalOpenClaw(["node", "denchclaw", "telemetry"])).toBe(false);
     expect(shouldDelegateToGlobalOpenClaw(["node", "denchclaw"])).toBe(false);
+  });
+
+  it("does not delegate telemetry subcommands to OpenClaw (prevents 'unknown command' error)", () => {
+    expect(shouldDelegateToGlobalOpenClaw(["node", "denchclaw", "telemetry", "status"])).toBe(false);
+    expect(shouldDelegateToGlobalOpenClaw(["node", "denchclaw", "telemetry", "privacy", "on"])).toBe(false);
+    expect(shouldDelegateToGlobalOpenClaw(["node", "denchclaw", "telemetry", "privacy", "off"])).toBe(false);
   });
 
   it("disables delegation when explicit env disable flag is set", () => {

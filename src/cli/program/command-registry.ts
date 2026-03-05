@@ -71,7 +71,7 @@ export function getCoreCliCommandNames(): string[] {
 }
 
 export function getCoreCliCommandsWithSubcommands(): string[] {
-  return [];
+  return ["telemetry"];
 }
 
 export async function registerCoreCliByName(

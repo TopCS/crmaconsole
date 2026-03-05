@@ -17,12 +17,14 @@ export function registerTelemetryCommand(program: Command) {
         process.env.DENCHCLAW_TELEMETRY_DISABLED === "1" ||
         Boolean(process.env.CI);
       const effective = isTelemetryEnabled();
+      const privacyOn = config.privacyMode !== false;
 
       console.log(`Telemetry config:  ${config.enabled ? "enabled" : "disabled"}`);
       if (envDisabled) {
         console.log("Environment override: disabled (DO_NOT_TRACK, DENCHCLAW_TELEMETRY_DISABLED, or CI)");
       }
       console.log(`Effective status:  ${effective ? "enabled" : "disabled"}`);
+      console.log(`Privacy mode:      ${privacyOn ? "on (message content is redacted)" : "off (full content is captured)"}`);
       console.log("\nLearn more: https://github.com/openclaw/openclaw/blob/main/TELEMETRY.md");
     });
 
@@ -41,5 +43,34 @@ export function registerTelemetryCommand(program: Command) {
     .action(() => {
       writeTelemetryConfig({ enabled: true });
       console.log("Telemetry has been enabled. Thank you for helping improve DenchClaw!");
+    });
+
+  const privacyCmd = cmd
+    .command("privacy")
+    .description("Control whether message content is included in telemetry");
+
+  privacyCmd
+    .command("on")
+    .description("Enable privacy mode (redacts message content, default)")
+    .action(() => {
+      if (!isTelemetryEnabled()) {
+        console.log("Telemetry is currently disabled. Enable it first with: denchclaw telemetry enable");
+        return;
+      }
+      writeTelemetryConfig({ privacyMode: true });
+      console.log("Privacy mode enabled. Message content and tool results will be redacted.");
+    });
+
+  privacyCmd
+    .command("off")
+    .description("Disable privacy mode (sends full message content)")
+    .action(() => {
+      if (!isTelemetryEnabled()) {
+        console.log("Telemetry is currently disabled. Enable it first with: denchclaw telemetry enable");
+        return;
+      }
+      writeTelemetryConfig({ privacyMode: false });
+      console.log("Privacy mode disabled. Full message content and tool results will be captured.");
+      console.log("Re-enable anytime with: denchclaw telemetry privacy on");
     });
 }

@@ -2,9 +2,12 @@ import { spawn, execFileSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
+  readlinkSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -15,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import { resolveRequiredHomeDir } from "../infra/home-dir.js";
 import { resolveLsofCommandSync } from "../infra/ports-lsof.js";
 import { sleep } from "../utils.js";
+import { flattenPnpmStandaloneDeps } from "./flatten-standalone-deps.js";
 import { listPortListeners, type PortProcess } from "./ports.js";
 
 export const DEFAULT_WEB_APP_PORT = 3100;
@@ -479,6 +483,187 @@ export function readLastKnownWebPort(stateDir: string): number {
   return DEFAULT_WEB_APP_PORT;
 }
 
+/**
+ * Node.js cpSync with dereference:true does NOT dereference symlinks nested
+ * inside a recursively-copied directory.  After copying the app dir:
+ *
+ * 1. Merge all packages from the standalone root node_modules/ into the
+ *    runtime's node_modules/ (provides transitive deps like styled-jsx).
+ * 2. Replace any remaining symlinks with real copies of their targets,
+ *    falling back to the standalone root node_modules/ when the original
+ *    target is missing (e.g. .pnpm/ was removed by a prior flatten).
+ */
+function dereferenceRuntimeNodeModules(
+  runtimeAppDir: string,
+  standaloneDir: string,
+): void {
+  const nmDir = path.join(runtimeAppDir, "node_modules");
+  mkdirSync(nmDir, { recursive: true });
+
+  const rootNm = path.join(standaloneDir, "node_modules");
+  mergeRootNodeModules(nmDir, rootNm);
+  resolveRemainingSymlinks(nmDir, rootNm);
+}
+
+function mergeRootNodeModules(targetNm: string, rootNm: string): void {
+  if (!existsSync(rootNm)) return;
+
+  let entries: string[];
+  try {
+    entries = readdirSync(rootNm);
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    if (entry === ".pnpm" || entry === "node_modules") continue;
+    const src = path.join(rootNm, entry);
+
+    if (entry.startsWith("@")) {
+      let scopeEntries: string[];
+      try {
+        scopeEntries = readdirSync(src);
+      } catch {
+        continue;
+      }
+      for (const pkg of scopeEntries) {
+        const dst = path.join(targetNm, entry, pkg);
+        if (existsSync(dst) && !lstatSync(dst).isSymbolicLink()) continue;
+        const scopeSrc = path.join(src, pkg);
+        try {
+          rmSync(dst, { recursive: true, force: true });
+          mkdirSync(path.join(targetNm, entry), { recursive: true });
+          cpSync(scopeSrc, dst, { recursive: true, dereference: true, force: true });
+        } catch {
+          // best-effort
+        }
+      }
+      continue;
+    }
+
+    const dst = path.join(targetNm, entry);
+    if (existsSync(dst) && !lstatSync(dst).isSymbolicLink()) continue;
+    try {
+      rmSync(dst, { recursive: true, force: true });
+      cpSync(src, dst, { recursive: true, dereference: true, force: true });
+    } catch {
+      // best-effort
+    }
+  }
+}
+
+function resolveRemainingSymlinks(nmDir: string, rootNm: string): void {
+  let entries: string[];
+  try {
+    entries = readdirSync(nmDir);
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    const entryPath = path.join(nmDir, entry);
+    try {
+      if (!lstatSync(entryPath).isSymbolicLink()) {
+        if (entry.startsWith("@")) {
+          resolveScopeSymlinks(entryPath, entry, rootNm);
+        }
+        continue;
+      }
+    } catch {
+      continue;
+    }
+    resolveSymlinkedPackage(entryPath, entry, rootNm);
+  }
+}
+
+function resolveScopeSymlinks(
+  scopeDir: string,
+  scopeName: string,
+  rootNm: string,
+): void {
+  let scopeEntries: string[];
+  try {
+    scopeEntries = readdirSync(scopeDir);
+  } catch {
+    return;
+  }
+  for (const pkg of scopeEntries) {
+    const pkgPath = path.join(scopeDir, pkg);
+    try {
+      if (!lstatSync(pkgPath).isSymbolicLink()) continue;
+    } catch {
+      continue;
+    }
+    resolveSymlinkedPackage(pkgPath, `${scopeName}/${pkg}`, rootNm);
+  }
+}
+
+function resolveSymlinkedPackage(
+  linkPath: string,
+  packageName: string,
+  rootNm: string,
+): void {
+  try {
+    const target = readlinkSync(linkPath);
+    const resolved = path.isAbsolute(target)
+      ? target
+      : path.resolve(path.dirname(linkPath), target);
+
+    if (existsSync(resolved)) {
+      rmSync(linkPath, { force: true });
+      cpSync(resolved, linkPath, { recursive: true, dereference: true, force: true });
+      return;
+    }
+  } catch {
+    // readlink failed — treat as dangling
+  }
+
+  const fallback = path.join(rootNm, packageName);
+  if (existsSync(fallback)) {
+    try {
+      rmSync(linkPath, { force: true });
+      cpSync(fallback, linkPath, { recursive: true, dereference: true, force: true });
+    } catch {
+      // best-effort
+    }
+    return;
+  }
+
+  try {
+    rmSync(linkPath, { force: true });
+  } catch {
+    // best-effort cleanup
+  }
+}
+
+/**
+ * Copy .next/static/ and public/ into the runtime app dir if they aren't
+ * already present.  In production the prepack script copies these into the
+ * standalone app dir before publish, so cpSync already picks them up.
+ * In dev the prepack hasn't run, so we pull them from the source tree.
+ */
+function ensureStaticAssets(runtimeAppDir: string, packageRoot: string): void {
+  const pairs: Array<[src: string, dst: string]> = [
+    [
+      path.join(packageRoot, "apps", "web", ".next", "static"),
+      path.join(runtimeAppDir, ".next", "static"),
+    ],
+    [
+      path.join(packageRoot, "apps", "web", "public"),
+      path.join(runtimeAppDir, "public"),
+    ],
+  ];
+  for (const [src, dst] of pairs) {
+    if (existsSync(dst) || !existsSync(src)) continue;
+    try {
+      mkdirSync(path.dirname(dst), { recursive: true });
+      cpSync(src, dst, { recursive: true, dereference: true, force: true });
+    } catch {
+      // best-effort — server still works, just missing static assets
+    }
+  }
+}
+
 export function installManagedWebRuntime(params: {
   stateDir: string;
   packageRoot: string;
@@ -501,9 +686,15 @@ export function installManagedWebRuntime(params: {
     };
   }
 
+  const standaloneDir = path.join(params.packageRoot, "apps", "web", ".next", "standalone");
+  flattenPnpmStandaloneDeps(standaloneDir);
+
   mkdirSync(runtimeDir, { recursive: true });
   rmSync(runtimeAppDir, { recursive: true, force: true });
   cpSync(sourceAppDir, runtimeAppDir, { recursive: true, force: true, dereference: true });
+
+  dereferenceRuntimeNodeModules(runtimeAppDir, standaloneDir);
+  ensureStaticAssets(runtimeAppDir, params.packageRoot);
 
   const manifest: ManagedWebRuntimeManifest = {
     schemaVersion: 1,

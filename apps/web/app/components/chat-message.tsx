@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { UIMessage } from "ai";
-import { memo, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
@@ -685,9 +685,71 @@ function createMarkdownComponents(
 	};
 }
 
+/* ─── Feedback buttons (thumbs up / down) ─── */
+
+const POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY || "";
+
+function FeedbackButtons({ messageId, sessionId }: { messageId: string; sessionId?: string | null }) {
+	const [sentiment, setSentiment] = useState<"positive" | "negative" | null>(null);
+	const [submitting, setSubmitting] = useState(false);
+
+	const handleFeedback = useCallback(async (value: "positive" | "negative") => {
+		const next = sentiment === value ? null : value;
+		setSentiment(next);
+		setSubmitting(true);
+		try {
+			await fetch("/api/feedback", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ messageId, sessionId, sentiment: next }),
+			});
+		} catch { /* fail silently */ }
+		setSubmitting(false);
+	}, [sentiment, messageId, sessionId]);
+
+	if (!POSTHOG_KEY) return null;
+
+	const btnBase = "p-1 rounded-md transition-colors disabled:opacity-30";
+
+	return (
+		<div className="flex items-center gap-0.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+			<button
+				type="button"
+				disabled={submitting}
+				onClick={() => handleFeedback("positive")}
+				className={btnBase}
+				style={{
+					color: sentiment === "positive" ? "var(--color-accent)" : "var(--color-text-muted)",
+				}}
+				title="Good response"
+				aria-label="Thumbs up"
+			>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill={sentiment === "positive" ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+					<path d="M7 10v12" /><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
+				</svg>
+			</button>
+			<button
+				type="button"
+				disabled={submitting}
+				onClick={() => handleFeedback("negative")}
+				className={btnBase}
+				style={{
+					color: sentiment === "negative" ? "var(--color-error, #ef4444)" : "var(--color-text-muted)",
+				}}
+				title="Bad response"
+				aria-label="Thumbs down"
+			>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill={sentiment === "negative" ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+					<path d="M17 14V2" /><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
+				</svg>
+			</button>
+		</div>
+	);
+}
+
 /* ─── Chat message ─── */
 
-export const ChatMessage = memo(function ChatMessage({ message, isStreaming, onSubagentClick, onFilePathClick }: { message: UIMessage; isStreaming?: boolean; onSubagentClick?: (task: string) => void; onFilePathClick?: FilePathClickHandler }) {
+export const ChatMessage = memo(function ChatMessage({ message, isStreaming, onSubagentClick, onFilePathClick, sessionId }: { message: UIMessage; isStreaming?: boolean; onSubagentClick?: (task: string) => void; onFilePathClick?: FilePathClickHandler; sessionId?: string | null }) {
 	const isUser = message.role === "user";
 	const segments = groupParts(message.parts);
 	const markdownComponents = useMemo(
@@ -750,7 +812,7 @@ export const ChatMessage = memo(function ChatMessage({ message, isStreaming, onS
 
 	// Assistant: free-flowing text, left-aligned, NO bubble
 	return (
-		<div className="py-3 space-y-2 min-w-0 overflow-hidden">
+		<div className="py-3 space-y-2 min-w-0 overflow-hidden group">
 			<AnimatePresence initial={false}>
 			{segments.map((segment, index) => {
 				if (segment.type === "text") {
@@ -914,6 +976,7 @@ export const ChatMessage = memo(function ChatMessage({ message, isStreaming, onS
 			);
 			})}
 			</AnimatePresence>
+			{!isStreaming && <FeedbackButtons messageId={message.id} sessionId={sessionId} />}
 		</div>
 	);
 });

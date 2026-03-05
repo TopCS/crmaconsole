@@ -39,12 +39,18 @@ Opens at `localhost:3100` after completing onboarding wizard.
 ## Commands
 
 ```bash
-npx denchclaw stop # stops denchclaw web server
-npx denchclaw restart # restarts denchclaw web server
-npx denchclaw update # updates denchclaw with current settings as is
 npx denchclaw # runs onboarding again for openclaw --profile dench
+npx denchclaw update # updates denchclaw with current settings as is
+npx denchclaw restart # restarts denchclaw web server
+npx denchclaw start # starts denchclaw web server
+npx denchclaw stop # stops denchclaw web server
 
+# some examples
 openclaw --profile dench <any openclaw command>
+openclaw --profile dench gateway restart
+
+openclaw --profile dench config set gateway.port 19001
+openclaw --profile dench gateway install --force --port 19001
 openclaw --profile dench gateway restart
 ```
 

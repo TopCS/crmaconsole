@@ -400,6 +400,17 @@ async function installBundledPlugins(params: {
     mkdirSync(path.dirname(pluginDest), { recursive: true });
     cpSync(pluginSrc, pluginDest, { recursive: true, force: true });
 
+    await runOpenClawOrThrow({
+      openclawCommand: params.openclawCommand,
+      args: [
+        "--profile", params.profile,
+        "config", "set",
+        "plugins.allow", '["posthog-analytics"]',
+      ],
+      timeoutMs: 30_000,
+      errorMessage: "Failed to set plugins.allow for posthog-analytics.",
+    });
+
     if (params.posthogKey) {
       await runOpenClawOrThrow({
         openclawCommand: params.openclawCommand,
@@ -1661,6 +1672,17 @@ export async function bootstrapCommand(
   // never drifts into creating/using legacy workspace-* paths.
   await ensureDefaultWorkspacePath(openclawCommand, profile, workspaceDir);
 
+  const packageRoot = resolveCliPackageRoot();
+
+  // Install bundled plugins BEFORE onboard so the gateway daemon starts with
+  // plugins.allow already configured, suppressing "plugins.allow is empty" warnings.
+  const posthogPluginInstalled = await installBundledPlugins({
+    openclawCommand,
+    profile,
+    stateDir,
+    posthogKey: process.env.POSTHOG_KEY || "",
+  });
+
   const onboardArgv = [
     "--profile",
     profile,
@@ -1696,17 +1718,9 @@ export async function bootstrapCommand(
     });
   }
 
-  const packageRoot = resolveCliPackageRoot();
   const workspaceSeed = seedWorkspaceFromAssets({
     workspaceDir,
     packageRoot,
-  });
-
-  const posthogPluginInstalled = await installBundledPlugins({
-    openclawCommand,
-    profile,
-    stateDir,
-    posthogKey: process.env.POSTHOG_KEY || "",
   });
 
   const postOnboardSpinner = !opts.json ? spinner() : null;
@@ -1780,8 +1794,23 @@ export async function bootstrapCommand(
     posthogPluginInstalled,
   });
 
-  const shouldOpen = !opts.noOpen && !opts.json;
-  const opened = shouldOpen ? await openUrl(webUrl) : false;
+  let opened = false;
+  let openAttempted = false;
+  if (!opts.noOpen && !opts.json && webReachable) {
+    if (nonInteractive) {
+      openAttempted = true;
+      opened = await openUrl(webUrl);
+    } else {
+      const wantOpen = await confirm({
+        message: stylePromptMessage(`Open ${webUrl} in your browser?`),
+        initialValue: true,
+      });
+      if (!isCancel(wantOpen) && wantOpen) {
+        openAttempted = true;
+        opened = await openUrl(webUrl);
+      }
+    }
+  }
 
   if (!opts.json) {
     if (!webRuntimeStatus.ready) {
@@ -1849,7 +1878,7 @@ export async function bootstrapCommand(
     runtime.log(
       `Rollout stage: ${rolloutStage}${legacyFallbackEnabled ? " (legacy fallback enabled)" : ""}`,
     );
-    if (!opened && shouldOpen) {
+    if (!opened && openAttempted) {
       runtime.log(theme.muted("Browser open failed; copy/paste the URL above."));
     }
     if (diagnostics.hasFailures) {

@@ -1961,6 +1961,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 								isStreaming={isStreaming && i === messages.length - 1}
 								onSubagentClick={onSubagentClick}
 								onFilePathClick={onFilePathClick}
+								sessionId={currentSessionId}
 							/>
 						))}
 						{showInlineSpinner && (
