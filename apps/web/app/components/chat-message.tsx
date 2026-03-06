@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { UIMessage } from "ai";
+import posthog from "posthog-js";
 import { useThumbSurvey } from "posthog-js/react/surveys";
 import { memo, useCallback, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -697,7 +698,11 @@ function FeedbackButtons({ messageId, sessionId }: { messageId: string; sessionI
 		fetch("/api/feedback", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ sessionId: sid, messageId: mid }),
+			body: JSON.stringify({
+				sessionId: sid,
+				messageId: mid,
+				distinctId: posthog.get_distinct_id?.(),
+			}),
 		}).catch(() => {});
 	}, []);
 

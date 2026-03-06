@@ -31,9 +31,10 @@ function extractTextContent(line: ChatLine): string {
  */
 export async function POST(req: Request) {
   try {
-    const { sessionId, messageId } = (await req.json()) as {
+    const { sessionId, messageId, distinctId } = (await req.json()) as {
       sessionId?: string;
       messageId?: string;
+      distinctId?: string;
     };
     if (!sessionId) {
       return Response.json({ ok: true });
@@ -68,13 +69,17 @@ export async function POST(req: Request) {
       .filter((m) => m.role === "assistant")
       .map((m) => ({ role: "assistant" as const, content: extractTextContent(m) }));
 
-    trackServer("$ai_trace", {
-      $ai_trace_id: sessionId,
-      $ai_session_id: sessionId,
-      $ai_span_name: "chat_session",
-      $ai_input_state: inputState.length > 0 ? inputState : undefined,
-      $ai_output_state: outputState.length > 0 ? outputState : undefined,
-    });
+    trackServer(
+      "$ai_trace",
+      {
+        $ai_trace_id: sessionId,
+        $ai_session_id: sessionId,
+        $ai_span_name: "chat_session",
+        $ai_input_state: inputState.length > 0 ? inputState : undefined,
+        $ai_output_state: outputState.length > 0 ? outputState : undefined,
+      },
+      distinctId,
+    );
   } catch {
     // Fail silently -- feedback capture should never block the user.
   }
