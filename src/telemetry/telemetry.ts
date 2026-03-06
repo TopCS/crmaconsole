@@ -1,7 +1,5 @@
-import { createHash } from "node:crypto";
-import os from "node:os";
 import { PostHog } from "posthog-node";
-import { readTelemetryConfig } from "./config.js";
+import { readTelemetryConfig, getOrCreateAnonymousId } from "./config.js";
 
 const POSTHOG_KEY = process.env.POSTHOG_KEY || "";
 const POSTHOG_HOST = "https://us.i.posthog.com";
@@ -22,15 +20,6 @@ export function isTelemetryEnabled(): boolean {
   }
 
   return true;
-}
-
-export function getAnonymousId(): string {
-  try {
-    const raw = `${os.hostname()}:${os.userInfo().username}`;
-    return createHash("sha256").update(raw).digest("hex").slice(0, 16);
-  } catch {
-    return "unknown";
-  }
 }
 
 function getMachineContext(): Record<string, unknown> {
@@ -67,7 +56,7 @@ export function track(event: string, properties?: Record<string, unknown>): void
   if (!ph) return;
 
   ph.capture({
-    distinctId: getAnonymousId(),
+    distinctId: getOrCreateAnonymousId(),
     event,
     properties: {
       ...getMachineContext(),

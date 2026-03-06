@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { readTelemetryConfig, writeTelemetryConfig } from "../../telemetry/config.js";
+import { readTelemetryConfig, writeTelemetryConfig, getOrCreateAnonymousId } from "../../telemetry/config.js";
 import { isTelemetryEnabled } from "../../telemetry/telemetry.js";
 
 export function registerTelemetryCommand(program: Command) {
@@ -25,6 +25,7 @@ export function registerTelemetryCommand(program: Command) {
       }
       console.log(`Effective status:  ${effective ? "enabled" : "disabled"}`);
       console.log(`Privacy mode:      ${privacyOn ? "on (message content is redacted)" : "off (full content is captured)"}`);
+      console.log(`Install ID:        ${getOrCreateAnonymousId()}`);
       console.log("\nLearn more: https://github.com/openclaw/openclaw/blob/main/TELEMETRY.md");
     });
 

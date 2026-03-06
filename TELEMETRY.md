@@ -32,9 +32,23 @@ Both layers share the same opt-out controls and privacy mode setting.
 | `$pageview` | User navigates within the web app | `$current_url` (path only, no query params with user data) |
 
 Every event includes baseline machine context: `os` (platform), `arch`, and
-`node_version`. A SHA-256 hash of the machine hostname + username (truncated to
-16 hex chars) is used as the anonymous distinct ID — it cannot be reversed to
-identify you.
+`node_version`.
+
+### Anonymous install ID
+
+A single anonymous UUID is generated on first run and persisted in
+`~/.openclaw-dench/telemetry.json` as `anonymousId`. This install-scoped ID is
+shared across all telemetry layers — CLI, web server, browser, and the OpenClaw
+PostHog plugin — so a single DenchClaw installation maps to exactly one PostHog
+person.
+
+The ID is:
+
+- **Stable** — survives restarts, upgrades, and re-bootstrap.
+- **Anonymous** — a random UUID with no relation to your machine, username, or
+  IP address.
+- **Install-scoped** — deleting `~/.openclaw-dench` resets it.
+- **Inspectable** — run `npx denchclaw telemetry status` to see your current ID.
 
 ---
 
@@ -201,17 +215,22 @@ npx denchclaw telemetry enable
 
 ## How It Works
 
+- **Shared identity**: All layers read the same `anonymousId` from
+  `~/.openclaw-dench/telemetry.json`. The first component to run (usually the
+  CLI during `denchclaw bootstrap`) generates the UUID; every subsequent layer
+  reuses it.
 - **CLI**: The `posthog-node` SDK sends events from the Node.js process. Events
   are batched and flushed asynchronously — telemetry never blocks the CLI.
 - **Web app (server)**: API route handlers call `trackServer()` which uses the
-  same `posthog-node` SDK on the server side.
-- **Web app (client)**: The `posthog-js` SDK captures pageview events in the
-  browser. No cookies are set; session data is stored in memory only.
+  same `posthog-node` SDK on the server side with the persisted install ID.
+- **Web app (client)**: The `posthog-js` SDK is bootstrapped with the install ID
+  from the server so the browser shares the same PostHog identity. No cookies
+  are set; session data is stored in memory only.
 - **OpenClaw plugin**: The `posthog-analytics` plugin runs in-process with the
-  OpenClaw Gateway. It hooks into agent lifecycle events (`before_model_resolve`,
-  `before_prompt_build`, `before_tool_call`, `after_tool_call`, `agent_end`,
-  `message_received`, `session_start`, `session_end`) and emits PostHog AI
-  events via `posthog-node`.
+  OpenClaw Gateway. It reads the persisted install ID and hooks into agent
+  lifecycle events (`before_model_resolve`, `before_prompt_build`,
+  `before_tool_call`, `after_tool_call`, `agent_end`, `message_received`,
+  `session_start`, `session_end`) to emit PostHog AI events via `posthog-node`.
 - **PostHog project token**: The write-only project token (`phc_...`) is
   embedded in the built artifacts. It can only send events — it cannot read
   dashboards or analytics data.
