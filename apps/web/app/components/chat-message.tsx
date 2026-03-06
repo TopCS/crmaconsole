@@ -52,7 +52,7 @@ type MessageSegment =
 	| { type: "chain"; parts: ChainPart[] }
 	| { type: "report-artifact"; config: ReportConfig }
 	| { type: "diff-artifact"; diff: string }
-	| { type: "subagent-card"; task: string; label?: string; status: "running" | "done" | "error" };
+	| { type: "subagent-card"; task: string; label?: string; sessionKey?: string; status: "running" | "done" | "error" };
 
 /** Map AI SDK tool state string to a simplified status */
 function toolStatus(state: string): "running" | "done" | "error" {
@@ -145,9 +145,11 @@ function groupParts(parts: UIMessage["parts"]): MessageSegment[] {
 		if (tp.toolName === "sessions_spawn") {
 			flush(true);
 			const args = asRecord(tp.input);
+			const out = asRecord(tp.output);
 			const task = typeof args?.task === "string" ? args.task : "Subagent task";
 			const label = typeof args?.label === "string" ? args.label : undefined;
-			segments.push({ type: "subagent-card", task, label, status: toolStatus(tp.state) });
+			const sessionKey = typeof out?.sessionKey === "string" ? out.sessionKey : undefined;
+			segments.push({ type: "subagent-card", task, label, sessionKey, status: toolStatus(tp.state) });
 		} else {
 			chain.push({
 				kind: "tool",
@@ -178,12 +180,14 @@ function groupParts(parts: UIMessage["parts"]): MessageSegment[] {
 		if (resolvedToolName === "sessions_spawn") {
 			flush(true);
 			const args = asRecord(tp.input) ?? asRecord(tp.args);
+			const out = asRecord(tp.output) ?? asRecord(tp.result);
 			const task = typeof args?.task === "string" ? args.task : "Subagent task";
 			const label = typeof args?.label === "string" ? args.label : undefined;
+			const sessionKey = typeof out?.sessionKey === "string" ? out.sessionKey : undefined;
 			const resolvedState =
 				tp.state ??
 				(tp.errorText ? "error" : ("result" in tp || "output" in tp) ? "output-available" : "input-available");
-			segments.push({ type: "subagent-card", task, label, status: toolStatus(resolvedState) });
+			segments.push({ type: "subagent-card", task, label, sessionKey, status: toolStatus(resolvedState) });
 		} else {
 			// Persisted tool-invocation parts have no state field but
 			// include result/output/errorText to indicate completion.
@@ -565,7 +569,7 @@ function createMarkdownComponents(
 			const normalizedHref = normalizePathReference(rawHref);
 			const isExternal =
 				rawHref && (rawHref.startsWith("http://") || rawHref.startsWith("https://") || rawHref.startsWith("//"));
-			const isWorkspaceAppLink = rawHref.startsWith("/workspace");
+			const isWorkspaceAppLink = rawHref.startsWith("/workspace") || rawHref.startsWith("/?");
 			const isLocalPathLink =
 				!isWorkspaceAppLink &&
 				(Boolean(rawHref.startsWith("file://")) ||
@@ -929,7 +933,7 @@ export const ChatMessage = memo(function ChatMessage({ message, isStreaming, onS
 				>
 					<button
 						type="button"
-						onClick={() => onSubagentClick?.(segment.task)}
+						onClick={() => onSubagentClick?.(segment.sessionKey ?? segment.task)}
 						className="w-full text-left rounded-xl px-3.5 py-2.5 transition-colors cursor-pointer"
 						style={{
 							background: "var(--color-accent-light)",

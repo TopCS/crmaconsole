@@ -1008,15 +1008,17 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 				setFileSessions(sessions);
 
 				if (sessions.length > 0) {
-					const latest = sessions[0];
-					setCurrentSessionId(latest.id);
-					sessionIdRef.current = latest.id;
-					onActiveSessionChange?.(latest.id);
+					const target = (initialSessionId
+						? sessions.find((s) => s.id === initialSessionId)
+						: undefined) ?? sessions[0];
+					setCurrentSessionId(target.id);
+					sessionIdRef.current = target.id;
+					onActiveSessionChange?.(target.id);
 					isFirstFileMessageRef.current = false;
 
 					try {
 						const msgRes = await fetch(
-							`/api/web-sessions/${latest.id}`,
+							`/api/web-sessions/${target.id}`,
 						);
 						if (cancelled) {
 							return;
@@ -1060,13 +1062,9 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 						setMessages(uiMessages);
 					}
 
-						// Always try to reconnect to a potentially
-						// active agent run. The stream endpoint returns
-						// 404 gracefully if no run exists, avoiding the
-						// 2-second persistence timing gap for _streaming.
 						if (!cancelled) {
 							await attemptReconnect(
-								latest.id,
+								target.id,
 								uiMessages,
 							);
 						}
