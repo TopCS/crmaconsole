@@ -34,6 +34,8 @@ function PageviewTracker() {
 
   useEffect(() => {
     if (!initialized) return;
+    const wsPath = searchParams?.get("path") ?? "";
+    if (wsPath.startsWith("~cron")) return;
     const url = pathname + (searchParams?.toString() ? `?${searchParams.toString()}` : "");
     posthog.capture("$pageview", { $current_url: url });
   }, [pathname, searchParams]);

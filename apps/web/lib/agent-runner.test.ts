@@ -9,6 +9,12 @@ vi.mock("node:child_process", async (importOriginal) => {
 		spawn: vi.fn(),
 	};
 });
+vi.mock("./workspace", () => ({
+	resolveActiveAgentId: () => "main",
+	getEffectiveProfile: () => undefined,
+	resolveWorkspaceRoot: () => undefined,
+	resolveOpenClawStateDir: () => "/tmp/__agent_runner_test_state",
+}));
 const spawnMock = vi.mocked(spawn);
 
 // Valid client IDs the Gateway accepts (from ui/src/ui/contracts/gateway-client-info.ts).

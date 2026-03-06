@@ -11,6 +11,8 @@ All structured data lives in **DuckDB**. The primary database is `{{WORKSPACE_PA
 
 All actions should look into / edit and work on `{{WORKSPACE_PATH}}/**` by default unless told otherwise. Exceptions to this are the `SOUL.md`, `skills/`, `memory/`, `USER.md`, `IDENTITY.md`, `TOOLS.md`, `AGENTS.md` and `MEMORY.md` and other such files.
 
+All your workspace chats and past conversations are stored in `{{WORKSPACE_PATH}}/.openclaw/web-chat/`.
+
 ## Workspace Structure
 
 ```
