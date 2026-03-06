@@ -365,6 +365,7 @@ function WorkspacePageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const initialPathHandled = useRef(false);
+  const lastPushedQs = useRef<string | null>(null);
 
   // Chat panel ref for session management
   const chatRef = useRef<ChatPanelHandle>(null);
@@ -586,8 +587,8 @@ function WorkspacePageInner() {
       resetMainChat: () => {
         void chatRef.current?.newSession();
       },
-      replaceUrlToWorkspace: () => {
-        router.replace("/", { scroll: false });
+      replaceUrlToRoot: () => {
+        // URL sync effect will write the correct URL after state is cleared
       },
       reconnectWorkspaceWatcher,
       refreshSessions,
@@ -832,7 +833,6 @@ function WorkspacePageInner() {
         setActivePath(null);
         setContent({ kind: "none" });
         void chatRef.current?.newSession();
-        router.replace("/", { scroll: false });
         return;
       }
       // Intercept cron job item clicks
@@ -842,7 +842,6 @@ function WorkspacePageInner() {
         if (job) {
           setActivePath(node.path);
           setContent({ kind: "cron-job", jobId, job });
-          router.replace("/", { scroll: false });
           return;
         }
       }
@@ -850,7 +849,6 @@ function WorkspacePageInner() {
       if (node.path === "~cron") {
         setActivePath(node.path);
         setContent({ kind: "cron-dashboard" });
-        router.replace("/", { scroll: false });
         return;
       }
       void loadContent(node);
@@ -949,7 +947,6 @@ function WorkspacePageInner() {
         if (activePath || content.kind !== "none") {
           setActivePath(null);
           setContent({ kind: "none" });
-          router.replace("/", { scroll: false });
         }
 
         setChatSidebarPreview({
@@ -1117,8 +1114,7 @@ function WorkspacePageInner() {
   const handleGoToChat = useCallback(() => {
     setActivePath(null);
     setContent({ kind: "none" });
-    router.replace("/", { scroll: false });
-  }, [router]);
+  }, []);
 
   // Insert a file mention into the chat editor when a sidebar item is dropped on the chat input.
   // Try the main chat panel first; fall back to the compact (file-scoped) panel.
@@ -1160,6 +1156,12 @@ function WorkspacePageInner() {
   // IMPORTANT: Skip until hydration is done. On initial load, state is all
   // null/default while the URL still carries the user's deep-link params.
   // Writing the URL before hydration would wipe those params.
+  //
+  // This effect only manages shell-level params (path, chat, browse, etc.)
+  // and preserves object-view params (viewType, filters, search, sort, etc.)
+  // that are managed by ObjectView's own URL sync effect.
+  const OBJECT_VIEW_PARAMS = ["viewType", "view", "filters", "search", "sort", "page", "pageSize", "cols"];
+
   useEffect(() => {
     if (!initialPathHandled.current) return;
 
@@ -1181,6 +1183,12 @@ function WorkspacePageInner() {
         if (cronRunFilter !== "all") params.set("cronRunFilter", cronRunFilter);
         if (cronRun != null) params.set("cronRun", String(cronRun));
       }
+
+      // Preserve object-view params managed by ObjectView's URL sync effect
+      for (const k of OBJECT_VIEW_PARAMS) {
+        const v = current.get(k);
+        if (v) params.set(k, v);
+      }
     } else if (activeSessionId) {
       params.set("chat", activeSessionId);
       if (activeSubagentKey) params.set("subagent", activeSubagentKey);
@@ -1194,6 +1202,7 @@ function WorkspacePageInner() {
     const currentQs = current.toString();
 
     if (nextQs !== currentQs) {
+      lastPushedQs.current = nextQs;
       const url = nextQs ? `/?${nextQs}` : "/";
       router.push(url, { scroll: false });
     }
@@ -1292,6 +1301,90 @@ function WorkspacePageInner() {
     }
   }, [tree, treeLoading, searchParams, loadContent, setBrowseDir, setShowHidden, loadSidebarPreviewFromNode]);
 
+  // Handle browser back/forward navigation.
+  // When the user clicks Back/Forward, the URL changes but the app doesn't
+  // re-render with new state. We listen for popstate and re-apply URL state.
+  useEffect(() => {
+    const handlePopState = () => {
+      const qs = window.location.search.replace(/^\?/, "");
+      // Skip if this matches what the app last pushed (not a real back/forward)
+      if (qs === lastPushedQs.current) return;
+
+      const urlState = parseUrlState(window.location.search);
+
+      if (urlState.path) {
+        const node = resolveNode(tree, urlState.path);
+        if (node) {
+          void loadContent(node);
+        } else if (urlState.path === "~cron") {
+          setActivePath("~cron");
+          setContent({ kind: "cron-dashboard" });
+        } else if (urlState.path.startsWith("~cron/")) {
+          setActivePath(urlState.path);
+          const jobId = urlState.path.slice("~cron/".length);
+          const job = cronJobs.find((j) => j.id === jobId);
+          if (job) {
+            setContent({ kind: "cron-job", jobId, job });
+          } else {
+            setContent({ kind: "cron-dashboard" });
+          }
+        } else if (isAbsolutePath(urlState.path) || isHomeRelativePath(urlState.path)) {
+          const name = urlState.path.split("/").pop() || urlState.path;
+          void loadContent({ name, path: urlState.path, type: "file" });
+        }
+        setFileChatSessionId(urlState.fileChat);
+      } else if (urlState.chat) {
+        setActiveSessionId(urlState.chat);
+        setActivePath(null);
+        setContent({ kind: "none" });
+        void chatRef.current?.loadSession(urlState.chat);
+        setActiveSubagentKey(urlState.subagent);
+      } else {
+        setActivePath(null);
+        setContent({ kind: "none" });
+        setActiveSessionId(null);
+        setActiveSubagentKey(null);
+      }
+
+      if (urlState.entry) {
+        setEntryModal(urlState.entry);
+      } else {
+        setEntryModal(null);
+      }
+
+      if (urlState.browse) {
+        setBrowseDir(urlState.browse);
+      } else if (!urlState.path || !isAbsolutePath(urlState.path)) {
+        setBrowseDir(null);
+      }
+
+      if (urlState.hidden) {
+        setShowHidden(true);
+      } else {
+        setShowHidden(false);
+      }
+
+      setChatSidebarPreview(null);
+      if (urlState.preview) {
+        const filename = urlState.preview.split("/").pop() || urlState.preview;
+        setChatSidebarPreview({ status: "loading", path: urlState.preview, filename });
+        const previewNode: TreeNode = { name: filename, path: urlState.preview, type: "file" };
+        void loadSidebarPreviewFromNode(previewNode).then((previewContent) => {
+          if (!previewContent) {
+            setChatSidebarPreview({ status: "error", path: urlState.preview!, filename, message: "Could not load preview" });
+          } else {
+            setChatSidebarPreview({ status: "ready", path: urlState.preview!, filename, content: previewContent });
+          }
+        });
+      }
+
+      lastPushedQs.current = qs;
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [tree, cronJobs, loadContent, setBrowseDir, setShowHidden, loadSidebarPreviewFromNode]);
+
   // Resolve cron job detail once cronJobs load (they arrive after the main hydration).
   useEffect(() => {
     if (!activePath?.startsWith("~cron/") || cronJobs.length === 0) return;
@@ -1309,8 +1402,11 @@ function WorkspacePageInner() {
     const sendParam = searchParams.get("send");
     if (!sendParam) {return;}
 
-    // Clear the send param from the URL immediately
-    router.replace("/", { scroll: false });
+    // Clear the send param from the URL, preserving other params
+    const params = new URLSearchParams(window.location.search);
+    params.delete("send");
+    const qs = params.toString();
+    router.replace(qs ? `/?${qs}` : "/", { scroll: false });
 
     // Show the main chat (clear any active file/content)
     setActivePath(null);
@@ -1454,17 +1550,15 @@ function WorkspacePageInner() {
     if (job) {
       setActivePath(`~cron/${jobId}`);
       setContent({ kind: "cron-job", jobId, job });
-      router.replace("/", { scroll: false });
     }
-  }, [cronJobs, router]);
+  }, [cronJobs]);
 
   const handleBackToCronDashboard = useCallback(() => {
     setActivePath("~cron");
     setContent({ kind: "cron-dashboard" });
     setCronRunFilter("all");
     setCronRun(null);
-    router.replace("/", { scroll: false });
-  }, [router]);
+  }, []);
 
   const handleCronSendCommand = useCallback((message: string) => {
     setActivePath(null);
@@ -1606,7 +1700,6 @@ function WorkspacePageInner() {
                   onClick={() => {
                     setActivePath(null);
                     setContent({ kind: "none" });
-                    router.replace("/", { scroll: false });
                   }}
                   className="p-2 rounded-lg flex-shrink-0"
                   style={{ color: "var(--color-text-muted)" }}
@@ -1651,7 +1744,6 @@ function WorkspacePageInner() {
                 onClick={() => {
                   setActivePath(null);
                   setContent({ kind: "none" });
-                  router.replace("/", { scroll: false });
                 }}
                 className="p-1.5 rounded-lg flex-shrink-0"
                 style={{ color: "var(--color-text-muted)" }}
@@ -1730,7 +1822,6 @@ function WorkspacePageInner() {
                       setActiveSessionId(null);
                       setActiveSubagentKey(null);
                       void chatRef.current?.newSession();
-                      router.replace("/", { scroll: false });
                       setChatSessionsOpen(false);
                     }}
                     onSelectSubagent={handleSelectSubagent}
@@ -1777,7 +1868,6 @@ function WorkspacePageInner() {
                           setActiveSessionId(null);
                           setActiveSubagentKey(null);
                           void chatRef.current?.newSession();
-                          router.replace("/", { scroll: false });
                         }}
                         onSelectSubagent={handleSelectSubagent}
                         onDeleteSession={handleDeleteSession}
@@ -2522,11 +2612,18 @@ function ObjectView({
   const [viewColumns, setViewColumns] = useState<string[] | undefined>(initialUrlState.cols ?? undefined);
 
   // Sync object view state to URL params (additive — preserves path/entry/browse params).
+  // Skip the initial render to avoid overwriting URL params that haven't been
+  // read yet or that the shell-level effect is still propagating.
+  const objectViewMounted = useRef(false);
   useEffect(() => {
+    if (!objectViewMounted.current) {
+      objectViewMounted.current = true;
+      return;
+    }
+
     const current = new URLSearchParams(window.location.search);
     const next = new URLSearchParams(current);
 
-    // Remove previous object-view params before re-setting
     for (const k of ["viewType", "view", "filters", "search", "sort", "page", "pageSize", "cols"]) {
       next.delete(k);
     }
