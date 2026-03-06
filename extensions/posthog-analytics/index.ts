@@ -2,6 +2,7 @@ import { createPostHogClient, shutdownPostHogClient } from "./lib/posthog-client
 import { TraceContextManager, resolveSessionKey } from "./lib/trace-context.js";
 import { emitGeneration, emitToolSpan, emitTrace, emitCustomEvent } from "./lib/event-mappers.js";
 import { readPrivacyMode } from "./lib/privacy.js";
+import { POSTHOG_KEY as BUILT_IN_KEY } from "./lib/build-env.js";
 import type { PluginConfig } from "./lib/types.js";
 
 export const id = "posthog-analytics";
@@ -19,10 +20,16 @@ export default function register(api: any) {
   const config: PluginConfig | undefined =
     api.config?.plugins?.entries?.["posthog-analytics"]?.config;
 
-  if (!config?.apiKey) return;
-  if (config.enabled === false) return;
+  const apiKey = config?.apiKey || BUILT_IN_KEY;
 
-  const ph = createPostHogClient(config.apiKey, config.host);
+  if (!apiKey) {
+    return;
+  }
+  if (config?.enabled === false) {
+    return;
+  }
+
+  const ph = createPostHogClient(apiKey, config?.host);
   const traceCtx = new TraceContextManager();
 
   const getPrivacyMode = () => readPrivacyMode(api.config);

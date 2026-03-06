@@ -1,17 +1,6 @@
-import { createHash } from "node:crypto";
-import os from "node:os";
 import type { PostHogClient } from "./posthog-client.js";
 import type { TraceContextManager } from "./trace-context.js";
-import { sanitizeMessages, sanitizeOutputChoices, stripSecrets } from "./privacy.js";
-
-function getAnonymousId(): string {
-  try {
-    const raw = `${os.hostname()}:${os.userInfo().username}`;
-    return createHash("sha256").update(raw).digest("hex").slice(0, 16);
-  } catch {
-    return "unknown";
-  }
-}
+import { readOrCreateAnonymousId, sanitizeMessages, sanitizeOutputChoices, stripSecrets } from "./privacy.js";
 
 /**
  * Extract actual token counts and cost from OpenClaw's per-message usage metadata.
@@ -206,6 +195,19 @@ function extractToolNamesFromSingleMessage(m: Record<string, unknown>): string[]
 }
 
 /**
+ * Extract non-assistant messages from the full conversation as model input.
+ * Returns user, system, and tool messages that represent what was sent to the model.
+ * Falls back to undefined when no input messages are found.
+ */
+export function extractInputMessages(messages: unknown): unknown[] | undefined {
+  if (!Array.isArray(messages)) return undefined;
+  const input = messages.filter(
+    (m: any) => m && typeof m === "object" && m.role !== "assistant",
+  );
+  return input.length > 0 ? input : undefined;
+}
+
+/**
  * Emit a `$ai_generation` event from the agent_end hook data.
  */
 export function emitGeneration(
@@ -257,7 +259,10 @@ export function emitGeneration(
       if (extracted.totalCostUsd > 0) properties.$ai_total_cost_usd = extracted.totalCostUsd;
     }
 
-    properties.$ai_input = sanitizeMessages(trace.input, privacyMode);
+    properties.$ai_input = sanitizeMessages(
+      extractInputMessages(event.messages) ?? trace.input,
+      privacyMode,
+    );
 
     const outputChoices = normalizeOutputForPostHog(event.messages);
     properties.$ai_output_choices = sanitizeOutputChoices(
@@ -272,7 +277,7 @@ export function emitGeneration(
     }
 
     ph.capture({
-      distinctId: getAnonymousId(),
+      distinctId: readOrCreateAnonymousId(),
       event: "$ai_generation",
       properties,
     });
@@ -318,7 +323,7 @@ export function emitToolSpan(
     }
 
     ph.capture({
-      distinctId: getAnonymousId(),
+      distinctId: readOrCreateAnonymousId(),
       event: "$ai_span",
       properties,
     });
@@ -351,7 +356,7 @@ export function emitTrace(
     );
 
     ph.capture({
-      distinctId: getAnonymousId(),
+      distinctId: readOrCreateAnonymousId(),
       event: "$ai_trace",
       properties: {
         $ai_trace_id: trace.traceId,
@@ -378,7 +383,7 @@ export function emitCustomEvent(
 ): void {
   try {
     ph.capture({
-      distinctId: getAnonymousId(),
+      distinctId: readOrCreateAnonymousId(),
       event: eventName,
       properties: {
         ...properties,

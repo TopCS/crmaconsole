@@ -1,10 +1,18 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
 
 const SECRETS_PATTERN =
   /(?:sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|xoxb-[a-zA-Z0-9-]+|AKIA[A-Z0-9]{16}|eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,})/g;
 
 const REDACTED = "[REDACTED]";
+
+function resolveConfigPath(openclawConfig?: any): string {
+  const stateDir =
+    openclawConfig?.stateDir ??
+    join(process.env.HOME || "~", ".openclaw-dench");
+  return join(stateDir, "telemetry.json");
+}
 
 /**
  * Read privacy mode from DenchClaw's telemetry config.
@@ -12,15 +20,45 @@ const REDACTED = "[REDACTED]";
  */
 export function readPrivacyMode(openclawConfig?: any): boolean {
   try {
-    const stateDir =
-      openclawConfig?.stateDir ??
-      join(process.env.HOME || "~", ".openclaw-dench");
-    const configPath = join(stateDir, "telemetry.json");
+    const configPath = resolveConfigPath(openclawConfig);
     if (!existsSync(configPath)) return true;
     const raw = JSON.parse(readFileSync(configPath, "utf-8"));
     return raw.privacyMode !== false;
   } catch {
     return true;
+  }
+}
+
+let _cachedAnonymousId: string | null = null;
+
+/**
+ * Read the persisted install-scoped anonymous ID from telemetry.json,
+ * generating and writing one if absent.
+ */
+export function readOrCreateAnonymousId(openclawConfig?: any): string {
+  if (_cachedAnonymousId) return _cachedAnonymousId;
+
+  try {
+    const configPath = resolveConfigPath(openclawConfig);
+
+    let raw: Record<string, unknown> = {};
+    if (existsSync(configPath)) {
+      raw = JSON.parse(readFileSync(configPath, "utf-8"));
+    }
+    if (typeof raw.anonymousId === "string" && raw.anonymousId) {
+      _cachedAnonymousId = raw.anonymousId;
+      return raw.anonymousId;
+    }
+    const id = randomUUID();
+    raw.anonymousId = id;
+    mkdirSync(dirname(configPath), { recursive: true });
+    writeFileSync(configPath, JSON.stringify(raw, null, 2) + "\n", "utf-8");
+    _cachedAnonymousId = id;
+    return id;
+  } catch {
+    const id = randomUUID();
+    _cachedAnonymousId = id;
+    return id;
   }
 }
 
