@@ -110,3 +110,6 @@ dist/protocol.schema.json
 .cursor/skills/
 
 .npmrc.deploy
+
+# Generated at build time (bakes POSTHOG_KEY into the plugin)
+extensions/posthog-analytics/lib/build-env.js
