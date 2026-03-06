@@ -216,7 +216,7 @@ function WorkspaceSection({ tree, onRefresh }: { tree: TreeNode[]; onRefresh: ()
   const handleSelect = useCallback((node: TreeNode) => {
     // Navigate to workspace page for actionable items
     if (node.type === "object" || node.type === "document" || node.type === "file" || node.type === "database" || node.type === "report") {
-      window.location.href = `/workspace?path=${encodeURIComponent(node.path)}`;
+      window.location.href = `/?path=${encodeURIComponent(node.path)}`;
     }
   }, []);
 
@@ -240,7 +240,7 @@ function WorkspaceSection({ tree, onRefresh }: { tree: TreeNode[]; onRefresh: ()
 
       {/* Full workspace link */}
       <a
-        href="/workspace"
+        href="/"
         className="flex items-center gap-1.5 mx-2 mt-2 px-2 py-1.5 rounded-md text-xs transition-colors hover:bg-[var(--color-surface-hover)]"
         style={{ color: "var(--color-accent)" }}
       >
@@ -279,7 +279,7 @@ function ReportsSection({ tree }: { tree: TreeNode[] }) {
       {reports.map((report) => (
         <a
           key={report.path}
-          href={`/workspace?path=${encodeURIComponent(report.path)}`}
+          href={`/?path=${encodeURIComponent(report.path)}`}
           className="flex items-center gap-2 mx-2 px-2 py-1.5 rounded-md text-xs transition-colors hover:bg-[var(--color-surface-hover)]"
           style={{ color: "var(--color-text-muted)" }}
         >

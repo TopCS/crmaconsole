@@ -1,45 +1,251 @@
 /**
  * Workspace link utilities.
  *
- * All workspace links use REAL URLs so they work if the browser follows them:
- *   Files/docs:  /workspace?path=knowledge/path/to/doc.md
- *   Objects:     /workspace?path=knowledge/leads
- *   Entries:     /workspace?entry=leads:abc123
+ * All workspace links use the root route with query params:
+ *   Files/docs:  /?path=knowledge/path/to/doc.md
+ *   Objects:     /?path=knowledge/leads
+ *   Entries:     /?entry=leads:abc123
+ *   Chat:        /?chat=session-id
+ *   Subagent:    /?chat=parent-id&subagent=child-key
+ *   Browse:      /?browse=/abs/path&hidden=1
+ *   Cron:        /?path=~cron  or  /?path=~cron/job-id
+ *   Object view: /?path=leads&viewType=kanban&filters=...&sort=...&search=...&page=1&pageSize=50&cols=a,b,c&view=MyView
+ *   Preview:     /?path=file.md&preview=other.md
+ *   Send:        /?send=install+duckdb  (consumed immediately)
+ *
+ * Legacy /workspace?... links are accepted by parseWorkspaceLink and
+ * migrateWorkspaceUrl for backward compat.
  */
+
+import type { FilterGroup, SortRule, ViewType } from "./object-filters";
+
+// ---------------------------------------------------------------------------
+// Parsed link (simple)
+// ---------------------------------------------------------------------------
 
 export type WorkspaceLink =
   | { kind: "file"; path: string }
   | { kind: "entry"; objectName: string; entryId: string };
 
-// --- Builders ---
+// ---------------------------------------------------------------------------
+// Full URL state
+// ---------------------------------------------------------------------------
 
-/** Build a real URL for an entry detail modal. */
-export function buildEntryLink(objectName: string, entryId: string): string {
-  return `/workspace?entry=${encodeURIComponent(objectName)}:${encodeURIComponent(entryId)}`;
-}
+export type WorkspaceUrlState = {
+  path: string | null;
+  chat: string | null;
+  subagent: string | null;
+  /** File-scoped chat session (active when a file is open in the main panel). */
+  fileChat: string | null;
+  entry: { objectName: string; entryId: string } | null;
+  send: string | null;
+  browse: string | null;
+  hidden: boolean;
+  preview: string | null;
+  view: string | null;
+  viewType: ViewType | null;
+  filters: FilterGroup | null;
+  search: string | null;
+  sort: SortRule[] | null;
+  page: number | null;
+  pageSize: number | null;
+  cols: string[] | null;
+};
 
-/** Build a real URL for a file or object in the workspace. */
-export function buildFileLink(path: string): string {
-  return `/workspace?path=${encodeURIComponent(path)}`;
-}
+const VALID_VIEW_TYPES: ViewType[] = [
+  "table", "kanban", "calendar", "timeline", "gallery", "list",
+];
 
-// --- Parsers ---
+// ---------------------------------------------------------------------------
+// URL state codec
+// ---------------------------------------------------------------------------
 
-/** Parse a workspace URL into a structured link. Returns null if not a workspace link. */
-export function parseWorkspaceLink(href: string): WorkspaceLink | null {
-  // Handle full or relative /workspace?... URLs
-  let url: URL | null = null;
-  try {
-    if (href.startsWith("/workspace")) {
-      url = new URL(href, "http://localhost");
-    } else if (href.includes("/workspace?")) {
-      url = new URL(href);
-    }
-  } catch {
-    // not a valid URL
+/** Parse search params (from any origin) into a typed WorkspaceUrlState. */
+export function parseUrlState(search: string | URLSearchParams): WorkspaceUrlState {
+  const params = typeof search === "string"
+    ? new URLSearchParams(search)
+    : search;
+
+  let entry: WorkspaceUrlState["entry"] = null;
+  const entryRaw = params.get("entry");
+  if (entryRaw && entryRaw.includes(":")) {
+    const idx = entryRaw.indexOf(":");
+    entry = {
+      objectName: entryRaw.slice(0, idx),
+      entryId: entryRaw.slice(idx + 1),
+    };
   }
 
-  if (url) {
+  let filters: FilterGroup | null = null;
+  const filtersRaw = params.get("filters");
+  if (filtersRaw) {
+    try {
+      filters = JSON.parse(atob(filtersRaw)) as FilterGroup;
+    } catch { /* invalid — ignore */ }
+  }
+
+  let sort: SortRule[] | null = null;
+  const sortRaw = params.get("sort");
+  if (sortRaw) {
+    try {
+      sort = JSON.parse(atob(sortRaw)) as SortRule[];
+    } catch { /* invalid — ignore */ }
+  }
+
+  const pageRaw = params.get("page");
+  const pageSizeRaw = params.get("pageSize");
+
+  const colsRaw = params.get("cols");
+  const viewTypeRaw = params.get("viewType") as ViewType | null;
+
+  return {
+    path: params.get("path"),
+    chat: params.get("chat"),
+    subagent: params.get("subagent"),
+    fileChat: params.get("fileChat"),
+    entry,
+    send: params.get("send"),
+    browse: params.get("browse"),
+    hidden: params.get("hidden") === "1",
+    preview: params.get("preview"),
+    view: params.get("view"),
+    viewType:
+      viewTypeRaw && VALID_VIEW_TYPES.includes(viewTypeRaw)
+        ? viewTypeRaw
+        : null,
+    filters,
+    search: params.get("search"),
+    sort,
+    page: pageRaw ? parseInt(pageRaw, 10) || null : null,
+    pageSize: pageSizeRaw ? parseInt(pageSizeRaw, 10) || null : null,
+    cols: colsRaw ? colsRaw.split(",").filter(Boolean) : null,
+  };
+}
+
+/** Serialize a (partial) WorkspaceUrlState to a query string. Omits null/default values. */
+export function serializeUrlState(state: Partial<WorkspaceUrlState>): string {
+  const params = new URLSearchParams();
+
+  if (state.path) params.set("path", state.path);
+  if (state.chat) params.set("chat", state.chat);
+  if (state.subagent) params.set("subagent", state.subagent);
+  if (state.fileChat) params.set("fileChat", state.fileChat);
+  if (state.entry) {
+    params.set("entry", `${state.entry.objectName}:${state.entry.entryId}`);
+  }
+  if (state.send) params.set("send", state.send);
+  if (state.browse) params.set("browse", state.browse);
+  if (state.hidden) params.set("hidden", "1");
+  if (state.preview) params.set("preview", state.preview);
+  if (state.view) params.set("view", state.view);
+  if (state.viewType) params.set("viewType", state.viewType);
+  if (state.filters && state.filters.rules.length > 0) {
+    params.set("filters", btoa(JSON.stringify(state.filters)));
+  }
+  if (state.search) params.set("search", state.search);
+  if (state.sort && state.sort.length > 0) {
+    params.set("sort", btoa(JSON.stringify(state.sort)));
+  }
+  if (state.page != null && state.page > 1) params.set("page", String(state.page));
+  if (state.pageSize != null) params.set("pageSize", String(state.pageSize));
+  if (state.cols && state.cols.length > 0) params.set("cols", state.cols.join(","));
+
+  return params.toString();
+}
+
+/** Build a full root-route URL string from partial state. */
+export function buildUrl(state: Partial<WorkspaceUrlState>): string {
+  const qs = serializeUrlState(state);
+  return qs ? `/?${qs}` : "/";
+}
+
+// ---------------------------------------------------------------------------
+// Legacy migration
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a legacy /workspace?... URL to the equivalent root URL.
+ * Returns null if the href is not a legacy workspace URL.
+ */
+export function migrateWorkspaceUrl(href: string): string | null {
+  const isLegacy =
+    href === "/workspace" ||
+    href.startsWith("/workspace?") ||
+    href.startsWith("/workspace#");
+
+  if (!isLegacy) return null;
+
+  if (href === "/workspace") return "/";
+
+  const qIdx = href.indexOf("?");
+  const hIdx = href.indexOf("#");
+
+  let qs = "";
+  let hash = "";
+
+  if (qIdx >= 0) {
+    const endOfQs = hIdx > qIdx ? hIdx : href.length;
+    qs = href.slice(qIdx, endOfQs);
+  }
+  if (hIdx >= 0) {
+    hash = href.slice(hIdx);
+  }
+
+  return `/${qs}${hash}`;
+}
+
+// ---------------------------------------------------------------------------
+// Simple link builders
+// ---------------------------------------------------------------------------
+
+/** Build a URL for an entry detail modal. */
+export function buildEntryLink(objectName: string, entryId: string): string {
+  return `/?entry=${encodeURIComponent(objectName)}:${encodeURIComponent(entryId)}`;
+}
+
+/** Build a URL for a file or object in the workspace. */
+export function buildFileLink(path: string): string {
+  return `/?path=${encodeURIComponent(path)}`;
+}
+
+/** Build a URL for a chat session. */
+export function buildChatLink(sessionId: string): string {
+  return `/?chat=${encodeURIComponent(sessionId)}`;
+}
+
+/** Build a URL for a subagent panel. */
+export function buildSubagentLink(chatId: string, subagentKey: string): string {
+  return `/?chat=${encodeURIComponent(chatId)}&subagent=${encodeURIComponent(subagentKey)}`;
+}
+
+/** Build a URL for browse mode. */
+export function buildBrowseLink(dir: string, showHidden?: boolean): string {
+  const p = new URLSearchParams();
+  p.set("browse", dir);
+  if (showHidden) p.set("hidden", "1");
+  return `/?${p.toString()}`;
+}
+
+// ---------------------------------------------------------------------------
+// Simple link parsers / predicates
+// ---------------------------------------------------------------------------
+
+function tryParseAppUrl(href: string): URL | null {
+  try {
+    if (href.startsWith("/")) {
+      return new URL(href, "http://localhost");
+    }
+    const u = new URL(href);
+    if (u.pathname === "/" || u.pathname === "/workspace") return u;
+  } catch { /* invalid */ }
+  return null;
+}
+
+/** Parse a workspace URL into a structured link. Accepts both root and legacy /workspace URLs. */
+export function parseWorkspaceLink(href: string): WorkspaceLink | null {
+  const url = tryParseAppUrl(href);
+
+  if (url && (url.pathname === "/" || url.pathname === "/workspace")) {
     const entryParam = url.searchParams.get("entry");
     if (entryParam && entryParam.includes(":")) {
       const colonIdx = entryParam.indexOf(":");
@@ -72,14 +278,20 @@ export function parseWorkspaceLink(href: string): WorkspaceLink | null {
   return null;
 }
 
-/** Check if an href is a workspace link (either /workspace?... or legacy @entry/). */
+/** Check if an href is an app-internal workspace link (root, legacy /workspace, or @entry/). */
 export function isWorkspaceLink(href: string): boolean {
-  return (
-    href.startsWith("/workspace?") ||
-    href.startsWith("/workspace#") ||
+  if (href.startsWith("@entry/")) return true;
+  // Legacy /workspace links
+  if (
     href === "/workspace" ||
-    href.startsWith("@entry/")
-  );
+    href.startsWith("/workspace?") ||
+    href.startsWith("/workspace#")
+  ) return true;
+  // New root links with query params
+  if (href === "/") return true;
+  if (href.startsWith("/?")) return true;
+  if (href.startsWith("/#")) return true;
+  return false;
 }
 
 /** Check if an href is a workspace-internal link (not external URL). */
@@ -93,7 +305,7 @@ export function isInternalLink(href: string): boolean {
 
 /** Check if an href is an entry link (any format). */
 export function isEntryLink(href: string): boolean {
-  if (href.startsWith("@entry/")) {return true;}
-  if (href.startsWith("/workspace") && href.includes("entry=")) {return true;}
+  if (href.startsWith("@entry/")) return true;
+  if ((href.startsWith("/") || href.startsWith("/workspace")) && href.includes("entry=")) return true;
   return false;
 }

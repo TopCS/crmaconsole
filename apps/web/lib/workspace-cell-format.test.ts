@@ -62,11 +62,11 @@ describe("formatWorkspaceFieldValue", () => {
 	});
 
 	it("identifies workspace file links and includes embed metadata", () => {
-		const result = formatWorkspaceFieldValue("/workspace?path=docs%2Fdeck.pdf", "text");
+		const result = formatWorkspaceFieldValue("/?path=docs%2Fdeck.pdf", "text");
 		expect(result.kind).toBe("link");
 		expect(result.linkType).toBe("file");
 		expect(result.filePath).toBe("docs/deck.pdf");
-		expect(result.href).toContain("/workspace?path=");
+		expect(result.href).toContain("/?path=");
 		expect(result.mediaType).toBe("pdf");
 		expect(result.embedUrl).toBe("/api/workspace/raw-file?path=docs%2Fdeck.pdf");
 	});

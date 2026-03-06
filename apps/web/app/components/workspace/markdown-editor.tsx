@@ -226,7 +226,7 @@ export function MarkdownEditor({
   }, [editor, insertUploadedImages]);
 
   // Handle link clicks for workspace navigation.
-  // Links are real URLs like /workspace?path=... so clicking them navigates
+  // Links are real URLs like /?path=... so clicking them navigates
   // within the same tab. We intercept to avoid a full page reload.
   useEffect(() => {
     if (!editor || !onNavigate) {return;}
@@ -239,7 +239,7 @@ export function MarkdownEditor({
       const href = link.getAttribute("href");
       if (!href) {return;}
 
-      // Intercept /workspace?... links to handle via client-side state
+      // Intercept workspace links to handle via client-side state
       if (isWorkspaceLink(href)) {
         event.preventDefault();
         event.stopPropagation();
