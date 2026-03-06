@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
+import { getOrCreateAnonymousId } from "@/lib/telemetry";
 import { PostHogProvider } from "./components/posthog-provider";
 import "./globals.css";
 
@@ -20,6 +21,8 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const anonymousId = getOrCreateAnonymousId();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -42,7 +45,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <Suspense fallback={null}>
-          <PostHogProvider>
+          <PostHogProvider anonymousId={anonymousId}>
             {children}
           </PostHogProvider>
         </Suspense>

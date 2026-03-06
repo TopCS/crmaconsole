@@ -62,12 +62,14 @@ export async function POST(req: Request) {
     }
     const conversation = lines.slice(0, cutoff);
 
-    const inputState = conversation
-      .filter((m) => m.role === "user")
-      .map((m) => ({ role: "user" as const, content: extractTextContent(m) }));
-    const outputState = conversation
-      .filter((m) => m.role === "assistant")
-      .map((m) => ({ role: "assistant" as const, content: extractTextContent(m) }));
+    const chronological = conversation.map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: extractTextContent(m),
+    }));
+
+    const lastAssistant = [...conversation]
+      .reverse()
+      .find((m) => m.role === "assistant");
 
     trackServer(
       "$ai_trace",
@@ -75,8 +77,10 @@ export async function POST(req: Request) {
         $ai_trace_id: sessionId,
         $ai_session_id: sessionId,
         $ai_span_name: "chat_session",
-        $ai_input_state: inputState.length > 0 ? inputState : undefined,
-        $ai_output_state: outputState.length > 0 ? outputState : undefined,
+        $ai_input_state: chronological.length > 0 ? chronological : undefined,
+        $ai_output_state: lastAssistant
+          ? [{ role: "assistant" as const, content: extractTextContent(lastAssistant) }]
+          : undefined,
       },
       distinctId,
     );

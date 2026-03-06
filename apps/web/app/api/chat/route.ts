@@ -44,7 +44,8 @@ export async function POST(req: Request) {
 		messages,
 		sessionId,
 		sessionKey,
-	}: { messages: UIMessage[]; sessionId?: string; sessionKey?: string } = await req.json();
+		distinctId,
+	}: { messages: UIMessage[]; sessionId?: string; sessionKey?: string; distinctId?: string } = await req.json();
 
 	const lastUserMessage = messages.filter((m) => m.role === "user").pop();
 	const userText =
@@ -60,10 +61,14 @@ export async function POST(req: Request) {
 		return new Response("No message provided", { status: 400 });
 	}
 
-	trackServer("chat_message_sent", {
-		message_length: userText.length,
-		is_subagent: typeof sessionKey === "string" && sessionKey.includes(":subagent:"),
-	});
+	trackServer(
+		"chat_message_sent",
+		{
+			message_length: userText.length,
+			is_subagent: typeof sessionKey === "string" && sessionKey.includes(":subagent:"),
+		},
+		distinctId,
+	);
 
 	const isSubagentSession = typeof sessionKey === "string" && sessionKey.includes(":subagent:");
 

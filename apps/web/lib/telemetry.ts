@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { PostHog } from "posthog-node";
 
 const POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY || "";
@@ -18,6 +20,40 @@ function ensureClient(): PostHog | null {
   return client;
 }
 
+let _cachedAnonymousId: string | null = null;
+
+/**
+ * Read the persisted install-scoped anonymous ID from ~/.openclaw-dench/telemetry.json,
+ * generating and writing one if absent.
+ */
+export function getOrCreateAnonymousId(): string {
+  if (_cachedAnonymousId) return _cachedAnonymousId;
+
+  try {
+    const stateDir = join(process.env.HOME || "~", ".openclaw-dench");
+    const configPath = join(stateDir, "telemetry.json");
+
+    let raw: Record<string, unknown> = {};
+    if (existsSync(configPath)) {
+      raw = JSON.parse(readFileSync(configPath, "utf-8"));
+    }
+    if (typeof raw.anonymousId === "string" && raw.anonymousId) {
+      _cachedAnonymousId = raw.anonymousId;
+      return raw.anonymousId;
+    }
+    const id = randomUUID();
+    raw.anonymousId = id;
+    mkdirSync(dirname(configPath), { recursive: true });
+    writeFileSync(configPath, JSON.stringify(raw, null, 2) + "\n", "utf-8");
+    _cachedAnonymousId = id;
+    return id;
+  } catch {
+    const id = randomUUID();
+    _cachedAnonymousId = id;
+    return id;
+  }
+}
+
 export function trackServer(
   event: string,
   properties?: Record<string, unknown>,
@@ -27,7 +63,7 @@ export function trackServer(
   if (!ph) return;
 
   ph.capture({
-    distinctId: distinctId || randomUUID(),
+    distinctId: distinctId || getOrCreateAnonymousId(),
     event,
     properties: {
       ...properties,
