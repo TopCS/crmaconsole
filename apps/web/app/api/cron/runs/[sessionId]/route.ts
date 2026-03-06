@@ -39,86 +39,122 @@ function parseSessionTranscript(content: string): ParsedMessage[] {
   const lines = content.trim().split("\n").filter((l) => l.trim());
   const messages: ParsedMessage[] = [];
 
-  // Track tool calls for linking invocations with results
   const pendingToolCalls = new Map<string, { toolName: string; args?: unknown }>();
 
   for (const line of lines) {
     try {
       const entry = JSON.parse(line);
+      if (entry.type !== "message" || !entry.message) continue;
 
-      if (entry.type === "message" && entry.message) {
-        const msg = entry.message;
-        const role = msg.role as "user" | "assistant" | "system";
-        const parts: MessagePart[] = [];
+      const msg = entry.message;
+      const role = msg.role as string;
 
-        if (Array.isArray(msg.content)) {
-          for (const part of msg.content) {
-            if (part.type === "text" && typeof part.text === "string" && part.text.trim()) {
-              parts.push({ type: "text", text: part.text });
-            } else if (part.type === "thinking" && typeof part.thinking === "string" && part.thinking.trim()) {
-              parts.push({ type: "thinking", thinking: part.thinking });
-            } else if (part.type === "tool_use" || part.type === "tool-call") {
-              const toolName = part.name ?? part.toolName ?? "unknown";
-              const toolCallId = part.id ?? part.toolCallId ?? `tool-${Date.now()}`;
-              pendingToolCalls.set(toolCallId, { toolName, args: part.input ?? part.args });
+      // toolResult messages: merge into previous assistant message
+      if (role === "toolResult") {
+        const toolCallId = msg.toolCallId ?? "";
+        const rawContent = msg.content;
+        const outputText = typeof rawContent === "string"
+          ? rawContent
+          : Array.isArray(rawContent)
+            ? rawContent.filter((c: { type: string }) => c.type === "text").map((c: { text: string }) => c.text ?? "").join("\n")
+            : JSON.stringify(rawContent ?? "");
+
+        for (let i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].role !== "assistant") continue;
+          const tc = messages[i].parts.find(
+            (p) => p.type === "tool-call" && (p as { toolCallId: string }).toolCallId === toolCallId,
+          );
+          if (tc && tc.type === "tool-call") {
+            (tc as { output?: string }).output = outputText.slice(0, 5000);
+          }
+          break;
+        }
+        continue;
+      }
+
+      if (role !== "user" && role !== "assistant" && role !== "system") continue;
+
+      const parts: MessagePart[] = [];
+
+      if (Array.isArray(msg.content)) {
+        for (const part of msg.content) {
+          if (part.type === "text" && typeof part.text === "string" && part.text.trim()) {
+            parts.push({ type: "text", text: part.text });
+          } else if (part.type === "thinking" && typeof part.thinking === "string" && part.thinking.trim()) {
+            parts.push({ type: "thinking", thinking: part.thinking });
+          // Current format: toolCall with id/name/arguments
+          } else if (part.type === "toolCall") {
+            const toolName = part.name ?? part.toolName ?? "unknown";
+            const toolCallId = part.id ?? part.toolCallId ?? `tool-${Date.now()}`;
+            pendingToolCalls.set(toolCallId, { toolName, args: part.arguments ?? part.input ?? part.args });
+            parts.push({
+              type: "tool-call",
+              toolName,
+              toolCallId,
+              args: part.arguments ?? part.input ?? part.args,
+            });
+          // Legacy Anthropic format
+          } else if (part.type === "tool_use" || part.type === "tool-call") {
+            const toolName = part.name ?? part.toolName ?? "unknown";
+            const toolCallId = part.id ?? part.toolCallId ?? `tool-${Date.now()}`;
+            pendingToolCalls.set(toolCallId, { toolName, args: part.input ?? part.args });
+            parts.push({
+              type: "tool-call",
+              toolName,
+              toolCallId,
+              args: part.input ?? part.args,
+            });
+          // Legacy inline tool results
+          } else if (part.type === "tool_result" || part.type === "tool-result") {
+            const toolCallId = part.tool_use_id ?? part.toolCallId ?? "";
+            const pending = pendingToolCalls.get(toolCallId);
+            const outputText = typeof part.content === "string"
+              ? part.content
+              : Array.isArray(part.content)
+                ? part.content.filter((c: { type: string }) => c.type === "text").map((c: { text: string }) => c.text).join("\n")
+                : typeof part.output === "string"
+                  ? part.output
+                  : JSON.stringify(part.output ?? part.content ?? "");
+
+            if (pending) {
+              const existingMsg = messages[messages.length - 1];
+              if (existingMsg) {
+                const tc = existingMsg.parts.find(
+                  (p) => p.type === "tool-call" && (p as { toolCallId: string }).toolCallId === toolCallId,
+                );
+                if (tc && tc.type === "tool-call") {
+                  (tc as { output?: string }).output = outputText.slice(0, 5000);
+                  continue;
+                }
+              }
               parts.push({
                 type: "tool-call",
-                toolName,
+                toolName: pending.toolName,
                 toolCallId,
-                args: part.input ?? part.args,
+                args: pending.args,
+                output: outputText.slice(0, 5000),
               });
-            } else if (part.type === "tool_result" || part.type === "tool-result") {
-              const toolCallId = part.tool_use_id ?? part.toolCallId ?? "";
-              const pending = pendingToolCalls.get(toolCallId);
-              const outputText = typeof part.content === "string"
-                ? part.content
-                : Array.isArray(part.content)
-                  ? part.content.filter((c: { type: string }) => c.type === "text").map((c: { text: string }) => c.text).join("\n")
-                  : typeof part.output === "string"
-                    ? part.output
-                    : JSON.stringify(part.output ?? part.content ?? "");
-
-              if (pending) {
-                // Merge output into existing tool-call part
-                const existingMsg = messages[messages.length - 1];
-                if (existingMsg) {
-                  const tc = existingMsg.parts.find(
-                    (p) => p.type === "tool-call" && (p as { toolCallId: string }).toolCallId === toolCallId,
-                  );
-                  if (tc && tc.type === "tool-call") {
-                    (tc as { output?: string }).output = outputText.slice(0, 5000);
-                    continue;
-                  }
-                }
-                parts.push({
-                  type: "tool-call",
-                  toolName: pending.toolName,
-                  toolCallId,
-                  args: pending.args,
-                  output: outputText.slice(0, 5000),
-                });
-              } else {
-                parts.push({
-                  type: "tool-call",
-                  toolName: "tool",
-                  toolCallId,
-                  output: outputText.slice(0, 5000),
-                });
-              }
+            } else {
+              parts.push({
+                type: "tool-call",
+                toolName: "tool",
+                toolCallId,
+                output: outputText.slice(0, 5000),
+              });
             }
           }
-        } else if (typeof msg.content === "string" && msg.content.trim()) {
-          parts.push({ type: "text", text: msg.content });
         }
+      } else if (typeof msg.content === "string" && msg.content.trim()) {
+        parts.push({ type: "text", text: msg.content });
+      }
 
-        if (parts.length > 0) {
-          messages.push({
-            id: entry.id ?? `msg-${messages.length}`,
-            role,
-            parts,
-            timestamp: entry.timestamp ?? new Date(entry.ts ?? Date.now()).toISOString(),
-          });
-        }
+      if (parts.length > 0) {
+        messages.push({
+          id: entry.id ?? `msg-${messages.length}`,
+          role: role as "user" | "assistant" | "system",
+          parts,
+          timestamp: entry.timestamp ?? new Date(entry.ts ?? Date.now()).toISOString(),
+        });
       }
     } catch {
       // skip malformed lines
