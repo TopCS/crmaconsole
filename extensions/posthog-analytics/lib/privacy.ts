@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 
 const SECRETS_PATTERN =
@@ -10,7 +11,7 @@ const REDACTED = "[REDACTED]";
 function resolveConfigPath(openclawConfig?: any): string {
   const stateDir =
     openclawConfig?.stateDir ??
-    join(process.env.HOME || "~", ".openclaw-dench");
+    join(process.env.HOME || homedir(), ".openclaw-dench");
   return join(stateDir, "telemetry.json");
 }
 

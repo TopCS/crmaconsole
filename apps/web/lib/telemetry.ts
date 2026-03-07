@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { PostHog } from "posthog-node";
 
@@ -30,7 +31,7 @@ export function getOrCreateAnonymousId(): string {
   if (_cachedAnonymousId) return _cachedAnonymousId;
 
   try {
-    const stateDir = join(process.env.HOME || "~", ".openclaw-dench");
+    const stateDir = join(process.env.HOME || homedir(), ".openclaw-dench");
     const configPath = join(stateDir, "telemetry.json");
 
     let raw: Record<string, unknown> = {};
