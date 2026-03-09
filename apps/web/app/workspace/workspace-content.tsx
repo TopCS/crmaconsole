@@ -1385,7 +1385,7 @@ function WorkspacePageInner() {
     if (browseDir) params.set("browse", browseDir);
     if (showHidden) params.set("hidden", "1");
     if (chatSidebarPreview) params.set("preview", chatSidebarPreview.path);
-    // terminal param is managed by its own effect below
+    if (terminalOpen) params.set("terminal", "1");
 
     const nextQs = params.toString();
     const currentQs = current.toString();
