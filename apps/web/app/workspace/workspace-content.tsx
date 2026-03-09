@@ -17,6 +17,7 @@ import { DocumentView } from "../components/workspace/document-view";
 import { FileViewer, isSpreadsheetFile } from "../components/workspace/file-viewer";
 import { SpreadsheetEditor } from "../components/workspace/spreadsheet-editor";
 import { HtmlViewer } from "../components/workspace/html-viewer";
+import { AppViewer } from "../components/workspace/app-viewer";
 import { MonacoCodeEditor } from "../components/workspace/code-editor";
 import { MediaViewer, detectMediaType, type MediaType } from "../components/workspace/media-viewer";
 import { DatabaseViewer, DuckDBMissing } from "../components/workspace/database-viewer";
@@ -45,6 +46,15 @@ import {
 import { UnicodeSpinner } from "../components/unicode-spinner";
 import { resolveActiveViewSyncDecision } from "./object-view-active-view";
 import { resetWorkspaceStateOnSwitch } from "./workspace-switch";
+import { TabBar } from "../components/workspace/tab-bar";
+import {
+  type Tab, type TabState,
+  HOME_TAB_ID, HOME_TAB,
+  generateTabId, loadTabs, saveTabs, openTab, closeTab,
+  closeOtherTabs, closeTabsToRight, closeAllTabs,
+  activateTab, reorderTabs, togglePinTab,
+  inferTabType, inferTabTitle,
+} from "@/lib/tab-state";
 import dynamic from "next/dynamic";
 
 const TerminalDrawer = dynamic(
@@ -129,7 +139,19 @@ type ContentState =
   | { kind: "cron-job"; jobId: string; job: CronJob }
   | { kind: "cron-session"; jobId: string; job: CronJob; sessionId: string; run: import("../types/cron").CronRunLogEntry }
   | { kind: "duckdb-missing" }
-  | { kind: "richDocument"; html: string; filePath: string; mode: "docx" | "txt" };
+  | { kind: "richDocument"; html: string; filePath: string; mode: "docx" | "txt" }
+  | { kind: "app"; appPath: string; manifest: DenchAppManifest; filename: string };
+
+export type DenchAppManifest = {
+  name: string;
+  description?: string;
+  icon?: string;
+  version?: string;
+  author?: string;
+  entry?: string;
+  runtime?: "static" | "esbuild" | "build";
+  permissions?: string[];
+};
 
 type SidebarPreviewContent =
   | { kind: "document"; data: FileData; title: string }
@@ -281,6 +303,7 @@ function objectNameFromPath(path: string): string {
 
 /** Infer a tree node type from filename extension for ad-hoc path previews. */
 function inferNodeTypeFromFileName(fileName: string): TreeNode["type"] {
+  if (fileName.endsWith(".dench.app")) return "app";
   const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
   if (ext === "md" || ext === "mdx") {return "document";}
   if (ext === "duckdb" || ext === "sqlite" || ext === "sqlite3" || ext === "db") {return "database";}
@@ -485,6 +508,41 @@ function WorkspacePageInner() {
   // Terminal drawer state
   const [terminalOpen, setTerminalOpen] = useState(false);
 
+  // Tab state -- always starts with the home tab
+  const [tabState, setTabState] = useState<TabState>({ tabs: [HOME_TAB], activeTabId: HOME_TAB_ID });
+  // Track which workspace we loaded tabs for, so we reload if the workspace switches
+  // and don't save until we've loaded first.
+  const tabLoadedForWorkspace = useRef<string | null>(null);
+
+  // Load tabs from localStorage once workspace name is known
+  useEffect(() => {
+    const key = workspaceName || null;
+    if (tabLoadedForWorkspace.current === key) return;
+    tabLoadedForWorkspace.current = key;
+    const loaded = loadTabs(key);
+    setTabState(loaded);
+  }, [workspaceName]);
+
+  // Persist tabs to localStorage on change (only after initial load for this workspace)
+  useEffect(() => {
+    const key = workspaceName || null;
+    if (tabLoadedForWorkspace.current !== key) return;
+    saveTabs(tabState, key);
+  }, [tabState, workspaceName]);
+
+  // Ref for the keyboard shortcut to close the active tab (avoids stale closure over loadContent)
+  const tabCloseActiveRef = useRef<(() => void) | null>(null);
+
+  const openTabForNode = useCallback((node: { path: string; name: string; type: string }) => {
+    const tab: Tab = {
+      id: generateTabId(),
+      type: node.type === "object" ? "object" : inferTabType(node.path),
+      title: inferTabTitle(node.path, node.name),
+      path: node.path,
+    };
+    setTabState((prev) => openTab(prev, tab));
+  }, []);
+
   // Resizable sidebar widths (desktop only; persisted in localStorage).
   // Use static defaults so server and client match on first render (avoid hydration mismatch).
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(260);
@@ -527,6 +585,12 @@ function WorkspacePageInner() {
       if (mod && key === "j" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         setTerminalOpen((v) => !v);
+        return;
+      }
+
+      if (mod && key === "w" && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        tabCloseActiveRef.current?.();
         return;
       }
     };
@@ -789,6 +853,14 @@ function WorkspacePageInner() {
           } else {
             setContent({ kind: "file", data, filename: node.name });
           }
+        } else if (node.type === "app") {
+          // Fetch manifest from the tree node or API
+          const manifestRes = await fetch(`/api/apps?app=${encodeURIComponent(node.path)}&file=.dench.yaml&meta=1`);
+          let manifest: DenchAppManifest = { name: node.name };
+          if (manifestRes.ok) {
+            try { manifest = await manifestRes.json(); } catch { /* use default */ }
+          }
+          setContent({ kind: "app", appPath: node.path, manifest, filename: node.name });
         } else if (node.type === "folder") {
           setContent({ kind: "directory", node });
         }
@@ -874,10 +946,95 @@ function WorkspacePageInner() {
         setContent({ kind: "cron-dashboard" });
         return;
       }
+      openTabForNode(node);
       void loadContent(node);
     },
-    [loadContent, router, cronJobs, browseDir, workspaceRoot, openclawDir, setBrowseDir],
+    [loadContent, openTabForNode, cronJobs, browseDir, workspaceRoot, openclawDir, setBrowseDir],
   );
+
+  // Tab handler callbacks (defined after loadContent is available)
+  const handleTabActivate = useCallback((tabId: string) => {
+    if (tabId === HOME_TAB_ID) {
+      setActivePath(null);
+      setContent({ kind: "none" });
+      setTabState((prev) => activateTab(prev, tabId));
+      return;
+    }
+    setTabState((prev) => {
+      const next = activateTab(prev, tabId);
+      const tab = next.tabs.find((t) => t.id === tabId);
+      if (tab?.path) {
+        const node = resolveNode(tree, tab.path);
+        if (node) {
+          void loadContent(node);
+        } else if (tab.path === "~cron") {
+          setActivePath("~cron");
+          setContent({ kind: "cron-dashboard" });
+        } else if (tab.path.startsWith("~cron/")) {
+          setActivePath(tab.path);
+          const jobId = tab.path.slice("~cron/".length);
+          const job = cronJobs.find((j) => j.id === jobId);
+          if (job) setContent({ kind: "cron-job", jobId, job });
+        }
+      }
+      return next;
+    });
+  }, [tree, loadContent, cronJobs]);
+
+  const handleTabClose = useCallback((tabId: string) => {
+    setTabState((prev) => {
+      const next = closeTab(prev, tabId);
+      if (next.activeTabId !== prev.activeTabId) {
+        if (next.activeTabId === HOME_TAB_ID || !next.activeTabId) {
+          setActivePath(null);
+          setContent({ kind: "none" });
+        } else {
+          const newActive = next.tabs.find((t) => t.id === next.activeTabId);
+          if (newActive?.path) {
+            const node = resolveNode(tree, newActive.path);
+            if (node) {
+              void loadContent(node);
+            }
+          }
+        }
+      }
+      return next;
+    });
+  }, [tree, loadContent]);
+
+  // Keep ref in sync so keyboard shortcut can close active tab
+  useEffect(() => {
+    tabCloseActiveRef.current = () => {
+      if (tabState.activeTabId) {
+        handleTabClose(tabState.activeTabId);
+      }
+    };
+  }, [tabState.activeTabId, handleTabClose]);
+
+  const handleTabCloseOthers = useCallback((tabId: string) => {
+    setTabState((prev) => closeOtherTabs(prev, tabId));
+  }, []);
+
+  const handleTabCloseToRight = useCallback((tabId: string) => {
+    setTabState((prev) => closeTabsToRight(prev, tabId));
+  }, []);
+
+  const handleTabCloseAll = useCallback(() => {
+    setTabState((prev) => {
+      const next = closeAllTabs(prev);
+      setActivePath(null);
+      setContent({ kind: "none" });
+      return next;
+    });
+  }, []);
+
+  const handleTabReorder = useCallback((from: number, to: number) => {
+    setTabState((prev) => reorderTabs(prev, from, to));
+  }, []);
+
+  const handleTabTogglePin = useCallback((tabId: string) => {
+    setTabState((prev) => togglePinTab(prev, tabId));
+  }, []);
 
   const loadSidebarPreviewFromNode = useCallback(
     async (node: TreeNode): Promise<SidebarPreviewContent | null> => {
@@ -1137,6 +1294,7 @@ function WorkspacePageInner() {
   const handleGoToChat = useCallback(() => {
     setActivePath(null);
     setContent({ kind: "none" });
+    setTabState((prev) => activateTab(prev, HOME_TAB_ID));
   }, []);
 
   // Insert a file mention into the chat editor when a sidebar item is dropped on the chat input.
@@ -1288,14 +1446,17 @@ function WorkspacePageInner() {
       initialPathHandled.current = true;
       const node = resolveNode(tree, urlState.path);
       if (node) {
+        openTabForNode(node);
         void loadContent(node);
       } else if (urlState.path === "~cron") {
+        openTabForNode({ path: "~cron", name: "Cron", type: "folder" });
         setActivePath("~cron");
         setContent({ kind: "cron-dashboard" });
         if (urlState.cronView) setCronView(urlState.cronView);
         if (urlState.cronCalMode) setCronCalMode(urlState.cronCalMode);
         if (urlState.cronDate) setCronDate(urlState.cronDate);
       } else if (urlState.path.startsWith("~cron/")) {
+        openTabForNode({ path: urlState.path, name: urlState.path.split("/").pop() || "Cron Job", type: "file" });
         setActivePath(urlState.path);
         setContent({ kind: "cron-dashboard" });
         if (urlState.cronRunFilter) setCronRunFilter(urlState.cronRunFilter);
@@ -1303,6 +1464,7 @@ function WorkspacePageInner() {
       } else if (isAbsolutePath(urlState.path) || isHomeRelativePath(urlState.path)) {
         const name = urlState.path.split("/").pop() || urlState.path;
         const syntheticNode: TreeNode = { name, path: urlState.path, type: "file" };
+        openTabForNode(syntheticNode);
         void loadContent(syntheticNode);
       }
       if (urlState.fileChat) {
@@ -1365,11 +1527,14 @@ function WorkspacePageInner() {
       if (urlState.path) {
         const node = resolveNode(tree, urlState.path);
         if (node) {
+          openTabForNode(node);
           void loadContent(node);
         } else if (urlState.path === "~cron") {
+          openTabForNode({ path: "~cron", name: "Cron", type: "folder" });
           setActivePath("~cron");
           setContent({ kind: "cron-dashboard" });
         } else if (urlState.path.startsWith("~cron/")) {
+          openTabForNode({ path: urlState.path, name: urlState.path.split("/").pop() || "Cron Job", type: "file" });
           setActivePath(urlState.path);
           const jobId = urlState.path.slice("~cron/".length);
           const job = cronJobs.find((j) => j.id === jobId);
@@ -1380,7 +1545,9 @@ function WorkspacePageInner() {
           }
         } else if (isAbsolutePath(urlState.path) || isHomeRelativePath(urlState.path)) {
           const name = urlState.path.split("/").pop() || urlState.path;
-          void loadContent({ name, path: urlState.path, type: "file" });
+          const synNode: TreeNode = { name, path: urlState.path, type: "file" };
+          openTabForNode(synNode);
+          void loadContent(synNode);
         }
         setFileChatSessionId(urlState.fileChat);
       } else if (urlState.chat) {
@@ -1389,11 +1556,13 @@ function WorkspacePageInner() {
         setContent({ kind: "none" });
         void chatRef.current?.loadSession(urlState.chat);
         setActiveSubagentKey(urlState.subagent);
+        setTabState((prev) => activateTab(prev, HOME_TAB_ID));
       } else {
         setActivePath(null);
         setContent({ kind: "none" });
         setActiveSessionId(null);
         setActiveSubagentKey(null);
+        setTabState((prev) => activateTab(prev, HOME_TAB_ID));
       }
 
       if (urlState.entry) {
@@ -1777,6 +1946,21 @@ function WorkspacePageInner() {
               )}
             </div>
           </div>
+        )}
+
+        {/* Tab bar (desktop only, always visible -- home tab is always present) */}
+        {!isMobile && (
+          <TabBar
+            tabs={tabState.tabs}
+            activeTabId={tabState.activeTabId}
+            onActivate={handleTabActivate}
+            onClose={handleTabClose}
+            onCloseOthers={handleTabCloseOthers}
+            onCloseToRight={handleTabCloseToRight}
+            onCloseAll={handleTabCloseAll}
+            onReorder={handleTabReorder}
+            onTogglePin={handleTabTogglePin}
+          />
         )}
 
         {/* When a file is selected: show top bar with breadcrumbs (desktop only, mobile has unified top bar) */}
@@ -2507,6 +2691,14 @@ function ContentRenderer({
           rawUrl={content.rawUrl}
           contentUrl={content.contentUrl}
           filename={content.filename}
+        />
+      );
+
+    case "app":
+      return (
+        <AppViewer
+          appPath={content.appPath}
+          manifest={content.manifest}
         />
       );
 

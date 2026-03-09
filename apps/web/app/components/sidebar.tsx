@@ -28,7 +28,7 @@ type MemoryFile = {
 type TreeNode = {
   name: string;
   path: string;
-  type: "object" | "document" | "folder" | "file" | "database" | "report";
+  type: "object" | "document" | "folder" | "file" | "database" | "report" | "app";
   icon?: string;
   defaultView?: "table" | "kanban";
   children?: TreeNode[];

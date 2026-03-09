@@ -22,7 +22,7 @@ import { InlineRename, RENAME_SHAKE_STYLE } from "./inline-rename";
 export type TreeNode = {
   name: string;
   path: string;
-  type: "object" | "document" | "folder" | "file" | "database" | "report";
+  type: "object" | "document" | "folder" | "file" | "database" | "report" | "app";
   icon?: string;
   defaultView?: "table" | "kanban";
   children?: TreeNode[];
@@ -30,6 +30,15 @@ export type TreeNode = {
   virtual?: boolean;
   /** True when the entry is a symbolic link / shortcut. */
   symlink?: boolean;
+  /** App manifest metadata (only for type: "app"). */
+  appManifest?: {
+    name: string;
+    description?: string;
+    icon?: string;
+    version?: string;
+    entry?: string;
+    runtime?: string;
+  };
 };
 
 /** Folder names reserved for virtual sections -- cannot be created/renamed to. */
@@ -147,6 +156,15 @@ function ChatBubbleIcon() {
   );
 }
 
+function AppNodeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" />
+      <rect width="7" height="7" x="3" y="14" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" />
+    </svg>
+  );
+}
+
 function LockBadge() {
   return (
     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}>
@@ -199,6 +217,23 @@ function NodeIcon({ node, open }: { node: TreeNode; open?: boolean }) {
       return <DatabaseIcon />;
     case "report":
       return <ReportIcon />;
+    case "app": {
+      const icon = node.appManifest?.icon ?? node.icon;
+      if (icon && (icon.endsWith(".png") || icon.endsWith(".svg") || icon.endsWith(".jpg") || icon.endsWith(".jpeg") || icon.endsWith(".webp"))) {
+        return (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/apps/serve/${node.path}/${icon}`}
+            alt=""
+            width={16}
+            height={16}
+            className="rounded-sm flex-shrink-0"
+            style={{ objectFit: "cover" }}
+          />
+        );
+      }
+      return <AppNodeIcon />;
+    }
     default:
       return <FileIcon />;
   }
@@ -210,6 +245,7 @@ function typeColor(node: TreeNode): string {
     case "document": return "#60a5fa";
     case "database": return "#c084fc";
     case "report": return "#22c55e";
+    case "app": return "#6366f1";
     default: return "var(--color-text-muted)";
   }
 }
@@ -416,7 +452,7 @@ function DraggableNode({
   // Workspace root in browse mode: non-expandable entry point back to workspace
   const isWorkspaceRoot = !!workspaceRoot && node.path === workspaceRoot;
   const hasChildren = node.children && node.children.length > 0;
-  const isExpandable = isWorkspaceRoot ? false : (hasChildren || node.type === "folder" || node.type === "object");
+  const isExpandable = isWorkspaceRoot ? false : node.type === "app" ? false : (hasChildren || node.type === "folder" || node.type === "object");
   const isExpanded = isWorkspaceRoot ? false : expandedPaths.has(node.path);
   const isActive = activePath === node.path;
   const isSelected = selectedPath === node.path;
@@ -563,6 +599,14 @@ function DraggableNode({
           <span className="text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 font-medium"
             style={{ background: "var(--color-accent)", color: "white" }}>
             workspace
+          </span>
+        )}
+
+        {/* App badge */}
+        {node.type === "app" && (
+          <span className="text-[9px] px-1.5 py-[1px] rounded flex-shrink-0 font-medium"
+            style={{ background: "#6366f118", color: "#6366f1" }}>
+            APP
           </span>
         )}
 

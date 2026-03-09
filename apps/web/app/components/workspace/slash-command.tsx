@@ -26,7 +26,7 @@ const fileMentionPluginKey = new PluginKey("fileMention");
 export type TreeNode = {
   name: string;
   path: string;
-  type: "object" | "document" | "folder" | "file" | "database" | "report";
+  type: "object" | "document" | "folder" | "file" | "database" | "report" | "app";
   icon?: string;
   children?: TreeNode[];
 };

@@ -91,6 +91,7 @@ export const SEED_OBJECTS: SeedObject[] = [
 export function buildDenchClawIdentity(workspaceDir: string): string {
   const crmSkillPath = path.join(workspaceDir, "skills", "crm", "SKILL.md");
   const browserSkillPath = path.join(workspaceDir, "skills", "browser", "SKILL.md");
+  const appBuilderSkillPath = path.join(workspaceDir, "skills", "app-builder", "SKILL.md");
   return `# IDENTITY.md - DenchClaw
 
 You are **DenchClaw** - a personal AI agent and a CRM Database System built by Dench (dench.com), running on top of [OpenClaw](https://github.com/openclaw/openclaw).
@@ -116,11 +117,22 @@ Your browser automation behavior is defined by the Browser skill at:
 - Always load and follow that skill for browser-based tasks.
 - Treat the Browser skill as always-on system context.
 
+## App Builder contract
+
+Your app-building behavior is defined by the App Builder skill at:
+\`${appBuilderSkillPath}\`
+
+- Always load and follow that skill for app creation tasks.
+- Treat the App Builder skill as always-on system context.
+- Build apps using the \`.dench.app\` folder format with \`.dench.yaml\` manifests.
+- Default app location: \`${workspaceDir}/apps/\`
+
 ## What you do
 
 - Find and enrich leads, maintain CRM pipelines, and help run outreach workflows.
 - Chat with local DuckDB workspace data and return structured insights.
 - Generate analytics and maintain workspace documentation.
+- Build custom apps that run inside the workspace with access to DuckDB data.
 
 ## Links
 
@@ -188,6 +200,7 @@ export function seedDenchClawIdentity(workspaceDir: string): void {
 export const MANAGED_SKILLS: ReadonlyArray<{ name: string; templatePaths?: boolean }> = [
   { name: "crm", templatePaths: true },
   { name: "browser" },
+  { name: "app-builder", templatePaths: true },
 ];
 
 export function seedSkill(
@@ -279,6 +292,80 @@ export function syncManagedSkills(params: {
   return { syncedSkills: synced, workspaceDirs: params.workspaceDirs, identityUpdated: true };
 }
 
+export function seedSampleApp(appsDir: string): void {
+  const appDir = path.join(appsDir, "hello.dench.app");
+  if (existsSync(appDir)) return;
+
+  mkdirSync(appDir, { recursive: true });
+
+  writeFileSync(
+    path.join(appDir, ".dench.yaml"),
+    `name: "Hello World"
+description: "A sample DenchClaw app"
+icon: "sparkles"
+version: "1.0.0"
+entry: "index.html"
+runtime: "static"
+permissions:
+  - database
+`,
+    "utf-8",
+  );
+
+  writeFileSync(
+    path.join(appDir, "index.html"),
+    `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hello World</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 32px; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    body.dark { background: #1a1a2e; color: #e0e0e0; }
+    body.light { background: #ffffff; color: #1a1a2e; }
+    h1 { font-size: 28px; margin-bottom: 8px; }
+    p { opacity: 0.6; margin-bottom: 24px; }
+    .stats { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+    .stat { padding: 16px 24px; border-radius: 12px; background: color-mix(in srgb, currentColor 5%, transparent); border: 1px solid color-mix(in srgb, currentColor 10%, transparent); min-width: 120px; }
+    .stat .label { font-size: 12px; opacity: 0.5; margin-bottom: 4px; }
+    .stat .value { font-size: 24px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>Hello from DenchClaw!</h1>
+  <p>This is a sample app running inside your workspace.</p>
+  <div class="stats" id="stats">Loading...</div>
+  <script>
+    async function init() {
+      try {
+        const theme = await window.dench.app.getTheme();
+        document.body.className = theme;
+      } catch { document.body.className = 'light'; }
+      try {
+        const result = await window.dench.db.query("SELECT name, entry_count FROM objects");
+        const el = document.getElementById('stats');
+        el.innerHTML = '';
+        for (const row of (result.rows || [])) {
+          el.innerHTML += '<div class="stat"><div class="label">' + row.name + '</div><div class="value">' + (row.entry_count || 0) + '</div></div>';
+        }
+        if (!result.rows || result.rows.length === 0) {
+          el.textContent = 'No objects found yet. Create some in DenchClaw!';
+        }
+      } catch (err) {
+        document.getElementById('stats').textContent = 'Could not load data: ' + err.message;
+      }
+    }
+    init();
+  </script>
+</body>
+</html>
+`,
+    "utf-8",
+  );
+}
+
 export function writeIfMissing(filePath: string, content: string): boolean {
   if (existsSync(filePath)) {
     return false;
@@ -351,6 +438,13 @@ export function seedWorkspaceFromAssets(params: {
     writeFileSync(path.join(objDir, ".object.yaml"), generateObjectYaml(obj), "utf-8");
   }
   writeIfMissing(path.join(workspaceDir, "WORKSPACE.md"), generateWorkspaceMd(SEED_OBJECTS));
+
+  // Create default apps directory
+  const appsDir = path.join(workspaceDir, "apps");
+  mkdirSync(appsDir, { recursive: true });
+
+  // Seed a sample hello-world app
+  seedSampleApp(appsDir);
 
   return {
     workspaceDir,

@@ -16,7 +16,7 @@ export const runtime = "nodejs";
 export type TreeNode = {
   name: string;
   path: string; // relative to workspace root (or ~skills/ for virtual nodes)
-  type: "object" | "document" | "folder" | "file" | "database" | "report";
+  type: "object" | "document" | "folder" | "file" | "database" | "report" | "app";
   icon?: string;
   defaultView?: "table" | "kanban";
   children?: TreeNode[];
@@ -24,6 +24,15 @@ export type TreeNode = {
   virtual?: boolean;
   /** True when the entry is a symbolic link. */
   symlink?: boolean;
+  /** App manifest metadata (only for type: "app"). */
+  appManifest?: {
+    name: string;
+    description?: string;
+    icon?: string;
+    version?: string;
+    entry?: string;
+    runtime?: string;
+  };
 };
 
 type DbObject = {
@@ -97,6 +106,29 @@ async function resolveEntryType(
   return null;
 }
 
+/** Read .dench.yaml manifest from a .dench.app directory. */
+async function readAppManifest(
+  dirPath: string,
+): Promise<TreeNode["appManifest"] | null> {
+  const yamlPath = join(dirPath, ".dench.yaml");
+  if (!await pathExists(yamlPath)) return null;
+
+  try {
+    const content = await readFile(yamlPath, "utf-8");
+    const parsed = parseSimpleYaml(content);
+    return {
+      name: (parsed.name as string) || dirPath.split("/").pop()?.replace(/\.dench\.app$/, "") || "App",
+      description: parsed.description as string | undefined,
+      icon: parsed.icon as string | undefined,
+      version: parsed.version as string | undefined,
+      entry: (parsed.entry as string) || "index.html",
+      runtime: (parsed.runtime as string) || "static",
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Recursively build a tree from a workspace directory. */
 async function buildTree(
   absDir: string,
@@ -145,6 +177,21 @@ async function buildTree(
     const isSymlink = entry.isSymbolicLink();
 
     if (effectiveType === "directory") {
+      // Detect .dench.app folders -- treat as app nodes (no children exposed)
+      if (entry.name.endsWith(".dench.app")) {
+        const manifest = await readAppManifest(absPath);
+        const displayName = manifest?.name || entry.name.replace(/\.dench\.app$/, "");
+        nodes.push({
+          name: displayName,
+          path: relPath,
+          type: "app",
+          icon: manifest?.icon,
+          appManifest: manifest ?? { name: displayName, entry: "index.html", runtime: "static" },
+          ...(isSymlink && { symlink: true }),
+        });
+        continue;
+      }
+
       const objectMeta = await readObjectMeta(absPath);
       const dbObject = dbObjects.get(entry.name);
       const children = await buildTree(absPath, relPath, dbObjects, showHidden);
