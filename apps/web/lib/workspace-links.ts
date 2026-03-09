@@ -64,6 +64,8 @@ export type WorkspaceUrlState = {
   cronRunFilter: CronRunStatusFilter | null;
   /** Selected run timestamp in cron job detail. */
   cronRun: number | null;
+  /** Whether the terminal drawer is open. */
+  terminal: boolean;
 };
 
 const VALID_VIEW_TYPES: ViewType[] = [
@@ -147,6 +149,7 @@ export function parseUrlState(search: string | URLSearchParams): WorkspaceUrlSta
     cronDate: params.get("cronDate"),
     cronRunFilter: cronRunFilterRaw && VALID_CRON_RUN_FILTERS.includes(cronRunFilterRaw) ? cronRunFilterRaw : null,
     cronRun: cronRunRaw ? parseInt(cronRunRaw, 10) || null : null,
+    terminal: params.get("terminal") === "1",
   };
 }
 
@@ -182,6 +185,7 @@ export function serializeUrlState(state: Partial<WorkspaceUrlState>): string {
   if (state.cronDate) params.set("cronDate", state.cronDate);
   if (state.cronRunFilter && state.cronRunFilter !== "all") params.set("cronRunFilter", state.cronRunFilter);
   if (state.cronRun != null) params.set("cronRun", String(state.cronRun));
+  if (state.terminal) params.set("terminal", "1");
 
   return params.toString();
 }

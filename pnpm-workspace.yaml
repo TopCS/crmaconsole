@@ -10,5 +10,6 @@ onlyBuiltDependencies:
   - authenticate-pam
   - esbuild
   - node-llama-cpp
+  - node-pty
   - protobufjs
   - sharp

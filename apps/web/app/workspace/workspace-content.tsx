@@ -45,6 +45,12 @@ import {
 import { UnicodeSpinner } from "../components/unicode-spinner";
 import { resolveActiveViewSyncDecision } from "./object-view-active-view";
 import { resetWorkspaceStateOnSwitch } from "./workspace-switch";
+import dynamic from "next/dynamic";
+
+const TerminalDrawer = dynamic(
+  () => import("../components/terminal/terminal-drawer"),
+  { ssr: false },
+);
 
 // --- Types ---
 
@@ -476,6 +482,9 @@ function WorkspacePageInner() {
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
   const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false);
 
+  // Terminal drawer state
+  const [terminalOpen, setTerminalOpen] = useState(false);
+
   // Resizable sidebar widths (desktop only; persisted in localStorage).
   // Use static defaults so server and client match on first render (avoid hydration mismatch).
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(260);
@@ -499,16 +508,26 @@ function WorkspacePageInner() {
     window.localStorage.setItem(STORAGE_RIGHT, String(rightSidebarWidth));
   }, [rightSidebarWidth]);
 
-  // Keyboard shortcuts: Cmd+B = toggle left sidebar, Cmd+Shift+B = toggle right sidebar
+  // Keyboard shortcuts: Cmd+B = toggle left sidebar, Cmd+Shift+B = toggle right sidebar, Cmd+J = toggle terminal
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+      const mod = e.metaKey || e.ctrlKey;
+      const key = e.key.toLowerCase();
+
+      if (mod && key === "b") {
         e.preventDefault();
         if (e.shiftKey) {
           setRightSidebarCollapsed((v) => !v);
         } else {
           setLeftSidebarCollapsed((v) => !v);
         }
+        return;
+      }
+
+      if (mod && key === "j" && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        setTerminalOpen((v) => !v);
+        return;
       }
     };
     window.addEventListener("keydown", handler);
@@ -1208,6 +1227,7 @@ function WorkspacePageInner() {
     if (browseDir) params.set("browse", browseDir);
     if (showHidden) params.set("hidden", "1");
     if (chatSidebarPreview) params.set("preview", chatSidebarPreview.path);
+    // terminal param is managed by its own effect below
 
     const nextQs = params.toString();
     const currentQs = current.toString();
@@ -1219,6 +1239,21 @@ function WorkspacePageInner() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally excludes searchParams to avoid infinite loop
   }, [activePath, activeSessionId, activeSubagentKey, fileChatSessionId, browseDir, showHidden, chatSidebarPreview, router, cronView, cronCalMode, cronDate, cronRunFilter, cronRun]);
+
+  // Terminal URL sync — independent of workspace hydration so it works app-wide.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const current = params.get("terminal") === "1";
+    if (current === terminalOpen) return;
+    if (terminalOpen) {
+      params.set("terminal", "1");
+    } else {
+      params.delete("terminal");
+    }
+    const qs = params.toString();
+    const url = qs ? `/?${qs}` : "/";
+    window.history.replaceState(window.history.state, "", url);
+  }, [terminalOpen]);
 
   // Open entry modal handler
   const handleOpenEntry = useCallback(
@@ -1311,6 +1346,9 @@ function WorkspacePageInner() {
         }
       });
     }
+    if (urlState.terminal) {
+      setTerminalOpen(true);
+    }
   }, [tree, treeLoading, searchParams, loadContent, setBrowseDir, setShowHidden, loadSidebarPreviewFromNode]);
 
   // Handle browser back/forward navigation.
@@ -1389,6 +1427,8 @@ function WorkspacePageInner() {
           }
         });
       }
+
+      setTerminalOpen(urlState.terminal);
 
       lastPushedQs.current = qs;
     };
@@ -1978,6 +2018,11 @@ function WorkspacePageInner() {
             </>
           )}
         </div>
+
+        {/* Terminal drawer (Cmd+J) */}
+        {terminalOpen && (
+          <TerminalDrawer onClose={() => setTerminalOpen(false)} cwd={workspaceRoot ?? undefined} />
+        )}
       </main>
 
       {/* Entry detail modal (rendered on top of everything) */}

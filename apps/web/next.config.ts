@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(import.meta.dirname, "..", ".."),
 
   // Externalize packages with native addons so webpack doesn't break them
-  serverExternalPackages: ["ws", "bufferutil", "utf-8-validate"],
+  serverExternalPackages: ["ws", "bufferutil", "utf-8-validate", "node-pty"],
 
   // Transpile ESM-only packages so webpack can bundle them
   transpilePackages: ["react-markdown", "remark-gfm"],
