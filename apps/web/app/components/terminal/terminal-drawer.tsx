@@ -16,7 +16,7 @@ const MIN_DRAWER_HEIGHT = 180;
 const MAX_DRAWER_HEIGHT_RATIO = 0.75;
 const DEFAULT_DRAWER_HEIGHT = 280;
 const STORAGE_KEY = "dench-terminal-height";
-const WS_PORT = 3101;
+const DEFAULT_WS_PORT = 3101;
 const MAX_TERMINALS = 8;
 
 function maxDrawerHeight(): number {
@@ -159,7 +159,7 @@ function TerminalViewport({
     termRef.current = terminal;
     fitRef.current = fitAddon;
 
-    const connectWs = () => {
+    const connectWs = async () => {
       if (disposed) return;
 
       // Fit now that the container has layout dimensions
@@ -167,8 +167,16 @@ function TerminalViewport({
       const cols = terminal.cols > 0 ? terminal.cols : 80;
       const rows = terminal.rows > 0 ? terminal.rows : 24;
 
+      let wsPort = DEFAULT_WS_PORT;
+      try {
+        const res = await fetch("/api/terminal/port");
+        const json = await res.json();
+        if (json.port) wsPort = json.port;
+      } catch {}
+
+      if (disposed) return;
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//127.0.0.1:${WS_PORT}`;
+      const wsUrl = `${protocol}//127.0.0.1:${wsPort}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 

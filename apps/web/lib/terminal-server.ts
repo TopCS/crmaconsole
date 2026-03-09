@@ -11,12 +11,19 @@ interface TerminalSession {
 
 const sessions = new Map<WebSocket, TerminalSession>();
 
-let wss: WebSocketServer | null = null;
-let didFixSpawnHelper = false;
+const _g = globalThis as unknown as {
+  __terminalWss?: WebSocketServer;
+  __terminalDidFixSpawnHelper?: boolean;
+  __terminalPort?: number;
+};
+
+let wss: WebSocketServer | null = _g.__terminalWss ?? null;
+let didFixSpawnHelper = _g.__terminalDidFixSpawnHelper ?? false;
 
 function ensureSpawnHelperExecutable() {
   if (didFixSpawnHelper || process.platform === "win32") return;
   didFixSpawnHelper = true;
+  _g.__terminalDidFixSpawnHelper = true;
   try {
     const req = createRequire(import.meta.url);
     const pkgPath = req.resolve("node-pty/package.json");
@@ -163,14 +170,23 @@ export function startTerminalServer(port: number) {
   if (wss) return;
 
   wss = new WebSocketServer({ port, host: "127.0.0.1" });
+  _g.__terminalWss = wss;
   wss.on("connection", handleConnection);
+  wss.on("listening", () => {
+    _g.__terminalPort = port;
+  });
   wss.on("error", (err) => {
     if ((err as NodeJS.ErrnoException).code === "EADDRINUSE") {
       console.warn(`[terminal] Port ${port} in use, retrying on ${port + 1}`);
       wss = null;
+      _g.__terminalWss = undefined;
       startTerminalServer(port + 1);
     }
   });
+}
+
+export function getTerminalPort(): number | null {
+  return _g.__terminalPort ?? null;
 }
 
 export function stopTerminalServer() {
@@ -181,4 +197,5 @@ export function stopTerminalServer() {
   sessions.clear();
   wss.close();
   wss = null;
+  _g.__terminalWss = undefined;
 }
