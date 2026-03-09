@@ -54,6 +54,7 @@ openclaw --profile dench gateway restart
 openclaw --profile dench config set gateway.port 19001
 openclaw --profile dench gateway install --force --port 19001
 openclaw --profile dench gateway restart
+openclaw --profile dench uninstall
 ```
 
 ---
