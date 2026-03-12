@@ -5,6 +5,7 @@ import { FileManagerTree, type TreeNode } from "./file-manager-tree";
 import { ProfileSwitcher } from "./profile-switcher";
 import { CreateWorkspaceDialog } from "./create-workspace-dialog";
 import { UnicodeSpinner } from "../unicode-spinner";
+import { ChatSessionsSidebar, type WebSession, type SidebarSubagentInfo } from "./chat-sessions-sidebar";
 
 /** Shape returned by /api/workspace/suggest-files */
 type SuggestItem = {
@@ -52,6 +53,22 @@ type WorkspaceSidebarProps = {
   activeWorkspace?: string | null;
   /** Called after workspace switches or workspace creation so parent can refresh state. */
   onWorkspaceChanged?: () => void;
+  /** Chat sessions for the Chats tab. */
+  chatSessions?: WebSession[];
+  activeChatSessionId?: string | null;
+  activeChatSessionTitle?: string;
+  chatStreamingSessionIds?: Set<string>;
+  chatSubagents?: SidebarSubagentInfo[];
+  chatActiveSubagentKey?: string | null;
+  chatSessionsLoading?: boolean;
+  onSelectChatSession?: (sessionId: string) => void;
+  onNewChatSession?: () => void;
+  onSelectChatSubagent?: (sessionKey: string) => void;
+  onDeleteChatSession?: (sessionId: string) => void;
+  onRenameChatSession?: (sessionId: string, newTitle: string) => void;
+  /** Which tab is active. Controlled from parent if provided. */
+  activeTab?: "files" | "chats";
+  onTabChange?: (tab: "files" | "chats") => void;
 };
 
 function HomeIcon() {
@@ -412,10 +429,31 @@ export function WorkspaceSidebar({
 	onCollapse,
   activeWorkspace,
   onWorkspaceChanged,
+  chatSessions,
+  activeChatSessionId,
+  activeChatSessionTitle,
+  chatStreamingSessionIds,
+  chatSubagents,
+  chatActiveSubagentKey,
+  chatSessionsLoading,
+  onSelectChatSession,
+  onNewChatSession,
+  onSelectChatSubagent,
+  onDeleteChatSession,
+  onRenameChatSession,
+  activeTab: activeTabProp,
+  onTabChange,
 }: WorkspaceSidebarProps) {
 	const isBrowsing = browseDir != null;
 	const width = mobile ? "280px" : (widthProp ?? 260);
 	const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
+	const hasChatProps = chatSessions !== undefined;
+	const [internalTab, setInternalTab] = useState<"files" | "chats">(activeTabProp ?? "files");
+	const currentTab = activeTabProp ?? internalTab;
+	const setTab = useCallback((tab: "files" | "chats") => {
+		setInternalTab(tab);
+		onTabChange?.(tab);
+	}, [onTabChange]);
 
 	const sidebar = (
 		<aside
@@ -555,35 +593,83 @@ export function WorkspaceSidebar({
 				)}
 			</div>
 
-			{/* File search */}
-			{onFileSearchSelect && (
-				<FileSearch onSelect={onFileSearchSelect} />
+			{/* Tab switcher */}
+			{hasChatProps && !isBrowsing && (
+				<div
+					className="flex px-3 pt-2 pb-1 gap-1"
+				>
+					<button
+						type="button"
+						onClick={() => setTab("files")}
+						className="flex-1 text-[11px] font-medium py-1.5 rounded-md transition-colors"
+						style={{
+							color: currentTab === "files" ? "var(--color-text)" : "var(--color-text-muted)",
+							background: currentTab === "files" ? "var(--color-surface-hover)" : "transparent",
+						}}
+					>
+						Files
+					</button>
+					<button
+						type="button"
+						onClick={() => setTab("chats")}
+						className="flex-1 text-[11px] font-medium py-1.5 rounded-md transition-colors"
+						style={{
+							color: currentTab === "chats" ? "var(--color-text)" : "var(--color-text-muted)",
+							background: currentTab === "chats" ? "var(--color-surface-hover)" : "transparent",
+						}}
+					>
+						Chats
+					</button>
+				</div>
 			)}
 
-			{/* Tree */}
-			<div className="flex-1 overflow-y-auto px-1">
-				{loading ? (
-					<div className="flex items-center justify-center py-12">
-						<UnicodeSpinner
-							name="braille"
-							className="text-2xl"
-							style={{ color: "var(--color-text-muted)" }}
-						/>
+			{/* Tab content */}
+			{currentTab === "files" || !hasChatProps ? (
+				<>
+					{onFileSearchSelect && (
+						<FileSearch onSelect={onFileSearchSelect} />
+					)}
+					<div className="flex-1 overflow-y-auto px-1">
+						{loading ? (
+							<div className="flex items-center justify-center py-12">
+								<UnicodeSpinner
+									name="braille"
+									className="text-2xl"
+									style={{ color: "var(--color-text-muted)" }}
+								/>
+							</div>
+						) : (
+							<FileManagerTree
+								tree={tree}
+								activePath={activePath}
+								onSelect={onSelect}
+								onRefresh={onRefresh}
+								parentDir={parentDir}
+								onNavigateUp={onNavigateUp}
+								browseDir={browseDir}
+								workspaceRoot={workspaceRoot}
+								onExternalDrop={onExternalDrop}
+							/>
+						)}
 					</div>
-				) : (
-			<FileManagerTree
-				tree={tree}
-				activePath={activePath}
-				onSelect={onSelect}
-				onRefresh={onRefresh}
-				parentDir={parentDir}
-				onNavigateUp={onNavigateUp}
-				browseDir={browseDir}
-				workspaceRoot={workspaceRoot}
-				onExternalDrop={onExternalDrop}
-			/>
-				)}
-			</div>
+				</>
+			) : (
+				<ChatSessionsSidebar
+					sessions={chatSessions ?? []}
+					activeSessionId={activeChatSessionId ?? null}
+					activeSessionTitle={activeChatSessionTitle}
+					streamingSessionIds={chatStreamingSessionIds}
+					subagents={chatSubagents}
+					activeSubagentKey={chatActiveSubagentKey}
+					loading={chatSessionsLoading}
+					onSelectSession={onSelectChatSession ?? (() => {})}
+					onNewSession={onNewChatSession ?? (() => {})}
+					onSelectSubagent={onSelectChatSubagent}
+					onDeleteSession={onDeleteChatSession}
+					onRenameSession={onRenameChatSession}
+					embedded
+				/>
+			)}
 
 			{/* Footer */}
 			<div

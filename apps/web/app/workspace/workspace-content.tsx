@@ -23,7 +23,6 @@ import { MediaViewer, detectMediaType, type MediaType } from "../components/work
 import { DatabaseViewer, DuckDBMissing } from "../components/workspace/database-viewer";
 import { RichDocumentEditor, isDocxFile, isTxtFile, textToHtml } from "../components/workspace/rich-document-editor";
 import { Breadcrumbs } from "../components/workspace/breadcrumbs";
-import { ChatSessionsSidebar } from "../components/workspace/chat-sessions-sidebar";
 import { EmptyState } from "../components/workspace/empty-state";
 import { ReportViewer } from "../components/charts/report-viewer";
 import { ChatPanel, type ChatPanelHandle, type SubagentSpawnInfo } from "../components/chat-panel";
@@ -499,8 +498,6 @@ function WorkspacePageInner() {
   // Mobile responsive state
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [chatSessionsOpen, setChatSessionsOpen] = useState(false);
-
   // Sidebar collapse state (desktop only).
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
   const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false);
@@ -1810,6 +1807,28 @@ function WorkspacePageInner() {
             onToggleHidden={() => setShowHidden((v) => !v)}
             activeWorkspace={workspaceName}
             onWorkspaceChanged={handleWorkspaceChanged}
+            chatSessions={sessions}
+            activeChatSessionId={activeSessionId}
+            activeChatSessionTitle={activeSessionTitle}
+            chatStreamingSessionIds={streamingSessionIds}
+            chatSubagents={subagents}
+            chatActiveSubagentKey={activeSubagentKey}
+            chatSessionsLoading={sessionsLoading}
+            onSelectChatSession={(sessionId) => {
+              setActiveSessionId(sessionId);
+              setActiveSubagentKey(null);
+              void chatRef.current?.loadSession(sessionId);
+              setSidebarOpen(false);
+            }}
+            onNewChatSession={() => {
+              setActiveSessionId(null);
+              setActiveSubagentKey(null);
+              void chatRef.current?.newSession();
+              setSidebarOpen(false);
+            }}
+            onSelectChatSubagent={handleSelectSubagent}
+            onDeleteChatSession={handleDeleteSession}
+            onRenameChatSession={handleRenameSession}
             mobile
             onClose={() => setSidebarOpen(false)}
           />
@@ -1849,6 +1868,26 @@ function WorkspacePageInner() {
               onCollapse={() => setLeftSidebarCollapsed(true)}
               activeWorkspace={workspaceName}
               onWorkspaceChanged={handleWorkspaceChanged}
+              chatSessions={sessions}
+              activeChatSessionId={activeSessionId}
+              activeChatSessionTitle={activeSessionTitle}
+              chatStreamingSessionIds={streamingSessionIds}
+              chatSubagents={subagents}
+              chatActiveSubagentKey={activeSubagentKey}
+              chatSessionsLoading={sessionsLoading}
+              onSelectChatSession={(sessionId) => {
+                setActiveSessionId(sessionId);
+                setActiveSubagentKey(null);
+                void chatRef.current?.loadSession(sessionId);
+              }}
+              onNewChatSession={() => {
+                setActiveSessionId(null);
+                setActiveSubagentKey(null);
+                void chatRef.current?.newSession();
+              }}
+              onSelectChatSubagent={handleSelectSubagent}
+              onDeleteChatSession={handleDeleteSession}
+              onRenameChatSession={handleRenameSession}
             />
           </div>
           )}
@@ -1909,19 +1948,6 @@ function WorkspacePageInner() {
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="m12 19-7-7 7-7" /><path d="M19 12H5" />
-                  </svg>
-                </button>
-              )}
-              {showMainChat && (
-                <button
-                  type="button"
-                  onClick={() => setChatSessionsOpen(true)}
-                  className="p-2 rounded-lg flex-shrink-0"
-                  style={{ color: "var(--color-text-muted)" }}
-                  title="Chat sessions"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                   </svg>
                 </button>
               )}
@@ -2019,100 +2045,6 @@ function WorkspacePageInner() {
                   onBack={activeSubagent ? handleBackFromSubagent : undefined}
                 />
               </div>
-              {/* Chat sessions sidebar — static on desktop, drawer overlay on mobile */}
-              {isMobile ? (
-                chatSessionsOpen && (
-                  <ChatSessionsSidebar
-                    sessions={sessions}
-                    activeSessionId={activeSessionId}
-                    activeSessionTitle={activeSessionTitle}
-                    streamingSessionIds={streamingSessionIds}
-                    subagents={subagents}
-                    activeSubagentKey={activeSubagentKey}
-                    loading={sessionsLoading}
-                    onSelectSession={(sessionId) => {
-                      setActiveSessionId(sessionId);
-                      setActiveSubagentKey(null);
-                      void chatRef.current?.loadSession(sessionId);
-                    }}
-                    onNewSession={() => {
-                      setActiveSessionId(null);
-                      setActiveSubagentKey(null);
-                      void chatRef.current?.newSession();
-                      setChatSessionsOpen(false);
-                    }}
-                    onSelectSubagent={handleSelectSubagent}
-                    onDeleteSession={handleDeleteSession}
-                    onRenameSession={handleRenameSession}
-                    mobile
-                    onClose={() => setChatSessionsOpen(false)}
-                  />
-                )
-              ) : (
-                <>
-                  {!rightSidebarCollapsed && (
-                  <div
-                    className="flex shrink-0 flex-col relative"
-                    style={{ width: rightSidebarWidth, minWidth: rightSidebarWidth, background: "var(--color-sidebar-bg)" }}
-                  >
-                    <ResizeHandle
-                      mode="right"
-                      containerRef={layoutRef}
-                      min={RIGHT_SIDEBAR_MIN}
-                      max={RIGHT_SIDEBAR_MAX}
-                      onResize={setRightSidebarWidth}
-                    />
-                    {chatSidebarPreview ? (
-                      <ChatSidebarPreview
-                        preview={chatSidebarPreview}
-                        onClose={() => setChatSidebarPreview(null)}
-                      />
-                    ) : (
-                      <ChatSessionsSidebar
-                        sessions={sessions}
-                        activeSessionId={activeSessionId}
-                        activeSessionTitle={activeSessionTitle}
-                        streamingSessionIds={streamingSessionIds}
-                        subagents={subagents}
-                        activeSubagentKey={activeSubagentKey}
-                        loading={sessionsLoading}
-                        onSelectSession={(sessionId) => {
-                          setActiveSessionId(sessionId);
-                          setActiveSubagentKey(null);
-                          void chatRef.current?.loadSession(sessionId);
-                        }}
-                        onNewSession={() => {
-                          setActiveSessionId(null);
-                          setActiveSubagentKey(null);
-                          void chatRef.current?.newSession();
-                        }}
-                        onSelectSubagent={handleSelectSubagent}
-                        onDeleteSession={handleDeleteSession}
-                        onRenameSession={handleRenameSession}
-                        onCollapse={() => setRightSidebarCollapsed(true)}
-                        width={rightSidebarWidth}
-                      />
-                    )}
-                  </div>
-                  )}
-                  {rightSidebarCollapsed && (
-                    <div className="shrink-0 flex flex-col items-center pt-2.5 px-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setRightSidebarCollapsed(false)}
-                        className="p-1.5 rounded-md transition-colors hover:bg-black/5"
-                        style={{ color: "var(--color-text-muted)" }}
-                        title="Show chat sidebar (⌘⇧B)"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <rect width="18" height="18" x="3" y="3" rx="2" />
-                          <path d="M15 3v18" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
             </>
           ) : (
             <>

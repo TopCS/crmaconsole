@@ -9,7 +9,7 @@ import {
 	DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 
-type WebSession = {
+export type WebSession = {
 	id: string;
 	title: string;
 	createdAt: number;
@@ -55,6 +55,8 @@ type ChatSessionsSidebarProps = {
 	onCollapse?: () => void;
 	/** When true, show a loader instead of empty state (e.g. initial sessions fetch). */
 	loading?: boolean;
+	/** When true, renders just the content without the aside wrapper (for embedding in another sidebar). */
+	embedded?: boolean;
 };
 
 /** Format a timestamp into a human-readable relative time string. */
@@ -164,6 +166,7 @@ export function ChatSessionsSidebar({
 	onClose,
 	width: widthProp,
 	loading = false,
+	embedded = false,
 }: ChatSessionsSidebarProps) {
 	const [hoveredId, setHoveredId] = useState<string | null>(null);
 	const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -229,24 +232,13 @@ export function ChatSessionsSidebar({
 	const grouped = groupSessions(filteredSessions);
 
 	const width = mobile ? "280px" : (widthProp ?? 260);
-	const headerHeight = 40; // px — match padding so list content clears the overlay
-	const sidebar = (
-		<aside
-			className={`flex flex-col h-full shrink-0 ${mobile ? "drawer-right" : "border-l"}`}
-			style={{
-				width: typeof width === "number" ? `${width}px` : width,
-				minWidth: typeof width === "number" ? `${width}px` : width,
-				borderColor: "var(--color-border)",
-				background: "var(--color-sidebar-bg)",
-			}}
-		>
-			{/* Scrollable list fills the sidebar; header overlays the top with blur */}
-			<div className="flex-1 min-h-0 relative">
-				{/* Session list — scrolls under the header */}
-				<div
-					className="absolute inset-0 overflow-y-auto"
-					style={{ paddingTop: headerHeight }}
-				>
+	const headerHeight = 40;
+	const content = (
+		<div className="flex-1 min-h-0 relative">
+			<div
+				className="absolute inset-0 overflow-y-auto"
+				style={{ paddingTop: headerHeight }}
+			>
 				{loading && sessions.length === 0 ? (
 					<div className="px-4 py-8 flex flex-col items-center justify-center min-h-[120px]">
 						<UnicodeSpinner
@@ -504,6 +496,23 @@ export function ChatSessionsSidebar({
 				</button>
 			</div>
 		</div>
+	);
+
+	if (embedded) {
+		return content;
+	}
+
+	const sidebar = (
+		<aside
+			className={`flex flex-col h-full shrink-0 ${mobile ? "drawer-right" : "border-l"}`}
+			style={{
+				width: typeof width === "number" ? `${width}px` : width,
+				minWidth: typeof width === "number" ? `${width}px` : width,
+				borderColor: "var(--color-border)",
+				background: "var(--color-sidebar-bg)",
+			}}
+		>
+			{content}
 		</aside>
 	);
 
