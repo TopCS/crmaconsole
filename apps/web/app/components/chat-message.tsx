@@ -777,9 +777,7 @@ export const ChatMessage = memo(function ChatMessage({ message, isStreaming, onS
 		const attachmentInfo = parseAttachments(textContent);
 		const richHtml = userHtmlMap?.get(message.id) ?? userHtmlMap?.get(textContent) ?? userHtmlMap?.get(attachmentInfo?.message ?? "");
 
-		const bubbleContent = richHtml
-			? <div className="chat-user-html-content" dangerouslySetInnerHTML={{ __html: richHtml }} />
-			: <p className="whitespace-pre-wrap break-words">{attachmentInfo?.message ?? textContent}</p>;
+		const bubbleContent = <p className="whitespace-pre-wrap wrap-break-word m-0">{attachmentInfo?.message ?? textContent}</p>;
 
 		if (attachmentInfo) {
 			return (

@@ -224,6 +224,9 @@ body {
 .chat-user-html-content p:empty {
   min-height: 1em;
 }
+.chat-user-html-content p:empty:last-child {
+  display: none;
+}
 .chat-user-html-content strong {
   font-weight: 700;
 }
