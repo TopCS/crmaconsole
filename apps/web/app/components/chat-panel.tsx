@@ -813,6 +813,8 @@ type ChatPanelProps = {
 	subagentLabel?: string;
 	/** Back button handler (subagent mode only). */
 	onBack?: () => void;
+	/** Hide the header action buttons (when they're rendered elsewhere, e.g. tab bar). */
+	hideHeaderActions?: boolean;
 };
 
 export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
@@ -834,6 +836,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 			subagentTask,
 			subagentLabel,
 			onBack,
+			hideHeaderActions,
 		},
 		ref,
 	) {
@@ -2229,6 +2232,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 							</h2>
 						)}
 					</div>
+					{!hideHeaderActions && (
 					<div className="flex items-center gap-1 shrink-0">
 						{currentSessionId && onDeleteSession && (
 							<DropdownMenu>
@@ -2259,13 +2263,12 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 										onSelect={() => onDeleteSession(currentSessionId)}
 									>
 										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
-										Delete
+										Delete this chat
 									</DropdownMenuItem>
 								</DropdownMenuContent>
 							</DropdownMenu>
 						)}
-						{compact && (
-							<button
+						<button
 								type="button"
 								onClick={() => handleNewSession()}
 								className="p-1.5 rounded-lg"
@@ -2288,8 +2291,8 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 									<path d="M5 12h14" />
 								</svg>
 							</button>
-						)}
 					</div>
+					)}
 					</>
 				)}
 				</header>
@@ -2365,6 +2368,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 							{/* Hero greeting */}
 							{greeting && (
 								<motion.h1
+									layout="position"
 									className="text-4xl md:text-5xl font-light tracking-normal font-instrument mb-10 text-center"
 									style={{ color: "var(--color-text)" }}
 									initial="hidden"
@@ -2376,6 +2380,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 											transition: { staggerChildren: 0.12, delayChildren: 0.2 },
 										},
 									}}
+									transition={{ layout: { type: "spring", stiffness: 260, damping: 30 } }}
 								>
 									{greeting.split(" ").map((word, i) => (
 										<motion.span
@@ -2399,10 +2404,11 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 
 							{/* Centered input bar */}
 							<motion.div
+								layout="position"
 								className="w-full max-w-[720px] mx-auto px-4"
 								initial={{ opacity: 0, y: 20 }}
 								animate={{ opacity: 1, y: 0 }}
-								transition={{ duration: 0.8, delay: 0.8, ease: [0.22, 1, 0.36, 1] }}
+								transition={{ duration: 0.8, delay: 0.8, ease: [0.22, 1, 0.36, 1], layout: { type: "spring", stiffness: 260, damping: 30 } }}
 							>
 								<motion.div
 									layout
@@ -2415,10 +2421,11 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 
 							{/* Prompt suggestion pills */}
 							<motion.div
+								layout="position"
 								className="mt-6 flex flex-col gap-2.5 w-full max-w-[720px] mx-auto px-4"
 								initial={{ opacity: 0, y: 10 }}
 								animate={{ opacity: 1, y: 0 }}
-								transition={{ duration: 0.5, delay: 1.0, ease: [0.22, 1, 0.36, 1] }}
+								transition={{ duration: 0.5, delay: 1.0, ease: [0.22, 1, 0.36, 1], layout: { type: "spring", stiffness: 260, damping: 30 } }}
 							>
 								<div className="flex items-center justify-center gap-2 flex-wrap">
 									{visiblePrompts.slice(0, 3).map((template) => {

@@ -14,6 +14,8 @@ type TabBarProps = {
   onCloseAll: () => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
   onTogglePin: (tabId: string) => void;
+  leftContent?: React.ReactNode;
+  rightContent?: React.ReactNode;
 };
 
 type ContextMenuState = {
@@ -32,6 +34,8 @@ export function TabBar({
   onCloseAll,
   onReorder,
   onTogglePin,
+  leftContent,
+  rightContent,
 }: TabBarProps) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -95,14 +99,22 @@ export function TabBar({
   return (
     <>
       <div
-        ref={scrollRef}
-        className="flex items-end overflow-x-auto flex-shrink-0"
+        className="flex items-stretch flex-shrink-0 h-[34px]"
         style={{
           background: "var(--color-surface)",
           borderBottom: "1px solid var(--color-border)",
-          scrollbarWidth: "none",
         }}
       >
+        <div
+          ref={scrollRef}
+          className="flex items-stretch overflow-x-auto flex-1 min-w-0"
+          style={{ scrollbarWidth: "none" }}
+        >
+        {leftContent && (
+          <div className="flex items-center px-1.5 shrink-0">
+            {leftContent}
+          </div>
+        )}
         {tabs.map((tab, index) => {
           const isActive = tab.id === activeTabId;
           const isDragOver = dragOverIndex === index && dragIndex !== index;
@@ -120,15 +132,14 @@ export function TabBar({
               onDragOver={isHome ? undefined : (e) => handleDragOver(e, index)}
               onDrop={isHome ? undefined : (e) => handleDrop(e, index)}
               onDragEnd={isHome ? undefined : handleDragEnd}
-              className={`group flex items-center gap-1.5 h-[34px] text-[12.5px] font-medium cursor-pointer flex-shrink-0 relative transition-colors duration-75 select-none ${isHome ? "px-2.5" : "pl-3 pr-1.5"}`}
+              className={`group flex items-center gap-1.5 text-[12.5px] font-medium cursor-pointer flex-shrink-0 relative transition-colors duration-75 select-none ${isHome ? "px-2.5" : "pl-3 pr-1.5"} ${isActive ? "mb-[-1px] rounded-t-lg" : ""}`}
               style={{
                 color: isActive ? "var(--color-text)" : "var(--color-text-muted)",
-                background: isActive ? "var(--color-bg)" : "transparent",
-                borderBottom: isActive ? "2px solid var(--color-accent)" : "2px solid transparent",
-                borderLeft: isDragOver && !isHome ? "2px solid var(--color-accent)" : "2px solid transparent",
+                background: isActive ? "var(--color-main-bg)" : "transparent",
+                borderBottom: isActive ? "1px solid var(--color-main-bg)" : "none",
+                borderLeft: isDragOver && !isHome ? "2px solid var(--color-accent)" : undefined,
                 opacity: dragIndex === index ? 0.5 : 1,
                 maxWidth: isHome ? undefined : 200,
-                borderRight: isHome ? "1px solid var(--color-border)" : undefined,
               }}
               title={isHome ? "Home (New Chat)" : undefined}
             >
@@ -162,24 +173,28 @@ export function TabBar({
             </button>
           );
         })}
+        </div>
+        {rightContent && (
+          <div className="relative flex items-center gap-0.5 px-2 shrink-0 h-[34px]">
+            {rightContent}
+          </div>
+        )}
       </div>
 
       {/* Context menu */}
       {contextMenu && contextTab && (
         <div
-          className="fixed z-[9999] min-w-[180px] rounded-lg border py-1 shadow-lg"
+          className="fixed z-[9999] min-w-[180px] rounded-2xl p-1 bg-neutral-100/[0.67] dark:bg-neutral-900/[0.67] border border-white dark:border-white/10 backdrop-blur-md shadow-[0_0_25px_0_rgba(0,0,0,0.16)]"
           style={{
             left: contextMenu.x,
             top: contextMenu.y,
-            background: "var(--color-surface)",
-            borderColor: "var(--color-border)",
           }}
         >
           <ContextMenuItem
             label={contextTab.pinned ? "Unpin Tab" : "Pin Tab"}
             onClick={() => { onTogglePin(contextMenu.tabId); setContextMenu(null); }}
           />
-          <div className="h-px my-1" style={{ background: "var(--color-border)" }} />
+          <div className="h-px my-0.5 mx-1 bg-neutral-400/15" />
           <ContextMenuItem
             label="Close"
             shortcut="⌘W"
@@ -220,14 +235,8 @@ function ContextMenuItem({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="w-full flex items-center justify-between px-3 py-1.5 text-[12.5px] text-left transition-colors disabled:opacity-40 cursor-pointer disabled:cursor-default"
+      className="w-full flex items-center justify-between px-2.5 py-1.5 text-[12.5px] text-left rounded-xl transition-all disabled:opacity-40 hover:bg-neutral-400/15"
       style={{ color: "var(--color-text)" }}
-      onMouseEnter={(e) => {
-        if (!disabled) (e.currentTarget as HTMLElement).style.background = "var(--color-surface-hover)";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.background = "transparent";
-      }}
     >
       <span>{label}</span>
       {shortcut && (

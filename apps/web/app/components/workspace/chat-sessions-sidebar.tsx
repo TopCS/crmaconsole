@@ -452,11 +452,11 @@ export function ChatSessionsSidebar({
 			</div>
 			{/* Header overlay: backdrop blur + 80% bg; list scrolls under it */}
 			<div
-				className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between border-b px-4 py-2 backdrop-blur-md"
+				className={`absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-2 backdrop-blur-md ${embedded ? "" : "border-b"}`}
 				style={{
 					height: headerHeight,
-					borderColor: "var(--color-border)",
-					background: "color-mix(in srgb, var(--color-sidebar-bg) 80%, transparent)",
+					borderColor: embedded ? undefined : "var(--color-border)",
+					background: embedded ? "transparent" : "color-mix(in srgb, var(--color-sidebar-bg) 80%, transparent)",
 				}}
 			>
 				<div className="min-w-0 flex-1 flex items-center gap-1.5">
