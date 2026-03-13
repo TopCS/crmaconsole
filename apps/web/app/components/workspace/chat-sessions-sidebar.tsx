@@ -232,7 +232,7 @@ export function ChatSessionsSidebar({
 	const grouped = groupSessions(filteredSessions);
 
 	const width = mobile ? "280px" : (widthProp ?? 260);
-	const headerHeight = 40;
+	const headerHeight = embedded ? 36 : 40;
 	const content = (
 		<div className="flex-1 min-h-0 relative">
 			<div
@@ -452,11 +452,12 @@ export function ChatSessionsSidebar({
 			</div>
 			{/* Header overlay: backdrop blur + 80% bg; list scrolls under it */}
 			<div
-				className={`absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-2 backdrop-blur-md ${embedded ? "border-b border-neutral-400/15 bg-neutral-100/50 dark:bg-neutral-900/50" : "border-b"}`}
+				className={`absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 backdrop-blur-md ${embedded ? "" : "border-b"}`}
 				style={{
 					height: headerHeight,
 					borderColor: embedded ? undefined : "var(--color-border)",
-					background: embedded ? undefined : "color-mix(in srgb, var(--color-sidebar-bg) 80%, transparent)",
+					background: "var(--color-sidebar-bg)",
+					boxShadow: embedded ? "inset 0 -1px 0 0 var(--color-border)" : undefined,
 				}}
 			>
 				<div className="min-w-0 flex-1 flex items-center gap-1.5">

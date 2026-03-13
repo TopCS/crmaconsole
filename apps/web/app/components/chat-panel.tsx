@@ -1686,7 +1686,10 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 						`/api/web-sessions/${sessionId}`,
 					);
 					if (!response.ok) {
-						throw new Error("Failed to load session");
+						console.warn(`Session ${sessionId} not found (${response.status}), starting fresh.`);
+						setMessages([]);
+						setLoadingSession(false);
+						return;
 					}
 
 					const data = await response.json();
@@ -2062,7 +2065,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 						)}
 					</div>
 					<div className="flex items-center gap-1.5">
-						{isStreaming && (
+						{isStreaming ? (
 							<button
 								type="button"
 								onClick={() => handleStop()}
@@ -2073,25 +2076,6 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 								<svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor">
 									<rect width="10" height="10" rx="1.5" />
 								</svg>
-							</button>
-						)}
-						{isStreaming ? (
-							<button
-								type="button"
-								onClick={() => editorRef.current?.submit()}
-								disabled={(editorEmpty && attachedFiles.length === 0) || loadingSession}
-								className="h-7 px-3 rounded-full flex items-center gap-1.5 text-[12px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-								style={{
-									background: !editorEmpty || attachedFiles.length > 0 ? "var(--color-accent)" : "var(--color-surface-hover)",
-									color: !editorEmpty || attachedFiles.length > 0 ? "white" : "var(--color-text-muted)",
-								}}
-								title="Add to queue"
-							>
-								<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-									<polyline points="9 10 4 15 9 20" />
-									<path d="M20 4v7a4 4 0 0 1-4 4H4" />
-								</svg>
-								Queue
 							</button>
 						) : (
 							<button
@@ -2180,9 +2164,6 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 				{/* Header — sticky glass bar */}
 				<header
 					className={`${compact ? "px-3 py-2" : "px-3 py-2 md:px-6 md:py-3"} flex items-center ${isSubagentMode ? "gap-3" : "justify-between"} z-20`}
-					style={{
-						background: "var(--color-bg-glass)",
-					}}
 				>
 				{isSubagentMode ? (
 					<>

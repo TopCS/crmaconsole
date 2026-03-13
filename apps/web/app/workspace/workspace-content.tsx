@@ -222,8 +222,11 @@ const LEFT_SIDEBAR_MIN = 200;
 const LEFT_SIDEBAR_MAX = 480;
 const RIGHT_SIDEBAR_MIN = 260;
 const RIGHT_SIDEBAR_MAX = 900;
+const CHAT_SIDEBAR_MIN = 220;
+const CHAT_SIDEBAR_MAX = 480;
 const STORAGE_LEFT = "dench-workspace-left-sidebar-width";
 const STORAGE_RIGHT = "dench-workspace-right-sidebar-width";
+const STORAGE_CHAT_SIDEBAR = "dench-workspace-chat-sidebar-width";
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -509,19 +512,7 @@ function WorkspacePageInner() {
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
   const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<"files" | "chats">("files");
-  const [chatPopoverOpen, setChatPopoverOpen] = useState(false);
-  const chatPopoverRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!chatPopoverOpen) return;
-    function handleClickOutside(e: MouseEvent) {
-      if (chatPopoverRef.current && !chatPopoverRef.current.contains(e.target as Node)) {
-        setChatPopoverOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [chatPopoverOpen]);
+  const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
 
   // Terminal drawer state
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -565,6 +556,7 @@ function WorkspacePageInner() {
   // Use static defaults so server and client match on first render (avoid hydration mismatch).
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(260);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(320);
+  const [chatSidebarWidth, setChatSidebarWidth] = useState(280);
   useEffect(() => {
     const left = window.localStorage.getItem(STORAGE_LEFT);
     const nLeft = left ? parseInt(left, 10) : NaN;
@@ -576,6 +568,11 @@ function WorkspacePageInner() {
     if (Number.isFinite(nRight)) {
       setRightSidebarWidth(clamp(nRight, RIGHT_SIDEBAR_MIN, RIGHT_SIDEBAR_MAX));
     }
+    const chat = window.localStorage.getItem(STORAGE_CHAT_SIDEBAR);
+    const nChat = chat ? parseInt(chat, 10) : NaN;
+    if (Number.isFinite(nChat)) {
+      setChatSidebarWidth(clamp(nChat, CHAT_SIDEBAR_MIN, CHAT_SIDEBAR_MAX));
+    }
   }, []);
   useEffect(() => {
     window.localStorage.setItem(STORAGE_LEFT, String(leftSidebarWidth));
@@ -583,6 +580,9 @@ function WorkspacePageInner() {
   useEffect(() => {
     window.localStorage.setItem(STORAGE_RIGHT, String(rightSidebarWidth));
   }, [rightSidebarWidth]);
+  useEffect(() => {
+    window.localStorage.setItem(STORAGE_CHAT_SIDEBAR, String(chatSidebarWidth));
+  }, [chatSidebarWidth]);
 
   // Keyboard shortcuts: Cmd+B = toggle left sidebar, Cmd+Shift+B = toggle right sidebar, Cmd+J = toggle terminal
   useEffect(() => {
@@ -1831,6 +1831,9 @@ function WorkspacePageInner() {
 
   // Whether to show the main ChatPanel (no file/content selected)
   const showMainChat = !activePath || content.kind === "none";
+  const showDesktopMainChatSidebar = !isMobile && showMainChat && chatSidebarOpen;
+  const showDesktopFileChatSidebar =
+    !isMobile && !showMainChat && fileContext && showChatSidebar && !rightSidebarCollapsed;
 
   return (
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
@@ -1956,338 +1959,327 @@ function WorkspacePageInner() {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden" style={{ background: "var(--color-surface)" }}>
-        {/* Mobile top bar — always visible on mobile */}
-        {isMobile && (
-          <div
-            className="px-3 py-2 border-b flex-shrink-0 flex items-center justify-between gap-2"
-            style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
-          >
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(true)}
-              className="p-2 rounded-lg flex-shrink-0"
-              style={{ color: "var(--color-text-muted)" }}
-              title="Open sidebar"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="4" x2="20" y1="12" y2="12" /><line x1="4" x2="20" y1="6" y2="6" /><line x1="4" x2="20" y1="18" y2="18" />
-              </svg>
-            </button>
-            <div className="flex-1 min-w-0 text-sm font-medium truncate" style={{ color: "var(--color-text)" }}>
-              {activePath ? activePath.split("/").pop() : (context?.organization?.name || "Workspace")}
-            </div>
-            <div className="flex items-center gap-1">
-              {activePath && content.kind !== "none" && (
+        <div className="flex flex-1 min-h-0">
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            {/* Mobile top bar — always visible on mobile */}
+            {isMobile && (
+              <div
+                className="px-3 py-2 border-b flex-shrink-0 flex items-center justify-between gap-2"
+                style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+              >
                 <button
                   type="button"
-                  onClick={() => {
-                    setActivePath(null);
-                    setContent({ kind: "none" });
-                  }}
+                  onClick={() => setSidebarOpen(true)}
                   className="p-2 rounded-lg flex-shrink-0"
                   style={{ color: "var(--color-text-muted)" }}
-                  title="Back to chat"
+                  title="Open sidebar"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m12 19-7-7 7-7" /><path d="M19 12H5" />
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="4" x2="20" y1="12" y2="12" /><line x1="4" x2="20" y1="6" y2="6" /><line x1="4" x2="20" y1="18" y2="18" />
                   </svg>
                 </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Tab bar (desktop only, always visible -- home tab is always present) */}
-        {!isMobile && (
-          <TabBar
-            tabs={tabState.tabs}
-            activeTabId={tabState.activeTabId}
-            onActivate={handleTabActivate}
-            leftContent={leftSidebarCollapsed ? (
-              <button
-                type="button"
-                onClick={() => setLeftSidebarCollapsed(false)}
-                className="p-1.5 rounded-md transition-colors hover:bg-black/5 cursor-pointer"
-                style={{ color: "var(--color-text-muted)" }}
-                title="Show sidebar (⌘B)"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect width="18" height="18" x="3" y="3" rx="2" />
-                  <path d="M9 3v18" />
-                </svg>
-              </button>
-            ) : undefined}
-            onClose={handleTabClose}
-            onCloseOthers={handleTabCloseOthers}
-            onCloseToRight={handleTabCloseToRight}
-            onCloseAll={handleTabCloseAll}
-            onReorder={handleTabReorder}
-            onTogglePin={handleTabTogglePin}
-            onNewTab={() => {
-              const newTab: Tab = {
-                id: generateTabId(),
-                type: "chat",
-                title: "New Chat",
-              };
-              setActivePath(null);
-              setContent({ kind: "none" });
-              setActiveSessionId(null);
-              setActiveSubagentKey(null);
-              setTabState((prev) => openTab(prev, newTab));
-              requestAnimationFrame(() => {
-                void chatRef.current?.newSession();
-              });
-            }}
-            rightContent={showMainChat ? (
-              <>
-                <div className="relative" ref={chatPopoverRef}>
-                  <button
-                    type="button"
-                    onClick={() => setChatPopoverOpen((v) => !v)}
-                    className="p-1.5 rounded-lg cursor-pointer"
-                    style={{ color: chatPopoverOpen ? "var(--color-accent)" : "var(--color-text-muted)" }}
-                    title="Chat history"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                    </svg>
-                  </button>
-                  {chatPopoverOpen && (
-                    <div
-                      className="absolute right-0 top-full mt-1.5 w-72 h-96 rounded-2xl overflow-hidden z-[9999] bg-neutral-100/[0.67] dark:bg-neutral-900/[0.67] border border-white dark:border-white/10 backdrop-blur-md shadow-[0_0_25px_0_rgba(0,0,0,0.16)] flex flex-col"
+                <div className="flex-1 min-w-0 text-sm font-medium truncate" style={{ color: "var(--color-text)" }}>
+                  {activePath ? activePath.split("/").pop() : (context?.organization?.name || "Workspace")}
+                </div>
+                <div className="flex items-center gap-1">
+                  {activePath && content.kind !== "none" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActivePath(null);
+                        setContent({ kind: "none" });
+                      }}
+                      className="p-2 rounded-lg flex-shrink-0"
+                      style={{ color: "var(--color-text-muted)" }}
+                      title="Back to chat"
                     >
-                      <ChatSessionsSidebar
-                        sessions={sessions}
-                        activeSessionId={activeSessionId}
-                        activeSessionTitle={activeSessionTitle}
-                        streamingSessionIds={streamingSessionIds}
-                        subagents={subagents}
-                        activeSubagentKey={activeSubagentKey}
-                        loading={sessionsLoading}
-                        onSelectSession={(sessionId) => {
-                          setActiveSessionId(sessionId);
-                          setActiveSubagentKey(null);
-                          void chatRef.current?.loadSession(sessionId);
-                          setChatPopoverOpen(false);
-                        }}
-                        onNewSession={() => {
-                          setActiveSessionId(null);
-                          setActiveSubagentKey(null);
-                          void chatRef.current?.newSession();
-                          setChatPopoverOpen(false);
-                        }}
-                        onSelectSubagent={(key) => {
-                          handleSelectSubagent(key);
-                          setChatPopoverOpen(false);
-                        }}
-                        onDeleteSession={handleDeleteSession}
-                        onRenameSession={handleRenameSession}
-                        embedded
-                      />
-                    </div>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="m12 19-7-7 7-7" /><path d="M19 12H5" />
+                      </svg>
+                    </button>
                   )}
                 </div>
-                {activeSessionId && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      className="p-1.5 rounded-lg cursor-pointer"
-                      style={{ color: "var(--color-text-muted)" }}
-                      title="More options"
-                      aria-label="More options"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="1" /><circle cx="5" cy="12" r="1" /><circle cx="19" cy="12" r="1" />
-                      </svg>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" side="bottom">
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onSelect={() => handleDeleteSession(activeSessionId)}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
-                        Delete this chat
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveSessionId(null);
-                    setActiveSubagentKey(null);
-                    void chatRef.current?.newSession();
-                  }}
-                  className="p-1.5 rounded-lg cursor-pointer"
-                  style={{ color: "var(--color-text-muted)" }}
-                  title="New chat"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 5v14" /><path d="M5 12h14" />
-                  </svg>
-                </button>
-              </>
-            ) : undefined}
-          />
-        )}
+              </div>
+            )}
 
-        {/* When a file is selected: show top bar with breadcrumbs (desktop only, mobile has unified top bar) */}
-        {!isMobile && activePath && content.kind !== "none" && (
-          <div
-            className="px-6 border-b flex-shrink-0 flex items-center justify-between"
-            style={{ borderColor: "var(--color-border)" }}
-          >
-            <Breadcrumbs
-              path={activePath}
-              onNavigate={handleBreadcrumbNavigate}
-            />
-            <div className="flex items-center gap-1">
-              {/* Back to chat button */}
-              <button
-                type="button"
-                onClick={() => {
+            {/* Tab bar (desktop only, always visible -- home tab is always present) */}
+            {!isMobile && (
+              <TabBar
+                tabs={tabState.tabs}
+                activeTabId={tabState.activeTabId}
+                onActivate={handleTabActivate}
+                leftContent={leftSidebarCollapsed ? (
+                  <button
+                    type="button"
+                    onClick={() => setLeftSidebarCollapsed(false)}
+                    className="p-1.5 rounded-md transition-colors hover:bg-black/5 cursor-pointer"
+                    style={{ color: "var(--color-text-muted)" }}
+                    title="Show sidebar (⌘B)"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect width="18" height="18" x="3" y="3" rx="2" />
+                      <path d="M9 3v18" />
+                    </svg>
+                  </button>
+                ) : undefined}
+                onClose={handleTabClose}
+                onCloseOthers={handleTabCloseOthers}
+                onCloseToRight={handleTabCloseToRight}
+                onCloseAll={handleTabCloseAll}
+                onReorder={handleTabReorder}
+                onTogglePin={handleTabTogglePin}
+                onNewTab={() => {
+                  const newTab: Tab = {
+                    id: generateTabId(),
+                    type: "chat",
+                    title: "New Chat",
+                  };
                   setActivePath(null);
                   setContent({ kind: "none" });
+                  setActiveSessionId(null);
+                  setActiveSubagentKey(null);
+                  setTabState((prev) => openTab(prev, newTab));
+                  requestAnimationFrame(() => {
+                    void chatRef.current?.newSession();
+                  });
                 }}
-                className="p-1.5 rounded-lg flex-shrink-0"
-                style={{ color: "var(--color-text-muted)" }}
-                title="Back to chat"
+                rightContent={showMainChat ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setChatSidebarOpen((v) => !v)}
+                      className="p-1.5 rounded-lg cursor-pointer"
+                      style={{
+                        color: chatSidebarOpen ? "var(--color-text)" : "var(--color-text-muted)",
+                        background: chatSidebarOpen ? "var(--color-surface-hover)" : "transparent",
+                      }}
+                      title="Chat history"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                      </svg>
+                    </button>
+                    {activeSessionId && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          className="p-1.5 rounded-lg cursor-pointer"
+                          style={{ color: "var(--color-text-muted)" }}
+                          title="More options"
+                          aria-label="More options"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="1" /><circle cx="5" cy="12" r="1" /><circle cx="19" cy="12" r="1" />
+                          </svg>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" side="bottom">
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() => handleDeleteSession(activeSessionId)}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
+                            Delete this chat
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </>
+                ) : undefined}
+              />
+            )}
+
+            {/* When a file is selected: show top bar with breadcrumbs (desktop only, mobile has unified top bar) */}
+            {!isMobile && activePath && content.kind !== "none" && (
+              <div
+                className="px-6 border-b flex-shrink-0 flex items-center justify-between"
+                style={{ borderColor: "var(--color-border)" }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m12 19-7-7 7-7" /><path d="M19 12H5" />
-                </svg>
-              </button>
-              {/* Chat sidebar toggle (hidden for reserved/virtual paths) */}
-              {fileContext && (
-                <button
-                  type="button"
-                  onClick={() => setShowChatSidebar((v) => !v)}
-                  className="p-1.5 rounded-lg flex-shrink-0"
-                  style={{
-                    color: showChatSidebar ? "var(--color-accent)" : "var(--color-text-muted)",
-                    background: showChatSidebar ? "var(--color-accent-light)" : "transparent",
-                  }}
-                  title={showChatSidebar ? "Hide chat" : fileContext.isDirectory ? "Chat about this folder" : "Chat about this file"}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                  </svg>
-                </button>
+                <Breadcrumbs
+                  path={activePath}
+                  onNavigate={handleBreadcrumbNavigate}
+                />
+                <div className="flex items-center gap-1">
+                  {/* Back to chat button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivePath(null);
+                      setContent({ kind: "none" });
+                    }}
+                    className="p-1.5 rounded-lg flex-shrink-0"
+                    style={{ color: "var(--color-text-muted)" }}
+                    title="Back to chat"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m12 19-7-7 7-7" /><path d="M19 12H5" />
+                    </svg>
+                  </button>
+                  {/* Chat sidebar toggle (hidden for reserved/virtual paths) */}
+                  {fileContext && (
+                    <button
+                      type="button"
+                      onClick={() => setShowChatSidebar((v) => !v)}
+                      className="p-1.5 rounded-lg flex-shrink-0"
+                      style={{
+                        color: showChatSidebar ? "var(--color-text)" : "var(--color-text-muted)",
+                        background: showChatSidebar ? "var(--color-surface-hover)" : "transparent",
+                      }}
+                      title={showChatSidebar ? "Hide chat" : fileContext.isDirectory ? "Chat about this folder" : "Chat about this file"}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Content area */}
+            <div className="flex-1 flex min-h-0">
+              {showMainChat ? (
+                <div className="flex-1 flex flex-col min-w-0" style={{ background: "var(--color-main-bg)" }}>
+                  <ChatPanel
+                    key={activeSubagent?.childSessionKey ?? "main"}
+                    ref={activeSubagent ? undefined : chatRef}
+                    sessionTitle={activeSessionTitle}
+                    initialSessionId={activeSessionId ?? undefined}
+                    onActiveSessionChange={activeSubagent ? undefined : (id) => {
+                      setActiveSessionId(id);
+                      setActiveSubagentKey(null);
+                      if (id) {
+                        setTabState((prev) => {
+                          const active = prev.tabs.find((t) => t.id === prev.activeTabId);
+                          if (active?.type === "chat" && !active.sessionId) {
+                            return {
+                              ...prev,
+                              tabs: prev.tabs.map((t) =>
+                                t.id === active.id ? { ...t, sessionId: id } : t,
+                              ),
+                            };
+                          }
+                          return prev;
+                        });
+                      }
+                    }}
+                    onSessionsChange={activeSubagent ? undefined : refreshSessions}
+                    onSubagentSpawned={activeSubagent ? undefined : handleSubagentSpawned}
+                    onSubagentClick={handleSubagentClickFromChat}
+                    onFilePathClick={handleFilePathClickFromChat}
+                    onDeleteSession={activeSubagent ? undefined : handleDeleteSession}
+                    onRenameSession={activeSubagent ? undefined : handleRenameSession}
+                    compact={isMobile}
+                    sessionKey={activeSubagent?.childSessionKey}
+                    subagentTask={activeSubagent?.task}
+                    subagentLabel={activeSubagent?.label}
+                    onBack={activeSubagent ? handleBackFromSubagent : undefined}
+                    hideHeaderActions={!isMobile}
+                  />
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto">
+                  <ContentRenderer
+                    content={content}
+                    workspaceExists={workspaceExists}
+                    expectedPath={workspaceRoot}
+                    tree={tree}
+                    activePath={activePath}
+                    browseDir={browseDir}
+                    treeLoading={treeLoading}
+                    members={context?.members}
+                    onNodeSelect={handleNodeSelect}
+                    onNavigateToObject={handleNavigateToObject}
+                    onRefreshObject={refreshCurrentObject}
+                    onRefreshTree={refreshTree}
+                    onNavigate={handleEditorNavigate}
+                    onOpenEntry={handleOpenEntry}
+                    searchFn={searchIndex}
+                    onSelectCronJob={handleSelectCronJob}
+                    onBackToCronDashboard={handleBackToCronDashboard}
+                    cronView={cronView}
+                    onCronViewChange={setCronView}
+                    cronCalMode={cronCalMode}
+                    onCronCalModeChange={setCronCalMode}
+                    cronDate={cronDate}
+                    onCronDateChange={setCronDate}
+                    cronRunFilter={cronRunFilter}
+                    onCronRunFilterChange={setCronRunFilter}
+                    cronRun={cronRun}
+                    onCronRunChange={setCronRun}
+                    onSendCommand={handleCronSendCommand}
+                  />
+                </div>
               )}
             </div>
           </div>
-        )}
 
-        {/* Content area */}
-        <div className="flex-1 flex min-h-0">
-          {showMainChat ? (
-            /* Main chat view (default when no file is selected) */
-            <>
-              <div className="flex-1 flex flex-col min-w-0" style={{ background: "var(--color-main-bg)" }}>
-                <ChatPanel
-                  key={activeSubagent?.childSessionKey ?? "main"}
-                  ref={activeSubagent ? undefined : chatRef}
-                  sessionTitle={activeSessionTitle}
-                  initialSessionId={activeSessionId ?? undefined}
-                  onActiveSessionChange={activeSubagent ? undefined : (id) => {
-                    setActiveSessionId(id);
-                    setActiveSubagentKey(null);
-                    if (id) {
-                      setTabState((prev) => {
-                        const active = prev.tabs.find((t) => t.id === prev.activeTabId);
-                        if (active?.type === "chat" && !active.sessionId) {
-                          return {
-                            ...prev,
-                            tabs: prev.tabs.map((t) =>
-                              t.id === active.id ? { ...t, sessionId: id } : t,
-                            ),
-                          };
-                        }
-                        return prev;
-                      });
-                    }
-                  }}
-                  onSessionsChange={activeSubagent ? undefined : refreshSessions}
-                  onSubagentSpawned={activeSubagent ? undefined : handleSubagentSpawned}
-                  onSubagentClick={handleSubagentClickFromChat}
-                  onFilePathClick={handleFilePathClickFromChat}
-                  onDeleteSession={activeSubagent ? undefined : handleDeleteSession}
-                  onRenameSession={activeSubagent ? undefined : handleRenameSession}
-                  compact={isMobile}
-                  sessionKey={activeSubagent?.childSessionKey}
-                  subagentTask={activeSubagent?.task}
-                  subagentLabel={activeSubagent?.label}
-                  onBack={activeSubagent ? handleBackFromSubagent : undefined}
-                  hideHeaderActions={!isMobile}
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              {/* File content area */}
-              <div className="flex-1 overflow-y-auto">
-                <ContentRenderer
-                  content={content}
-                  workspaceExists={workspaceExists}
-                  expectedPath={workspaceRoot}
-                  tree={tree}
-                  activePath={activePath}
-                  browseDir={browseDir}
-                  treeLoading={treeLoading}
-                  members={context?.members}
-                  onNodeSelect={handleNodeSelect}
-                  onNavigateToObject={handleNavigateToObject}
-                  onRefreshObject={refreshCurrentObject}
-                  onRefreshTree={refreshTree}
-                  onNavigate={handleEditorNavigate}
-                  onOpenEntry={handleOpenEntry}
-                  searchFn={searchIndex}
-                  onSelectCronJob={handleSelectCronJob}
-                  onBackToCronDashboard={handleBackToCronDashboard}
-                  cronView={cronView}
-                  onCronViewChange={setCronView}
-                  cronCalMode={cronCalMode}
-                  onCronCalModeChange={setCronCalMode}
-                  cronDate={cronDate}
-                  onCronDateChange={setCronDate}
-                  cronRunFilter={cronRunFilter}
-                  onCronRunFilterChange={setCronRunFilter}
-                  cronRun={cronRun}
-                  onCronRunChange={setCronRun}
-                  onSendCommand={handleCronSendCommand}
-                />
-              </div>
+          {showDesktopMainChatSidebar && (
+            <aside
+              className="flex-shrink-0 min-h-0 border-l flex flex-col relative"
+              style={{
+                width: chatSidebarWidth,
+                borderColor: "var(--color-border)",
+                background: "var(--color-bg)",
+              }}
+            >
+              <ResizeHandle
+                mode="right"
+                containerRef={layoutRef}
+                min={CHAT_SIDEBAR_MIN}
+                max={CHAT_SIDEBAR_MAX}
+                onResize={setChatSidebarWidth}
+              />
+              <ChatSessionsSidebar
+                sessions={sessions}
+                activeSessionId={activeSessionId}
+                activeSessionTitle={activeSessionTitle}
+                streamingSessionIds={streamingSessionIds}
+                subagents={subagents}
+                activeSubagentKey={activeSubagentKey}
+                loading={sessionsLoading}
+                onSelectSession={(sessionId) => {
+                  setActiveSessionId(sessionId);
+                  setActiveSubagentKey(null);
+                  void chatRef.current?.loadSession(sessionId);
+                }}
+                onNewSession={() => {
+                  setActiveSessionId(null);
+                  setActiveSubagentKey(null);
+                  void chatRef.current?.newSession();
+                }}
+                onSelectSubagent={handleSelectSubagent}
+                onDeleteSession={handleDeleteSession}
+                onRenameSession={handleRenameSession}
+                embedded
+              />
+            </aside>
+          )}
 
-              {/* Chat sidebar (file/folder-scoped) — hidden for reserved paths, hidden on mobile */}
-              {!isMobile && fileContext && showChatSidebar && !rightSidebarCollapsed && (
-                <>
-                  <aside
-                    className="flex-shrink-0 border-l flex flex-col relative"
-                    style={{
-                      width: rightSidebarWidth,
-                      borderColor: "var(--color-border)",
-                      background: "var(--color-bg)",
-                    }}
-                  >
-                    <ResizeHandle
-                      mode="right"
-                      containerRef={layoutRef}
-                      min={RIGHT_SIDEBAR_MIN}
-                      max={RIGHT_SIDEBAR_MAX}
-                      onResize={setRightSidebarWidth}
-                    />
-                    <ChatPanel
-                      ref={compactChatRef}
-                      compact
-                      fileContext={fileContext}
-                      initialSessionId={fileChatSessionId ?? undefined}
-                      onFileChanged={handleFileChanged}
-                      onFilePathClick={handleFilePathClickFromChat}
-                      onActiveSessionChange={setFileChatSessionId}
-                    />
-                  </aside>
-                </>
-              )}
-            </>
+          {showDesktopFileChatSidebar && (
+            <aside
+              className="flex-shrink-0 min-h-0 border-l flex flex-col relative"
+              style={{
+                width: rightSidebarWidth,
+                borderColor: "var(--color-border)",
+                background: "var(--color-bg)",
+              }}
+            >
+              <ResizeHandle
+                mode="right"
+                containerRef={layoutRef}
+                min={RIGHT_SIDEBAR_MIN}
+                max={RIGHT_SIDEBAR_MAX}
+                onResize={setRightSidebarWidth}
+              />
+              <ChatPanel
+                ref={compactChatRef}
+                compact
+                fileContext={fileContext}
+                initialSessionId={fileChatSessionId ?? undefined}
+                onFileChanged={handleFileChanged}
+                onFilePathClick={handleFilePathClickFromChat}
+                onActiveSessionChange={setFileChatSessionId}
+              />
+            </aside>
           )}
         </div>
 
