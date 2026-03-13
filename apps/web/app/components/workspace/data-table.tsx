@@ -32,6 +32,14 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { rankItem } from "@tanstack/match-sorter-utils";
+import {
+	DropdownMenu,
+	DropdownMenuTrigger,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuCheckboxItem,
+} from "../ui/dropdown-menu";
 
 /* ─── Types ─── */
 
@@ -197,11 +205,9 @@ export function DataTable<TData, TValue>({
 		setColumnVisibility(initialColumnVisibility ?? {});
 	}, [initialColumnVisibility]);
 	const [internalRowSelection, setInternalRowSelection] = useState<Record<string, boolean>>({});
-	const [showColumnsMenu, setShowColumnsMenu] = useState(false);
 	const [stickyFirstColumn, setStickyFirstColumn] = useState(stickyFirstProp);
 	const [isScrolled, setIsScrolled] = useState(false);
 	const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: defaultPageSize });
-	const columnsMenuRef = useRef<HTMLDivElement>(null);
 	const scrollContainerRef = useRef<HTMLDivElement>(null);
 
 	const rowSelectionState = externalRowSelection !== undefined ? externalRowSelection : internalRowSelection;
@@ -261,19 +267,6 @@ export function DataTable<TData, TValue>({
 	const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
 		setIsScrolled(e.currentTarget.scrollLeft > 0);
 	}, []);
-
-	// Close columns menu on click outside
-	useEffect(() => {
-		function handleClick(e: MouseEvent) {
-			if (columnsMenuRef.current && !columnsMenuRef.current.contains(e.target as Node)) {
-				setShowColumnsMenu(false);
-			}
-		}
-		if (showColumnsMenu) {
-			document.addEventListener("mousedown", handleClick);
-			return () => document.removeEventListener("mousedown", handleClick);
-		}
-	}, [showColumnsMenu]);
 
 	// Build selection column
 	const selectionColumn: ColumnDef<TData> | null = enableRowSelection
@@ -394,13 +387,13 @@ export function DataTable<TData, TValue>({
 		<div className="flex flex-col h-full">
 			{/* Toolbar */}
 			<div
-				className="flex items-center gap-2 px-4 py-2.5 flex-shrink-0 flex-wrap"
+				className="flex items-center gap-2 px-3 py-1.5 flex-shrink-0 flex-wrap"
 				style={{ borderBottom: "1px solid var(--color-border)" }}
 			>
 				{title && (
-					<div className="flex items-center gap-2 mr-2">
+					<div className="flex items-center gap-2 mr-1">
 						{titleIcon}
-						<span className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>
+						<span className="text-xs font-semibold" style={{ color: "var(--color-text)" }}>
 							{title}
 						</span>
 					</div>
@@ -408,8 +401,8 @@ export function DataTable<TData, TValue>({
 
 				{/* Search */}
 				{enableGlobalFilter && (
-					<div className="relative flex-1 min-w-[180px] max-w-[320px]">
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--color-text-muted)" }}>
+					<div className="relative flex-1 min-w-[140px] max-w-[260px]">
+						<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--color-text-muted)", opacity: 0.5 }}>
 							<circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
 						</svg>
 						<input
@@ -420,9 +413,9 @@ export function DataTable<TData, TValue>({
 								onServerSearch?.(e.target.value);
 							}}
 							placeholder={searchPlaceholder}
-							className="w-full pl-9 pr-3 py-1.5 text-xs rounded-full outline-none"
+							className="w-full pl-8 pr-3 py-1 text-xs rounded-md outline-none"
 							style={{
-								background: "var(--color-surface-hover)",
+								background: "var(--color-surface)",
 								color: "var(--color-text)",
 								border: "1px solid var(--color-border)",
 							}}
@@ -431,10 +424,10 @@ export function DataTable<TData, TValue>({
 							<button
 								type="button"
 								onClick={() => { setGlobalFilter(""); onServerSearch?.(""); }}
-								className="absolute right-2.5 top-1/2 -translate-y-1/2"
+								className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer"
 								style={{ color: "var(--color-text-muted)" }}
 							>
-								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+								<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
 							</button>
 						)}
 					</div>
@@ -454,98 +447,54 @@ export function DataTable<TData, TValue>({
 
 				{toolbarExtra}
 
-				{/* Refresh */}
-				{onRefresh && (
-					<button
-						type="button"
-						onClick={onRefresh}
-						className="p-1.5 rounded-lg"
-						style={{ color: "var(--color-text-muted)" }}
-						title="Refresh"
-					>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-							<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M3 21v-5h5" />
-						</svg>
-					</button>
-				)}
-
 				{/* Columns menu */}
-				<div className="relative" ref={columnsMenuRef}>
-					<button
-						type="button"
-						onClick={() => setShowColumnsMenu((v) => !v)}
-						className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium"
-						style={{
-							color: "var(--color-text-muted)",
-							border: "1px solid var(--color-border)",
-							background: showColumnsMenu ? "var(--color-surface-hover)" : "transparent",
-						}}
+				<DropdownMenu>
+					<DropdownMenuTrigger
+						className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs cursor-pointer transition-colors"
+						style={{ color: "var(--color-text-muted)" }}
 					>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+						<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 							<rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /><path d="M15 3v18" />
 						</svg>
 						Columns
-					</button>
-					{showColumnsMenu && (
-						<div
-							className="absolute right-0 top-full mt-1 z-50 min-w-[200px] rounded-xl overflow-hidden py-1"
-							style={{
-								background: "var(--color-surface)",
-								border: "1px solid var(--color-border)",
-								boxShadow: "var(--shadow-lg)",
-							}}
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end" sideOffset={6}>
+						<DropdownMenuCheckboxItem
+							checked={stickyFirstColumn}
+							onSelect={() => setStickyFirstColumn((v) => !v)}
 						>
-							{/* Sticky first col toggle */}
-							<label
-								className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer"
-								style={{ color: "var(--color-text-muted)", borderBottom: "1px solid var(--color-border)" }}
-							>
-								<input
-									type="checkbox"
-									checked={stickyFirstColumn}
-									onChange={() => setStickyFirstColumn((v) => !v)}
-									className="w-3.5 h-3.5 rounded accent-[var(--color-accent)]"
-								/>
-								Freeze first column
-							</label>
-							{visibleColumns.length === 0 ? (
-								<div className="px-3 py-2 text-xs" style={{ color: "var(--color-text-muted)" }}>
-									No toggleable columns
-								</div>
-							) : (
-								table.getAllLeafColumns()
-									.filter((c) => c.id !== "select" && c.id !== "actions" && c.getCanHide())
-									.map((column) => (
-										<label
-											key={column.id}
-											className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer"
-											style={{ color: "var(--color-text)" }}
-										>
-											<input
-												type="checkbox"
-												checked={column.getIsVisible()}
-												onChange={column.getToggleVisibilityHandler()}
-												className="w-3.5 h-3.5 rounded accent-[var(--color-accent)]"
-											/>
-											{typeof column.columnDef.header === "string"
-												? column.columnDef.header
-												: String((column.columnDef.meta as Record<string, string> | undefined)?.label ?? column.id)}
-										</label>
-									))
-							)}
-						</div>
-					)}
-				</div>
+							Freeze first column
+						</DropdownMenuCheckboxItem>
+						<DropdownMenuSeparator />
+						{visibleColumns.length === 0 ? (
+							<div className="px-2 py-1.5 text-xs opacity-50">No toggleable columns</div>
+						) : (
+							table.getAllLeafColumns()
+								.filter((c) => c.id !== "select" && c.id !== "actions" && c.getCanHide())
+								.map((column) => (
+									<DropdownMenuCheckboxItem
+										key={column.id}
+										checked={column.getIsVisible()}
+										onSelect={() => column.toggleVisibility(!column.getIsVisible())}
+									>
+										{typeof column.columnDef.header === "string"
+											? column.columnDef.header
+											: String((column.columnDef.meta as Record<string, string> | undefined)?.label ?? column.id)}
+									</DropdownMenuCheckboxItem>
+								))
+						)}
+					</DropdownMenuContent>
+				</DropdownMenu>
 
 				{/* Add button */}
 				{onAdd && (
 					<button
 						type="button"
 						onClick={onAdd}
-						className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium"
+						className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer"
 						style={{
-							background: "var(--color-accent)",
-							color: "white",
+							background: "var(--color-surface-hover)",
+							color: "var(--color-text)",
 						}}
 					>
 						{addButtonLabel}
@@ -603,7 +552,7 @@ export function DataTable<TData, TValue>({
 															key={header.id}
 															id={header.id}
 															style={headerStyle}
-															className="text-left px-3 py-2.5 font-medium text-xs uppercase tracking-wider whitespace-nowrap border-b select-none"
+															className="text-left px-3 py-2 font-medium text-xs uppercase tracking-wider whitespace-nowrap border-b select-none"
 														>
 															<span
 																className={`flex items-center gap-1 ${canSort ? "cursor-pointer" : ""}`}
@@ -620,7 +569,7 @@ export function DataTable<TData, TValue>({
 													<th
 														key={header.id}
 														style={headerStyle}
-														className="text-left px-3 py-2.5 font-medium text-xs uppercase tracking-wider whitespace-nowrap border-b select-none"
+														className="text-left px-3 py-2 font-medium text-xs uppercase tracking-wider whitespace-nowrap border-b select-none"
 													>
 														<span
 															className={`flex items-center gap-1 ${canSort ? "cursor-pointer" : ""}`}
@@ -696,7 +645,7 @@ export function DataTable<TData, TValue>({
 												return (
 													<td
 														key={cell.id}
-														className="px-3 py-2 border-b whitespace-nowrap"
+														className="px-3 py-1.5 border-b whitespace-nowrap text-xs"
 														style={cellStyle}
 													>
 														{flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -715,7 +664,7 @@ export function DataTable<TData, TValue>({
 			{/* Pagination footer */}
 			{!loading && data.length > 0 && (
 				<div
-					className="flex items-center justify-between px-4 py-2 text-xs flex-shrink-0"
+					className="flex items-center justify-between px-3 py-1.5 text-xs flex-shrink-0"
 					style={{
 						borderTop: "1px solid var(--color-border)",
 						color: "var(--color-text-muted)",
@@ -785,8 +734,8 @@ function PaginationButton({ onClick, disabled, label }: { onClick: () => void; d
 			type="button"
 			onClick={onClick}
 			disabled={disabled}
-			className="w-6 h-6 rounded flex items-center justify-center text-xs disabled:opacity-30"
-			style={{ color: "var(--color-text-muted)", border: "1px solid var(--color-border)" }}
+			className="w-5 h-5 rounded flex items-center justify-center text-xs disabled:opacity-30 cursor-pointer"
+			style={{ color: "var(--color-text-muted)" }}
 			// biome-ignore lint: using html entity label
 			dangerouslySetInnerHTML={{ __html: label }}
 		/>
@@ -794,61 +743,28 @@ function PaginationButton({ onClick, disabled, label }: { onClick: () => void; d
 }
 
 function RowActionsMenu<TData>({ row, actions }: { row: TData; actions: RowAction<TData>[] }) {
-	const [open, setOpen] = useState(false);
-	const ref = useRef<HTMLDivElement>(null);
-
-	useEffect(() => {
-		function handleClick(e: MouseEvent) {
-			if (ref.current && !ref.current.contains(e.target as Node)) {
-				setOpen(false);
-			}
-		}
-		if (open) {
-			document.addEventListener("mousedown", handleClick);
-			return () => document.removeEventListener("mousedown", handleClick);
-		}
-	}, [open]);
-
 	return (
-		<div className="relative" ref={ref}>
-			<button
-				type="button"
-				onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-				className="p-1 rounded-md"
+		<DropdownMenu>
+			<DropdownMenuTrigger
+				className="p-1 rounded-md cursor-pointer"
 				style={{ color: "var(--color-text-muted)" }}
+				onClick={(e) => e.stopPropagation()}
 			>
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
-			</button>
-			{open && (
-				<div
-					className="absolute right-0 top-full mt-1 z-50 min-w-[140px] rounded-xl overflow-hidden py-1"
-					style={{
-						background: "var(--color-surface)",
-						border: "1px solid var(--color-border)",
-						boxShadow: "var(--shadow-lg)",
-					}}
-				>
-					{actions.map((action, i) => (
-						<button
-							key={i}
-							type="button"
-							onClick={(e) => {
-								e.stopPropagation();
-								action.onClick?.(row);
-								setOpen(false);
-							}}
-							className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-left"
-							style={{
-								color: action.variant === "destructive" ? "var(--color-error)" : "var(--color-text)",
-							}}
-						>
-							{action.icon}
-							{action.label}
-						</button>
-					))}
-				</div>
-			)}
-		</div>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" sideOffset={4}>
+				{actions.map((action, i) => (
+					<DropdownMenuItem
+						key={i}
+						variant={action.variant === "destructive" ? "destructive" : "default"}
+						onSelect={() => action.onClick?.(row)}
+					>
+						{action.icon}
+						{action.label}
+					</DropdownMenuItem>
+				))}
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }
 
