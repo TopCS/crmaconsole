@@ -40,6 +40,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuCheckboxItem,
 } from "../ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
 /* ─── Types ─── */
 
@@ -384,11 +385,11 @@ export function DataTable<TData, TValue>({
 	// ─── Render ───
 
 	return (
-		<div className="flex flex-col h-full">
+		<div className="w-full h-full flex flex-col overflow-hidden" style={{ overscrollBehavior: "contain" }}>
 			{/* Toolbar */}
 			<div
-				className="flex items-center gap-2 px-3 py-1.5 flex-shrink-0 flex-wrap"
-				style={{ borderBottom: "1px solid var(--color-border)" }}
+				className="flex items-center gap-3 px-3 py-2 shrink-0 flex-wrap backdrop-blur-md"
+				style={{ background: "var(--color-glass)", borderBottom: "1px solid var(--color-border)" }}
 			>
 				{title && (
 					<div className="flex items-center gap-2 mr-1">
@@ -401,8 +402,11 @@ export function DataTable<TData, TValue>({
 
 				{/* Search */}
 				{enableGlobalFilter && (
-					<div className="relative flex-1 min-w-[140px] max-w-[260px]">
-						<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--color-text-muted)", opacity: 0.5 }}>
+					<div
+						className="flex items-center gap-2 h-8 px-3 backdrop-blur-sm rounded-full focus-within:ring-2 focus-within:ring-(--color-accent)/30 transition-shadow max-w-[260px] min-w-[140px] shadow-[0_0_21px_0_rgba(0,0,0,0.05)]"
+						style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+					>
+						<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" style={{ color: "var(--color-text-muted)", opacity: 0.5 }}>
 							<circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
 						</svg>
 						<input
@@ -413,18 +417,14 @@ export function DataTable<TData, TValue>({
 								onServerSearch?.(e.target.value);
 							}}
 							placeholder={searchPlaceholder}
-							className="w-full pl-8 pr-3 py-1 text-xs rounded-md outline-none"
-							style={{
-								background: "var(--color-surface)",
-								color: "var(--color-text)",
-								border: "1px solid var(--color-border)",
-							}}
+							className="w-full h-full text-xs bg-transparent outline-none border-0 p-0"
+							style={{ color: "var(--color-text)" }}
 						/>
 						{globalFilter && (
 							<button
 								type="button"
 								onClick={() => { setGlobalFilter(""); onServerSearch?.(""); }}
-								className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer"
+								className="shrink-0 h-5 w-5 rounded-full flex items-center justify-center cursor-pointer transition-colors"
 								style={{ color: "var(--color-text-muted)" }}
 							>
 								<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
@@ -450,8 +450,8 @@ export function DataTable<TData, TValue>({
 				{/* Columns menu */}
 				<DropdownMenu>
 					<DropdownMenuTrigger
-						className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs cursor-pointer transition-colors"
-						style={{ color: "var(--color-text-muted)" }}
+						className="h-8 px-3 flex items-center gap-1.5 rounded-full text-xs cursor-pointer transition-colors backdrop-blur-sm shadow-[0_0_21px_0_rgba(0,0,0,0.05)] outline-none focus:outline-none"
+						style={{ color: "var(--color-text-muted)", border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
 					>
 						<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 							<rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /><path d="M15 3v18" />
@@ -486,15 +486,27 @@ export function DataTable<TData, TValue>({
 					</DropdownMenuContent>
 				</DropdownMenu>
 
+				{/* Refresh button */}
+				{onRefresh && (
+					<button
+						type="button"
+						onClick={onRefresh}
+						className="h-8 w-8 rounded-full flex items-center justify-center cursor-pointer transition-colors backdrop-blur-sm shadow-[0_0_21px_0_rgba(0,0,0,0.05)]"
+						style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)", color: "var(--color-text-muted)" }}
+					>
+						<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M16 21h5v-5" /></svg>
+					</button>
+				)}
+
 				{/* Add button */}
 				{onAdd && (
 					<button
 						type="button"
 						onClick={onAdd}
-						className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer"
+						className="h-8 px-3 flex items-center gap-1.5 rounded-full text-xs font-medium cursor-pointer transition-colors shadow-[0_0_21px_0_rgba(0,0,0,0.05)]"
 						style={{
-							background: "var(--color-surface-hover)",
-							color: "var(--color-text)",
+							background: "var(--color-accent)",
+							color: "#fff",
 						}}
 					>
 						{addButtonLabel}
@@ -505,24 +517,44 @@ export function DataTable<TData, TValue>({
 			{/* Table */}
 			<div
 				ref={scrollContainerRef}
-				className="flex-1 overflow-auto min-w-0"
+				className="overflow-auto flex-1 min-h-0 max-h-full relative"
 				onScroll={handleScroll}
+				style={{ overscrollBehavior: "contain" }}
 			>
 				{loading ? (
 					<LoadingSkeleton columnCount={allColumns.length} />
 				) : data.length === 0 ? (
-					<div className="flex flex-col items-center justify-center py-20 gap-3">
-						<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: "var(--color-text-muted)", opacity: 0.4 }}>
-							<rect width="18" height="18" x="3" y="3" rx="2" /><path d="M3 9h18" /><path d="M3 15h18" /><path d="M9 3v18" />
-						</svg>
-						<p className="text-sm" style={{ color: "var(--color-text-muted)" }}>No data</p>
+					<div className="flex flex-col items-center justify-center py-24 gap-4">
+						<div
+							className="rounded-full p-4 mb-2 backdrop-blur-sm"
+							style={{ background: "var(--color-glass)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-sm)" }}
+						>
+							<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: "var(--color-text-muted)" }}>
+								<circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+							</svg>
+						</div>
+						<div className="text-center">
+							<h3 className="text-base font-semibold mb-1" style={{ color: "var(--color-text)" }}>No results found</h3>
+							<p className="text-sm max-w-xs" style={{ color: "var(--color-text-muted)" }}>
+								{globalFilter
+									? "Try adjusting your search or filter criteria."
+									: "No data available yet. Create your first entry to get started."}
+							</p>
+						</div>
 					</div>
 				) : (
 					<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-						<table className="w-full text-sm" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
-							<thead>
+						<table
+							className="w-full caption-bottom text-sm"
+							style={{ tableLayout: "fixed", minWidth: table.getCenterTotalSize() }}
+						>
+							<thead className="[&_tr]:border-b sticky top-0 z-30" style={{ background: "var(--color-surface)" }}>
 								{table.getHeaderGroups().map((headerGroup) => (
-									<tr key={headerGroup.id}>
+									<tr
+										key={headerGroup.id}
+										style={{ borderColor: "var(--color-border)" }}
+										className="border-b-2 backdrop-blur-sm"
+									>
 										<SortableContext items={columnOrder} strategy={horizontalListSortingStrategy}>
 											{headerGroup.headers.map((header, colIdx) => {
 												const isFirstData = colIdx === (enableRowSelection ? 1 : 0);
@@ -530,14 +562,18 @@ export function DataTable<TData, TValue>({
 												const isSelectCol = header.id === "select";
 												const isActionsCol = header.id === "actions";
 												const canSort = header.column.getCanSort();
+												const isSorted = header.column.getIsSorted();
+												const isLastCol = colIdx === headerGroup.headers.length - 1;
 
 												const headerStyle: React.CSSProperties = {
-													borderColor: "var(--color-border)",
 													background: "var(--color-surface)",
 													position: "sticky",
 													top: 0,
 													zIndex: isSticky || isSelectCol ? 31 : 30,
-													...(isSticky ? { left: enableRowSelection ? 40 : 0, boxShadow: isScrolled ? "4px 0 8px -2px rgba(0,0,0,0.08)" : "none" } : {}),
+													...(isSticky ? {
+														left: enableRowSelection ? 40 : 0,
+														boxShadow: isScrolled ? "4px 0 12px -2px rgba(0,0,0,0.15), 2px 0 4px -1px rgba(0,0,0,0.08)" : "none",
+													} : {}),
 													...(isSelectCol ? { left: 0, position: "sticky", zIndex: 31, width: 40 } : {}),
 													width: header.getSize(),
 												};
@@ -546,21 +582,37 @@ export function DataTable<TData, TValue>({
 													? null
 													: flexRender(header.column.columnDef.header, header.getContext());
 
+												const thClassName = cn(
+													"h-11 text-left align-middle font-medium text-xs uppercase tracking-wider whitespace-nowrap p-0 group select-none relative box-border",
+													!isLastCol && "border-r",
+													isSticky && isScrolled && "border-r-2!",
+												);
+
+												const innerClassName = cn(
+													"flex items-center gap-1 h-full px-4 transition-colors",
+													canSort && "cursor-pointer hover:bg-[var(--color-surface-hover)]",
+													isSorted && "bg-[var(--color-surface-hover)]",
+												);
+
 												if (enableColumnReordering && !isSelectCol && !isActionsCol) {
 													return (
 														<SortableHeader
 															key={header.id}
 															id={header.id}
 															style={headerStyle}
-															className="text-left px-3 py-2 font-medium text-xs uppercase tracking-wider whitespace-nowrap border-b select-none"
+															className={thClassName}
 														>
 															<span
-																className={`flex items-center gap-1 ${canSort ? "cursor-pointer" : ""}`}
+																className={innerClassName}
 																onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
+																style={{ color: "var(--color-text-muted)" }}
 															>
 																{content}
-																{canSort && <SortIcon direction={header.column.getIsSorted()} />}
+																{canSort && <SortIcon direction={isSorted} />}
 															</span>
+															{isSticky && isScrolled && (
+																<div className="absolute top-0 right-0 bottom-0 w-4 translate-x-full pointer-events-none bg-linear-to-r from-black/4 to-transparent z-100" />
+															)}
 														</SortableHeader>
 													);
 												}
@@ -568,17 +620,23 @@ export function DataTable<TData, TValue>({
 												return (
 													<th
 														key={header.id}
-														style={headerStyle}
-														className="text-left px-3 py-2 font-medium text-xs uppercase tracking-wider whitespace-nowrap border-b select-none"
+														style={{
+															...headerStyle,
+															borderColor: "var(--color-border)",
+														}}
+														className={thClassName}
 													>
 														<span
-															className={`flex items-center gap-1 ${canSort ? "cursor-pointer" : ""}`}
+															className={innerClassName}
 															onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
 															style={{ color: "var(--color-text-muted)" }}
 														>
 															{content}
-															{canSort && <SortIcon direction={header.column.getIsSorted()} />}
+															{canSort && <SortIcon direction={isSorted} />}
 														</span>
+														{isSticky && isScrolled && (
+															<div className="absolute top-0 right-0 bottom-0 w-4 translate-x-full pointer-events-none bg-linear-to-r from-black/4 to-transparent z-100" />
+														)}
 													</th>
 												);
 											})}
@@ -586,19 +644,26 @@ export function DataTable<TData, TValue>({
 									</tr>
 								))}
 							</thead>
-							<tbody>
+							<tbody className="[&_tr:last-child]:border-0">
 								{table.getRowModel().rows.map((row, rowIdx) => {
 									const isSelected = row.getIsSelected();
+									const visibleCells = row.getVisibleCells();
 									return (
 										<tr
 											key={row.id}
-											className={`transition-colors duration-75 ${onRowClick ? "cursor-pointer" : ""}`}
+											data-state={isSelected ? "selected" : undefined}
+											className={cn(
+												"border-b transition-all duration-150 group/row relative",
+												onRowClick && "cursor-pointer",
+												isSelected && "data-[state=selected]:bg-(--color-accent-light)",
+											)}
 											style={{
+												borderColor: "var(--color-border)",
 												background: isSelected
 													? "var(--color-accent-light)"
 													: rowIdx % 2 === 0
-														? "transparent"
-														: "var(--color-surface)",
+														? "var(--color-surface)"
+														: "var(--color-bg)",
 											}}
 											onClick={() => onRowClick?.(row.original, rowIdx)}
 											onMouseEnter={(e) => {
@@ -608,13 +673,20 @@ export function DataTable<TData, TValue>({
 											onMouseLeave={(e) => {
 												if (!isSelected)
 													{(e.currentTarget as HTMLElement).style.background =
-														rowIdx % 2 === 0 ? "transparent" : "var(--color-surface)";}
+														rowIdx % 2 === 0 ? "var(--color-surface)" : "var(--color-bg)";}
 											}}
 										>
-											{row.getVisibleCells().map((cell, colIdx) => {
+											{visibleCells.map((cell, colIdx) => {
 												const isFirstData = colIdx === (enableRowSelection ? 1 : 0);
 												const isSticky = stickyFirstColumn && isFirstData;
 												const isSelectCol = cell.column.id === "select";
+												const isLastCol = colIdx === visibleCells.length - 1;
+
+												const rowBg = isSelected
+													? "var(--color-accent-light)"
+													: rowIdx % 2 === 0
+														? "var(--color-surface)"
+														: "var(--color-bg)";
 
 												const cellStyle: React.CSSProperties = {
 													borderColor: "var(--color-border)",
@@ -623,10 +695,8 @@ export function DataTable<TData, TValue>({
 																position: "sticky" as const,
 																left: enableRowSelection ? 40 : 0,
 																zIndex: 20,
-																background: isSelected
-																	? "var(--color-accent-light)"
-																	: "var(--color-bg)",
-																boxShadow: isScrolled ? "4px 0 8px -2px rgba(0,0,0,0.08)" : "none",
+																background: rowBg,
+																boxShadow: isScrolled ? "4px 0 12px -2px rgba(0,0,0,0.12), 2px 0 4px -1px rgba(0,0,0,0.06)" : "none",
 															}
 														: {}),
 													...(isSelectCol
@@ -634,9 +704,7 @@ export function DataTable<TData, TValue>({
 																position: "sticky" as const,
 																left: 0,
 																zIndex: 20,
-																background: isSelected
-																	? "var(--color-accent-light)"
-																	: "var(--color-bg)",
+																background: rowBg,
 																width: 40,
 															}
 														: {}),
@@ -645,10 +713,19 @@ export function DataTable<TData, TValue>({
 												return (
 													<td
 														key={cell.id}
-														className="px-3 py-1.5 border-b whitespace-nowrap text-xs"
+														className={cn(
+															"px-3 py-1.5 align-middle whitespace-nowrap text-xs border-b transition-colors box-border",
+															!isLastCol && "border-r",
+															isSticky && isScrolled && "border-r-2!",
+														)}
 														style={cellStyle}
 													>
-														{flexRender(cell.column.columnDef.cell, cell.getContext())}
+														<div className="overflow-hidden">
+															{flexRender(cell.column.columnDef.cell, cell.getContext())}
+														</div>
+														{isSticky && isScrolled && (
+															<div className="absolute top-0 right-0 bottom-0 w-4 translate-x-full pointer-events-none bg-linear-to-r from-black/4 to-transparent z-100" />
+														)}
 													</td>
 												);
 											})}
@@ -664,45 +741,48 @@ export function DataTable<TData, TValue>({
 			{/* Pagination footer */}
 			{!loading && data.length > 0 && (
 				<div
-					className="flex items-center justify-between px-3 py-1.5 text-xs flex-shrink-0"
+					className="flex items-center justify-between px-3 py-2 text-xs shrink-0 backdrop-blur-xl"
 					style={{
 						borderTop: "1px solid var(--color-border)",
 						color: "var(--color-text-muted)",
+						background: "var(--color-glass)",
 					}}
 				>
-					<span>
+					<span className="text-xs font-medium">
 						{serverPagination
 							? `Showing ${(serverPagination.page - 1) * serverPagination.pageSize + 1}–${Math.min(serverPagination.page * serverPagination.pageSize, serverPagination.totalCount)} of ${serverPagination.totalCount} results`
 							: `Showing ${table.getRowModel().rows.length} of ${data.length} results`}
 						{selectedCount > 0 && ` (${selectedCount} selected)`}
 					</span>
-					<div className="flex items-center gap-2">
-						<span>Rows per page</span>
-						<select
-							value={serverPagination ? serverPagination.pageSize : pagination.pageSize}
-							onChange={(e) => {
-								const newSize = Number(e.target.value);
-								if (serverPagination) {
-									serverPagination.onPageSizeChange(newSize);
-								} else {
-									setPagination((p) => ({ ...p, pageSize: newSize, pageIndex: 0 }));
-								}
-							}}
-							className="px-1.5 py-0.5 rounded-md text-xs outline-none"
-							style={{
-								background: "var(--color-surface-hover)",
-								color: "var(--color-text)",
-								border: "1px solid var(--color-border)",
-							}}
-						>
-							{[20, 50, 100, 250, 500].map((size) => (
-								<option key={size} value={size}>{size}</option>
-							))}
-						</select>
-						<span>
+					<div className="flex items-center gap-3">
+						<div className="flex items-center gap-2">
+							<span className="text-xs font-medium">Rows per page</span>
+							<select
+								value={serverPagination ? serverPagination.pageSize : pagination.pageSize}
+								onChange={(e) => {
+									const newSize = Number(e.target.value);
+									if (serverPagination) {
+										serverPagination.onPageSizeChange(newSize);
+									} else {
+										setPagination((p) => ({ ...p, pageSize: newSize, pageIndex: 0 }));
+									}
+								}}
+								className="h-7 px-2 py-0 rounded-full text-xs outline-none shadow-[0_0_21px_0_rgba(0,0,0,0.05)] transition-colors"
+								style={{
+									background: "var(--color-surface)",
+									color: "var(--color-text)",
+									border: "1px solid var(--color-border)",
+								}}
+							>
+								{[20, 50, 100, 250, 500].map((size) => (
+									<option key={size} value={size}>{size}</option>
+								))}
+							</select>
+						</div>
+						<span className="text-xs font-medium min-w-[80px] text-center">
 							Page {serverPagination ? serverPagination.page : pagination.pageIndex + 1} of {table.getPageCount()}
 						</span>
-						<div className="flex gap-0.5">
+						<div className="flex gap-1">
 							{serverPagination ? (
 								<>
 									<PaginationButton onClick={() => serverPagination.onPageChange(1)} disabled={serverPagination.page <= 1} label="&laquo;" />
@@ -734,8 +814,8 @@ function PaginationButton({ onClick, disabled, label }: { onClick: () => void; d
 			type="button"
 			onClick={onClick}
 			disabled={disabled}
-			className="w-5 h-5 rounded flex items-center justify-center text-xs disabled:opacity-30 cursor-pointer"
-			style={{ color: "var(--color-text-muted)" }}
+			className="h-7 w-7 rounded-full flex items-center justify-center text-xs disabled:opacity-30 cursor-pointer transition-colors backdrop-blur-sm shadow-[0_0_21px_0_rgba(0,0,0,0.05)]"
+			style={{ color: "var(--color-text-muted)", border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
 			// biome-ignore lint: using html entity label
 			dangerouslySetInnerHTML={{ __html: label }}
 		/>
@@ -769,16 +849,42 @@ function RowActionsMenu<TData>({ row, actions }: { row: TData; actions: RowActio
 }
 
 function LoadingSkeleton({ columnCount }: { columnCount: number }) {
+	const widths = ["w-full", "w-3/4", "w-5/6", "w-2/3"];
 	return (
-		<div className="p-4 space-y-2">
-			{Array.from({ length: 12 }).map((_, i) => (
-				<div key={i} className="flex gap-3">
+		<div className="w-full">
+			{/* Skeleton header */}
+			<div className="flex gap-0 border-b-2" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+				{Array.from({ length: Math.min(columnCount, 6) }).map((_col, j) => (
+					<div key={j} className="flex-1 h-11 px-4 flex items-center" style={{ borderRight: j < Math.min(columnCount, 6) - 1 ? "1px solid var(--color-border)" : "none" }}>
+						<div
+							className="h-3 w-16 rounded animate-pulse"
+							style={{ background: "var(--color-surface-hover)", animationDelay: `${j * 50}ms`, animationDuration: "1.5s" }}
+						/>
+					</div>
+				))}
+			</div>
+			{/* Skeleton rows */}
+			{Array.from({ length: 15 }).map((_, i) => (
+				<div
+					key={i}
+					className="flex gap-0 border-b"
+					style={{ borderColor: "var(--color-border)" }}
+				>
 					{Array.from({ length: Math.min(columnCount, 6) }).map((_col, j) => (
 						<div
 							key={j}
-							className="h-8 rounded-lg animate-pulse flex-1"
-							style={{ background: "var(--color-surface-hover)", animationDelay: `${j * 50}ms` }}
-						/>
+							className="flex-1 px-3 py-2.5 flex items-center"
+							style={{ borderRight: j < Math.min(columnCount, 6) - 1 ? "1px solid var(--color-border)" : "none" }}
+						>
+							<div
+								className={cn("h-3.5 rounded animate-pulse", widths[(i + j) % widths.length])}
+								style={{
+									background: "var(--color-surface-hover)",
+									animationDelay: `${(i * 50) + (j * 30)}ms`,
+									animationDuration: "1.5s",
+								}}
+							/>
+						</div>
 					))}
 				</div>
 			))}
