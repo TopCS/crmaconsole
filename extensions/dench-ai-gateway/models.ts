@@ -13,8 +13,8 @@ export type DenchCloudCatalogModel = {
   id: string;
   stableId: string;
   displayName: string;
-  provider: "openai" | "anthropic";
-  transportProvider: "openai" | "bedrock";
+  provider: string;
+  transportProvider: string;
   api: "openai-completions";
   input: Array<"text" | "image">;
   reasoning: boolean;
@@ -77,12 +77,8 @@ function readBoolean(input: UnknownRecord, ...keys: string[]): boolean | undefin
   return undefined;
 }
 
-function isProvider(value: string | undefined): value is "openai" | "anthropic" {
-  return value === "openai" || value === "anthropic";
-}
-
-function isTransportProvider(value: string | undefined): value is "openai" | "bedrock" {
-  return value === "openai" || value === "bedrock";
+function isNonEmptyString(value: string | undefined): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function normalizeInputKinds(input: unknown, supportsImages: boolean): Array<"text" | "image"> {
@@ -213,7 +209,7 @@ export function normalizeDenchCloudCatalogModel(input: unknown): DenchCloudCatal
   const displayName = readString(record, "name", "displayName", "display_name");
   const provider = readString(record, "provider");
   const transportProvider = readString(record, "transportProvider", "transport_provider");
-  if (!publicId || !stableId || !displayName || !isProvider(provider) || !isTransportProvider(transportProvider)) {
+  if (!publicId || !stableId || !displayName || !isNonEmptyString(provider) || !isNonEmptyString(transportProvider)) {
     return null;
   }
 
