@@ -803,6 +803,14 @@ export function startManagedWebRuntime(params: {
   const outFd = openSync(path.join(logsDir, "web-app.log"), "a");
   const errFd = openSync(path.join(logsDir, "web-app.err.log"), "a");
 
+  const gatewayAuthEnv: Record<string, string> = {};
+  for (const key of ["OPENCLAW_GATEWAY_TOKEN", "OPENCLAW_GATEWAY_PASSWORD"] as const) {
+    const value = params.env?.[key] ?? process.env[key];
+    if (value) {
+      gatewayAuthEnv[key] = value;
+    }
+  }
+
   const child = spawn(process.execPath, [runtimeServerPath], {
     cwd: path.dirname(runtimeServerPath),
     detached: true,
@@ -810,6 +818,7 @@ export function startManagedWebRuntime(params: {
     env: {
       ...process.env,
       ...params.env,
+      ...gatewayAuthEnv,
       PORT: String(params.port),
       HOSTNAME: "127.0.0.1",
       OPENCLAW_GATEWAY_PORT: String(params.gatewayPort),
