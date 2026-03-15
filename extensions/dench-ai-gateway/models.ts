@@ -223,8 +223,8 @@ export function normalizeDenchCloudCatalogModel(input: unknown): DenchCloudCatal
   const supportsReasoning = readBoolean(record, "supportsReasoning", "supports_reasoning")
     ?? readBoolean(record, "reasoning")
     ?? false;
-  const contextWindow = readNumber(record, "contextWindow", "context_window") ?? 128000;
-  const maxTokens = readNumber(record, "maxTokens", "max_tokens", "maxOutputTokens", "max_output_tokens") ?? 128000;
+  const contextWindow = readNumber(record, "contextWindow", "context_window") ?? 200000;
+  const maxTokens = readNumber(record, "maxTokens", "max_tokens", "maxOutputTokens", "max_output_tokens") ?? 64000;
 
   const costRecord = asRecord(record.cost) ?? {};
   const inputCost = readNumber(costRecord, "input") ?? 0;
