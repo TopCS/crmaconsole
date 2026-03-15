@@ -81,6 +81,13 @@ import {
   type ChatRunsSnapshot,
   type ChatPanelRuntimeState,
 } from "@/lib/chat-session-registry";
+import {
+  fileReadUrl as fileApiUrl,
+  rawFileReadUrl as rawFileUrl,
+  isAbsolutePath,
+  isHomeRelativePath,
+  isVirtualPath,
+} from "@/lib/workspace-paths";
 import dynamic from "next/dynamic";
 
 const TerminalDrawer = dynamic(
@@ -201,42 +208,6 @@ type WebSession = {
   updatedAt: number;
   messageCount: number;
 };
-
-// --- Helpers ---
-
-/** Detect virtual paths (skills, memories) that live outside the main workspace. */
-function isVirtualPath(path: string): boolean {
-  return path.startsWith("~") && !path.startsWith("~/");
-}
-
-/** Detect absolute filesystem paths (browse mode). */
-function isAbsolutePath(path: string): boolean {
-  return path.startsWith("/");
-}
-
-/** Detect home-relative filesystem paths (e.g. ~/Desktop/file.txt). */
-function isHomeRelativePath(path: string): boolean {
-  return path.startsWith("~/");
-}
-
-/** Pick the right file API endpoint based on virtual vs real vs absolute paths. */
-function fileApiUrl(path: string): string {
-  if (isVirtualPath(path)) {
-    return `/api/workspace/virtual-file?path=${encodeURIComponent(path)}`;
-  }
-  if (isAbsolutePath(path) || isHomeRelativePath(path)) {
-    return `/api/workspace/browse-file?path=${encodeURIComponent(path)}`;
-  }
-  return `/api/workspace/file?path=${encodeURIComponent(path)}`;
-}
-
-/** Pick the right raw file URL for media preview. */
-function rawFileUrl(path: string): string {
-  if (isAbsolutePath(path) || isHomeRelativePath(path)) {
-    return `/api/workspace/browse-file?path=${encodeURIComponent(path)}&raw=true`;
-  }
-  return `/api/workspace/raw-file?path=${encodeURIComponent(path)}`;
-}
 
 const LEFT_SIDEBAR_MIN = 200;
 const LEFT_SIDEBAR_MAX = 480;
@@ -1177,6 +1148,14 @@ function WorkspacePageInner() {
         const jobId = tab.path.slice("~cron/".length);
         const job = cronJobs.find((j) => j.id === jobId);
         if (job) setContent({ kind: "cron-job", jobId, job });
+      } else {
+        const fileName = tab.title || tab.path.split("/").pop() || tab.path;
+        const syntheticNode: TreeNode = {
+          name: fileName,
+          path: tab.path,
+          type: tab.type === "object" ? "object" : inferNodeTypeFromFileName(fileName),
+        };
+        void loadContent(syntheticNode);
       }
     }
   }, [tree, loadContent, cronJobs]);
