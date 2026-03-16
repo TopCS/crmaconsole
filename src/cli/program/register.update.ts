@@ -12,6 +12,7 @@ export function registerUpdateCommand(program: Command) {
     .option("--non-interactive", "Fail instead of prompting for major-gate approval", false)
     .option("--yes", "Approve mandatory major-gate OpenClaw update", false)
     .option("--no-open", "Do not open the browser automatically")
+    .option("--skip-daemon-install", "Skip gateway daemon/service management (for containers or environments without systemd/launchd)", false)
     .option("--json", "Output summary as JSON", false)
     .action(async (opts) => {
       await runCommandWithRuntime(defaultRuntime, async () => {
@@ -21,6 +22,7 @@ export function registerUpdateCommand(program: Command) {
           nonInteractive: Boolean(opts.nonInteractive),
           yes: Boolean(opts.yes),
           noOpen: Boolean(opts.open === false),
+          skipDaemonInstall: Boolean(opts.skipDaemonInstall),
           json: Boolean(opts.json),
         });
       });

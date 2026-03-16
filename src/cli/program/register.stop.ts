@@ -9,12 +9,14 @@ export function registerStopCommand(program: Command) {
     .description("Stop Dench managed web runtime on the configured port")
     .option("--profile <name>", "Compatibility flag; non-dench values are ignored with a warning")
     .option("--web-port <port>", "Web runtime port override")
+    .option("--skip-daemon-install", "Skip gateway daemon/service management (for containers or environments without systemd/launchd)", false)
     .option("--json", "Output summary as JSON", false)
     .action(async (opts) => {
       await runCommandWithRuntime(defaultRuntime, async () => {
         await stopWebRuntimeCommand({
           profile: opts.profile as string | undefined,
           webPort: opts.webPort as string | undefined,
+          skipDaemonInstall: Boolean(opts.skipDaemonInstall),
           json: Boolean(opts.json),
         });
       });

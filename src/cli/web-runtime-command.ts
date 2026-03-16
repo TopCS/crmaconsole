@@ -6,7 +6,7 @@ import { confirm, isCancel, spinner } from "@clack/prompts";
 import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
 import { stylePromptMessage } from "../terminal/prompt-style.js";
 import { theme } from "../terminal/theme.js";
-import { DENCHCLAW_DEFAULT_GATEWAY_PORT } from "../config/paths.js";
+import { DENCHCLAW_DEFAULT_GATEWAY_PORT, isDaemonlessMode } from "../config/paths.js";
 import { VERSION } from "../version.js";
 import { applyCliProfileEnv } from "./profile.js";
 import {
@@ -43,12 +43,14 @@ export type UpdateWebRuntimeOptions = {
   yes?: boolean;
   noOpen?: boolean;
   json?: boolean;
+  skipDaemonInstall?: boolean;
 };
 
 export type StopWebRuntimeOptions = {
   profile?: string;
   webPort?: string | number;
   json?: boolean;
+  skipDaemonInstall?: boolean;
 };
 
 export type StartWebRuntimeOptions = {
@@ -56,6 +58,7 @@ export type StartWebRuntimeOptions = {
   webPort?: string | number;
   noOpen?: boolean;
   json?: boolean;
+  skipDaemonInstall?: boolean;
 };
 
 export type UpdateWebRuntimeSummary = {
@@ -397,6 +400,7 @@ export async function updateWebRuntimeCommand(
     await runOpenClawUpdateWithProgress(openclawCommand);
   }
 
+  const daemonless = isDaemonlessMode(opts);
   const selectedPort =
     parseOptionalPort(opts.webPort) ??
     parseOptionalPort(previousManifest?.lastPort) ??
@@ -404,7 +408,7 @@ export async function updateWebRuntimeCommand(
     DEFAULT_WEB_APP_PORT;
   const gatewayPort = resolveGatewayPort(stateDir);
 
-  if (process.platform === "darwin") {
+  if (!daemonless && process.platform === "darwin") {
     uninstallWebRuntimeLaunchAgent();
   }
 
@@ -414,11 +418,9 @@ export async function updateWebRuntimeCommand(
     includeLegacyStandalone: true,
   });
 
-  const gatewayResult = await restartGatewayDaemon({
-    profile,
-    gatewayPort,
-    json: Boolean(opts.json),
-  });
+  const gatewayResult: { restarted: boolean; error?: string } = daemonless
+    ? { restarted: false, error: "skipped (daemonless)" }
+    : await restartGatewayDaemon({ profile, gatewayPort, json: Boolean(opts.json) });
 
   const workspaceDirs = discoverWorkspaceDirs(stateDir);
   const skillSyncResult = syncManagedSkills({ workspaceDirs, packageRoot });
@@ -430,7 +432,7 @@ export async function updateWebRuntimeCommand(
     port: selectedPort,
     gatewayPort,
     startFn:
-      process.platform === "darwin"
+      !daemonless && process.platform === "darwin"
         ? (p) => installWebRuntimeLaunchAgent(p)
         : undefined,
   });
@@ -449,7 +451,7 @@ export async function updateWebRuntimeCommand(
     ready: ensureResult.ready,
     reason: ensureResult.reason,
     gatewayRestarted: gatewayResult.restarted,
-    gatewayError: gatewayResult.error,
+    gatewayError: daemonless ? undefined : gatewayResult.error,
     skillSync: skillSyncResult,
   };
 
@@ -459,7 +461,11 @@ export async function updateWebRuntimeCommand(
     runtime.log(`Profile: ${profile}`);
     runtime.log(`Version: ${VERSION}`);
     runtime.log(`Web port: ${selectedPort}`);
-    runtime.log(`Gateway: ${summary.gatewayRestarted ? "restarted" : "restart failed"}`);
+    if (daemonless) {
+      runtime.log(`Gateway: skipped (daemonless mode)`);
+    } else {
+      runtime.log(`Gateway: ${summary.gatewayRestarted ? "restarted" : "restart failed"}`);
+    }
     if (summary.gatewayError) {
       runtime.log(theme.warn(`Gateway error: ${summary.gatewayError}`));
     }
@@ -508,7 +514,7 @@ export async function stopWebRuntimeCommand(
   const stateDir = resolveProfileStateDir(profile);
   const selectedPort = parseOptionalPort(opts.webPort) ?? readLastKnownWebPort(stateDir);
 
-  if (process.platform === "darwin") {
+  if (!isDaemonlessMode(opts) && process.platform === "darwin") {
     uninstallWebRuntimeLaunchAgent();
   }
 
@@ -570,11 +576,12 @@ export async function startWebRuntimeCommand(
     runtime.log(theme.warn(appliedProfile.warning));
   }
 
+  const daemonless = isDaemonlessMode(opts);
   const stateDir = resolveProfileStateDir(profile);
   const selectedPort = parseOptionalPort(opts.webPort) ?? readLastKnownWebPort(stateDir);
   const gatewayPort = resolveGatewayPort(stateDir);
 
-  if (process.platform === "darwin") {
+  if (!daemonless && process.platform === "darwin") {
     uninstallWebRuntimeLaunchAgent();
   }
 
@@ -590,14 +597,12 @@ export async function startWebRuntimeCommand(
     );
   }
 
-  const gatewayResult = await restartGatewayDaemon({
-    profile,
-    gatewayPort,
-    json: Boolean(opts.json),
-  });
+  const gatewayResult: { restarted: boolean; error?: string } = daemonless
+    ? { restarted: false, error: "skipped (daemonless)" }
+    : await restartGatewayDaemon({ profile, gatewayPort, json: Boolean(opts.json) });
 
   let startResult;
-  if (process.platform === "darwin") {
+  if (!daemonless && process.platform === "darwin") {
     startResult = installWebRuntimeLaunchAgent({ stateDir, port: selectedPort, gatewayPort });
     if (!startResult.started && startResult.reason !== "runtime-missing") {
       startResult = startManagedWebRuntime({ stateDir, port: selectedPort, gatewayPort });
@@ -625,7 +630,7 @@ export async function startWebRuntimeCommand(
     started: probe.ok,
     reason: probe.reason,
     gatewayRestarted: gatewayResult.restarted,
-    gatewayError: gatewayResult.error,
+    gatewayError: daemonless ? undefined : gatewayResult.error,
   };
 
   if (opts.json) {
@@ -637,7 +642,11 @@ export async function startWebRuntimeCommand(
   runtime.log(theme.heading(`Dench web ${label}`));
   runtime.log(`Profile: ${profile}`);
   runtime.log(`Web port: ${selectedPort}`);
-  runtime.log(`Gateway: ${summary.gatewayRestarted ? "restarted" : "restart failed"}`);
+  if (daemonless) {
+    runtime.log(`Gateway: skipped (daemonless mode)`);
+  } else {
+    runtime.log(`Gateway: ${summary.gatewayRestarted ? "restarted" : "restart failed"}`);
+  }
   if (summary.gatewayError) {
     runtime.log(theme.warn(`Gateway error: ${summary.gatewayError}`));
   }

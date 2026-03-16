@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  isDaemonlessMode,
   resolveGatewayPort,
   DEFAULT_GATEWAY_PORT,
   DENCHCLAW_DEFAULT_GATEWAY_PORT,
@@ -82,6 +83,32 @@ describe("resolveGatewayPort", () => {
     expect(resolveGatewayPort({ gateway: {} }, { OPENCLAW_PROFILE: "dench" })).toBe(
       DENCHCLAW_DEFAULT_GATEWAY_PORT,
     );
+  });
+});
+
+describe("isDaemonlessMode", () => {
+  it("returns false when no opt and no env var", () => {
+    expect(isDaemonlessMode(undefined, {})).toBe(false);
+    expect(isDaemonlessMode({}, {})).toBe(false);
+  });
+
+  it("returns true when opts.skipDaemonInstall is set", () => {
+    expect(isDaemonlessMode({ skipDaemonInstall: true }, {})).toBe(true);
+  });
+
+  it("returns true when DENCHCLAW_DAEMONLESS=1 env var is set", () => {
+    expect(isDaemonlessMode(undefined, { DENCHCLAW_DAEMONLESS: "1" })).toBe(true);
+    expect(isDaemonlessMode({}, { DENCHCLAW_DAEMONLESS: "1" })).toBe(true);
+  });
+
+  it("returns false for non-'1' env values", () => {
+    expect(isDaemonlessMode(undefined, { DENCHCLAW_DAEMONLESS: "true" })).toBe(false);
+    expect(isDaemonlessMode(undefined, { DENCHCLAW_DAEMONLESS: "yes" })).toBe(false);
+    expect(isDaemonlessMode(undefined, { DENCHCLAW_DAEMONLESS: "0" })).toBe(false);
+  });
+
+  it("opts.skipDaemonInstall=true wins even without env var", () => {
+    expect(isDaemonlessMode({ skipDaemonInstall: true }, { DENCHCLAW_DAEMONLESS: "0" })).toBe(true);
   });
 });
 

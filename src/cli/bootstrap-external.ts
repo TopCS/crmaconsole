@@ -13,6 +13,7 @@ import path from "node:path";
 import process from "node:process";
 import { confirm, isCancel, select, spinner, text } from "@clack/prompts";
 import json5 from "json5";
+import { isDaemonlessMode } from "../config/paths.js";
 import { isTruthyEnvValue } from "../infra/env.js";
 import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
 import { readTelemetryConfig, markNoticeShown } from "../telemetry/config.js";
@@ -95,6 +96,7 @@ export type BootstrapOptions = {
   denchCloudApiKey?: string;
   denchCloudModel?: string;
   denchGatewayUrl?: string;
+  skipDaemonInstall?: boolean;
 };
 
 type BootstrapSummary = {
@@ -2148,6 +2150,7 @@ export async function bootstrapCommand(
     runtime.log(theme.warn(appliedProfile.warning));
   }
 
+  const daemonless = isDaemonlessMode(opts);
   const bootstrapStartTime = Date.now();
 
   if (!opts.json) {
@@ -2325,7 +2328,7 @@ export async function bootstrapCommand(
     "--profile",
     profile,
     "onboard",
-    "--install-daemon",
+    ...(daemonless ? [] : ["--install-daemon"]),
     "--gateway-bind",
     "loopback",
     "--gateway-port",
@@ -2342,6 +2345,9 @@ export async function bootstrapCommand(
   }
 
   onboardArgv.push("--accept-risk", "--skip-ui");
+  if (daemonless) {
+    onboardArgv.push("--skip-health");
+  }
 
   if (nonInteractive) {
     await runOpenClawOrThrow({
@@ -2410,55 +2416,62 @@ export async function bootstrapCommand(
   postOnboardSpinner?.message("Configuring subagent defaults…");
   await ensureSubagentDefaults(openclawCommand, profile);
 
-  // ── Single post-config gateway restart ──
-  // All Dench-owned config has been applied.  Restart the gateway once so the
-  // daemon picks up plugin, model, and subagent changes that were written after
-  // onboard started it.  No helper above triggers its own restart.
-  postOnboardSpinner?.message("Restarting gateway…");
-  try {
-    await runOpenClawOrThrow({
-      openclawCommand,
-      args: ["--profile", profile, "gateway", "restart"],
-      timeoutMs: 60_000,
-      errorMessage: "Failed to restart gateway after config update.",
-    });
-  } catch {
-    // Gateway may not be running (e.g. onboard daemon install failed on this
-    // platform).  The final readiness check below will catch this.
-  }
-
-  // ── Final readiness verification ──
-  // Give the gateway time to finish starting after the restart, then verify
-  // readiness.  The probe retries here replace the old pattern of probing
-  // immediately (which raced gateway startup) and jumping straight into a
-  // destructive stop/install/start auto-fix cycle.
-  postOnboardSpinner?.message("Waiting for gateway…");
-  let gatewayProbe = await probeGateway(openclawCommand, profile, gatewayPort);
-  for (let attempt = 0; attempt < 4 && !gatewayProbe.ok; attempt += 1) {
-    await sleep(750);
-    postOnboardSpinner?.message(`Probing gateway health (attempt ${attempt + 2}/5)…`);
-    gatewayProbe = await probeGateway(openclawCommand, profile, gatewayPort);
-  }
-
-  // Repair is failure-only: only invoked when the retried final verification
-  // still reports the gateway as unreachable.
+  // ── Gateway daemon restart + readiness verification ──
+  // Skipped entirely in daemonless mode — the user manages the gateway process
+  // externally (e.g. `openclaw gateway --port <port>` as a foreground process).
+  let gatewayProbe: { ok: boolean; detail?: string };
   let gatewayAutoFix: GatewayAutoFixResult | undefined;
-  if (!gatewayProbe.ok) {
-    postOnboardSpinner?.message("Gateway unreachable, attempting auto-fix…");
-    gatewayAutoFix = await attemptGatewayAutoFix({
-      openclawCommand,
-      profile,
-      stateDir,
-      gatewayPort,
-    });
-    gatewayProbe = gatewayAutoFix.finalProbe;
-    if (!gatewayProbe.ok && gatewayAutoFix.failureSummary) {
-      gatewayProbe = {
-        ...gatewayProbe,
-        detail: [gatewayProbe.detail, gatewayAutoFix.failureSummary]
-          .filter((value, index, self) => value && self.indexOf(value) === index)
-          .join(" | "),
-      };
+
+  if (daemonless) {
+    gatewayProbe = { ok: true, detail: "skipped (daemonless)" };
+  } else {
+    // All Dench-owned config has been applied.  Restart the gateway once so the
+    // daemon picks up plugin, model, and subagent changes that were written after
+    // onboard started it.  No helper above triggers its own restart.
+    postOnboardSpinner?.message("Restarting gateway…");
+    try {
+      await runOpenClawOrThrow({
+        openclawCommand,
+        args: ["--profile", profile, "gateway", "restart"],
+        timeoutMs: 60_000,
+        errorMessage: "Failed to restart gateway after config update.",
+      });
+    } catch {
+      // Gateway may not be running (e.g. onboard daemon install failed on this
+      // platform).  The final readiness check below will catch this.
+    }
+
+    // Give the gateway time to finish starting after the restart, then verify
+    // readiness.  The probe retries here replace the old pattern of probing
+    // immediately (which raced gateway startup) and jumping straight into a
+    // destructive stop/install/start auto-fix cycle.
+    postOnboardSpinner?.message("Waiting for gateway…");
+    gatewayProbe = await probeGateway(openclawCommand, profile, gatewayPort);
+    for (let attempt = 0; attempt < 4 && !gatewayProbe.ok; attempt += 1) {
+      await sleep(750);
+      postOnboardSpinner?.message(`Probing gateway health (attempt ${attempt + 2}/5)…`);
+      gatewayProbe = await probeGateway(openclawCommand, profile, gatewayPort);
+    }
+
+    // Repair is failure-only: only invoked when the retried final verification
+    // still reports the gateway as unreachable.
+    if (!gatewayProbe.ok) {
+      postOnboardSpinner?.message("Gateway unreachable, attempting auto-fix…");
+      gatewayAutoFix = await attemptGatewayAutoFix({
+        openclawCommand,
+        profile,
+        stateDir,
+        gatewayPort,
+      });
+      gatewayProbe = gatewayAutoFix.finalProbe;
+      if (!gatewayProbe.ok && gatewayAutoFix.failureSummary) {
+        gatewayProbe = {
+          ...gatewayProbe,
+          detail: [gatewayProbe.detail, gatewayAutoFix.failureSummary]
+            .filter((value, index, self) => value && self.indexOf(value) === index)
+            .join(" | "),
+        };
+      }
     }
   }
   const gatewayUrl = `ws://127.0.0.1:${gatewayPort}`;

@@ -57,6 +57,28 @@ openclaw --profile dench gateway restart
 openclaw --profile dench uninstall
 ```
 
+### Daemonless / Docker
+
+For containers or environments without systemd/launchd, set the environment variable once:
+
+```bash
+export DENCHCLAW_DAEMONLESS=1
+```
+
+This skips all gateway daemon management (install/start/stop/restart) and launchd LaunchAgent installation across all commands. You must start the gateway yourself as a foreground process:
+
+```bash
+openclaw --profile dench gateway --port 19001
+```
+
+Alternatively, pass `--skip-daemon-install` to individual commands:
+
+```bash
+npx denchclaw --skip-daemon-install
+npx denchclaw update --skip-daemon-install
+npx denchclaw start --skip-daemon-install
+```
+
 ---
 
 ## Development

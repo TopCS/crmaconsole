@@ -273,6 +273,22 @@ describe("updateWebRuntimeCommand", () => {
     });
   });
 
+  it("skips gateway daemon restart and LaunchAgent in daemonless mode", async () => {
+    webRuntimeMocks.runOpenClawCommand.mockClear();
+    launchdMocks.uninstallWebRuntimeLaunchAgent.mockClear();
+    const runtime = runtimeStub();
+    const summary = await updateWebRuntimeCommand(
+      { nonInteractive: true, skipDaemonInstall: true },
+      runtime,
+    );
+
+    expect(webRuntimeMocks.runOpenClawCommand).not.toHaveBeenCalled();
+    expect(launchdMocks.uninstallWebRuntimeLaunchAgent).not.toHaveBeenCalled();
+    expect(summary.gatewayRestarted).toBe(false);
+    expect(summary.gatewayError).toBeUndefined();
+    expect(summary.ready).toBe(true);
+  });
+
   it("skips OpenClaw update on minor upgrades while still refreshing runtime (avoids unnecessary blocking)", async () => {
     webRuntimeMocks.evaluateMajorVersionTransition.mockReturnValue({
       previousMajor: 2,
@@ -408,6 +424,30 @@ describe("startWebRuntimeCommand", () => {
     expect(webRuntimeMocks.ensureManagedWebRuntime).not.toHaveBeenCalled();
     expect(spawnMock).not.toHaveBeenCalled();
     expect(summary.started).toBe(true);
+  });
+
+  it("skips gateway daemon restart and LaunchAgent in daemonless mode, uses child process", async () => {
+    webRuntimeMocks.runOpenClawCommand.mockClear();
+    launchdMocks.installWebRuntimeLaunchAgent.mockClear();
+    launchdMocks.uninstallWebRuntimeLaunchAgent.mockClear();
+    webRuntimeMocks.startManagedWebRuntime.mockClear();
+    const runtime = runtimeStub();
+    const summary = await startWebRuntimeCommand(
+      { webPort: "3100", skipDaemonInstall: true },
+      runtime,
+    );
+
+    expect(webRuntimeMocks.runOpenClawCommand).not.toHaveBeenCalled();
+    expect(launchdMocks.installWebRuntimeLaunchAgent).not.toHaveBeenCalled();
+    expect(launchdMocks.uninstallWebRuntimeLaunchAgent).not.toHaveBeenCalled();
+    expect(webRuntimeMocks.startManagedWebRuntime).toHaveBeenCalledWith({
+      stateDir: "/tmp/.openclaw-dench",
+      port: 3100,
+      gatewayPort: 19001,
+    });
+    expect(summary.started).toBe(true);
+    expect(summary.gatewayRestarted).toBe(false);
+    expect(summary.gatewayError).toBeUndefined();
   });
 
   it("falls back to DenchClaw port 19001 when manifest has no lastGatewayPort (prevents 18789 hijack)", async () => {

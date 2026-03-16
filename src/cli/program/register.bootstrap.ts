@@ -21,6 +21,7 @@ export function registerBootstrapCommand(program: Command) {
     .option("--dench-cloud-api-key <key>", "Dench Cloud API key for bootstrap-driven setup")
     .option("--dench-cloud-model <id>", "Stable or public Dench Cloud model id to use as default")
     .option("--dench-gateway-url <url>", "Override the Dench Cloud gateway base URL")
+    .option("--skip-daemon-install", "Skip gateway daemon/service installation (for containers or environments without systemd/launchd)", false)
     .option("--no-open", "Do not open the browser automatically")
     .option("--json", "Output summary as JSON", false)
     .addHelpText(
@@ -43,6 +44,7 @@ export function registerBootstrapCommand(program: Command) {
           denchCloudApiKey: opts.denchCloudApiKey as string | undefined,
           denchCloudModel: opts.denchCloudModel as string | undefined,
           denchGatewayUrl: opts.denchGatewayUrl as string | undefined,
+          skipDaemonInstall: Boolean(opts.skipDaemonInstall),
           noOpen: Boolean(opts.open === false),
           json: Boolean(opts.json),
         });

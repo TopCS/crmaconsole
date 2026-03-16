@@ -22,6 +22,13 @@ export function resolveIsNixMode(env: NodeJS.ProcessEnv = process.env): boolean 
 
 export const isNixMode = resolveIsNixMode();
 
+export function isDaemonlessMode(
+  opts?: { skipDaemonInstall?: boolean },
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return Boolean(opts?.skipDaemonInstall) || env.DENCHCLAW_DAEMONLESS === "1";
+}
+
 // Support historical (and occasionally misspelled) legacy state dirs.
 const LEGACY_STATE_DIRNAMES = [".clawdbot", ".moldbot", ".moltbot"] as const;
 const NEW_STATE_DIRNAME = ".openclaw-dench";
