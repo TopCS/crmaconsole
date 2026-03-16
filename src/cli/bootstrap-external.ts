@@ -523,7 +523,6 @@ async function syncBundledPlugins(params: {
   profile: string;
   stateDir: string;
   plugins: BundledPluginSpec[];
-  restartGateway?: boolean;
 }): Promise<BundledPluginSyncResult> {
   try {
     const packageRoot = resolveCliPackageRoot();
@@ -623,19 +622,6 @@ async function syncBundledPlugins(params: {
       rmSync(legacyPluginDir, { recursive: true, force: true });
     }
 
-    if (params.restartGateway) {
-      try {
-        await runOpenClawOrThrow({
-          openclawCommand: params.openclawCommand,
-          args: ["--profile", params.profile, "gateway", "restart"],
-          timeoutMs: 60_000,
-          errorMessage: "Failed to restart gateway after plugin install.",
-        });
-      } catch {
-        // Gateway may not be running yet (first bootstrap) — ignore.
-      }
-    }
-
     return {
       installedPluginIds,
       migratedLegacyDenchPlugin,
@@ -693,19 +679,35 @@ async function ensureDefaultWorkspacePath(
 }
 
 /**
- * Write `agents.defaults.workspace` directly into `stateDir/openclaw.json`
+ * Stage all required pre-onboard config directly into `stateDir/openclaw.json`
  * without going through the OpenClaw CLI.  On a fresh install the "dench"
- * profile doesn't exist yet (it's created by `openclaw onboard`), so the
- * CLI-based `config set` fails.  Writing the file directly sidesteps this
- * while still ensuring the workspace is pinned before onboard runs.
+ * profile doesn't exist yet (it's created by `openclaw onboard`), so any
+ * `openclaw config set` call fails.  Writing the file directly sidesteps
+ * this while still ensuring the config is in place before onboard starts
+ * the daemon.  The CLI-based re-application happens post-onboard once the
+ * profile is live.
  */
-function pinWorkspaceInConfigFile(stateDir: string, workspaceDir: string): void {
+function stagePreOnboardConfig(
+  stateDir: string,
+  params: {
+    workspaceDir: string;
+    gatewayMode: string;
+    gatewayPort: number;
+  },
+): void {
   const raw = readBootstrapConfig(stateDir) ?? {};
+
   const agents = { ...(asRecord(raw.agents) ?? {}) };
   const defaults = { ...(asRecord(agents.defaults) ?? {}) };
-  defaults.workspace = workspaceDir;
+  defaults.workspace = params.workspaceDir;
   agents.defaults = defaults;
   raw.agents = agents;
+
+  const gateway = { ...(asRecord(raw.gateway) ?? {}) };
+  gateway.mode = params.gatewayMode;
+  gateway.port = params.gatewayPort;
+  raw.gateway = gateway;
+
   mkdirSync(stateDir, { recursive: true });
   writeFileSync(
     path.join(stateDir, "openclaw.json"),
@@ -1413,8 +1415,8 @@ async function attemptGatewayAutoFix(params: {
   }
 
   let finalProbe = await probeGateway(params.openclawCommand, params.profile, params.gatewayPort);
-  for (let attempt = 0; attempt < 2 && !finalProbe.ok; attempt += 1) {
-    await sleep(1_200);
+  for (let attempt = 0; attempt < 4 && !finalProbe.ok; attempt += 1) {
+    await sleep(1_000);
     finalProbe = await probeGateway(params.openclawCommand, params.profile, params.gatewayPort);
   }
 
@@ -2248,15 +2250,18 @@ export async function bootstrapCommand(
     );
   }
 
-  // Pin OpenClaw to the managed default workspace before onboarding so bootstrap
-  // never drifts into creating/using legacy workspace-* paths.
-  // On a fresh install the "dench" profile doesn't exist yet (created by
-  // `openclaw onboard`), so `openclaw config set` fails.  Write the value
-  // directly into the JSON config file instead — the CLI-based re-application
-  // happens post-onboard alongside gateway mode/port.
+  // Stage workspace, gateway mode, and gateway port directly into the raw JSON
+  // config file.  On a fresh install the "dench" profile doesn't exist yet
+  // (it's created by `openclaw onboard`), so any `openclaw config set` call
+  // would fail.  Writing directly sidesteps this; the CLI-based re-application
+  // happens post-onboard once the profile is live.
   mkdirSync(workspaceDir, { recursive: true });
-  preCloudSpinner?.message("Configuring default workspace…");
-  pinWorkspaceInConfigFile(stateDir, workspaceDir);
+  preCloudSpinner?.message("Staging pre-onboard config…");
+  stagePreOnboardConfig(stateDir, {
+    workspaceDir,
+    gatewayMode: "local",
+    gatewayPort,
+  });
 
   preCloudSpinner?.stop("Gateway ready.");
 
@@ -2305,44 +2310,14 @@ export async function bootstrapCommand(
     profile,
     stateDir,
     plugins: managedBundledPlugins,
-    restartGateway: true,
   });
   const posthogPluginInstalled = preOnboardPlugins.installedPluginIds.includes("posthog-analytics");
 
-  // Ensure gateway.mode=local BEFORE onboard so the daemon starts successfully.
-  // Previously this ran post-onboard, but onboard --install-daemon starts the
-  // gateway immediately — if gateway.mode is unset at that point the daemon
-  // blocks with "set gateway.mode=local" and enters a crash loop.
-  preOnboardSpinner?.message("Configuring gateway…");
-  await ensureGatewayModeLocal(openclawCommand, profile);
-  // Persist the assigned port so the daemon binds to the correct port on first
-  // start rather than falling back to the default.
-  await ensureGatewayPort(openclawCommand, profile, gatewayPort);
-
-  // Push plugin trust through the CLI as the LAST config step before onboard.
-  // syncBundledPlugins writes plugins.allow / plugins.load.paths to the raw
-  // JSON file, but subsequent `openclaw config set` calls may clobber them.
-  // Re-applying via the CLI ensures OpenClaw's own config resolution sees them.
-  if (preOnboardPlugins.installedPluginIds.length > 0) {
-    preOnboardSpinner?.message("Trusting managed plugins…");
-    await setOpenClawConfigJson({
-      openclawCommand,
-      profile,
-      key: "plugins.allow",
-      value: preOnboardPlugins.installedPluginIds,
-      errorMessage: "Failed to set plugins.allow for managed plugins.",
-    });
-    const pluginLoadPaths = managedBundledPlugins.map((plugin) =>
-      normalizeFilesystemPath(path.join(stateDir, "extensions", plugin.sourceDirName)),
-    );
-    await setOpenClawConfigJson({
-      openclawCommand,
-      profile,
-      key: "plugins.load.paths",
-      value: pluginLoadPaths,
-      errorMessage: "Failed to set plugins.load.paths for managed plugins.",
-    });
-  }
+  // All pre-onboard config (workspace, gateway mode/port, plugin trust) is now
+  // staged via raw JSON writes above — no CLI calls needed before the profile
+  // exists.  syncBundledPlugins already wrote plugins.allow / plugins.load.paths
+  // to the raw JSON file.  Post-onboard re-application via the CLI happens after
+  // `openclaw onboard` creates the profile.
 
   preOnboardSpinner?.stop("Ready to onboard.");
 
@@ -2392,18 +2367,17 @@ export async function bootstrapCommand(
   const postOnboardSpinner = !opts.json ? spinner() : null;
   postOnboardSpinner?.start("Finalizing configuration…");
 
-  // Re-apply settings after onboard so interactive/wizard flows cannot
-  // drift DenchClaw away from its required configuration.  The workspace path
-  // was written directly to the JSON file pre-onboard (profile didn't exist
-  // yet); now that the profile is live we also push it through the CLI.
+  // ── Post-onboard config reconciliation ──
+  // Apply all Dench-owned settings via the CLI now that onboard has created the
+  // profile.  Pre-onboard config was staged via raw JSON writes (the profile
+  // didn't exist for CLI calls); this pass enforces the values through
+  // OpenClaw's own config resolution and guards against onboard wizard drift.
   await ensureDefaultWorkspacePath(openclawCommand, profile, workspaceDir);
   postOnboardSpinner?.message("Configuring gateway…");
   await ensureGatewayModeLocal(openclawCommand, profile);
   postOnboardSpinner?.message("Configuring gateway port…");
   await ensureGatewayPort(openclawCommand, profile, gatewayPort);
   postOnboardSpinner?.message("Setting tools profile…");
-  // DenchClaw requires the full tool profile; onboarding defaults can drift to
-  // messaging-only, so enforce this on every bootstrap run.
   await ensureToolsProfile(openclawCommand, profile);
 
   if (
@@ -2431,14 +2405,43 @@ export async function bootstrapCommand(
     profile,
     stateDir,
     plugins: managedBundledPlugins,
-    restartGateway: true,
   });
 
   postOnboardSpinner?.message("Configuring subagent defaults…");
   await ensureSubagentDefaults(openclawCommand, profile);
 
-  postOnboardSpinner?.message("Probing gateway health…");
+  // ── Single post-config gateway restart ──
+  // All Dench-owned config has been applied.  Restart the gateway once so the
+  // daemon picks up plugin, model, and subagent changes that were written after
+  // onboard started it.  No helper above triggers its own restart.
+  postOnboardSpinner?.message("Restarting gateway…");
+  try {
+    await runOpenClawOrThrow({
+      openclawCommand,
+      args: ["--profile", profile, "gateway", "restart"],
+      timeoutMs: 60_000,
+      errorMessage: "Failed to restart gateway after config update.",
+    });
+  } catch {
+    // Gateway may not be running (e.g. onboard daemon install failed on this
+    // platform).  The final readiness check below will catch this.
+  }
+
+  // ── Final readiness verification ──
+  // Give the gateway time to finish starting after the restart, then verify
+  // readiness.  The probe retries here replace the old pattern of probing
+  // immediately (which raced gateway startup) and jumping straight into a
+  // destructive stop/install/start auto-fix cycle.
+  postOnboardSpinner?.message("Waiting for gateway…");
   let gatewayProbe = await probeGateway(openclawCommand, profile, gatewayPort);
+  for (let attempt = 0; attempt < 4 && !gatewayProbe.ok; attempt += 1) {
+    await sleep(750);
+    postOnboardSpinner?.message(`Probing gateway health (attempt ${attempt + 2}/5)…`);
+    gatewayProbe = await probeGateway(openclawCommand, profile, gatewayPort);
+  }
+
+  // Repair is failure-only: only invoked when the retried final verification
+  // still reports the gateway as unreachable.
   let gatewayAutoFix: GatewayAutoFixResult | undefined;
   if (!gatewayProbe.ok) {
     postOnboardSpinner?.message("Gateway unreachable, attempting auto-fix…");
