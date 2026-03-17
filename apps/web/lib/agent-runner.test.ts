@@ -225,12 +225,12 @@ describe("agent-runner", () => {
 	// ── spawnAgentProcess (ws transport) ─────────────────────────────
 
 	describe("spawnAgentProcess", () => {
-		it("connects via ws module and issues connect, sessions.patch, agent RPCs in order", async () => {
+		it("connects via ws module and issues connect, sessions.patch, chat.send RPCs in order", async () => {
 			const MockWs = installMockWsModule();
 			const { spawnAgentProcess } = await import("./agent-runner.js");
 
 			const proc = spawnAgentProcess("hello", "sess-1");
-			await waitFor(() =>  MockWs.instances[0]?.methods.includes("agent"));
+			await waitFor(() =>  MockWs.instances[0]?.methods.includes("chat.send"));
 
 			const ws = MockWs.instances[0];
 			expect(ws).toBeDefined();
@@ -238,8 +238,8 @@ describe("agent-runner", () => {
 
 			expect(ws.methods).toContain("connect");
 			expect(ws.methods).toContain("sessions.patch");
-			expect(ws.methods).toContain("agent");
-			expect(ws.methods.slice(0, 3)).toEqual(["connect", "sessions.patch", "agent"]);
+			expect(ws.methods).toContain("chat.send");
+			expect(ws.methods.slice(0, 3)).toEqual(["connect", "sessions.patch", "chat.send"]);
 			proc.kill("SIGTERM");
 		});
 
@@ -290,7 +290,7 @@ describe("agent-runner", () => {
 			const { spawnAgentProcess } = await import("./agent-runner.js");
 
 			const proc = spawnAgentProcess("hello", "sess-lifeerr");
-			await waitFor(() =>  MockWs.instances[0]?.methods.includes("agent"));
+			await waitFor(() =>  MockWs.instances[0]?.methods.includes("chat.send"));
 			const ws = MockWs.instances[0];
 
 			let stdout = "";
@@ -363,16 +363,23 @@ describe("agent-runner", () => {
 			proc.kill("SIGTERM");
 		});
 
-		it("uses agent RPC for regular (non-slash) messages", async () => {
+		it("uses chat.send RPC for regular (non-slash) messages", async () => {
 			const MockWs = installMockWsModule();
 			const { spawnAgentProcess } = await import("./agent-runner.js");
 
 			const proc = spawnAgentProcess("hello world", "sess-reg");
-			await waitFor(() => MockWs.instances[0]?.methods.includes("agent"));
+			await waitFor(() => MockWs.instances[0]?.methods.includes("chat.send"));
 
 			const ws = MockWs.instances[0];
-			expect(ws.methods).toContain("agent");
-			expect(ws.methods).not.toContain("chat.send");
+			expect(ws.methods).toContain("chat.send");
+			expect(ws.methods).not.toContain("agent");
+
+			const chatSendFrame = ws.requestFrames.find(
+				(frame) => frame.method === "chat.send",
+			);
+			const params = chatSendFrame?.params as Record<string, unknown>;
+			expect(params.message).toBe("hello world");
+			expect(params.deliver).toBe(false);
 			proc.kill("SIGTERM");
 		});
 
@@ -419,12 +426,12 @@ describe("agent-runner", () => {
 			await waitFor(() => closed, { attempts: 80, delayMs: 10 });
 		});
 
-		it("does not forward chat events for regular messages in start mode", async () => {
+		it("suppresses chat events once agent events arrive in start mode", async () => {
 			const MockWs = installMockWsModule();
 			const { spawnAgentProcess } = await import("./agent-runner.js");
 
 			const proc = spawnAgentProcess("hello", "sess-nochat");
-			await waitFor(() => MockWs.instances[0]?.methods.includes("agent"));
+			await waitFor(() => MockWs.instances[0]?.methods.includes("chat.send"));
 			const ws = MockWs.instances[0];
 
 			let stdout = "";
@@ -434,8 +441,24 @@ describe("agent-runner", () => {
 
 			ws.emitJson({
 				type: "event",
-				event: "chat",
+				event: "agent",
 				seq: 1,
+				payload: {
+					runId: "r-nochat",
+					sessionKey: "agent:main:web:sess-nochat",
+					stream: "assistant",
+					data: { delta: "agent-output" },
+					globalSeq: 1,
+					ts: Date.now(),
+				},
+			});
+
+			await waitFor(() => stdout.includes("agent-output"), { attempts: 80, delayMs: 10 });
+
+			ws.emitJson({
+				type: "event",
+				event: "chat",
+				seq: 2,
 				payload: {
 					state: "final",
 					message: {
@@ -443,7 +466,7 @@ describe("agent-runner", () => {
 						content: "should be ignored",
 					},
 					sessionKey: "agent:main:web:sess-nochat",
-					globalSeq: 1,
+					globalSeq: 2,
 				},
 			});
 
@@ -768,9 +791,9 @@ describe("agent-runner", () => {
 			proc.kill("SIGTERM");
 		});
 
-		it("emits enhanced error when agent RPC fails with missing scope", async () => {
+		it("emits enhanced error when chat.send RPC fails with missing scope", async () => {
 			const MockWs = installMockWsModule();
-			MockWs.responseOverrides["agent"] = (frame) => ({
+			MockWs.responseOverrides["chat.send"] = (frame) => ({
 				type: "res",
 				id: frame.id,
 				ok: false,
