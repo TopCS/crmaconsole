@@ -285,6 +285,173 @@ describe("agent-runner", () => {
 			proc.kill("SIGTERM");
 		});
 
+		it("keeps stream open across lifecycle error and accepts continuation runId", async () => {
+			const MockWs = installMockWsModule();
+			const { spawnAgentProcess } = await import("./agent-runner.js");
+
+			const proc = spawnAgentProcess("hello", "sess-lifeerr");
+			await waitFor(() =>  MockWs.instances[0]?.methods.includes("agent"));
+			const ws = MockWs.instances[0];
+
+			let stdout = "";
+			let closed = false;
+			proc.stdout?.on("data", (chunk: Buffer | string) => {
+				stdout += chunk.toString();
+			});
+			proc.on("close", () => {
+				closed = true;
+			});
+
+			ws.emitJson({
+				type: "event",
+				event: "agent",
+				seq: 1,
+				payload: {
+					runId: "r-initial",
+					sessionKey: "agent:main:web:sess-lifeerr",
+					stream: "lifecycle",
+					data: { phase: "error" },
+					globalSeq: 1,
+					ts: Date.now(),
+				},
+			});
+
+			await new Promise((resolve) => setTimeout(resolve, 40));
+			expect(closed).toBe(false);
+
+			ws.emitJson({
+				type: "event",
+				event: "agent",
+				seq: 2,
+				payload: {
+					runId: "r-continuation",
+					sessionKey: "agent:main:web:sess-lifeerr",
+					stream: "assistant",
+					data: { delta: "continued-output" },
+					globalSeq: 2,
+					ts: Date.now(),
+				},
+			});
+
+			await waitFor(() => stdout.includes("continued-output"), {
+				attempts: 80,
+				delayMs: 10,
+			});
+			proc.kill("SIGTERM");
+		});
+
+		it("uses chat.send RPC for slash commands instead of agent", async () => {
+			const MockWs = installMockWsModule();
+			const { spawnAgentProcess } = await import("./agent-runner.js");
+
+			const proc = spawnAgentProcess("/status", "sess-cmd");
+			await waitFor(() => MockWs.instances[0]?.methods.includes("chat.send"));
+
+			const ws = MockWs.instances[0];
+			expect(ws.methods).toContain("connect");
+			expect(ws.methods).toContain("chat.send");
+			expect(ws.methods).not.toContain("agent");
+
+			const chatSendFrame = ws.requestFrames.find(
+				(frame) => frame.method === "chat.send",
+			);
+			const params = chatSendFrame?.params as Record<string, unknown>;
+			expect(params.message).toBe("/status");
+			expect(params.deliver).toBe(false);
+			expect(typeof params.idempotencyKey).toBe("string");
+			expect((params.idempotencyKey as string).length).toBeGreaterThan(0);
+			proc.kill("SIGTERM");
+		});
+
+		it("uses agent RPC for regular (non-slash) messages", async () => {
+			const MockWs = installMockWsModule();
+			const { spawnAgentProcess } = await import("./agent-runner.js");
+
+			const proc = spawnAgentProcess("hello world", "sess-reg");
+			await waitFor(() => MockWs.instances[0]?.methods.includes("agent"));
+
+			const ws = MockWs.instances[0];
+			expect(ws.methods).toContain("agent");
+			expect(ws.methods).not.toContain("chat.send");
+			proc.kill("SIGTERM");
+		});
+
+		it("forwards chat final events to stdout for slash commands", async () => {
+			const MockWs = installMockWsModule();
+			const { spawnAgentProcess } = await import("./agent-runner.js");
+
+			const proc = spawnAgentProcess("/status", "sess-chatfinal");
+			await waitFor(() => MockWs.instances[0]?.methods.includes("chat.send"));
+			const ws = MockWs.instances[0];
+
+			let stdout = "";
+			let closed = false;
+			proc.stdout?.on("data", (chunk: Buffer | string) => {
+				stdout += chunk.toString();
+			});
+			proc.on("close", () => {
+				closed = true;
+			});
+
+			ws.emitJson({
+				type: "event",
+				event: "chat",
+				seq: 1,
+				payload: {
+					state: "final",
+					message: {
+						role: "assistant",
+						content: "Status: all systems go",
+					},
+					sessionKey: "agent:main:web:sess-chatfinal",
+					globalSeq: 1,
+				},
+			});
+
+			await waitFor(() => stdout.includes("state"), {
+				attempts: 80,
+				delayMs: 10,
+			});
+			const parsed = JSON.parse(stdout.trim().split("\n").pop()!) as Record<string, unknown>;
+			expect(parsed.event).toBe("chat");
+			expect((parsed.data as Record<string, unknown>).state).toBe("final");
+
+			await waitFor(() => closed, { attempts: 80, delayMs: 10 });
+		});
+
+		it("does not forward chat events for regular messages in start mode", async () => {
+			const MockWs = installMockWsModule();
+			const { spawnAgentProcess } = await import("./agent-runner.js");
+
+			const proc = spawnAgentProcess("hello", "sess-nochat");
+			await waitFor(() => MockWs.instances[0]?.methods.includes("agent"));
+			const ws = MockWs.instances[0];
+
+			let stdout = "";
+			proc.stdout?.on("data", (chunk: Buffer | string) => {
+				stdout += chunk.toString();
+			});
+
+			ws.emitJson({
+				type: "event",
+				event: "chat",
+				seq: 1,
+				payload: {
+					state: "final",
+					message: {
+						role: "assistant",
+						content: "should be ignored",
+					},
+					sessionKey: "agent:main:web:sess-nochat",
+					globalSeq: 1,
+				},
+			});
+
+			await new Promise((resolve) => setTimeout(resolve, 40));
+			expect(stdout).not.toContain("should be ignored");
+			proc.kill("SIGTERM");
+		});
+
 	});
 
 	describe("spawnAgentSubscribeProcess", () => {
