@@ -45,5 +45,6 @@ export async function POST(req: Request) {
 	if (aborted || abortedChildren > 0) {
 		trackServer("chat_stopped");
 	}
+
 	return Response.json({ aborted, abortedChildren });
 }

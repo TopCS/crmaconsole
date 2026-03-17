@@ -1849,10 +1849,12 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 			reconnectAbortRef.current?.abort();
 			setIsReconnecting(false);
 
-			// Stop the server-side agent run and wait for confirmation so the
-			// session is no longer in "running" state before we stop the
-			// client-side stream (which may trigger queued message flush).
-			const stopKey = subagentSessionKey || currentSessionId;
+			// Read from refs to avoid stale closures — sessionIdRef is updated
+			// synchronously in handleEditorSubmit, so it's always current even
+			// if React hasn't re-rendered with the new state yet.
+			const sk = subagentSessionKeyRef.current;
+			const sid = sessionIdRef.current;
+			const stopKey = sk || sid;
 			if (stopKey) {
 				try {
 					await fetch("/api/chat/stop", {
@@ -1861,17 +1863,17 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 							"Content-Type": "application/json",
 						},
 						body: JSON.stringify(
-							subagentSessionKey
-								? { sessionKey: subagentSessionKey }
-								: { sessionId: currentSessionId },
+							sk
+								? { sessionKey: sk }
+								: { sessionId: sid },
 						),
 					});
 				} catch { /* ignore */ }
 			}
 
-		// Stop the useChat transport stream (transitions status → "ready").
-		void stop();
-	}, [currentSessionId, subagentSessionKey, stop]);
+			// Stop the useChat transport stream (transitions status → "ready").
+			void stop();
+		}, [stop]);
 
 		// ── Queue handlers ──
 
