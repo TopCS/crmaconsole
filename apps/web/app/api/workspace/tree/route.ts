@@ -177,16 +177,18 @@ async function buildTree(
     const isSymlink = entry.isSymbolicLink();
 
     if (effectiveType === "directory") {
-      // Detect .dench.app folders -- treat as app nodes (no children exposed)
+      // Detect .dench.app folders -- treat as app nodes
       if (entry.name.endsWith(".dench.app")) {
         const manifest = await readAppManifest(absPath);
         const displayName = manifest?.name || entry.name.replace(/\.dench\.app$/, "");
+        const children = showHidden ? await buildTree(absPath, relPath, dbObjects, showHidden) : undefined;
         nodes.push({
           name: displayName,
           path: relPath,
           type: "app",
           icon: manifest?.icon,
           appManifest: manifest ?? { name: displayName, entry: "index.html", runtime: "static" },
+          ...(children && children.length > 0 && { children }),
           ...(isSymlink && { symlink: true }),
         });
         continue;

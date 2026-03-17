@@ -184,6 +184,17 @@ export type DenchAppManifest = {
   entry?: string;
   runtime?: "static" | "esbuild" | "build";
   permissions?: string[];
+  display?: "full" | "widget";
+  widget?: {
+    width?: number;
+    height?: number;
+    refreshInterval?: number;
+  };
+  tools?: Array<{
+    name: string;
+    description: string;
+    inputSchema?: unknown;
+  }>;
 };
 
 type SidebarPreviewContent =
@@ -1063,6 +1074,7 @@ function WorkspacePageInner() {
           // Clicking the cron directory → show cron dashboard
           if (node.path === openclawDir + "/cron") {
             setBrowseDir(null);
+            openTabForNode({ path: "~cron", name: "Cron", type: "folder" });
             setActivePath("~cron");
             setContent({ kind: "cron-dashboard" });
             return;
@@ -1105,6 +1117,7 @@ function WorkspacePageInner() {
         const jobId = node.path.slice("~cron/".length);
         const job = cronJobs.find((j) => j.id === jobId);
         if (job) {
+          openTabForNode(node);
           setActivePath(node.path);
           setContent({ kind: "cron-job", jobId, job });
           return;
@@ -1112,6 +1125,7 @@ function WorkspacePageInner() {
       }
       // Clicking the Cron folder itself opens the dashboard
       if (node.path === "~cron") {
+        openTabForNode(node);
         setActivePath(node.path);
         setContent({ kind: "cron-dashboard" });
         return;

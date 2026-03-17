@@ -470,7 +470,7 @@ function DraggableNode({
   // Workspace root in browse mode: non-expandable entry point back to workspace
   const isWorkspaceRoot = !!workspaceRoot && node.path === workspaceRoot;
   const hasChildren = node.children && node.children.length > 0;
-  const isExpandable = isWorkspaceRoot ? false : node.type === "app" ? false : (hasChildren || node.type === "folder" || node.type === "object");
+  const isExpandable = isWorkspaceRoot ? false : node.type === "app" ? !!hasChildren : (hasChildren || node.type === "folder" || node.type === "object");
   const isExpanded = isWorkspaceRoot ? false : expandedPaths.has(node.path);
   const isActive = activePath === node.path;
   const isSelected = selectedPath === node.path;
