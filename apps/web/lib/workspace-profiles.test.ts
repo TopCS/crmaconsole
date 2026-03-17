@@ -379,6 +379,30 @@ describe("workspace (flat workspace model)", () => {
       expect(workspaces[0]?.isActive).toBe(true);
     });
 
+    it("ignores internal workspace directories for main/chat-slot agent ids", async () => {
+      const { discoverWorkspaces, mockReaddir, mockExists, mockReadFile } =
+        await importWorkspace();
+      mockReadFile.mockImplementation(() => {
+        throw new Error("ENOENT");
+      });
+      mockReaddir.mockReturnValue([
+        makeDirent("workspace", true),
+        makeDirent("workspace-main", true),
+        makeDirent("workspace-chat-slot-main-1", true),
+      ] as unknown as Dirent[]);
+      mockExists.mockImplementation((p) => {
+        const s = String(p);
+        return (
+          s === join(STATE_DIR, "workspace") ||
+          s === join(STATE_DIR, "workspace-main") ||
+          s === join(STATE_DIR, "workspace-chat-slot-main-1")
+        );
+      });
+
+      const workspaces = discoverWorkspaces();
+      expect(workspaces.map((workspace) => workspace.name)).toEqual(["default"]);
+    });
+
     it("keeps root default and workspace-dench as distinct workspaces", async () => {
       const { discoverWorkspaces, mockReaddir, mockExists, mockReadFile } =
         await importWorkspace();
@@ -614,7 +638,7 @@ describe("workspace (flat workspace model)", () => {
   });
 
   describe("ensureManagedWorkspaceRouting", () => {
-    it("repairs the default workspace agent and chat slots without flipping the active default agent", async () => {
+    it("repairs the default workspace agent and prunes chat slots without flipping the active default agent", async () => {
       const { ensureManagedWorkspaceRouting, mockExists, mockReadFile, mockWriteFile } =
         await importWorkspace();
       const configPath = join(STATE_DIR, "openclaw.json");
@@ -657,8 +681,8 @@ describe("workspace (flat workspace model)", () => {
 
       expect(written.agents.defaults.workspace).toBe(defaultWorkspaceDir);
       expect(written.agents.list.find((agent) => agent.id === "main")?.workspace).toBe(defaultWorkspaceDir);
-      expect(written.agents.list.find((agent) => agent.id === "chat-slot-main-1")?.workspace).toBe(defaultWorkspaceDir);
-      expect(written.agents.list.find((agent) => agent.id === "chat-slot-main-2")?.workspace).toBe(defaultWorkspaceDir);
+      expect(written.agents.list.find((agent) => agent.id === "chat-slot-main-1")).toBeUndefined();
+      expect(written.agents.list.find((agent) => agent.id === "chat-slot-main-2")).toBeUndefined();
       expect(written.agents.list.find((agent) => agent.id === "kumareth")?.default).toBe(true);
       expect(written.agents.list.find((agent) => agent.id === "main")?.default).toBeUndefined();
     });

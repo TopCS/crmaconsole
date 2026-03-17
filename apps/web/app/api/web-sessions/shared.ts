@@ -110,12 +110,16 @@ export function getSessionMeta(sessionId: string): WebSessionMeta | undefined {
  *  Uses pinned metadata when available, falls back to workspace-global resolution. */
 export function resolveSessionAgentId(sessionId: string, fallbackAgentId: string): string {
   const meta = getSessionMeta(sessionId);
-  return meta?.chatAgentId ?? meta?.workspaceAgentId ?? fallbackAgentId;
+  return meta?.workspaceAgentId ?? fallbackAgentId;
 }
 
 /** Resolve the gateway session key for a session.
  *  Uses pinned metadata when available, constructs from the given agent ID otherwise. */
 export function resolveSessionKey(sessionId: string, fallbackAgentId: string): string {
   const meta = getSessionMeta(sessionId);
-  return meta?.gatewaySessionKey ?? `agent:${fallbackAgentId}:web:${sessionId}`;
+  if (meta?.gatewaySessionKey && !meta.gatewaySessionKey.includes(":chat-slot-")) {
+    return meta.gatewaySessionKey;
+  }
+  const agentId = meta?.workspaceAgentId ?? fallbackAgentId;
+  return `agent:${agentId}:web:${sessionId}`;
 }

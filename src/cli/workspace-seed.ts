@@ -241,6 +241,7 @@ export type SkillSyncResult = {
  */
 export function discoverWorkspaceDirs(stateDir: string): string[] {
   const dirs = new Set<string>();
+  const CHAT_SLOT_PREFIX = "chat-slot-";
   for (const name of ["openclaw.json", "config.json"]) {
     const configPath = path.join(stateDir, name);
     if (!existsSync(configPath)) {
@@ -250,7 +251,7 @@ export function discoverWorkspaceDirs(stateDir: string): string[] {
       const raw = JSON.parse(readFileSync(configPath, "utf-8")) as {
         agents?: {
           defaults?: { workspace?: string };
-          list?: Array<{ workspace?: string }>;
+          list?: Array<{ id?: string; workspace?: string }>;
         };
       };
       const defaultWs = raw?.agents?.defaults?.workspace?.trim();
@@ -258,6 +259,10 @@ export function discoverWorkspaceDirs(stateDir: string): string[] {
         dirs.add(path.resolve(defaultWs));
       }
       for (const agent of raw?.agents?.list ?? []) {
+        const id = agent.id?.trim().toLowerCase();
+        if (id?.startsWith(CHAT_SLOT_PREFIX)) {
+          continue;
+        }
         const ws = agent.workspace?.trim();
         if (ws && existsSync(ws)) {
           dirs.add(path.resolve(ws));

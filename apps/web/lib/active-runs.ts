@@ -23,7 +23,6 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { resolveWebChatDir, resolveOpenClawStateDir, resolveActiveAgentId } from "./workspace";
-import { markChatAgentIdle } from "./chat-agent-registry";
 import {
 	type AgentProcessHandle,
 	type AgentEvent,
@@ -1971,9 +1970,6 @@ function wireChildProcess(run: ActiveRun): void {
 		// Normal completion path.
 		run.status = exitedClean ? "completed" : "error";
 
-		// Release the chat agent pool slot so it can be reused.
-		try { markChatAgentIdle(run.sessionId); } catch { /* best-effort */ }
-
 		// Final persistence flush (removes _streaming flag).
 		flushPersistence(run).catch(() => {});
 
@@ -2105,8 +2101,6 @@ function finalizeWaitingRun(run: ActiveRun): void {
 	resetSubscribeRetryState(run);
 
 	stopSubscribeProcess(run);
-
-	try { markChatAgentIdle(run.sessionId); } catch { /* best-effort */ }
 
 	flushPersistence(run).catch(() => {});
 

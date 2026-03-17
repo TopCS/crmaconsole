@@ -3,13 +3,11 @@ import { randomUUID } from "node:crypto";
 import { trackServer } from "@/lib/telemetry";
 import { type WebSessionMeta, ensureDir, readIndex, writeIndex } from "./shared";
 import {
-  ensureManagedWorkspaceRouting,
   getActiveWorkspaceName,
   resolveActiveAgentId,
   resolveWorkspaceDirForName,
   resolveWorkspaceRoot,
 } from "@/lib/workspace";
-import { allocateChatAgent } from "@/lib/chat-agent-registry";
 
 export { type WebSessionMeta };
 
@@ -38,22 +36,8 @@ export async function POST(req: Request) {
 
   const workspaceName = getActiveWorkspaceName() ?? "default";
   const workspaceRoot = resolveWorkspaceRoot() ?? resolveWorkspaceDirForName(workspaceName);
-  ensureManagedWorkspaceRouting(workspaceName, workspaceRoot, { markDefault: false });
   const workspaceAgentId = resolveActiveAgentId();
-
-  // Assign a pool slot agent for concurrent chat support.
-  // Falls back to the workspace agent if no slots are available.
-  let chatAgentId: string | undefined;
-  let effectiveAgentId = workspaceAgentId;
-  try {
-    const slot = allocateChatAgent(id);
-    chatAgentId = slot.chatAgentId;
-    effectiveAgentId = slot.chatAgentId;
-  } catch {
-    // Fall back to workspace agent
-  }
-
-  const gatewaySessionKey = `agent:${effectiveAgentId}:web:${id}`;
+  const gatewaySessionKey = `agent:${workspaceAgentId}:web:${id}`;
 
   const session: WebSessionMeta = {
     id,
@@ -65,9 +49,8 @@ export async function POST(req: Request) {
     workspaceName: workspaceName || undefined,
     workspaceRoot,
     workspaceAgentId,
-    chatAgentId,
     gatewaySessionKey,
-    agentMode: chatAgentId ? "ephemeral" : "workspace",
+    agentMode: "workspace",
     lastActiveAt: now,
   };
 

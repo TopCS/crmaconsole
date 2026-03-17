@@ -244,6 +244,34 @@ describe("discoverWorkspaceDirs", () => {
     expect(dirs).toHaveLength(2);
   });
 
+  it("ignores chat-slot agent workspace entries", () => {
+    const wsDefault = path.join(tempDir, "workspace");
+    const wsUser = path.join(tempDir, "workspace-user");
+    const wsSlot = path.join(tempDir, "workspace-chat-slot-main-1");
+    mkdirSync(wsDefault, { recursive: true });
+    mkdirSync(wsUser, { recursive: true });
+    mkdirSync(wsSlot, { recursive: true });
+    writeFileSync(
+      path.join(tempDir, "openclaw.json"),
+      JSON.stringify({
+        agents: {
+          defaults: { workspace: wsDefault },
+          list: [
+            { id: "main", workspace: wsDefault },
+            { id: "user", workspace: wsUser },
+            { id: "chat-slot-main-1", workspace: wsSlot },
+          ],
+        },
+      }),
+      "utf-8",
+    );
+
+    const dirs = discoverWorkspaceDirs(tempDir);
+    expect(dirs).toContain(path.resolve(wsDefault));
+    expect(dirs).toContain(path.resolve(wsUser));
+    expect(dirs).not.toContain(path.resolve(wsSlot));
+  });
+
   it("deduplicates workspace dirs", () => {
     const ws = path.join(tempDir, "workspace");
     mkdirSync(ws, { recursive: true });

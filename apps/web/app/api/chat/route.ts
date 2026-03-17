@@ -3,10 +3,6 @@ import {
 	resolveActiveAgentId,
 	resolveAgentWorkspacePrefix,
 	resolveOpenClawStateDir,
-	resolveWorkspaceDirForName,
-	resolveWorkspaceRoot,
-	getActiveWorkspaceName,
-	ensureManagedWorkspaceRouting,
 } from "@/lib/workspace";
 import {
 	startRun,
@@ -145,18 +141,8 @@ export async function POST(req: Request) {
 		});
 
 		const sessionMeta = getSessionMeta(sessionId);
-		const workspaceName =
-			sessionMeta?.workspaceName
-			?? getActiveWorkspaceName()
-			?? "default";
-		const workspaceRoot =
-			sessionMeta?.workspaceRoot
-			?? resolveWorkspaceRoot()
-			?? resolveWorkspaceDirForName(workspaceName);
-		ensureManagedWorkspaceRouting(workspaceName, workspaceRoot, { markDefault: false });
 		const effectiveAgentId =
-			sessionMeta?.chatAgentId
-			?? sessionMeta?.workspaceAgentId
+			sessionMeta?.workspaceAgentId
 			?? resolveActiveAgentId();
 
 		try {
@@ -193,11 +179,11 @@ export async function POST(req: Request) {
 				} catch { /* ignore enqueue errors on closed stream */ }
 			}, 15_000);
 
-			unsubscribe = subscribeToRun(
-				runKey,
-				(event: SseEvent | null) => {
-					if (closed) {return;}
-					if (event === null) {
+		unsubscribe = subscribeToRun(
+			runKey,
+			(event: SseEvent | null) => {
+				if (closed) {return;}
+				if (event === null) {
 						closed = true;
 						if (keepalive) { clearInterval(keepalive); keepalive = null; }
 						try { controller.close(); } catch { /* already closed */ }

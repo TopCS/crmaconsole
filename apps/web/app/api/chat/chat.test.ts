@@ -215,8 +215,7 @@ describe("Chat API routes", () => {
       expect(persistUserMessage).toHaveBeenCalledWith("s1", expect.objectContaining({ id: "m1" }));
     });
 
-    it("repairs managed workspace routing before starting a persisted session run", async () => {
-      const { ensureManagedWorkspaceRouting } = await import("@/lib/workspace");
+    it("uses the persisted workspace agent id when available", async () => {
       const { getSessionMeta } = await import("@/app/api/web-sessions/shared");
       const { startRun, hasActiveRun, subscribeToRun } = await import("@/lib/active-runs");
       vi.mocked(hasActiveRun).mockReturnValue(false);
@@ -230,7 +229,6 @@ describe("Chat API routes", () => {
         workspaceName: "default",
         workspaceRoot: "/home/testuser/.openclaw-dench/workspace",
         workspaceAgentId: "main",
-        chatAgentId: "chat-slot-main-2",
       } as never);
 
       const { POST } = await import("./route.js");
@@ -245,14 +243,9 @@ describe("Chat API routes", () => {
         }),
       });
       await POST(req);
-      expect(ensureManagedWorkspaceRouting).toHaveBeenCalledWith(
-        "default",
-        "/home/testuser/.openclaw-dench/workspace",
-        { markDefault: false },
-      );
       expect(startRun).toHaveBeenCalledWith(
         expect.objectContaining({
-          overrideAgentId: "chat-slot-main-2",
+          overrideAgentId: "main",
         }),
       );
     });

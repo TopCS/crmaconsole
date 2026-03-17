@@ -85,6 +85,11 @@ function workspaceNameFromDirName(dirName: string): string | null {
   return normalizeWorkspaceName(dirName.slice(WORKSPACE_PREFIX.length));
 }
 
+function isInternalWorkspaceNameForDiscovery(name: string): boolean {
+  const lowered = name.toLowerCase();
+  return lowered === GATEWAY_MAIN_AGENT_ID || lowered.startsWith(CHAT_SLOT_PREFIX);
+}
+
 function stateDirPath(): string {
   return join(resolveOpenClawHomeDir(), FIXED_STATE_DIRNAME);
 }
@@ -149,7 +154,7 @@ function scanWorkspaceNames(stateDir: string): string[] {
     const names = readdirSync(stateDir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => workspaceNameFromDirName(entry.name))
-      .filter((name): name is string => Boolean(name));
+      .filter((name): name is string => Boolean(name && !isInternalWorkspaceNameForDiscovery(name)));
     return [...new Set(names)].toSorted((a, b) => a.localeCompare(b));
   } catch {
     return [];
@@ -412,18 +417,15 @@ function applyDefaultAgentMarker(list: OpenClawAgentEntry[], targetAgentId: stri
   return changed;
 }
 
-function ensureChatSlotEntries(
-  list: OpenClawAgentEntry[],
-  baseId: string,
-  workspaceDir: string,
-  poolSize: number,
-): boolean {
-  let changed = false;
-  for (let i = 1; i <= poolSize; i++) {
-    const slotId = `${CHAT_SLOT_PREFIX}${baseId}-${i}`;
-    changed = upsertAgentWorkspace(list, slotId, workspaceDir) || changed;
+function removeChatSlotEntries(list: OpenClawAgentEntry[], baseId?: string): boolean {
+  const prefix = baseId ? `${CHAT_SLOT_PREFIX}${baseId}-` : CHAT_SLOT_PREFIX;
+  const next = list.filter((agent) => !agent.id.startsWith(prefix));
+  if (next.length === list.length) {
+    return false;
   }
-  return changed;
+  list.length = 0;
+  list.push(...next);
+  return true;
 }
 
 /**
@@ -448,6 +450,9 @@ export function ensureAgentInConfig(
   const list = ensureConfigAgentList(config);
   const resolvedId = workspaceNameToAgentId(normalized);
 
+  // Chat slots are internal, ephemeral session mechanics and should not be
+  // persisted as durable named agents in config.
+  changed = removeChatSlotEntries(list) || changed;
   changed = upsertAgentWorkspace(list, resolvedId, workspaceDir) || changed;
   if (options?.markDefault ?? true) {
     changed = applyDefaultAgentMarker(list, resolvedId) || changed;
@@ -459,21 +464,23 @@ export function ensureAgentInConfig(
 }
 
 /**
- * Pre-create a pool of chat agent slots in `agents.list[]` so the gateway
- * knows about them at startup. Each slot shares the workspace directory
- * of the parent workspace agent, enabling concurrent chat sessions.
+ * Legacy compatibility helper.
+ *
+ * Chat-slot agents are no longer persisted in openclaw.json. This function
+ * now prunes stale slot entries if present.
  */
 export function ensureChatAgentPool(workspaceName: string, workspaceDir: string, poolSize = DEFAULT_CHAT_POOL_SIZE): void {
+  void workspaceDir;
+  void poolSize;
   const normalized = normalizeWorkspaceName(workspaceName);
   if (!normalized) {
     throw new Error("Invalid workspace name.");
   }
   const config = readOpenClawConfig();
-  let changed = syncDefaultWorkspacePointer(config, normalized, workspaceDir);
+  let changed = false;
   const list = ensureConfigAgentList(config);
   const baseId = workspaceNameToAgentId(normalized);
-
-  changed = ensureChatSlotEntries(list, baseId, workspaceDir, poolSize) || changed;
+  changed = removeChatSlotEntries(list, baseId) || changed;
 
   if (changed) {
     writeOpenClawConfig(config);
@@ -481,15 +488,15 @@ export function ensureChatAgentPool(workspaceName: string, workspaceDir: string,
 }
 
 /**
- * Repair the managed agent mapping for a workspace in a single config pass.
- * This is used on chat creation/send so stale `main` or `chat-slot-main-*`
- * entries are redirected back to the intended managed workspace.
+ * Repair the workspace mapping for an existing managed agent without creating
+ * new entries. This also prunes stale `chat-slot-*` agent entries.
  */
 export function ensureManagedWorkspaceRouting(
   workspaceName: string,
   workspaceDir: string,
   options?: { markDefault?: boolean; poolSize?: number },
 ): void {
+  void options;
   const normalized = normalizeWorkspaceName(workspaceName);
   if (!normalized) {
     throw new Error("Invalid workspace name.");
@@ -498,15 +505,13 @@ export function ensureManagedWorkspaceRouting(
   let changed = syncDefaultWorkspacePointer(config, normalized, workspaceDir);
   const list = ensureConfigAgentList(config);
   const resolvedId = workspaceNameToAgentId(normalized);
-
-  changed = upsertAgentWorkspace(list, resolvedId, workspaceDir) || changed;
-  changed = ensureChatSlotEntries(
-    list,
-    resolvedId,
-    workspaceDir,
-    options?.poolSize ?? DEFAULT_CHAT_POOL_SIZE,
-  ) || changed;
-  if (options?.markDefault) {
+  const existing = list.find((agent) => agent.id === resolvedId);
+  if (existing && existing.workspace !== workspaceDir) {
+    existing.workspace = workspaceDir;
+    changed = true;
+  }
+  changed = removeChatSlotEntries(list, resolvedId) || changed;
+  if (options?.markDefault && existing) {
     changed = applyDefaultAgentMarker(list, resolvedId) || changed;
   }
 
@@ -519,13 +524,8 @@ export function ensureManagedWorkspaceRouting(
  * Return the list of chat slot agent IDs for a workspace.
  */
 export function getChatSlotAgentIds(workspaceName?: string): string[] {
-  const config = readOpenClawConfig();
-  const list = config.agents?.list;
-  if (!Array.isArray(list)) { return []; }
-
-  const baseId = workspaceNameToAgentId(workspaceName ?? getActiveWorkspaceName() ?? DEFAULT_WORKSPACE_NAME);
-  const prefix = `${CHAT_SLOT_PREFIX}${baseId}-`;
-  return list.filter((a) => a.id.startsWith(prefix)).map((a) => a.id);
+  void workspaceName;
+  return [];
 }
 
 export { CHAT_SLOT_PREFIX, DEFAULT_CHAT_POOL_SIZE };
