@@ -471,8 +471,9 @@ export function abortRun(sessionId: string): boolean {
 		run.childProcess.kill("SIGTERM");
 	}
 
-	// Send chat.abort directly to the gateway so the agent run stops
-	// even if the CLI child's best-effort onAbort doesn't complete in time.
+	// Send chat.abort to the gateway.  Now that runs are started via
+	// chat.send (not the agent RPC), they are registered in the gateway's
+	// session-level tracking and chat.abort can find them from any connection.
 	sendGatewayAbort(sessionId);
 
 	// Flush persistence to save the partial response (without _streaming).

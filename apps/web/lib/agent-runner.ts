@@ -559,6 +559,25 @@ class GatewayWsClient {
 		const ws = new NodeWebSocket(this.settings.url);
 		this.ws = ws;
 
+		// Attach message/close handlers BEFORE awaiting "open" so that
+		// events sent immediately after the handshake (e.g. connect.challenge)
+		// are never lost to a listener-attachment race.
+		ws.on("message", (data: NodeWebSocket.RawData) => {
+			const text = toMessageText(data);
+			if (text != null) {
+				this.handleMessageText(text);
+			}
+		});
+
+		ws.on("close", (code: number, reason: Buffer) => {
+			if (this.closed) {
+				return;
+			}
+			this.closed = true;
+			this.flushPending(new Error("Gateway connection closed"));
+			this.onClose(code, reason.toString("utf-8"));
+		});
+
 		await new Promise<void>((resolve, reject) => {
 			let settled = false;
 			const timer = setTimeout(() => {
@@ -589,22 +608,6 @@ class GatewayWsClient {
 
 			ws.once("open", onOpen);
 			ws.once("error", onError);
-		});
-
-		ws.on("message", (data: NodeWebSocket.RawData) => {
-			const text = toMessageText(data);
-			if (text != null) {
-				this.handleMessageText(text);
-			}
-		});
-
-		ws.on("close", (code: number, reason: Buffer) => {
-			if (this.closed) {
-				return;
-			}
-			this.closed = true;
-			this.flushPending(new Error("Gateway connection closed"));
-			this.onClose(code, reason.toString("utf-8"));
 		});
 	}
 
@@ -787,7 +790,11 @@ class GatewayProcessHandle
 
 			const sessionKey = this.params.sessionKey;
 			const msg = this.params.message ?? "";
-			this.useChatSend = msg.startsWith("/");
+			// Always use chat.send so runs are registered in the gateway's
+			// session-level tracking.  The `agent` RPC scopes runs to the
+			// originating WebSocket, making them invisible to chat.abort
+			// from any other connection (including the stop route).
+			this.useChatSend = true;
 
 			let startRes: GatewayResFrame;
 			if (this.useChatSend) {
@@ -1172,9 +1179,26 @@ export async function callGatewayRpc(
 		},
 	);
 	try {
+		const stateDir = resolveOpenClawStateDir();
+		const deviceIdentity = loadDeviceIdentity(stateDir);
+		const deviceAuth = loadDeviceAuth(stateDir);
+
+		let nonce: string | undefined;
+		if (deviceIdentity) {
+			try {
+				nonce = await client.waitForChallenge();
+			} catch {
+				nonce = undefined;
+			}
+		}
+
 		const connect = await client.request(
 			"connect",
-			buildConnectParams(settings),
+			buildConnectParams(settings, {
+				nonce,
+				deviceIdentity,
+				deviceToken: deviceAuth?.token,
+			}),
 			options?.timeoutMs ?? REQUEST_TIMEOUT_MS,
 		);
 		if (!connect.ok) {
