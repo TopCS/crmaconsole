@@ -167,16 +167,22 @@ function TerminalViewport({
       const cols = terminal.cols > 0 ? terminal.cols : 80;
       const rows = terminal.rows > 0 ? terminal.rows : 24;
 
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+
+      let useProxy = false;
       let wsPort = DEFAULT_WS_PORT;
       try {
         const res = await fetch("/api/terminal/port");
         const json = await res.json();
         if (json.port) wsPort = json.port;
+        if (json.proxy) useProxy = true;
       } catch {}
 
       if (disposed) return;
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//127.0.0.1:${wsPort}`;
+
+      const wsUrl = useProxy
+        ? `${protocol}//${window.location.host}/terminal-ws/`
+        : `${protocol}//127.0.0.1:${wsPort}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 

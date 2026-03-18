@@ -5,5 +5,6 @@ export const dynamic = "force-dynamic";
 
 export function GET() {
   const port = getTerminalPort();
-  return NextResponse.json({ port });
+  const proxy = process.env.DENCHCLAW_DAEMONLESS === "1";
+  return NextResponse.json({ port, proxy });
 }
