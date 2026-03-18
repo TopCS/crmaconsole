@@ -623,7 +623,7 @@ export function startSubscribeRun(params: {
 		"sessions.patch",
 		{
 			key: sessionKey,
-			thinkingLevel: "xhigh",
+			thinkingLevel: "high",
 			verboseLevel: "full",
 			reasoningLevel: "on",
 		},
@@ -969,19 +969,19 @@ function wireSubscribeOnlyProcess(
 					}
 				}
 			}
-			if (typeof ev.data?.stopReason === "string" && ev.data.stopReason === "error" && !agentErrorReported) {
-				agentErrorReported = true;
-				const errMsg = typeof ev.data?.errorMessage === "string"
-					? parseErrorBody(ev.data.errorMessage)
-					: (parseAgentErrorMessage(ev.data) ?? "Agent stopped with an error");
-				emitError(errMsg);
-			}
+		if (typeof ev.data?.stopReason === "string" && ev.data.stopReason === "error" && !agentErrorReported) {
+			agentErrorReported = true;
+			const errMsg = typeof ev.data?.errorMessage === "string"
+				? parseErrorBody(ev.data.errorMessage)
+				: (parseAgentErrorMessage(ev.data) ?? "Agent stopped with an error");
+			emitError(errMsg);
 		}
+	}
 
-		if (ev.event === "agent" && ev.stream === "tool") {
-			const phase = typeof ev.data?.phase === "string" ? ev.data.phase : undefined;
-			const toolCallId = typeof ev.data?.toolCallId === "string" ? ev.data.toolCallId : "";
-			const toolName = typeof ev.data?.name === "string" ? ev.data.name : "";
+	if (ev.event === "agent" && ev.stream === "tool") {
+		const phase = typeof ev.data?.phase === "string" ? ev.data.phase : undefined;
+		const toolCallId = typeof ev.data?.toolCallId === "string" ? ev.data.toolCallId : "";
+		const toolName = typeof ev.data?.name === "string" ? ev.data.name : "";
 			if (phase === "start") {
 				liveStats.toolStartCount += 1;
 				closeReasoning();
@@ -1080,19 +1080,19 @@ function wireSubscribeOnlyProcess(
 			}, SUBSCRIBE_LIFECYCLE_END_GRACE_MS);
 		}
 
-		if (ev.event === "agent" && ev.stream === "lifecycle" && ev.data?.phase === "error" && !agentErrorReported) {
-			agentErrorReported = true;
-			emitError(parseAgentErrorMessage(ev.data) ?? "Agent encountered an error");
-			finalizeSubscribeRun(run, "error");
-		}
+	if (ev.event === "agent" && ev.stream === "lifecycle" && ev.data?.phase === "error" && !agentErrorReported) {
+		agentErrorReported = true;
+		emitError(parseAgentErrorMessage(ev.data) ?? "Agent encountered an error");
+		finalizeSubscribeRun(run, "error");
+	}
 
-		if (ev.event === "error" && !agentErrorReported) {
-			agentErrorReported = true;
-			emitError(parseAgentErrorMessage(ev.data ?? (ev as unknown as Record<string, unknown>)) ?? "An unknown error occurred");
-		}
-	};
+	if (ev.event === "error" && !agentErrorReported) {
+		agentErrorReported = true;
+		emitError(parseAgentErrorMessage(ev.data ?? (ev as unknown as Record<string, unknown>)) ?? "An unknown error occurred");
+	}
+};
 
-	const rl = createInterface({ input: child.stdout! });
+const rl = createInterface({ input: child.stdout! });
 
 	rl.on("line", (line: string) => {
 		if (!line.trim()) { return; }
@@ -1620,22 +1620,22 @@ function wireChildProcess(run: ActiveRun): void {
 					}
 				}
 			}
-			// Agent error inline (stopReason=error)
-			if (
-				typeof ev.data?.stopReason === "string" &&
-				ev.data.stopReason === "error" &&
-				!agentErrorReported
-			) {
-				agentErrorReported = true;
-				const errMsg = typeof ev.data?.errorMessage === "string"
-					? parseErrorBody(ev.data.errorMessage)
-					: (parseAgentErrorMessage(ev.data) ?? "Agent stopped with an error");
-				emitError(errMsg);
-			}
+		// Agent error inline (stopReason=error)
+		if (
+			typeof ev.data?.stopReason === "string" &&
+			ev.data.stopReason === "error" &&
+			!agentErrorReported
+		) {
+			agentErrorReported = true;
+			const errMsg = typeof ev.data?.errorMessage === "string"
+				? parseErrorBody(ev.data.errorMessage)
+				: (parseAgentErrorMessage(ev.data) ?? "Agent stopped with an error");
+			emitError(errMsg);
 		}
+	}
 
-		// Tool events
-		if (ev.event === "agent" && ev.stream === "tool") {
+	// Tool events
+	if (ev.event === "agent" && ev.stream === "tool") {
 			const phase =
 				typeof ev.data?.phase === "string"
 					? ev.data.phase
@@ -1794,28 +1794,28 @@ function wireChildProcess(run: ActiveRun): void {
 			closeText();
 		}
 
-		// Lifecycle error
-		if (
-			ev.event === "agent" &&
-			ev.stream === "lifecycle" &&
-			ev.data?.phase === "error" &&
-			!agentErrorReported
-		) {
-			agentErrorReported = true;
-			emitError(parseAgentErrorMessage(ev.data) ?? "Agent encountered an error");
-		}
+	// Lifecycle error
+	if (
+		ev.event === "agent" &&
+		ev.stream === "lifecycle" &&
+		ev.data?.phase === "error" &&
+		!agentErrorReported
+	) {
+		agentErrorReported = true;
+		emitError(parseAgentErrorMessage(ev.data) ?? "Agent encountered an error");
+	}
 
-		// Top-level error event
-		if (ev.event === "error" && !agentErrorReported) {
-			agentErrorReported = true;
-			emitError(
-				parseAgentErrorMessage(
-					ev.data ??
-						(ev as unknown as Record<string, unknown>),
-				) ?? "An unknown error occurred",
-			);
-		}
-	};
+	// Top-level error event
+	if (ev.event === "error" && !agentErrorReported) {
+		agentErrorReported = true;
+		emitError(
+			parseAgentErrorMessage(
+				ev.data ??
+					(ev as unknown as Record<string, unknown>),
+			) ?? "An unknown error occurred",
+		);
+	}
+};
 
 	const processParentSubscribeEvent = (ev: AgentEvent) => {
 		const gSeq = typeof (ev as Record<string, unknown>).globalSeq === "number"

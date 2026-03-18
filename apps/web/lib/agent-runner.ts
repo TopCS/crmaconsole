@@ -875,7 +875,7 @@ class GatewayProcessHandle
 
 		const patchParams: Record<string, string> = {
 			key: sessionKey,
-			thinkingLevel: "xhigh",
+			thinkingLevel: "high",
 			verboseLevel: "full",
 			reasoningLevel: "on",
 		};
@@ -1353,6 +1353,10 @@ export function parseAgentErrorMessage(
  * Returns a clean, user-readable message.
  */
 export function parseErrorBody(raw: string): string {
+	if (raw === "terminated") {
+		return "Agent run was terminated by the gateway. This is usually caused by the model provider dropping the connection mid-stream. Retry the message to continue.";
+	}
+
 	// Try to extract JSON body from "STATUS {json}" pattern
 	const jsonIdx = raw.indexOf("{");
 	if (jsonIdx >= 0) {
