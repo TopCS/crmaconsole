@@ -694,10 +694,13 @@ function ensureSeedAssets(runtimeAppDir: string, packageRoot: string): void {
 }
 
 /**
- * Copy .next/static/ and public/ into the runtime app dir if they aren't
- * already present.  In production the prepack script copies these into the
- * standalone app dir before publish, so cpSync already picks them up.
- * In dev the prepack hasn't run, so we pull them from the source tree.
+ * Copy .next/static/ and public/ into the runtime app dir.  Always
+ * force-overwrites so stale assets left by a partial prior install or an
+ * npx cache hit are replaced with the current build.
+ *
+ * In production the prepack script already embeds these in the standalone
+ * app dir, so cpSync picks them up first; this pass guarantees they match
+ * the source tree even when the standalone copy is incomplete.
  */
 function ensureStaticAssets(runtimeAppDir: string, packageRoot: string): void {
   const pairs: Array<[src: string, dst: string]> = [
@@ -711,7 +714,7 @@ function ensureStaticAssets(runtimeAppDir: string, packageRoot: string): void {
     ],
   ];
   for (const [src, dst] of pairs) {
-    if (existsSync(dst) || !existsSync(src)) continue;
+    if (!existsSync(src)) continue;
     try {
       mkdirSync(path.dirname(dst), { recursive: true });
       cpSync(src, dst, { recursive: true, dereference: true, force: true });

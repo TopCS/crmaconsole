@@ -15,10 +15,27 @@ try {
   openclawVersion = oclPkg.version ?? "";
 } catch { /* openclaw not resolvable at build time */ }
 
+const denchVersion = rootPkg.version ?? "";
+
 const nextConfig: NextConfig = {
   env: {
-    NEXT_PUBLIC_DENCHCLAW_VERSION: rootPkg.version ?? "",
+    NEXT_PUBLIC_DENCHCLAW_VERSION: denchVersion,
     NEXT_PUBLIC_OPENCLAW_VERSION: openclawVersion,
+  },
+
+  async headers() {
+    return [
+      {
+        source: "/((?!_next/static|_next/image|favicon\\.ico).*)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "private, no-cache, no-store, max-age=0, must-revalidate",
+          },
+          { key: "X-Denchclaw-Version", value: denchVersion },
+        ],
+      },
+    ];
   },
 
   // Produce a self-contained standalone build so npm global installs
