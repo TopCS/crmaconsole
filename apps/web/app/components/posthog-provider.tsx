@@ -48,9 +48,18 @@ function initPostHog(anonymousId?: string, personInfo?: PersonInfo, privacyMode?
 
   if (personInfo && anonymousId) {
     const props: Record<string, string> = {};
-    if (personInfo.name) props.$name = personInfo.name;
-    if (personInfo.email) props.$email = personInfo.email;
-    if (personInfo.avatar) props.$avatar = personInfo.avatar;
+    if (personInfo.name) {
+      props.$name = personInfo.name;
+      props.name = personInfo.name;
+    }
+    if (personInfo.email) {
+      props.$email = personInfo.email;
+      props.email = personInfo.email;
+    }
+    if (personInfo.avatar) {
+      props.$avatar = personInfo.avatar;
+      props.avatar = personInfo.avatar;
+    }
     if (personInfo.denchOrgId) props.dench_org_id = personInfo.denchOrgId;
     posthog.identify(anonymousId, props);
   }
