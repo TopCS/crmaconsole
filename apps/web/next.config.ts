@@ -27,13 +27,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/((?!_next/static|_next/image|favicon\\.ico).*)",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "private, no-cache, no-store, max-age=0, must-revalidate",
-          },
-          { key: "X-Denchclaw-Version", value: denchVersion },
-        ],
+        headers: [{ key: "X-Denchclaw-Version", value: denchVersion }],
       },
     ];
   },
