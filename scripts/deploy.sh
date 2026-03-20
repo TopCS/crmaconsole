@@ -10,10 +10,14 @@
 #
 # Flags:
 #   --skip-tests  Skip running tests before build/publish.
+#   --skip-publish  Run all validation/build checks but do not publish.
 #   --skip-npx-smoke  Skip post-publish npx binary verification.
 #
 # Environment:
-#   NPM_TOKEN   Required. npm auth token for publishing.
+#   NPM_TOKEN    Optional. npm auth token for publishing.
+#                Required only when actually publishing outside GitHub Actions.
+#                If omitted in GitHub Actions, npm trusted publishing via OIDC
+#                can be used instead.
 
 set -euo pipefail
 
@@ -28,6 +32,14 @@ cd "$ROOT_DIR"
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 die() { echo "error: $*" >&2; exit 1; }
+
+run_npm() {
+  if [[ ${#NPM_FLAGS[@]} -gt 0 ]]; then
+    npm "$@" "${NPM_FLAGS[@]}"
+  else
+    npm "$@"
+  fi
+}
 
 current_version() {
   node -p "require('./package.json').version"
@@ -126,6 +138,7 @@ EXPLICIT_VERSION=""
 DRY_RUN=false
 SKIP_BUILD=false
 SKIP_TESTS=false
+SKIP_PUBLISH=false
 SKIP_NPX_SMOKE=false
 
 set_mode() {
@@ -138,6 +151,9 @@ set_mode() {
 
 while [[ $# -gt 0 ]]; do
   case $1 in
+    --)
+      shift
+      ;;
     --version)
       set_mode "version"
       EXPLICIT_VERSION="${2:?--version requires a semver argument (x.y.z)}"
@@ -163,6 +179,10 @@ while [[ $# -gt 0 ]]; do
       SKIP_TESTS=true
       shift
       ;;
+    --skip-publish)
+      SKIP_PUBLISH=true
+      shift
+      ;;
     --skip-npx-smoke)
       SKIP_NPX_SMOKE=true
       shift
@@ -179,16 +199,22 @@ done
 
 # ── auth ─────────────────────────────────────────────────────────────────────
 
-if [[ -z "${NPM_TOKEN:-}" ]]; then
-  die "NPM_TOKEN environment variable is required"
-fi
+NPM_FLAGS=()
 
-# Write a temporary .npmrc for auth (npm_config_ env vars can't encode
-# registry-scoped keys because they contain slashes and colons).
-NPMRC_TEMP="${ROOT_DIR}/.npmrc.deploy"
-trap 'rm -f "$NPMRC_TEMP"' EXIT
-echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$NPMRC_TEMP"
-NPM_FLAGS=(--userconfig "$NPMRC_TEMP")
+if [[ "$SKIP_PUBLISH" == true ]]; then
+  :
+elif [[ -n "${NPM_TOKEN:-}" ]]; then
+  # Write a temporary .npmrc for auth (npm_config_ env vars can't encode
+  # registry-scoped keys because they contain slashes and colons).
+  NPMRC_TEMP="${ROOT_DIR}/.npmrc.deploy"
+  trap 'rm -f "$NPMRC_TEMP"' EXIT
+  echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$NPMRC_TEMP"
+  NPM_FLAGS=(--userconfig "$NPMRC_TEMP")
+elif [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  echo "using npm trusted publishing via GitHub Actions OIDC"
+else
+  die "NPM_TOKEN environment variable is required outside GitHub Actions"
+fi
 
 # ── compute version ─────────────────────────────────────────────────────────
 
@@ -213,7 +239,11 @@ case "$MODE" in
 esac
 
 if npm_version_exists "$VERSION"; then
-  die "version $VERSION already exists on npm. Use --bump <major|minor|patch> or --version <x.y.z>."
+  if [[ "$SKIP_PUBLISH" == true ]]; then
+    echo "version $VERSION already exists on npm; continuing because --skip-publish was requested"
+  else
+    die "version $VERSION already exists on npm. Use --bump <major|minor|patch> or --version <x.y.z>."
+  fi
 fi
 
 if [[ "$DRY_RUN" == true ]]; then
@@ -223,7 +253,7 @@ fi
 
 # ── set version ──────────────────────────────────────────────────────────────
 
-npm version "$VERSION" --no-git-tag-version --allow-same-version "${NPM_FLAGS[@]}"
+run_npm version "$VERSION" --no-git-tag-version --allow-same-version
 
 # ── pre-flight: tests ────────────────────────────────────────────────────────
 
@@ -307,13 +337,18 @@ for mod in $SERVER_EXTERNAL; do
 done
 echo "standalone node_modules verified ($CHECKED)"
 
+if [[ "$SKIP_PUBLISH" == true ]]; then
+  echo "pre-publish checks passed; skipping publish"
+  exit 0
+fi
+
 # ── publish ──────────────────────────────────────────────────────────────────
 
 # Always tag as "latest" — npm skips the latest tag for prerelease versions
 # by default, but we want `npm i -g denchclaw` to always resolve to
 # the most recently published version.
 echo "publishing ${PACKAGE_NAME}@${VERSION}..."
-npm publish --access public --tag latest "${NPM_FLAGS[@]}"
+run_npm publish --access public --tag latest
 
 # ── publish alias package (dench → denchclaw) ────────────────────────────────
 
@@ -329,7 +364,7 @@ if [[ -d "$ALIAS_DIR" ]]; then
     fs.writeFileSync('${ALIAS_DIR}/package.json', JSON.stringify(pkg, null, 2) + '\n');
   "
   echo "publishing ${ALIAS_PACKAGE_NAME}@${VERSION}..."
-  if (cd "$ALIAS_DIR" && npm publish --access public --tag latest "${NPM_FLAGS[@]}" 2>/dev/null); then
+  if (cd "$ALIAS_DIR" && run_npm publish --access public --tag latest 2>/dev/null); then
     ALIAS_PUBLISHED=true
     echo "published ${ALIAS_PACKAGE_NAME}@${VERSION}"
   else
