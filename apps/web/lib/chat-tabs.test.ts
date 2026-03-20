@@ -115,10 +115,12 @@ describe("chat tab helpers", () => {
     expect(resolveChatIdentityForTab(parent)).toEqual({
       sessionId: "parent-1",
       subagentKey: null,
+      gatewaySessionKey: null,
     });
     expect(resolveChatIdentityForTab(child)).toEqual({
       sessionId: "parent-1",
       subagentKey: "agent:child-1:subagent:abc",
+      gatewaySessionKey: null,
     });
   });
 });
