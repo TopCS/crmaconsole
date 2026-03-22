@@ -12,12 +12,16 @@
 #   --skip-tests  Skip running tests before build/publish.
 #   --skip-publish  Run all validation/build checks but do not publish.
 #   --skip-npx-smoke  Skip post-publish npx binary verification.
+#   --npx-smoke-only  Only run post-publish npx verification for package.json's
+#                     current version.
 #
 # Environment:
 #   NPM_TOKEN    Optional. npm auth token for publishing.
 #                Required only when actually publishing outside GitHub Actions.
 #                If omitted in GitHub Actions, npm trusted publishing via OIDC
 #                can be used instead.
+#   NPX_VERIFY_ATTEMPTS       Optional. Retry count for post-publish npx checks.
+#   NPX_VERIFY_DELAY_SECONDS  Optional. Delay between npx smoke-test retries.
 
 set -euo pipefail
 
@@ -80,52 +84,128 @@ bump_semver() {
   esac
 }
 
+print_last_command_output() {
+  local stream_name="$1"
+  local output="$2"
+
+  if [[ -n "$output" ]]; then
+    echo "last ${stream_name}:" >&2
+    echo "$output" >&2
+  fi
+}
+
 verify_npx_command() {
   local version="$1"
   local label="$2"
   shift 2
-  local attempts=15
-  local delay_seconds=2
+  local attempts="${NPX_VERIFY_ATTEMPTS:-40}"
+  local delay_seconds="${NPX_VERIFY_DELAY_SECONDS:-3}"
   local output=""
+  local stderr_output=""
+  local last_stdout=""
+  local last_stderr=""
+  local failure_reason=""
+  local status=0
   local temp_dir
+  local stdout_file
+  local stderr_file
   temp_dir="$(mktemp -d)"
+  stdout_file="${temp_dir}/stdout.log"
+  stderr_file="${temp_dir}/stderr.log"
 
   for ((i = 1; i <= attempts; i++)); do
-    if output="$(cd "$temp_dir" && "$@" 2>/dev/null)"; then
+    : > "$stdout_file"
+    : > "$stderr_file"
+
+    if (cd "$temp_dir" && "$@" >"$stdout_file" 2>"$stderr_file"); then
+      output="$(<"$stdout_file")"
+      stderr_output="$(<"$stderr_file")"
       if [[ "$output" == *"$version"* ]]; then
         echo "verified ${label}: ${output}"
         rm -rf "$temp_dir"
         return 0
       fi
+      last_stdout="$output"
+      last_stderr="$stderr_output"
+      failure_reason="unexpected stdout (expected to include ${version})"
+    else
+      status=$?
+      last_stdout="$(<"$stdout_file")"
+      last_stderr="$(<"$stderr_file")"
+      failure_reason="exit code ${status}"
     fi
-    sleep "$delay_seconds"
+
+    if (( i < attempts )); then
+      echo "npx smoke attempt ${i}/${attempts} for ${label} failed (${failure_reason}); retrying in ${delay_seconds}s"
+      sleep "$delay_seconds"
+    fi
   done
 
   rm -rf "$temp_dir"
-  echo "error: failed to verify ${label} for ${PACKAGE_NAME}@${version}" >&2
+  echo "error: failed to verify ${label} for ${PACKAGE_NAME}@${version} after ${attempts} attempts" >&2
+  echo "last failure: ${failure_reason}" >&2
+  print_last_command_output "stdout" "$last_stdout"
+  print_last_command_output "stderr" "$last_stderr"
   return 1
 }
 
 verify_npx_invocation() {
   local label="$1"
   shift
-  local attempts=15
-  local delay_seconds=2
+  local attempts="${NPX_VERIFY_ATTEMPTS:-40}"
+  local delay_seconds="${NPX_VERIFY_DELAY_SECONDS:-3}"
+  local last_stdout=""
+  local last_stderr=""
+  local failure_reason=""
+  local status=0
   local temp_dir
+  local stdout_file
+  local stderr_file
   temp_dir="$(mktemp -d)"
+  stdout_file="${temp_dir}/stdout.log"
+  stderr_file="${temp_dir}/stderr.log"
 
   for ((i = 1; i <= attempts; i++)); do
-    if (cd "$temp_dir" && "$@" >/dev/null 2>&1); then
+    : > "$stdout_file"
+    : > "$stderr_file"
+
+    if (cd "$temp_dir" && "$@" >"$stdout_file" 2>"$stderr_file"); then
       echo "verified ${label}"
       rm -rf "$temp_dir"
       return 0
     fi
-    sleep "$delay_seconds"
+
+    status=$?
+    last_stdout="$(<"$stdout_file")"
+    last_stderr="$(<"$stderr_file")"
+    failure_reason="exit code ${status}"
+
+    if (( i < attempts )); then
+      echo "npx smoke attempt ${i}/${attempts} for ${label} failed (${failure_reason}); retrying in ${delay_seconds}s"
+      sleep "$delay_seconds"
+    fi
   done
 
   rm -rf "$temp_dir"
-  echo "error: failed to verify ${label}" >&2
+  echo "error: failed to verify ${label} after ${attempts} attempts" >&2
+  echo "last failure: ${failure_reason}" >&2
+  print_last_command_output "stdout" "$last_stdout"
+  print_last_command_output "stderr" "$last_stderr"
   return 1
+}
+
+run_npx_smoke_checks() {
+  local version="$1"
+
+  echo "verifying npx binaries..."
+  verify_npx_command "$version" "npx denchclaw" \
+    npx --yes "${PACKAGE_NAME}@${version}" --version
+  verify_npx_invocation "npx denchclaw update --help" \
+    npx --yes "${PACKAGE_NAME}@${version}" update --help
+  verify_npx_invocation "npx denchclaw start --help" \
+    npx --yes "${PACKAGE_NAME}@${version}" start --help
+  verify_npx_invocation "npx denchclaw stop --help" \
+    npx --yes "${PACKAGE_NAME}@${version}" stop --help
 }
 
 # ── parse args ───────────────────────────────────────────────────────────────
@@ -138,6 +218,7 @@ SKIP_BUILD=false
 SKIP_TESTS=false
 SKIP_PUBLISH=false
 SKIP_NPX_SMOKE=false
+NPX_SMOKE_ONLY=false
 
 set_mode() {
   local next="$1"
@@ -185,6 +266,10 @@ while [[ $# -gt 0 ]]; do
       SKIP_NPX_SMOKE=true
       shift
       ;;
+    --npx-smoke-only)
+      NPX_SMOKE_ONLY=true
+      shift
+      ;;
     --help|-h)
       sed -n '2,/^[^#]/{ /^#/s/^# \{0,1\}//p; }' "$0"
       exit 0
@@ -199,7 +284,7 @@ done
 
 NPM_FLAGS=()
 
-if [[ "$SKIP_PUBLISH" == true ]]; then
+if [[ "$SKIP_PUBLISH" == true || "$NPX_SMOKE_ONLY" == true ]]; then
   :
 elif [[ -n "${NPM_TOKEN:-}" ]]; then
   # Write a temporary .npmrc for auth (npm_config_ env vars can't encode
@@ -232,9 +317,24 @@ case "$MODE" in
     ;;
   *)
     VERSION="$CURRENT"
-    echo "publishing current version: $VERSION"
+    if [[ "$NPX_SMOKE_ONLY" == true ]]; then
+      echo "using current version for npx smoke tests: $VERSION"
+    elif [[ "$SKIP_PUBLISH" == true ]]; then
+      echo "checking current version: $VERSION"
+    else
+      echo "publishing current version: $VERSION"
+    fi
     ;;
 esac
+
+if [[ "$NPX_SMOKE_ONLY" == true ]]; then
+  echo "running npx smoke tests for ${PACKAGE_NAME}@${VERSION}"
+  if ! npm_version_exists "$VERSION"; then
+    die "cannot run npx smoke tests before ${PACKAGE_NAME}@${VERSION} is published"
+  fi
+  run_npx_smoke_checks "$VERSION"
+  exit 0
+fi
 
 if npm_version_exists "$VERSION"; then
   if [[ "$SKIP_PUBLISH" == true ]]; then
@@ -351,15 +451,7 @@ run_npm publish --access public --tag latest
 
 # Verify published npx flows for the primary package.
 if [[ "$SKIP_NPX_SMOKE" != true ]]; then
-  echo "verifying npx binaries..."
-  verify_npx_command "$VERSION" "npx denchclaw" \
-    npx --yes "${PACKAGE_NAME}@${VERSION}" --version
-  verify_npx_invocation "npx denchclaw update --help" \
-    npx --yes "${PACKAGE_NAME}@${VERSION}" update --help
-  verify_npx_invocation "npx denchclaw start --help" \
-    npx --yes "${PACKAGE_NAME}@${VERSION}" start --help
-  verify_npx_invocation "npx denchclaw stop --help" \
-    npx --yes "${PACKAGE_NAME}@${VERSION}" stop --help
+  run_npx_smoke_checks "$VERSION"
 fi
 
 # Post-publish sanity: confirm the standalone server was published.

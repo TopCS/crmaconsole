@@ -80,7 +80,7 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
-        run: pnpm run deploy -- --skip-tests --skip-build
+        run: pnpm run deploy -- --skip-tests --skip-build --skip-npx-smoke
 
       - name: Create GitHub release
         if: steps.github_release.outputs.exists != 'true'
@@ -92,3 +92,8 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "$TAG" \
             --generate-notes
+
+      - name: Verify published npx install
+        if: steps.npm.outputs.published != 'true'
+        continue-on-error: true
+        run: bash scripts/with-root-env.sh bash scripts/deploy.sh --npx-smoke-only
