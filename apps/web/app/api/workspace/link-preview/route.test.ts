@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMetadata } from "./route";
+import { parseMetadata } from "./link-preview-utils";
 
 describe("parseMetadata", () => {
 	it("extracts OG title, description, image, and site name", () => {

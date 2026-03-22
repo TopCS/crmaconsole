@@ -264,14 +264,14 @@ function TagChip({ tag }: { tag: string }) {
 				)}
 				<span className="min-w-0 truncate">{formatted.text}</span>
 				<LinkOpenButton
-					href={formatted.href}
+					href={formatted.href!}
 					openInNewTab={openInNewTab}
 					className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm hover:bg-black/5"
 				/>
 			</span>
 		);
 		return formatted.linkType === "url" ? (
-			<LinkPreviewWrapper href={formatted.href}>{chip}</LinkPreviewWrapper>
+			<LinkPreviewWrapper href={formatted.href!}>{chip}</LinkPreviewWrapper>
 		) : chip;
 	}
 	return (

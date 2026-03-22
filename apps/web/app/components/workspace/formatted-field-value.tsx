@@ -191,7 +191,7 @@ export function FormattedFieldValue({
 							{formatted.text}
 						</span>
 						<LinkOpenButton
-							href={formatted.href}
+							href={formatted.href!}
 							openInNewTab={openInNewTab}
 						/>
 					</span>
@@ -205,13 +205,13 @@ export function FormattedFieldValue({
 				</div>
 			);
 			return formatted.linkType === "url" ? (
-				<LinkPreviewWrapper href={formatted.href}>{buttonContent}</LinkPreviewWrapper>
+				<LinkPreviewWrapper href={formatted.href!}>{buttonContent}</LinkPreviewWrapper>
 			) : buttonContent;
 		}
 		return (
 			<div className={isTableMode ? "block max-w-[300px]" : "w-full"}>
 				<WorkspaceLink
-					href={formatted.href}
+					href={formatted.href!}
 					text={formatted.text}
 					linkType={formatted.linkType ?? "url"}
 					faviconUrl={formatted.faviconUrl}

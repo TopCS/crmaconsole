@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import type { LinkPreviewData } from "@/app/api/workspace/link-preview/route";
+import type { LinkPreviewData } from "@/app/api/workspace/link-preview/link-preview-utils";
 
 /* ─── Client-side preview cache ─── */
 

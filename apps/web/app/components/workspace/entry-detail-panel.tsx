@@ -214,14 +214,14 @@ function TagsBadges({ value }: { value: unknown }) {
               )}
               <span className="min-w-0 truncate">{formatted.text}</span>
               <LinkOpenButton
-                href={formatted.href}
+                href={formatted.href!}
                 openInNewTab={openInNewTab}
                 className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm hover:bg-black/5"
               />
             </span>
           );
           return formatted.linkType === "url" ? (
-            <LinkPreviewWrapper key={tag} href={formatted.href}>{chip}</LinkPreviewWrapper>
+            <LinkPreviewWrapper key={tag} href={formatted.href!}>{chip}</LinkPreviewWrapper>
           ) : <span key={tag}>{chip}</span>;
         }
         return (
