@@ -3,6 +3,14 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { type Tab, HOME_TAB_ID } from "@/lib/tab-state";
 import dynamic from "next/dynamic";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+} from "../ui/dropdown-menu";
 
 const Tabs = dynamic(
   () => import("@sinm/react-chrome-tabs").then((mod) => mod.Tabs),
@@ -81,17 +89,6 @@ export function TabBar({
     return () => { mq.removeEventListener("change", handler); obs.disconnect(); };
   }, []);
 
-  useEffect(() => {
-    if (!contextMenu) return;
-    const close = () => setContextMenu(null);
-    window.addEventListener("click", close);
-    window.addEventListener("contextmenu", close);
-    return () => {
-      window.removeEventListener("click", close);
-      window.removeEventListener("contextmenu", close);
-    };
-  }, [contextMenu]);
-
   const handleContextMenu = useCallback((tabId: string, event: MouseEvent) => {
     if (!tabId || tabId === HOME_TAB_ID) return;
     event.preventDefault();
@@ -144,21 +141,21 @@ export function TabBar({
             onTabClose={handleClose}
             onTabReorder={handleReorder}
             onContextMenu={handleContextMenu}
+            pinnedRight={onNewTab ? (
+              <button
+                type="button"
+                onClick={onNewTab}
+                className="flex items-center justify-center w-7 h-7 rounded-full shrink-0 cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/5 ml-2"
+                style={{ color: "var(--color-text-muted)" }}
+                title="New chat"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14" /><path d="M5 12h14" />
+                </svg>
+              </button>
+            ) : undefined}
           />
         </div>
-        {onNewTab && (
-          <button
-            type="button"
-            onClick={onNewTab}
-            className="flex items-center justify-center w-7 h-7 rounded-full shrink-0 cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-            style={{ color: "var(--color-text-muted)" }}
-            title="New chat"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14" /><path d="M5 12h14" />
-            </svg>
-          </button>
-        )}
         {rightContent && (
           <div className="flex items-center gap-0.5 px-2 shrink-0 z-10">
             {rightContent}
@@ -166,75 +163,44 @@ export function TabBar({
         )}
       </div>
 
-      {/* Context menu */}
       {contextMenu && contextTab && (
-        <div
-          className="fixed z-9999 min-w-[180px] rounded-2xl p-1 bg-neutral-100/67 dark:bg-neutral-900/67 border border-white dark:border-white/10 backdrop-blur-md shadow-[0_0_25px_0_rgba(0,0,0,0.16)]"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-        >
-          <ContextMenuItem
-            label={contextTab.pinned ? "Unpin Tab" : "Pin Tab"}
-            onClick={() => { onTogglePin(contextMenu.tabId); setContextMenu(null); }}
+        <DropdownMenu open onOpenChange={(open) => { if (!open) setContextMenu(null); }}>
+          <DropdownMenuTrigger
+            className="fixed w-0 h-0 opacity-0"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
           />
-          {contextTab.type === "chat" && liveChatTabIds?.has(contextMenu.tabId) && onStopTab && (
-            <>
-              <div className="h-px my-0.5 mx-1 bg-neutral-400/15" />
-              <ContextMenuItem
-                label="Stop Session"
-                onClick={() => { onStopTab(contextMenu.tabId); setContextMenu(null); }}
-              />
-            </>
-          )}
-          <div className="h-px my-0.5 mx-1 bg-neutral-400/15" />
-          <ContextMenuItem
-            label="Close"
-            shortcut="⌘W"
-            disabled={contextTab.pinned}
-            onClick={() => { onClose(contextMenu.tabId); setContextMenu(null); }}
-          />
-          <ContextMenuItem
-            label="Close Others"
-            onClick={() => { onCloseOthers(contextMenu.tabId); setContextMenu(null); }}
-          />
-          <ContextMenuItem
-            label="Close to the Right"
-            onClick={() => { onCloseToRight(contextMenu.tabId); setContextMenu(null); }}
-          />
-          <ContextMenuItem
-            label="Close All"
-            onClick={() => { onCloseAll(); setContextMenu(null); }}
-          />
-        </div>
+          <DropdownMenuContent align="start" side="bottom" className="min-w-[180px]">
+            <DropdownMenuItem onSelect={() => { onTogglePin(contextMenu.tabId); setContextMenu(null); }}>
+              {contextTab.pinned ? "Unpin Tab" : "Pin Tab"}
+            </DropdownMenuItem>
+            {contextTab.type === "chat" && liveChatTabIds?.has(contextMenu.tabId) && onStopTab && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => { onStopTab(contextMenu.tabId); setContextMenu(null); }}>
+                  Stop Session
+                </DropdownMenuItem>
+              </>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              disabled={contextTab.pinned}
+              onSelect={() => { onClose(contextMenu.tabId); setContextMenu(null); }}
+            >
+              Close
+              <DropdownMenuShortcut>⌘W</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => { onCloseOthers(contextMenu.tabId); setContextMenu(null); }}>
+              Close Others
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => { onCloseToRight(contextMenu.tabId); setContextMenu(null); }}>
+              Close to the Right
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => { onCloseAll(); setContextMenu(null); }}>
+              Close All
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </>
-  );
-}
-
-function ContextMenuItem({
-  label,
-  shortcut,
-  disabled,
-  onClick,
-}: {
-  label: string;
-  shortcut?: string;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className="w-full flex items-center justify-between px-2.5 py-1.5 text-[12.5px] text-left rounded-xl transition-all disabled:opacity-40 hover:bg-neutral-400/15"
-      style={{ color: "var(--color-text)" }}
-    >
-      <span>{label}</span>
-      {shortcut && (
-        <span className="ml-4 text-[11px]" style={{ color: "var(--color-text-muted)" }}>
-          {shortcut}
-        </span>
-      )}
-    </button>
   );
 }

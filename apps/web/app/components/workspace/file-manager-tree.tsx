@@ -549,7 +549,7 @@ function DraggableNode({
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
-        className="w-full flex items-center gap-1.5 py-1 px-2 rounded-md text-left text-sm transition-colors duration-100 cursor-pointer select-none"
+        className="w-full flex items-center gap-1.5 py-1 px-2 rounded-md text-left text-sm transition-all duration-100 cursor-pointer select-none"
         style={{
           paddingLeft: `${depth * 16 + 8}px`,
           background: isWorkspaceRoot
@@ -1271,7 +1271,7 @@ export function FileManagerTree({ tree, activePath, onSelect, onRefresh, compact
             role="treeitem"
             tabIndex={-1}
             onClick={onNavigateUp}
-            className="w-full flex items-center gap-1.5 py-1 px-2 rounded-md text-left text-sm transition-colors duration-100 cursor-pointer select-none"
+            className="w-full flex items-center gap-1.5 py-1 px-2 rounded-md text-left text-sm transition-all duration-100 cursor-pointer select-none"
             style={{
               paddingLeft: "8px",
               color: "var(--color-text-muted)",
