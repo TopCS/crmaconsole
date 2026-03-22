@@ -26,6 +26,7 @@ describe("resolveActiveViewSyncDecision", () => {
       currentActiveViewName: "Important",
       currentFilters: emptyFilterGroup(),
       currentViewColumns: undefined,
+      currentColumnWidths: undefined,
     });
 
     expect(decision).not.toBeNull();
@@ -41,6 +42,7 @@ describe("resolveActiveViewSyncDecision", () => {
       currentActiveViewName: "Important",
       currentFilters: statusFilter("Important"),
       currentViewColumns: ["Name", "Status", "Owner"],
+      currentColumnWidths: undefined,
     });
 
     expect(decision).not.toBeNull();
@@ -60,6 +62,7 @@ describe("resolveActiveViewSyncDecision", () => {
       currentActiveViewName: "Important",
       currentFilters: statusFilter("Important"),
       currentViewColumns: ["Name", "Status", "Owner"],
+      currentColumnWidths: undefined,
     });
 
     expect(decision).not.toBeNull();
@@ -76,6 +79,7 @@ describe("resolveActiveViewSyncDecision", () => {
       currentActiveViewName: "Important",
       currentFilters: statusFilter("Important"),
       currentViewColumns: ["Name", "Status", "Owner"],
+      currentColumnWidths: undefined,
     });
 
     const unknownActive = resolveActiveViewSyncDecision({
@@ -84,6 +88,7 @@ describe("resolveActiveViewSyncDecision", () => {
       currentActiveViewName: "Important",
       currentFilters: statusFilter("Important"),
       currentViewColumns: ["Name", "Status", "Owner"],
+      currentColumnWidths: undefined,
     });
 
     expect(missingActive).toBeNull();
@@ -105,6 +110,7 @@ describe("resolveActiveViewSyncDecision", () => {
       currentActiveViewName: "Board",
       currentFilters: emptyFilterGroup(),
       currentViewColumns: undefined,
+      currentColumnWidths: undefined,
       currentViewType: "table",
       currentSettings: undefined,
     });
@@ -128,6 +134,7 @@ describe("resolveActiveViewSyncDecision", () => {
       currentActiveViewName: "Monthly",
       currentFilters: emptyFilterGroup(),
       currentViewColumns: undefined,
+      currentColumnWidths: undefined,
       currentViewType: "calendar",
       currentSettings: { calendarDateField: "Due Date", calendarMode: "week" },
     });
@@ -149,6 +156,7 @@ describe("resolveActiveViewSyncDecision", () => {
       currentActiveViewName: "Timeline",
       currentFilters: emptyFilterGroup(),
       currentViewColumns: undefined,
+      currentColumnWidths: undefined,
       currentViewType: "timeline",
       currentSettings: { timelineStartField: "Start", timelineEndField: "End" },
     });
@@ -169,12 +177,49 @@ describe("resolveActiveViewSyncDecision", () => {
       currentActiveViewName: "Gallery",
       currentFilters: emptyFilterGroup(),
       currentViewColumns: undefined,
+      currentColumnWidths: undefined,
       currentViewType: "table",
       currentSettings: { galleryTitleField: "Name" },
     });
 
     expect(decision?.shouldApply).toBe(true);
     expect(decision?.nextViewType).toBe("gallery");
+  });
+
+  it("propagates column_widths from saved view (ensures resize state syncs)", () => {
+    const viewWithWidths: SavedView = {
+      name: "Custom Widths",
+      filters: statusFilter("Active"),
+      columns: ["Name", "Status"],
+      column_widths: { Name: 250, Status: 150 },
+    };
+
+    const decision = resolveActiveViewSyncDecision({
+      savedViews: [viewWithWidths],
+      activeView: "Custom Widths",
+      currentActiveViewName: undefined,
+      currentFilters: emptyFilterGroup(),
+      currentViewColumns: undefined,
+      currentColumnWidths: undefined,
+    });
+
+    expect(decision).not.toBeNull();
+    expect(decision?.shouldApply).toBe(true);
+    expect(decision?.nextColumnWidths).toEqual({ Name: 250, Status: 150 });
+  });
+
+  it("returns undefined column_widths when view has no widths (backwards compat)", () => {
+    const decision = resolveActiveViewSyncDecision({
+      savedViews: [importantView],
+      activeView: "Important",
+      currentActiveViewName: undefined,
+      currentFilters: emptyFilterGroup(),
+      currentViewColumns: undefined,
+      currentColumnWidths: { Name: 200 },
+    });
+
+    expect(decision).not.toBeNull();
+    expect(decision?.nextColumnWidths).toBeUndefined();
   });
 
   it("propagates undefined viewType without crashing (backwards compat with old saved views)", () => {
@@ -189,6 +234,7 @@ describe("resolveActiveViewSyncDecision", () => {
       currentActiveViewName: undefined,
       currentFilters: emptyFilterGroup(),
       currentViewColumns: undefined,
+      currentColumnWidths: undefined,
       currentViewType: "table",
       currentSettings: {},
     });
