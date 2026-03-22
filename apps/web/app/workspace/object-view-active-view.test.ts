@@ -186,6 +186,42 @@ describe("resolveActiveViewSyncDecision", () => {
     expect(decision?.nextViewType).toBe("gallery");
   });
 
+  it("propagates column_widths from saved view (ensures resize state syncs)", () => {
+    const viewWithWidths: SavedView = {
+      name: "Custom Widths",
+      filters: statusFilter("Active"),
+      columns: ["Name", "Status"],
+      column_widths: { Name: 250, Status: 150 },
+    };
+
+    const decision = resolveActiveViewSyncDecision({
+      savedViews: [viewWithWidths],
+      activeView: "Custom Widths",
+      currentActiveViewName: undefined,
+      currentFilters: emptyFilterGroup(),
+      currentViewColumns: undefined,
+      currentColumnWidths: undefined,
+    });
+
+    expect(decision).not.toBeNull();
+    expect(decision?.shouldApply).toBe(true);
+    expect(decision?.nextColumnWidths).toEqual({ Name: 250, Status: 150 });
+  });
+
+  it("returns undefined column_widths when view has no widths (backwards compat)", () => {
+    const decision = resolveActiveViewSyncDecision({
+      savedViews: [importantView],
+      activeView: "Important",
+      currentActiveViewName: undefined,
+      currentFilters: emptyFilterGroup(),
+      currentViewColumns: undefined,
+      currentColumnWidths: { Name: 200 },
+    });
+
+    expect(decision).not.toBeNull();
+    expect(decision?.nextColumnWidths).toBeUndefined();
+  });
+
   it("propagates undefined viewType without crashing (backwards compat with old saved views)", () => {
     const legacyView: SavedView = {
       name: "Legacy",

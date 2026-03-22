@@ -56,7 +56,7 @@ const RUNTIME_MAP: Record<string, { command: string; args: (file: string) => str
 	".php": { command: "php", args: (f) => [f] },
 };
 
-function resolveRuntime(
+export function resolveRuntime(
 	scriptPath: string,
 	explicitRuntime?: string,
 ): { command: string; args: string[] } {
@@ -75,7 +75,7 @@ function resolveRuntime(
 	return { command: scriptPath, args: [] };
 }
 
-function buildEnv(ctx: ActionContext): NodeJS.ProcessEnv {
+export function buildEnv(ctx: ActionContext): NodeJS.ProcessEnv {
 	return {
 		...process.env,
 		DENCH_ENTRY_ID: ctx.entryId,
