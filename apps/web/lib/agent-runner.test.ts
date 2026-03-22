@@ -204,6 +204,23 @@ describe("agent-runner", () => {
 			expect(params.maxProtocol).toBe(3);
 		});
 
+		it("requests all 5 operator scopes for full gateway access (prevents missing-scope 403s)", async () => {
+			const { buildConnectParams } = await import("./agent-runner.js");
+			const params = buildConnectParams({ url: "ws://127.0.0.1:19001" }) as {
+				scopes: string[];
+			};
+			expect(params.scopes).toEqual(
+				expect.arrayContaining([
+					"operator.admin",
+					"operator.approvals",
+					"operator.pairing",
+					"operator.read",
+					"operator.write",
+				]),
+			);
+			expect(params.scopes).toHaveLength(5);
+		});
+
 		it("uses backend mode so sessions.patch is allowed", async () => {
 			const { buildConnectParams } = await import("./agent-runner.js");
 			const params = buildConnectParams({ url: "ws://127.0.0.1:19001" }) as {
