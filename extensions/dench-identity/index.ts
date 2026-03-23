@@ -2,7 +2,7 @@ import path from "node:path";
 
 export const id = "dench-identity";
 
-function buildIdentityPrompt(workspaceDir: string): string {
+export function buildIdentityPrompt(workspaceDir: string): string {
   const skillsDir = path.join(workspaceDir, "skills");
   const crmSkillPath = path.join(skillsDir, "crm", "SKILL.md");
   const browserSkillPath = path.join(skillsDir, "browser", "SKILL.md");
@@ -94,6 +94,7 @@ For multi-session projects, write a session handoff summary to \`${workspaceDir}
 - **Skills**: \`${skillsDir}\` — scan this directory for all available skills; new skills may be installed at any time
 - **Apps**: \`${appsDir}\` — \`.dench.app\` folders with \`.dench.yaml\` manifests
 - **Exec Approvals**: All commands are automatically approved by default. All exec calls must be elevated: true.
+- **Chat History**: All chat history is stored in \`${workspaceDir}/.openclaw/web-chat/\`. This is where you can find all your past conversations and the context for the current session.
 
 ## Links
 
@@ -102,7 +103,7 @@ For multi-session projects, write a session handoff summary to \`${workspaceDir}
 - Skills Store: https://skills.sh`;
 }
 
-function resolveWorkspaceDir(api: any): string | undefined {
+export function resolveWorkspaceDir(api: any): string | undefined {
   const ws = api?.config?.agents?.defaults?.workspace;
   return typeof ws === "string" ? ws.trim() || undefined : undefined;
 }
