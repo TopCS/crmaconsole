@@ -31,6 +31,7 @@ import { useSearchIndex } from "@/lib/search-index";
 import { parseWorkspaceLink, isWorkspaceLink, parseUrlState, buildUrl, buildWorkspaceSyncParams, type WorkspaceUrlState } from "@/lib/workspace-links";
 import { isCodeFile } from "@/lib/report-utils";
 import { CronDashboard } from "../components/cron/cron-dashboard";
+import { SkillStorePanel } from "../components/skill-store/skill-store-panel";
 import { CronJobDetail } from "../components/cron/cron-job-detail";
 import { CronSessionView } from "../components/cron/cron-session-view";
 import type { CronJob, CronJobsResponse } from "../types/cron";
@@ -171,6 +172,7 @@ type ContentState =
   | { kind: "report"; reportPath: string; filename: string }
   | { kind: "directory"; node: TreeNode }
   | { kind: "cron-dashboard" }
+  | { kind: "skill-store" }
   | { kind: "cron-job"; jobId: string; job: CronJob }
   | { kind: "cron-session"; jobId: string; job: CronJob; sessionId: string; run: import("../types/cron").CronRunLogEntry }
   | { kind: "duckdb-missing" }
@@ -1224,6 +1226,13 @@ function WorkspacePageInner() {
         setContent({ kind: "cron-dashboard" });
         return;
       }
+      // Clicking the Skills folder opens the skill store
+      if (node.path === "~skills") {
+        openTabForNode(node);
+        setActivePath(node.path);
+        setContent({ kind: "skill-store" });
+        return;
+      }
       openTabForNode(node);
       void loadContent(node);
     },
@@ -1251,6 +1260,9 @@ function WorkspacePageInner() {
       } else if (tab.path === "~cron") {
         setActivePath("~cron");
         setContent({ kind: "cron-dashboard" });
+      } else if (tab.path === "~skills") {
+        setActivePath("~skills");
+        setContent({ kind: "skill-store" });
       } else if (tab.path.startsWith("~cron/")) {
         setActivePath(tab.path);
         const jobId = tab.path.slice("~cron/".length);
@@ -1715,6 +1727,10 @@ function WorkspacePageInner() {
         setContent({ kind: "cron-dashboard" });
         if (urlState.cronRunFilter) setCronRunFilter(urlState.cronRunFilter);
         if (urlState.cronRun != null) setCronRun(urlState.cronRun);
+      } else if (urlState.path === "~skills") {
+        openTabForNode({ path: "~skills", name: "Skills", type: "folder" });
+        setActivePath("~skills");
+        setContent({ kind: "skill-store" });
       } else if (isAbsolutePath(urlState.path) || isHomeRelativePath(urlState.path)) {
         const name = urlState.path.split("/").pop() || urlState.path;
         const syntheticNode: TreeNode = { name, path: urlState.path, type: "file" };
@@ -1798,6 +1814,10 @@ function WorkspacePageInner() {
           } else {
             setContent({ kind: "cron-dashboard" });
           }
+        } else if (urlState.path === "~skills") {
+          openTabForNode({ path: "~skills", name: "Skills", type: "folder" });
+          setActivePath("~skills");
+          setContent({ kind: "skill-store" });
         } else if (isAbsolutePath(urlState.path) || isHomeRelativePath(urlState.path)) {
           const name = urlState.path.split("/").pop() || urlState.path;
           const synNode: TreeNode = { name, path: urlState.path, type: "file" };
@@ -3433,6 +3453,9 @@ function ContentRenderer({
           onCalendarDateChange={onCronDateChange}
         />
       );
+
+    case "skill-store":
+      return <SkillStorePanel />;
 
     case "cron-job":
       return (

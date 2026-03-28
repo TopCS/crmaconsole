@@ -4,12 +4,16 @@ import { resolveOpenClawStateDir, resolveWorkspaceRoot } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
+const PROTECTED_SKILLS = ["crm", "browser", "app-builder", "gstack"];
+
 type SkillEntry = {
   name: string;
+  slug: string;
   description: string;
   emoji?: string;
   source: string;
   filePath: string;
+  protected: boolean;
 };
 
 /** Parse YAML frontmatter from a SKILL.md file (lightweight, no deps). */
@@ -50,12 +54,15 @@ function scanSkillDir(dir: string, source: string): SkillEntry[] {
       try {
         const content = readFileSync(skillMdPath, "utf-8");
         const meta = parseSkillFrontmatter(content);
+        const slug = entry.name;
         skills.push({
           name: meta.name ?? entry.name,
+          slug,
           description: meta.description ?? "",
           emoji: meta.emoji,
           source,
           filePath: skillMdPath,
+          protected: source === "managed" || PROTECTED_SKILLS.includes(slug),
         });
       } catch {
         // skip unreadable skill files
