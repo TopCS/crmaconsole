@@ -2349,6 +2349,11 @@ export async function bootstrapCommand(
       sourceDirName: "dench-identity",
       enabled: true,
     },
+    {
+      pluginId: "apollo-enrichment",
+      sourceDirName: "apollo-enrichment",
+      enabled: true,
+    },
   ];
 
   // Trust managed bundled plugins BEFORE onboard so the gateway daemon never
