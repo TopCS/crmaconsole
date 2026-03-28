@@ -5,6 +5,7 @@ export const id = "apollo-enrichment";
 
 const DEFAULT_GATEWAY_URL = "https://gateway.merseoriginals.com";
 const ENRICHMENT_BASE_PATH = "/v1/enrichment";
+const APOLLO_ACTIONS = ["people", "company", "people_search"] as const;
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -12,30 +13,37 @@ function asRecord(value: unknown): UnknownRecord | undefined {
   return value && typeof value === "object" ? (value as UnknownRecord) : undefined;
 }
 
-function resolveGatewayUrl(config: any): string {
-  const gatewayConfig = asRecord(
-    asRecord(config?.plugins?.entries?.["dench-ai-gateway"])?.config,
-  );
-  const configured =
-    typeof gatewayConfig?.gatewayUrl === "string"
-      ? gatewayConfig.gatewayUrl.trim()
-      : undefined;
+function readTrimmedString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function readStringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const items = value
+    .map((item) => readTrimmedString(item))
+    .filter((item): item is string => Boolean(item));
+  return items.length > 0 ? items : undefined;
+}
+
+function resolveGatewayUrl(config: unknown): string {
+  const root = asRecord(config);
+  const pluginEntries = asRecord(asRecord(root?.plugins)?.entries);
+  const gatewayConfig = asRecord(asRecord(pluginEntries?.["dench-ai-gateway"])?.config);
   return (
-    configured ||
+    readTrimmedString(gatewayConfig?.gatewayUrl) ||
     process.env.DENCH_GATEWAY_URL?.trim() ||
     DEFAULT_GATEWAY_URL
   );
 }
 
-function resolveApiKey(config: any): string | undefined {
-  const provider = asRecord(
-    asRecord(config?.models?.providers)?.["dench-cloud"],
-  );
-  if (provider) {
-    const key = provider.apiKey;
-    if (typeof key === "string" && key.trim()) return key.trim();
-  }
+function resolveApiKey(config: unknown): string | undefined {
+  const root = asRecord(config);
+  const providers = asRecord(asRecord(asRecord(root?.models)?.providers));
+  const provider = asRecord(providers?.["dench-cloud"]);
   return (
+    readTrimmedString(provider?.apiKey) ||
     process.env.DENCH_CLOUD_API_KEY?.trim() ||
     process.env.DENCH_API_KEY?.trim() ||
     undefined
@@ -49,37 +57,145 @@ function jsonResult(payload: unknown) {
   };
 }
 
+function stringEnum<T extends readonly string[]>(
+  values: T,
+  description: string,
+) {
+  return Type.Unsafe<T[number]>({
+    type: "string",
+    enum: [...values],
+    description,
+  });
+}
+
 const ApolloEnrichParameters = Type.Object(
   {
-    action: Type.Unsafe<"person" | "company">({
-      type: "string",
-      enum: ["person", "company"],
-      description:
-        'The enrichment action to perform. "person" looks up a person by email, name, or domain. "company" looks up an organization by domain.',
-    }),
-    email: Type.Optional(
-      Type.String({ description: "Email address to enrich (person action)." }),
+    action: stringEnum(
+      APOLLO_ACTIONS,
+      'Action to perform: "people", "company", or "people_search".',
     ),
+    email: Type.Optional(Type.String({ description: "Email for people enrichment." })),
+    linkedinUrl: Type.Optional(
+      Type.String({ description: "LinkedIn URL for people enrichment." }),
+    ),
+    firstName: Type.Optional(Type.String({ description: "Person first name." })),
+    lastName: Type.Optional(Type.String({ description: "Person last name." })),
+    domain: Type.Optional(
+      Type.String({ description: "Company domain such as acme.com." }),
+    ),
+    organizationName: Type.Optional(
+      Type.String({ description: "Organization name hint for people enrichment." }),
+    ),
+    personTitles: Type.Optional(
+      Type.Array(Type.String(), { description: "Job titles for people search." }),
+    ),
+    personLocations: Type.Optional(
+      Type.Array(Type.String(), { description: "Locations for people search." }),
+    ),
+    organizationDomains: Type.Optional(
+      Type.Array(Type.String(), { description: "Organization domains for people search." }),
+    ),
+    page: Type.Optional(Type.Number({ description: "People search page number." })),
+    perPage: Type.Optional(Type.Number({ description: "People search page size." })),
     first_name: Type.Optional(
-      Type.String({ description: "First name of the person to enrich." }),
+      Type.String({ description: "Legacy alias for firstName." }),
     ),
     last_name: Type.Optional(
-      Type.String({ description: "Last name of the person to enrich." }),
-    ),
-    domain: Type.Optional(
-      Type.String({
-        description:
-          "Company domain (e.g. acme.com). Required for company action, optional hint for person action.",
-      }),
+      Type.String({ description: "Legacy alias for lastName." }),
     ),
     organization_name: Type.Optional(
-      Type.String({
-        description: "Company name hint for person enrichment.",
-      }),
+      Type.String({ description: "Legacy alias for organizationName." }),
     ),
+    linkedin_url: Type.Optional(
+      Type.String({ description: "Legacy alias for linkedinUrl." }),
+    ),
+    person_titles: Type.Optional(
+      Type.Array(Type.String(), { description: "Legacy alias for personTitles." }),
+    ),
+    person_locations: Type.Optional(
+      Type.Array(Type.String(), { description: "Legacy alias for personLocations." }),
+    ),
+    organization_domains: Type.Optional(
+      Type.Array(Type.String(), { description: "Legacy alias for organizationDomains." }),
+    ),
+    per_page: Type.Optional(Type.Number({ description: "Legacy alias for perPage." })),
   },
   { additionalProperties: false },
 );
+
+function buildPeopleBody(params: Record<string, unknown>) {
+  const body: Record<string, unknown> = {};
+  const email = readTrimmedString(params.email);
+  const linkedinUrl = readTrimmedString(params.linkedinUrl) ?? readTrimmedString(params.linkedin_url);
+  const firstName = readTrimmedString(params.firstName) ?? readTrimmedString(params.first_name);
+  const lastName = readTrimmedString(params.lastName) ?? readTrimmedString(params.last_name);
+  const domain = readTrimmedString(params.domain);
+  const organizationName =
+    readTrimmedString(params.organizationName) ?? readTrimmedString(params.organization_name);
+
+  if (email) {
+    body.email = email;
+  }
+  if (linkedinUrl) {
+    body.linkedinUrl = linkedinUrl;
+  }
+  if (firstName) {
+    body.firstName = firstName;
+  }
+  if (lastName) {
+    body.lastName = lastName;
+  }
+  if (domain) {
+    body.domain = domain;
+  }
+  if (organizationName) {
+    body.organizationName = organizationName;
+  }
+
+  return body;
+}
+
+function buildPeopleSearchBody(params: Record<string, unknown>) {
+  const body: Record<string, unknown> = {};
+  const personTitles = readStringList(params.personTitles) ?? readStringList(params.person_titles);
+  const personLocations =
+    readStringList(params.personLocations) ?? readStringList(params.person_locations);
+  const organizationDomains =
+    readStringList(params.organizationDomains) ?? readStringList(params.organization_domains);
+  const page = typeof params.page === "number" ? params.page : undefined;
+  const perPage =
+    typeof params.perPage === "number"
+      ? params.perPage
+      : typeof params.per_page === "number"
+        ? params.per_page
+        : undefined;
+
+  if (personTitles) {
+    body.personTitles = personTitles;
+  }
+  if (personLocations) {
+    body.personLocations = personLocations;
+  }
+  if (organizationDomains) {
+    body.organizationDomains = organizationDomains;
+  }
+  if (page !== undefined) {
+    body.page = page;
+  }
+  if (perPage !== undefined) {
+    body.perPage = perPage;
+  }
+
+  return body;
+}
+
+async function parseResponse(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+  return response.text();
+}
 
 async function executeApolloEnrich(
   gatewayUrl: string,
@@ -87,53 +203,66 @@ async function executeApolloEnrich(
   _toolCallId: string,
   params: Record<string, unknown>,
 ) {
-  const action = params.action as string;
-  if (action !== "person" && action !== "company") {
-    return jsonResult({ error: `Unknown action "${action}". Use "person" or "company".` });
-  }
-
-  const endpoint = `${gatewayUrl}${ENRICHMENT_BASE_PATH}/${action}`;
-  const body: Record<string, unknown> = {};
-
-  if (action === "person") {
-    if (params.email) body.email = params.email;
-    if (params.first_name) body.first_name = params.first_name;
-    if (params.last_name) body.last_name = params.last_name;
-    if (params.domain) body.domain = params.domain;
-    if (params.organization_name) body.organization_name = params.organization_name;
-
-    if (!body.email && !body.first_name && !body.last_name) {
-      return jsonResult({
-        error: "Person enrichment requires at least an email or a name (first_name / last_name).",
-      });
-    }
-  } else {
-    if (params.domain) body.domain = params.domain;
-    if (!body.domain) {
-      return jsonResult({ error: "Company enrichment requires a domain." });
-    }
+  const action = params.action;
+  if (action !== "people" && action !== "company" && action !== "people_search") {
+    return jsonResult({
+      error: `Unknown action "${String(action)}". Use "people", "company", or "people_search".`,
+    });
   }
 
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    });
+    let response: Response;
 
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      return jsonResult({
-        error: `Enrichment request failed (HTTP ${response.status}).`,
-        detail: text || undefined,
+    if (action === "people") {
+      const body = buildPeopleBody(params);
+      if (!body.email && !body.linkedinUrl && !body.firstName && !body.lastName) {
+        return jsonResult({
+          error:
+            "People enrichment requires at least an email, LinkedIn URL, or person name.",
+        });
+      }
+      response = await fetch(`${gatewayUrl}${ENRICHMENT_BASE_PATH}/people`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+      });
+    } else if (action === "company") {
+      const domain = readTrimmedString(params.domain);
+      if (!domain) {
+        return jsonResult({ error: "Company enrichment requires a domain." });
+      }
+      const url = new URL(`${gatewayUrl}${ENRICHMENT_BASE_PATH}/company`);
+      url.searchParams.set("domain", domain);
+      response = await fetch(url, {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+        },
+      });
+    } else {
+      const body = buildPeopleSearchBody(params);
+      response = await fetch(`${gatewayUrl}${ENRICHMENT_BASE_PATH}/people/search`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
       });
     }
 
-    const data = await response.json();
-    return jsonResult(data);
+    if (!response.ok) {
+      const detail = await parseResponse(response).catch(() => "");
+      return jsonResult({
+        error: `Enrichment request failed (HTTP ${response.status}).`,
+        detail: detail || undefined,
+      });
+    }
+
+    return jsonResult(await parseResponse(response));
   } catch (err) {
     return jsonResult({
       error: "Enrichment request failed.",
@@ -143,15 +272,15 @@ async function executeApolloEnrich(
 }
 
 export default function register(api: OpenClawPluginApi) {
-  const pluginConfig = asRecord(
-    asRecord((api as any).config?.plugins?.entries?.[id])?.config,
-  );
+  const rootConfig = asRecord(api.config);
+  const pluginEntries = asRecord(asRecord(rootConfig?.plugins)?.entries);
+  const pluginConfig = asRecord(asRecord(pluginEntries?.[id])?.config);
   if (pluginConfig?.enabled === false) {
     return;
   }
 
-  const gatewayUrl = resolveGatewayUrl((api as any).config);
-  const apiKey = resolveApiKey((api as any).config);
+  const gatewayUrl = resolveGatewayUrl(api.config);
+  const apiKey = resolveApiKey(api.config);
 
   if (!apiKey) {
     api.logger?.info?.(
@@ -165,10 +294,9 @@ export default function register(api: OpenClawPluginApi) {
       name: "apollo_enrich",
       label: "Apollo Enrichment",
       description:
-        "Look up a person or company using Apollo enrichment data. " +
-        'Use action "person" with an email, name, or domain to find a person\'s profile, ' +
-        'title, company, LinkedIn, and contact info. Use action "company" with a domain ' +
-        "to get company details like size, industry, revenue, and social links.",
+        "Look up Apollo people, companies, or people search results through the Dench Cloud gateway. " +
+        'Use action "people" for an individual profile, "company" for company enrichment by domain, ' +
+        'or "people_search" to search people with filters such as titles, locations, and company domains.',
       parameters: ApolloEnrichParameters,
       execute: (toolCallId: string, params: Record<string, unknown>) =>
         executeApolloEnrich(gatewayUrl, apiKey, toolCallId, params),

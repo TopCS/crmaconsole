@@ -2354,6 +2354,11 @@ export async function bootstrapCommand(
       sourceDirName: "apollo-enrichment",
       enabled: true,
     },
+    {
+      pluginId: "exa-search",
+      sourceDirName: "exa-search",
+      enabled: true,
+    },
   ];
 
   // Trust managed bundled plugins BEFORE onboard so the gateway daemon never
