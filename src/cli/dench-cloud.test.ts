@@ -142,6 +142,10 @@ describe("dench-cloud helpers", () => {
         alias: "Claude Opus 4.6 (Dench Cloud)",
       }),
     );
+    expect(patch.messages.tts.elevenlabs).toEqual({
+      baseUrl: "https://gateway.merseoriginals.com",
+      apiKey: "dench_live_key",
+    });
   });
 
   it("reads existing Dench Cloud gateway config from openclaw.json", () => {
@@ -167,6 +171,37 @@ describe("dench-cloud helpers", () => {
       gatewayUrl: "https://gateway.merseoriginals.com",
       apiKey: "dench_cfg_key",
       selectedModel: "anthropic.claude-opus-4-6-v1",
+      ttsElevenLabsBaseUrl: undefined,
     });
+  });
+
+  it("reads existing TTS ElevenLabs baseUrl from openclaw.json", () => {
+    const result = readConfiguredDenchCloudSettings({
+      models: {
+        providers: {
+          "dench-cloud": {
+            baseUrl: "https://gateway.merseoriginals.com/v1",
+            apiKey: "dench_cfg_key",
+          },
+        },
+      },
+      agents: {
+        defaults: {
+          model: {
+            primary: "dench-cloud/gpt-5.4",
+          },
+        },
+      },
+      messages: {
+        tts: {
+          elevenlabs: {
+            baseUrl: "https://gateway.merseoriginals.com",
+            apiKey: "dench_cfg_key",
+          },
+        },
+      },
+    });
+
+    expect(result.ttsElevenLabsBaseUrl).toBe("https://gateway.merseoriginals.com");
   });
 });

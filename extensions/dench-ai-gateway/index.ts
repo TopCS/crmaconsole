@@ -85,6 +85,14 @@ export function buildDenchCloudConfigPatch(params: {
         models: buildDenchCloudAgentModelEntries(params.models),
       },
     },
+    messages: {
+      tts: {
+        elevenlabs: {
+          baseUrl: params.gatewayUrl,
+          apiKey: params.apiKey,
+        },
+      },
+    },
   };
 }
 

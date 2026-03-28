@@ -1972,6 +1972,14 @@ async function applyDenchCloudBootstrapConfig(params: {
     value: nextAgentModels,
     errorMessage: "Failed to update agents.defaults.models for Dench Cloud.",
   });
+
+  await setOpenClawConfigJson({
+    openclawCommand: params.openclawCommand,
+    profile: params.profile,
+    key: "messages.tts.elevenlabs",
+    value: configPatch.messages.tts.elevenlabs,
+    errorMessage: "Failed to configure ElevenLabs TTS via Dench Cloud gateway.",
+  });
 }
 
 async function resolveDenchCloudBootstrapSelection(params: {

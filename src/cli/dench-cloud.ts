@@ -390,6 +390,14 @@ export function buildDenchCloudConfigPatch(params: {
         models: buildDenchCloudAgentModelEntries(params.models),
       },
     },
+    messages: {
+      tts: {
+        elevenlabs: {
+          baseUrl: params.gatewayUrl,
+          apiKey: params.apiKey,
+        },
+      },
+    },
   };
 }
 
@@ -421,6 +429,7 @@ export function readConfiguredDenchCloudSettings(
   gatewayUrl?: string;
   apiKey?: string;
   selectedModel?: string;
+  ttsElevenLabsBaseUrl?: string;
 } {
   const provider = asRecord(
     asRecord(asRecord(rawConfig?.models)?.providers)?.["dench-cloud"],
@@ -441,9 +450,13 @@ export function readConfiguredDenchCloudSettings(
       : undefined;
 
   const baseUrl = readString(provider ?? {}, "baseUrl", "base_url");
+  const ttsElevenlabs = asRecord(
+    asRecord(asRecord(rawConfig?.messages)?.tts)?.elevenlabs,
+  );
   return {
     gatewayUrl: baseUrl ? normalizeDenchGatewayUrl(baseUrl) : undefined,
     apiKey: readString(provider ?? {}, "apiKey", "api_key"),
     selectedModel,
+    ttsElevenLabsBaseUrl: readString(ttsElevenlabs ?? {}, "baseUrl", "base_url"),
   };
 }
