@@ -1235,6 +1235,13 @@ function WorkspacePageInner() {
         setContent({ kind: "skill-store" });
         return;
       }
+      // Clicking the Integrations folder opens the integrations plane
+      if (node.path === "~integrations") {
+        openTabForNode(node);
+        setActivePath(node.path);
+        setContent({ kind: "integrations" });
+        return;
+      }
       openTabForNode(node);
       void loadContent(node);
     },
@@ -1265,6 +1272,9 @@ function WorkspacePageInner() {
       } else if (tab.path === "~skills") {
         setActivePath("~skills");
         setContent({ kind: "skill-store" });
+      } else if (tab.path === "~integrations") {
+        setActivePath("~integrations");
+        setContent({ kind: "integrations" });
       } else if (tab.path.startsWith("~cron/")) {
         setActivePath(tab.path);
         const jobId = tab.path.slice("~cron/".length);
@@ -1516,7 +1526,7 @@ function WorkspacePageInner() {
     [tree, handleNodeSelect, workspaceRoot],
   );
 
-  // Build the enhanced tree: real tree + Cron virtual folder at the bottom
+  // Build the enhanced tree: real tree + workspace management virtual folders
   // (Chat sessions live in the right sidebar, not in the tree.)
   // In browse mode, skip virtual folders (they only apply to workspace mode)
   const enhancedTree = useMemo(() => {
@@ -1547,7 +1557,14 @@ function WorkspacePageInner() {
       children: cronChildren.length > 0 ? cronChildren : undefined,
     };
 
-    return [...tree, cronFolder];
+    const integrationsFolder: TreeNode = {
+      name: "Integrations",
+      path: "~integrations",
+      type: "folder",
+      virtual: true,
+    };
+
+    return [...tree, integrationsFolder, cronFolder];
   }, [tree, cronJobs, browseDir]);
 
   // Compute the effective parentDir for ".." navigation.
@@ -1733,6 +1750,10 @@ function WorkspacePageInner() {
         openTabForNode({ path: "~skills", name: "Skills", type: "folder" });
         setActivePath("~skills");
         setContent({ kind: "skill-store" });
+      } else if (urlState.path === "~integrations") {
+        openTabForNode({ path: "~integrations", name: "Integrations", type: "folder" });
+        setActivePath("~integrations");
+        setContent({ kind: "integrations" });
       } else if (isAbsolutePath(urlState.path) || isHomeRelativePath(urlState.path)) {
         const name = urlState.path.split("/").pop() || urlState.path;
         const syntheticNode: TreeNode = { name, path: urlState.path, type: "file" };
@@ -1820,6 +1841,10 @@ function WorkspacePageInner() {
           openTabForNode({ path: "~skills", name: "Skills", type: "folder" });
           setActivePath("~skills");
           setContent({ kind: "skill-store" });
+        } else if (urlState.path === "~integrations") {
+          openTabForNode({ path: "~integrations", name: "Integrations", type: "folder" });
+          setActivePath("~integrations");
+          setContent({ kind: "integrations" });
         } else if (isAbsolutePath(urlState.path) || isHomeRelativePath(urlState.path)) {
           const name = urlState.path.split("/").pop() || urlState.path;
           const synNode: TreeNode = { name, path: urlState.path, type: "file" };
