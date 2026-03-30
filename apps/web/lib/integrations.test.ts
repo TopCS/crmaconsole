@@ -5,6 +5,7 @@ vi.mock("@/lib/workspace", () => ({
 }));
 
 vi.mock("node:fs", () => ({
+  cpSync: vi.fn(),
   existsSync: vi.fn(() => false),
   mkdirSync: vi.fn(),
   readFileSync: vi.fn(() => ""),
@@ -496,5 +497,78 @@ describe("integrations state", () => {
       expect.objectContaining({ timeout: 30000 }),
       expect.any(Function),
     );
+  });
+
+  it("repairs older profiles by copying and re-registering bundled plugins", async () => {
+    const { cpSync, existsSync, readFileSync, writeFileSync } = await import("node:fs");
+    const mockCopy = vi.mocked(cpSync);
+    const mockExists = vi.mocked(existsSync);
+    const mockRead = vi.mocked(readFileSync);
+    const mockWrite = vi.mocked(writeFileSync);
+    const existingPaths = new Set<string>([
+      "/home/testuser/.openclaw-dench/openclaw.json",
+      "/Users/vedant/Desktop/denchclaw/extensions/exa-search",
+      "/Users/vedant/Desktop/denchclaw/extensions/apollo-enrichment",
+    ]);
+    let openClawJson = JSON.stringify({
+      plugins: {
+        entries: {},
+      },
+    });
+
+    mockExists.mockImplementation((path) => existingPaths.has(String(path)));
+    mockRead.mockImplementation((path) => {
+      if (String(path).endsWith("openclaw.json")) {
+        return openClawJson as never;
+      }
+      return "" as never;
+    });
+    mockCopy.mockImplementation((source, destination) => {
+      existingPaths.add(String(destination));
+      existingPaths.add(String(source));
+    });
+    mockWrite.mockImplementation((path, data) => {
+      if (String(path).endsWith("openclaw.json")) {
+        openClawJson = String(data);
+      }
+    });
+
+    const { repairOlderIntegrationsProfile } = await import("./integrations.js");
+    const result = repairOlderIntegrationsProfile();
+
+    expect(result.changed).toBe(true);
+    expect(result.repairedIds).toEqual(["exa", "apollo"]);
+    expect(result.repairs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "exa",
+          assetAvailable: true,
+          assetCopied: true,
+          repaired: true,
+        }),
+        expect.objectContaining({
+          id: "apollo",
+          assetAvailable: true,
+          assetCopied: true,
+          repaired: true,
+        }),
+      ]),
+    );
+    expect(mockCopy).toHaveBeenCalledTimes(2);
+
+    const writtenConfig = JSON.parse(openClawJson);
+    expect(writtenConfig.plugins.allow).toEqual(["exa-search", "apollo-enrichment"]);
+    expect(writtenConfig.plugins.load.paths).toEqual([
+      "/home/testuser/.openclaw-dench/extensions/exa-search",
+      "/home/testuser/.openclaw-dench/extensions/apollo-enrichment",
+    ]);
+    expect(writtenConfig.plugins.installs["exa-search"]).toEqual({
+      installPath: "/home/testuser/.openclaw-dench/extensions/exa-search",
+      sourcePath: "/Users/vedant/Desktop/denchclaw/extensions/exa-search",
+    });
+    expect(writtenConfig.plugins.installs["apollo-enrichment"]).toEqual({
+      installPath: "/home/testuser/.openclaw-dench/extensions/apollo-enrichment",
+      sourcePath: "/Users/vedant/Desktop/denchclaw/extensions/apollo-enrichment",
+    });
   });
 });

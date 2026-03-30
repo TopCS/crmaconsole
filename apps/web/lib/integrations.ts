@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { resolveOpenClawStateDir } from "@/lib/workspace";
 
@@ -96,6 +96,22 @@ export type IntegrationRuntimeRefresh = {
   restarted: boolean;
   error: string | null;
   profile: string;
+};
+
+export type IntegrationRepairEntry = {
+  id: "exa" | "apollo";
+  pluginId: string;
+  assetAvailable: boolean;
+  assetCopied: boolean;
+  repaired: boolean;
+  issues: string[];
+};
+
+export type IntegrationsRepairResult = {
+  changed: boolean;
+  repairs: IntegrationRepairEntry[];
+  repairedIds: Array<IntegrationRepairEntry["id"]>;
+  state: IntegrationsState;
 };
 
 type UnknownRecord = Record<string, unknown>;
@@ -296,8 +312,7 @@ function ensurePluginRegistration(config: OpenClawConfig, pluginId: string): boo
   }
 
   let changed = false;
-  const installPath = join(resolveOpenClawStateDir(), "extensions", pluginId);
-  const sourcePath = join(process.cwd(), "extensions", pluginId);
+  const { installPath, sourcePath } = resolveBundledPluginPaths(pluginId);
   const pluginExists = existsSync(installPath);
 
   changed = addUnique(allow, pluginId) || changed;
@@ -331,6 +346,101 @@ function ensurePluginRegistration(config: OpenClawConfig, pluginId: string): boo
   }
 
   return changed;
+}
+
+function resolveBundledPluginPaths(pluginId: string): {
+  installPath: string;
+  sourcePath: string;
+} {
+  const cwdCandidates = [
+    join(process.cwd(), "extensions", pluginId),
+    join(process.cwd(), "..", "..", "extensions", pluginId),
+  ];
+  const sourcePath = cwdCandidates.find((candidate) => existsSync(candidate)) ?? cwdCandidates[0];
+  return {
+    installPath: join(resolveOpenClawStateDir(), "extensions", pluginId),
+    sourcePath,
+  };
+}
+
+function repairBundledPluginRegistration(
+  config: OpenClawConfig,
+  params: {
+    id: "exa" | "apollo";
+    pluginId: string;
+  },
+): IntegrationRepairEntry & { changed: boolean } {
+  const plugins = ensurePluginsConfig(config);
+  const allow = ensureStringList(plugins.allow);
+  const loadPaths = ensureStringList(plugins.load?.paths);
+  plugins.allow = allow;
+  if (!plugins.load) {
+    plugins.load = {};
+  }
+  plugins.load.paths = loadPaths;
+  if (!plugins.entries) {
+    plugins.entries = {};
+  }
+  if (!plugins.installs) {
+    plugins.installs = {};
+  }
+
+  const { installPath, sourcePath } = resolveBundledPluginPaths(params.pluginId);
+  const sourceExists = existsSync(sourcePath);
+  let installExists = existsSync(installPath);
+  let assetCopied = false;
+  const issues: string[] = [];
+  let changed = false;
+
+  if (!installExists && sourceExists) {
+    mkdirSync(dirname(installPath), { recursive: true });
+    cpSync(sourcePath, installPath, { recursive: true, force: true });
+    installExists = true;
+    assetCopied = true;
+    changed = true;
+  }
+
+  if (!installExists && !sourceExists) {
+    issues.push("source_asset_missing");
+  }
+
+  const existingEntry = asRecord(plugins.entries[params.pluginId]);
+  const preservedEnabled = existingEntry?.enabled !== false;
+  if (!existingEntry) {
+    plugins.entries[params.pluginId] = { enabled: preservedEnabled };
+    changed = true;
+  }
+
+  if (installExists) {
+    changed = addUnique(allow, params.pluginId) || changed;
+    changed = addUnique(loadPaths, installPath) || changed;
+    const install = asRecord(plugins.installs[params.pluginId]);
+    if (!install) {
+      plugins.installs[params.pluginId] = { installPath, sourcePath };
+      changed = true;
+    } else {
+      if (install.installPath !== installPath) {
+        install.installPath = installPath;
+        changed = true;
+      }
+      if (install.sourcePath !== sourcePath) {
+        install.sourcePath = sourcePath;
+        changed = true;
+      }
+    }
+  } else {
+    issues.push("install_path_missing");
+  }
+
+  return {
+    id: params.id,
+    pluginId: params.pluginId,
+    assetAvailable: installExists,
+    assetCopied,
+    repaired: changed && installExists,
+    issues,
+    changed,
+  };
 }
 
 function setPluginEnabled(config: OpenClawConfig, pluginId: string, enabled: boolean): boolean {
@@ -684,6 +794,28 @@ export async function refreshIntegrationsRuntime(): Promise<IntegrationRuntimeRe
       profile,
     };
   }
+}
+
+export function repairOlderIntegrationsProfile(): IntegrationsRepairResult {
+  const config = readOpenClawConfigForIntegrations();
+  const repairs = [
+    repairBundledPluginRegistration(config, { id: "exa", pluginId: EXA_PLUGIN_ID }),
+    repairBundledPluginRegistration(config, { id: "apollo", pluginId: APOLLO_PLUGIN_ID }),
+  ];
+  const changed = repairs.some((repair) => repair.changed);
+
+  if (changed) {
+    writeOpenClawConfigForIntegrations(config);
+  }
+
+  return {
+    changed,
+    repairs: repairs.map(({ changed: _changed, ...repair }) => repair),
+    repairedIds: repairs
+      .filter((repair) => repair.repaired)
+      .map((repair) => repair.id),
+    state: getIntegrationsState(),
+  };
 }
 
 export function setExaIntegrationEnabled(enabled: boolean): IntegrationToggleResult {
