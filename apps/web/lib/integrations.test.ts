@@ -11,6 +11,16 @@ vi.mock("node:fs", () => ({
   writeFileSync: vi.fn(),
 }));
 
+vi.mock("node:child_process", () => ({
+  execFile: vi.fn((_file, _args, _options, callback) => {
+    if (typeof _options === "function") {
+      _options(null, "", "");
+      return;
+    }
+    callback?.(null, "", "");
+  }),
+}));
+
 describe("integrations state", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -131,12 +141,24 @@ describe("integrations state", () => {
       available: true,
       gatewayBaseUrl: "https://gateway.merseoriginals.com",
       healthIssues: [],
+      health: {
+        status: "healthy",
+        pluginMissing: false,
+        pluginInstalledButDisabled: false,
+        configMismatch: false,
+        missingAuth: false,
+        missingGatewayOverride: false,
+      },
     });
     expect(elevenlabs).toMatchObject({
       enabled: true,
       available: true,
       overrideActive: true,
       healthIssues: [],
+      health: {
+        status: "healthy",
+        missingGatewayOverride: false,
+      },
     });
   });
 
@@ -188,6 +210,18 @@ describe("integrations state", () => {
     expect(elevenlabs?.healthIssues).toEqual(
       expect.arrayContaining(["missing_auth", "missing_override"]),
     );
+    expect(exa?.health).toMatchObject({
+      status: "disabled",
+      pluginMissing: true,
+      pluginInstalledButDisabled: true,
+      configMismatch: true,
+      missingAuth: true,
+    });
+    expect(elevenlabs?.health).toMatchObject({
+      status: "disabled",
+      missingAuth: true,
+      missingGatewayOverride: true,
+    });
   });
 
   it("enables Exa and suppresses built-in web search", async () => {
@@ -437,5 +471,30 @@ describe("integrations state", () => {
       baseUrl: "https://gateway.merseoriginals.com",
       apiKey: "dench-key",
     });
+  });
+
+  it("restarts the OpenClaw gateway for the active profile", async () => {
+    const { execFile } = await import("node:child_process");
+    const mockExecFile = vi.mocked(execFile);
+    mockExecFile.mockImplementationOnce(((_file, _args, _options, callback) => {
+      callback?.(null, "", "");
+      return undefined as never;
+    }) as typeof execFile);
+
+    const { refreshIntegrationsRuntime } = await import("./integrations.js");
+    const result = await refreshIntegrationsRuntime();
+
+    expect(result).toEqual({
+      attempted: true,
+      restarted: true,
+      error: null,
+      profile: "dench",
+    });
+    expect(mockExecFile).toHaveBeenCalledWith(
+      "openclaw",
+      ["--profile", "dench", "gateway", "restart"],
+      expect.objectContaining({ timeout: 30000 }),
+      expect.any(Function),
+    );
   });
 });

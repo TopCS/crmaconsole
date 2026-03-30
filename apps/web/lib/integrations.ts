@@ -1,5 +1,7 @@
+import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+import { promisify } from "node:util";
 import { resolveOpenClawStateDir } from "@/lib/workspace";
 
 export type DenchIntegrationId = "exa" | "apollo" | "elevenlabs";
@@ -58,6 +60,14 @@ export type DenchIntegrationState = {
   plugin: IntegrationPluginState | null;
   managedByDench: boolean;
   healthIssues: IntegrationHealthIssue[];
+  health: {
+    status: "healthy" | "degraded" | "disabled";
+    pluginMissing: boolean;
+    pluginInstalledButDisabled: boolean;
+    configMismatch: boolean;
+    missingAuth: boolean;
+    missingGatewayOverride: boolean;
+  };
   overrideActive?: boolean;
 };
 
@@ -79,6 +89,13 @@ export type IntegrationsState = {
 export type IntegrationToggleResult = {
   state: IntegrationsState;
   changed: boolean;
+};
+
+export type IntegrationRuntimeRefresh = {
+  attempted: boolean;
+  restarted: boolean;
+  error: string | null;
+  profile: string;
 };
 
 type UnknownRecord = Record<string, unknown>;
@@ -118,6 +135,7 @@ const DEFAULT_FALLBACK_PROVIDER = "duckduckgo";
 const METADATA_FILENAME = ".dench-integrations.json";
 const EXA_PLUGIN_ID = "exa-search";
 const APOLLO_PLUGIN_ID = "apollo-enrichment";
+const execFileAsync = promisify(execFile);
 
 function asRecord(value: unknown): UnknownRecord | undefined {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -440,6 +458,24 @@ function resolveEffectiveSearchOwner(params: {
   return "none";
 }
 
+function buildHealth(enabled: boolean, issues: IntegrationHealthIssue[]): DenchIntegrationState["health"] {
+  return {
+    status: enabled ? (issues.length === 0 ? "healthy" : "degraded") : "disabled",
+    pluginMissing:
+      issues.includes("missing_plugin_entry") ||
+      issues.includes("plugin_install_missing") ||
+      issues.includes("plugin_install_path_missing"),
+    pluginInstalledButDisabled: issues.includes("plugin_disabled"),
+    configMismatch:
+      issues.includes("plugin_not_allowlisted") ||
+      issues.includes("plugin_load_path_missing") ||
+      issues.includes("built_in_search_still_enabled") ||
+      issues.includes("missing_override"),
+    missingAuth: issues.includes("missing_auth"),
+    missingGatewayOverride: issues.includes("missing_override"),
+  };
+}
+
 function buildExaState(
   config: OpenClawConfig,
   gatewayBaseUrl: string | null,
@@ -480,6 +516,7 @@ function buildExaState(
     plugin,
     managedByDench: true,
     healthIssues,
+    health: buildHealth(enabled, healthIssues),
   };
 }
 
@@ -519,6 +556,7 @@ function buildApolloState(
     plugin,
     managedByDench: true,
     healthIssues,
+    health: buildHealth(enabled, healthIssues),
   };
 }
 
@@ -546,6 +584,7 @@ function buildElevenLabsState(
     plugin: null,
     managedByDench: true,
     healthIssues,
+    health: buildHealth(overrideActive, healthIssues),
     overrideActive,
   };
 }
@@ -581,6 +620,70 @@ export function getIntegrationsState(): IntegrationsState {
 
 export function getIntegrationState(id: DenchIntegrationId): DenchIntegrationState | undefined {
   return getIntegrationsState().integrations.find((integration) => integration.id === id);
+}
+
+function resolveOpenClawProfileName(): string {
+  const stateDir = resolveOpenClawStateDir();
+  const dirName = basename(stateDir);
+  if (dirName === ".openclaw") {
+    return "default";
+  }
+  if (dirName.startsWith(".openclaw-")) {
+    const suffix = dirName.slice(".openclaw-".length).trim();
+    return suffix || "default";
+  }
+  return "default";
+}
+
+function extractRefreshError(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+  const structured = error as {
+    shortMessage?: string;
+    stderr?: string | Buffer;
+    stdout?: string | Buffer;
+  };
+  const stderr = typeof structured?.stderr === "string"
+    ? structured.stderr.trim()
+    : Buffer.isBuffer(structured?.stderr)
+      ? structured.stderr.toString("utf-8").trim()
+      : "";
+  if (stderr) {
+    return stderr.split("\n")[0] ?? stderr;
+  }
+  const stdout = typeof structured?.stdout === "string"
+    ? structured.stdout.trim()
+    : Buffer.isBuffer(structured?.stdout)
+      ? structured.stdout.toString("utf-8").trim()
+      : "";
+  if (stdout) {
+    return stdout.split("\n")[0] ?? stdout;
+  }
+  return structured?.shortMessage?.trim() || "Gateway restart failed.";
+}
+
+export async function refreshIntegrationsRuntime(): Promise<IntegrationRuntimeRefresh> {
+  const profile = resolveOpenClawProfileName();
+  try {
+    await execFileAsync("openclaw", ["--profile", profile, "gateway", "restart"], {
+      timeout: 30_000,
+      env: process.env,
+    });
+    return {
+      attempted: true,
+      restarted: true,
+      error: null,
+      profile,
+    };
+  } catch (error) {
+    return {
+      attempted: true,
+      restarted: false,
+      error: extractRefreshError(error),
+      profile,
+    };
+  }
 }
 
 export function setExaIntegrationEnabled(enabled: boolean): IntegrationToggleResult {

@@ -46,6 +46,12 @@ vi.mock("@/lib/integrations", () => ({
       integrations: [{ id: "elevenlabs", enabled, available: true }],
     },
   })),
+  refreshIntegrationsRuntime: vi.fn(() => Promise.resolve({
+    attempted: true,
+    restarted: true,
+    error: null,
+    profile: "dench",
+  })),
 }));
 
 describe("integrations toggle API", () => {
@@ -66,6 +72,7 @@ describe("integrations toggle API", () => {
     const json = await response.json();
     expect(json.integration).toBe("exa");
     expect(json.search.effectiveOwner).toBe("exa");
+    expect(json.refresh.restarted).toBe(true);
   });
 
   it("rejects missing enabled boolean", async () => {
