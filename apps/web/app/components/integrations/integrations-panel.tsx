@@ -142,7 +142,7 @@ function IntegrationCard({
   );
 }
 
-export function IntegrationsPanel() {
+export function IntegrationsPanel({ embedded }: { embedded?: boolean } = {}) {
   const [data, setData] = useState<IntegrationsState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -267,24 +267,39 @@ export function IntegrationsPanel() {
   }, [applyState]);
 
   return (
-    <div className="mx-auto max-w-5xl p-6">
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1
-            className="font-instrument text-3xl tracking-tight"
-            style={{ color: "var(--color-text)" }}
-          >
-            Integrations
-          </h1>
-          <p
-            className="mt-1 text-sm"
-            style={{ color: "var(--color-text-muted)" }}
-          >
-            Manage Dench-managed integrations and search ownership in one place.
-          </p>
-        </div>
+    <div className={embedded ? "" : "mx-auto max-w-5xl p-6"}>
+      {!embedded && (
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h1
+              className="font-instrument text-3xl tracking-tight"
+              style={{ color: "var(--color-text)" }}
+            >
+              Integrations
+            </h1>
+            <p
+              className="mt-1 text-sm"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              Manage Dench-managed integrations and search ownership in one place.
+            </p>
+          </div>
 
-        {needsRepair && (
+          {needsRepair && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void handleRepair()}
+              disabled={repairing}
+            >
+              {repairing ? "Repairing..." : "Repair older profiles"}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {embedded && needsRepair && (
+        <div className="mb-4">
           <Button
             type="button"
             variant="outline"
@@ -293,8 +308,8 @@ export function IntegrationsPanel() {
           >
             {repairing ? "Repairing..." : "Repair older profiles"}
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {loading && (
         <div className="flex items-center justify-center py-16">
