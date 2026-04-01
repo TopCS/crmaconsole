@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Input } from "../ui/input";
 import { ComposioAppCard } from "./composio-app-card";
 import { ComposioConnectModal } from "./composio-connect-modal";
-import {
-  type ComposioConnection,
+import type {
+  ComposioConnection,
   ComposioToolkit,
   ComposioToolkitsResponse,
   ComposioConnectionsResponse,

@@ -40,6 +40,13 @@ describe("buildIdentityPrompt", () => {
     expect(prompt).toContain("Never** use curl");
   });
 
+  it("prefers Composio over gog even without a generated tool index", () => {
+    const prompt = buildIdentityPrompt(workspaceDir);
+    expect(prompt).toContain("Composio MCP is the default integration layer");
+    expect(prompt).toContain("Do not read or use `gog`");
+    expect(prompt).toContain("GMAIL_FETCH_EMAILS");
+  });
+
   it("includes exec approval policy (prevents agent stalling on exec confirmation)", () => {
     const prompt = buildIdentityPrompt(workspaceDir);
     expect(prompt).toContain("elevated: true");

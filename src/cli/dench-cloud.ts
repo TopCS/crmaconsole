@@ -405,6 +405,7 @@ export function buildDenchCloudConfigPatch(params: {
       servers: {
         composio: {
           url: `${params.gatewayUrl}/v1/composio/mcp`,
+          transport: "streamable-http",
           headers: {
             Authorization: `Bearer ${params.apiKey}`,
           },

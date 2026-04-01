@@ -3,6 +3,21 @@ import { loadComposioToolCheatSheetMarkdown } from "./composio-cheat-sheet.js";
 
 export const id = "dench-identity";
 
+function buildComposioDefaultGuidance(composioAppsSkillPath: string): string {
+  return [
+    "## Connected App Tools (via Composio MCP)",
+    "",
+    "Composio MCP is the default integration layer for connected apps in this workspace.",
+    "",
+    "- If the user mentions Composio, rube, map, MCP, or says an app is already connected, use the Composio MCP tools first.",
+    `- Load and follow \`${composioAppsSkillPath}\` for Gmail, Slack, GitHub, Notion, Google Calendar, and Linear recipes when the generated tool index is missing.`,
+    "- Do not read or use `gog` for Gmail/Calendar/Drive tasks unless the user explicitly asks for `gog` or Composio is unavailable.",
+    "- Gmail fast path: `GMAIL_FETCH_EMAILS` with `label_ids: [\"INBOX\"]` and `max_results: 10`; for one message use `GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID`.",
+    "- If a Composio tool call fails because of argument shape, fix the arguments and retry once before considering any fallback.",
+    "",
+  ].join("\n");
+}
+
 export function buildIdentityPrompt(workspaceDir: string): string {
   const skillsDir = path.join(workspaceDir, "skills");
   const crmSkillPath = path.join(skillsDir, "crm", "SKILL.md");
@@ -13,6 +28,8 @@ export function buildIdentityPrompt(workspaceDir: string): string {
   const dbPath = path.join(workspaceDir, "workspace.duckdb");
 
   const composioCheatSheet = loadComposioToolCheatSheetMarkdown(workspaceDir);
+  const composioGuidance = composioCheatSheet
+    ?? buildComposioDefaultGuidance(composioAppsSkillPath);
 
   return `# DenchClaw System Prompt
 
@@ -108,8 +125,9 @@ For multi-session projects, write a session handoff summary to \`${workspaceDir}
 - Use \`apollo_enrich\` for people and company enrichment lookups.
 - For connected apps (Gmail, Slack, GitHub, etc.), use the **Composio MCP** tools directly. Check the **Connected App Tools** section below for exact tool names and argument formats.
 - **Never** use curl or raw HTTP to call Composio or gateway integration endpoints — always use the MCP tools.
+- **Never** use \`gog\` for Gmail/Calendar/Drive when Composio is connected or the user mentions Composio/rube/map/MCP. \`gog\` is a fallback only when the user explicitly asks for it or Composio is unavailable.
 
-${composioCheatSheet ? `\n${composioCheatSheet}\n` : ""}
+${composioGuidance ? `\n${composioGuidance}\n` : ""}
 ## Links
 
 - Website: https://denchclaw.com
