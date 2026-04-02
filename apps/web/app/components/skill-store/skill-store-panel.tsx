@@ -645,7 +645,7 @@ function BrowseTab({
           return (
             <div
               key={skill.slug}
-              className="rounded-2xl p-4 flex flex-col gap-2"
+              className="group rounded-2xl p-4 flex flex-col gap-2"
               style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}
             >
               <div className="flex items-start justify-between gap-2">
@@ -681,37 +681,31 @@ function BrowseTab({
                     >
                       Installed
                     </span>
+                  ) : isWorking ? (
+                    <span
+                      className="text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1"
+                      style={{
+                        background: "var(--color-surface-hover)",
+                        color: "var(--color-text-muted)",
+                      }}
+                    >
+                      <span
+                        className="w-3 h-3 border border-current rounded-full animate-spin"
+                        style={{ borderTopColor: "transparent" }}
+                      />
+                      {installStatus?.phase === "installing" ? "Installing..." : "Syncing..."}
+                    </span>
                   ) : (
                     <button
                       type="button"
                       onClick={() => onInstall(skill)}
-                      disabled={isWorking}
-                      className="text-[11px] px-2.5 py-1 rounded-lg cursor-pointer transition-colors"
+                      className="text-[11px] px-2.5 py-1 rounded-lg cursor-pointer transition-opacity opacity-0 group-hover:opacity-100"
                       style={{
-                        background: "var(--color-accent)",
-                        color: "var(--color-bg)",
-                        opacity: isWorking ? 0.7 : 1,
+                        background: "var(--color-surface-hover)",
+                        color: "var(--color-text)",
                       }}
                     >
-                      {installStatus?.phase === "installing" ? (
-                        <span className="flex items-center gap-1">
-                          <span
-                            className="w-3 h-3 border border-current rounded-full animate-spin"
-                            style={{ borderTopColor: "transparent" }}
-                          />
-                          Installing...
-                        </span>
-                      ) : installStatus?.phase === "refreshing" ? (
-                        <span className="flex items-center gap-1">
-                          <span
-                            className="w-3 h-3 border border-current rounded-full animate-spin"
-                            style={{ borderTopColor: "transparent" }}
-                          />
-                          Syncing...
-                        </span>
-                      ) : (
-                        "Install"
-                      )}
+                      <ArrowUpRightIcon /> Install
                     </button>
                   )}
                 </div>
@@ -770,6 +764,15 @@ function StatusNotice({
     <div className="rounded-xl px-3 py-2 text-sm" style={styles}>
       {children}
     </div>
+  );
+}
+
+function ArrowUpRightIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: "inline", verticalAlign: "middle" }}>
+      <line x1="7" y1="17" x2="17" y2="7" />
+      <polyline points="7 7 17 7 17 17" />
+    </svg>
   );
 }
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { ComposioAppCard } from "./composio-app-card";
 import { ComposioConnectModal } from "./composio-connect-modal";
@@ -31,6 +30,15 @@ const FEATURED_SLUGS = [
   "jira",
   "asana",
   "discord",
+];
+
+const MAX_CATEGORY_PILLS = 8;
+
+type IntegrationsTab = "connected" | "marketplace";
+
+const TABS: { id: IntegrationsTab; label: string }[] = [
+  { id: "connected", label: "Connected" },
+  { id: "marketplace", label: "Marketplace" },
 ];
 
 type ComposioAppsState = {
@@ -70,38 +78,6 @@ type ComposioMcpStatus = {
   };
 };
 
-function statusLabel(status: "pass" | "fail" | "unknown"): string {
-  if (status === "pass") {
-    return "OK";
-  }
-  if (status === "fail") {
-    return "Needs repair";
-  }
-  return "Not verified";
-}
-
-function statusToneStyles(level: "healthy" | "warning" | "error") {
-  if (level === "healthy") {
-    return {
-      borderColor: "rgba(16, 185, 129, 0.28)",
-      background: "rgba(16, 185, 129, 0.08)",
-      color: "rgb(110 231 183)",
-    };
-  }
-  if (level === "warning") {
-    return {
-      borderColor: "rgba(250, 204, 21, 0.28)",
-      background: "rgba(250, 204, 21, 0.08)",
-      color: "rgb(253 224 71)",
-    };
-  }
-  return {
-    borderColor: "rgba(248, 113, 113, 0.28)",
-    background: "rgba(248, 113, 113, 0.08)",
-    color: "rgb(252 165 165)",
-  };
-}
-
 export function ComposioAppsSection({
   eligible,
   lockBadge,
@@ -109,6 +85,7 @@ export function ComposioAppsSection({
   eligible: boolean;
   lockBadge: string | null;
 }) {
+  const [activeTab, setActiveTab] = useState<IntegrationsTab>("connected");
   const [state, setState] = useState<ComposioAppsState>({
     toolkits: [],
     connections: [],
@@ -125,7 +102,6 @@ export function ComposioAppsSection({
   const [statusError, setStatusError] = useState<string | null>(null);
   const [toolIndexError, setToolIndexError] = useState<string | null>(null);
   const [repairingMcp, setRepairingMcp] = useState(false);
-  const [probingLiveAgent, setProbingLiveAgent] = useState(false);
 
   const fetchData = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null, connectionsError: null }));
@@ -247,15 +223,6 @@ export function ComposioAppsSection({
     return map;
   }, [activeConnectionsByToolkit]);
 
-  const connectedAppsCount = activeAccountsByToolkit.size;
-  const activeAccountsCount = useMemo(
-    () => Array.from(activeAccountsByToolkit.values()).reduce(
-      (sum, connections) => sum + connections.length,
-      0,
-    ),
-    [activeAccountsByToolkit],
-  );
-
   const filteredToolkits = useMemo(() => {
     let list = [...state.toolkits].sort((left, right) => left.name.localeCompare(right.name));
     if (activeCategory) {
@@ -287,19 +254,21 @@ export function ComposioAppsSection({
     [activeAccountsByToolkit, filteredToolkits],
   );
 
-  const { featuredAvailable, restAvailable } = useMemo(() => {
+  const marketplaceToolkits = useMemo(() => {
     if (search.trim() || activeCategory) {
-      return { featuredAvailable: [] as ComposioToolkit[], restAvailable: availableToolkits };
+      return availableToolkits;
     }
-
     const featuredSet = new Set(FEATURED_SLUGS);
-    const featured = availableToolkits.filter((toolkit) => featuredSet.has(toolkit.slug));
-    featured.sort(
-      (left, right) => FEATURED_SLUGS.indexOf(left.slug) - FEATURED_SLUGS.indexOf(right.slug),
-    );
-    const rest = availableToolkits.filter((toolkit) => !featuredSet.has(toolkit.slug));
-    return { featuredAvailable: featured, restAvailable: rest };
+    const featured = availableToolkits.filter((t) => featuredSet.has(t.slug));
+    featured.sort((a, b) => FEATURED_SLUGS.indexOf(a.slug) - FEATURED_SLUGS.indexOf(b.slug));
+    const rest = availableToolkits.filter((t) => !featuredSet.has(t.slug));
+    return [...featured, ...rest];
   }, [activeCategory, availableToolkits, search]);
+
+  const displayCategories = useMemo(
+    () => state.categories.slice(0, MAX_CATEGORY_PILLS),
+    [state.categories],
+  );
 
   const selectedConnections = selectedToolkit
     ? connectionsByToolkit.get(normalizeComposioToolkitSlug(selectedToolkit.slug)) ?? []
@@ -314,20 +283,14 @@ export function ComposioAppsSection({
     void fetchData();
   }, [fetchData]);
 
-  const handleStatusAction = useCallback(async (
-    action: "repair_mcp" | "probe_live_agent",
-  ) => {
-    if (action === "repair_mcp") {
-      setRepairingMcp(true);
-    } else {
-      setProbingLiveAgent(true);
-    }
+  const handleRepairMcp = useCallback(async () => {
+    setRepairingMcp(true);
     setStatusError(null);
     try {
       const response = await fetch("/api/composio/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action: "repair_mcp" }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -337,48 +300,34 @@ export function ComposioAppsSection({
         return;
       }
       setMcpStatus(payload as ComposioMcpStatus);
-      if (action === "repair_mcp") {
-        const toolIndexRes = await fetch("/api/composio/tool-index", { method: "POST" });
-        if (!toolIndexRes.ok) {
-          const err = await toolIndexRes.json().catch(() => ({}));
-          setToolIndexError(
-            (err as { error?: string }).error ?? `Failed to rebuild Composio tool index (${toolIndexRes.status})`,
-          );
-        } else {
-          setToolIndexError(null);
-        }
+      const toolIndexRes = await fetch("/api/composio/tool-index", { method: "POST" });
+      if (!toolIndexRes.ok) {
+        const err = await toolIndexRes.json().catch(() => ({}));
+        setToolIndexError(
+          (err as { error?: string }).error ?? `Failed to rebuild Composio tool index (${toolIndexRes.status})`,
+        );
+      } else {
+        setToolIndexError(null);
       }
     } catch (err) {
       setStatusError(err instanceof Error ? err.message : "Failed to update Composio MCP status.");
     } finally {
       setRepairingMcp(false);
-      setProbingLiveAgent(false);
     }
   }, []);
 
   if (!eligible) {
     return (
-      <div className="mt-6">
-        <div className="mb-3">
-          <h3
-            className="text-sm font-medium"
-            style={{ color: "var(--color-text)" }}
-          >
-            App Connections
-          </h3>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Browse integrations and unlock them for your AI agent
-          </p>
-        </div>
+      <div>
         <div
-          className="flex items-center justify-center rounded-2xl border px-6 py-10"
+          className="flex items-center justify-center rounded-2xl px-6 py-10"
           style={{
-            borderColor: "var(--color-border)",
-            background: "var(--color-surface-hover)",
+            background: "var(--color-surface)",
+            border: "1px solid var(--color-border)",
           }}
         >
           <div className="text-center">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
               Available with Dench Cloud
             </p>
             {lockBadge && (
@@ -400,306 +349,142 @@ export function ComposioAppsSection({
   }
 
   return (
-    <div className="mt-6">
+    <div>
+      {/* Tab bar */}
       <div
-        className="mb-4 rounded-2xl border p-4"
-        style={{
-          borderColor: "var(--color-border)",
-          background: "var(--color-surface-hover)",
-        }}
+        className="flex w-fit items-center gap-1 mb-6 rounded-xl p-1"
+        style={{ background: "var(--color-surface-hover)" }}
       >
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h3
-              className="text-sm font-medium"
-              style={{ color: "var(--color-text)" }}
-            >
-              App Connections
-            </h3>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              Connect your tools, keep track of active accounts, and manage everything from one place.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <div
-              className="min-w-[120px] rounded-xl border px-3 py-2"
-              style={{ borderColor: "var(--color-border)", background: "var(--color-background)" }}
-            >
-              <p className="text-lg font-semibold text-foreground">{connectedAppsCount}</p>
-              <p className="text-[11px] text-muted-foreground">
-                app{connectedAppsCount === 1 ? "" : "s"} connected
-              </p>
-            </div>
-            <div
-              className="min-w-[120px] rounded-xl border px-3 py-2"
-              style={{ borderColor: "var(--color-border)", background: "var(--color-background)" }}
-            >
-              <p className="text-lg font-semibold text-foreground">{activeAccountsCount}</p>
-              <p className="text-[11px] text-muted-foreground">
-                active account{activeAccountsCount === 1 ? "" : "s"}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {(mcpStatus || statusError || toolIndexError) && (
-          <div
-            className="mt-4 rounded-2xl border px-4 py-3 text-sm"
-            style={statusToneStyles(statusError || toolIndexError ? "error" : (mcpStatus?.summary.level ?? "error"))}
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className="px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer"
+            style={{
+              background: activeTab === tab.id ? "var(--color-surface)" : "transparent",
+              color: activeTab === tab.id ? "var(--color-text)" : "var(--color-text-muted)",
+              boxShadow: activeTab === tab.id ? "var(--shadow-sm)" : "none",
+            }}
           >
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div className="space-y-2">
-                <div className="font-medium">
-                  {mcpStatus?.summary.message ?? statusError ?? "Composio MCP status is unavailable."}
-                </div>
-                <div className="grid gap-1 text-[12px] opacity-90">
-                  {mcpStatus && (
-                    <>
-                      <div>Config: {statusLabel(mcpStatus.config.status)}. {mcpStatus.config.detail}</div>
-                      <div>
-                        Gateway tools/list: {statusLabel(mcpStatus.gatewayTools.status)}.
-                        {" "}
-                        {mcpStatus.gatewayTools.detail}
-                        {typeof mcpStatus.gatewayTools.toolCount === "number"
-                          ? ` (${mcpStatus.gatewayTools.toolCount} tools)`
-                          : ""}
-                      </div>
-                      <div>
-                        Live agent: {statusLabel(mcpStatus.liveAgent.status)}. {mcpStatus.liveAgent.detail}
-                      </div>
-                      {mcpStatus.liveAgent.evidence.length > 0 && (
-                        <div>Evidence: {mcpStatus.liveAgent.evidence.join(", ")}</div>
-                      )}
-                      {mcpStatus.refresh && (
-                        <div>
-                          Gateway restart: {mcpStatus.refresh.restarted
-                            ? `Restarted ${mcpStatus.refresh.profile} successfully.`
-                            : mcpStatus.refresh.attempted
-                              ? `Restart attempt failed: ${mcpStatus.refresh.error ?? "unknown error"}.`
-                              : "No restart was attempted."}
-                        </div>
-                      )}
-                    </>
-                  )}
-                  {statusError && <div>{statusError}</div>}
-                  {toolIndexError && <div>Tool index: {toolIndexError}</div>}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void handleStatusAction("repair_mcp")}
-                  disabled={repairingMcp}
-                >
-                  {repairingMcp ? "Repairing..." : "Repair MCP"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void handleStatusAction("probe_live_agent")}
-                  disabled={probingLiveAgent}
-                >
-                  {probingLiveAgent ? "Verifying..." : "Verify Agent Access"}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => void fetchData()}>
-                  Retry Status
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Input
-            type="text"
-            placeholder="Search apps..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-9 text-sm"
-          />
-        </div>
-
-        {state.categories.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onClick={() => setActiveCategory(null)}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                !activeCategory
-                  ? "bg-[var(--color-accent)] text-white"
-                  : "bg-[var(--color-background)] text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              All
-            </button>
-            {state.categories.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() =>
-                  setActiveCategory(activeCategory === cat ? null : cat)
-                }
-                className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                  activeCategory === cat
-                    ? "bg-[var(--color-accent)] text-white"
-                    : "bg-[var(--color-background)] text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        )}
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {state.loading && (
-        <div className="flex items-center justify-center py-10">
-          <div
-            className="h-5 w-5 animate-spin rounded-full border-2"
+      {/* Search */}
+      <div className="mb-4">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={activeTab === "connected" ? "Filter connected apps..." : "Search marketplace..."}
+          className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+          style={{
+            background: "var(--color-surface)",
+            border: "1px solid var(--color-border)",
+            color: "var(--color-text)",
+          }}
+        />
+      </div>
+
+      {/* Category pills (marketplace only) */}
+      {activeTab === "marketplace" && displayCategories.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => setActiveCategory(null)}
+            className="rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer"
             style={{
-              borderColor: "var(--color-border)",
-              borderTopColor: "var(--color-accent)",
+              background: !activeCategory ? "var(--color-accent)" : "var(--color-surface)",
+              color: !activeCategory ? "var(--color-bg, #fff)" : "var(--color-text-muted)",
+              border: !activeCategory ? "none" : "1px solid var(--color-border)",
             }}
+          >
+            All
+          </button>
+          {displayCategories.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
+              className="rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer"
+              style={{
+                background: activeCategory === cat ? "var(--color-accent)" : "var(--color-surface)",
+                color: activeCategory === cat ? "var(--color-bg, #fff)" : "var(--color-text-muted)",
+                border: activeCategory === cat ? "none" : "1px solid var(--color-border)",
+              }}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* MCP status (collapsed into a small bar) */}
+      {(statusError || toolIndexError || (mcpStatus && mcpStatus.summary.level !== "healthy")) && (
+        <div
+          className="mb-4 flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-xs"
+          style={{
+            background: "color-mix(in srgb, var(--color-error, #ef4444) 8%, transparent)",
+            color: "var(--color-error, #ef4444)",
+            border: "1px solid color-mix(in srgb, var(--color-error, #ef4444) 20%, transparent)",
+          }}
+        >
+          <span className="truncate">
+            {statusError ?? toolIndexError ?? mcpStatus?.summary.message ?? "MCP needs attention"}
+          </span>
+          <button
+            type="button"
+            onClick={() => void handleRepairMcp()}
+            disabled={repairingMcp}
+            className="shrink-0 rounded-lg px-2 py-1 text-[11px] font-medium cursor-pointer transition-colors"
+            style={{
+              background: "color-mix(in srgb, var(--color-error, #ef4444) 15%, transparent)",
+            }}
+          >
+            {repairingMcp ? "Repairing..." : "Repair"}
+          </button>
+        </div>
+      )}
+
+      {state.loading && (
+        <div className="flex items-center justify-center py-16">
+          <div
+            className="w-6 h-6 border-2 rounded-full animate-spin"
+            style={{ borderColor: "var(--color-border)", borderTopColor: "var(--color-accent)" }}
           />
         </div>
       )}
 
       {!state.loading && state.error && (
         <div
-          className="rounded-xl border px-4 py-3 text-sm"
-          style={{
-            borderColor: "var(--color-border)",
-            color: "var(--color-text-muted)",
-          }}
+          className="p-8 text-center rounded-2xl"
+          style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}
         >
-          {state.error}
+          <p className="text-sm mb-3" style={{ color: "var(--color-text-muted)" }}>
+            {state.error}
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={() => void fetchData()}>
+            Retry
+          </Button>
         </div>
       )}
 
-      {!state.loading && !state.error && (
-        <>
-          {state.connectionsError && (
-            <div
-              className="mb-4 rounded-2xl border px-4 py-3 text-sm"
-              style={{
-                borderColor: "rgba(250, 204, 21, 0.28)",
-                background: "rgba(250, 204, 21, 0.08)",
-                color: "rgb(253 224 71)",
-              }}
-            >
-              {state.connectionsError}
-            </div>
-          )}
+      {!state.loading && !state.error && activeTab === "connected" && (
+        <ConnectedTab
+          toolkits={connectedToolkits}
+          activeAccountsByToolkit={activeAccountsByToolkit}
+          connectionsByToolkit={connectionsByToolkit}
+          onAppClick={handleAppClick}
+        />
+      )}
 
-          {connectedToolkits.length > 0 ? (
-            <div className="mb-5">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <h4 className="text-sm font-medium text-foreground">Connected</h4>
-                  <p className="text-[11px] text-muted-foreground">
-                    Apps already available to your AI agent
-                  </p>
-                </div>
-                <span className="text-[11px] text-muted-foreground">
-                  {connectedAppsCount} app{connectedAppsCount === 1 ? "" : "s"} connected
-                </span>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {connectedToolkits.map((toolkit) => {
-                  const toolkitSlug = normalizeComposioToolkitSlug(toolkit.slug);
-                  const activeConnections = activeAccountsByToolkit.get(toolkitSlug) ?? [];
-                  const totalConnections = connectionsByToolkit.get(toolkitSlug)?.length ?? 0;
-                  return (
-                    <ComposioAppCard
-                      key={toolkit.slug}
-                      toolkit={toolkit}
-                      activeConnections={activeConnections.length}
-                      totalConnections={totalConnections}
-                      onClick={() => handleAppClick(toolkit)}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <div
-              className="mb-5 rounded-2xl border border-dashed px-5 py-6"
-              style={{
-                borderColor: "var(--color-border)",
-                background: "var(--color-background-soft, var(--color-surface-hover))",
-              }}
-            >
-              <h4 className="text-sm font-medium text-foreground">No connected apps yet</h4>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Connect an app below to make it available inside your agent workflows.
-              </p>
-            </div>
-          )}
-
-          {featuredAvailable.length > 0 && (
-            <div className="mb-5">
-              <div className="mb-3">
-                <h4 className="text-sm font-medium text-foreground">Popular to connect</h4>
-                <p className="text-[11px] text-muted-foreground">
-                  Quick-start apps people usually connect first
-                </p>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {featuredAvailable.map((toolkit) => (
-                  <ComposioAppCard
-                    key={toolkit.slug}
-                    toolkit={toolkit}
-                    activeConnections={0}
-                    featured
-                    onClick={() => handleAppClick(toolkit)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {restAvailable.length > 0 && (
-            <div>
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <h4 className="text-sm font-medium text-foreground">
-                    {featuredAvailable.length > 0 ? "Browse all apps" : "Available apps"}
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground">
-                    Explore the rest of the catalog and connect more tools
-                  </p>
-                </div>
-                <span className="text-[11px] text-muted-foreground">
-                  {restAvailable.length} available
-                </span>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {restAvailable.map((toolkit) => (
-                  <ComposioAppCard
-                    key={toolkit.slug}
-                    toolkit={toolkit}
-                    activeConnections={0}
-                    onClick={() => handleAppClick(toolkit)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {connectedToolkits.length === 0 && availableToolkits.length === 0 && (
-            <div className="py-8 text-center text-sm text-muted-foreground">
-              {search.trim()
-                ? `No apps matching "${search.trim()}"`
-                : "No apps available"}
-            </div>
-          )}
-        </>
+      {!state.loading && !state.error && activeTab === "marketplace" && (
+        <MarketplaceTab
+          toolkits={marketplaceToolkits}
+          onAppClick={handleAppClick}
+        />
       )}
 
       <ComposioConnectModal
@@ -709,6 +494,86 @@ export function ComposioAppsSection({
         onOpenChange={setModalOpen}
         onConnectionChange={handleConnectionChange}
       />
+    </div>
+  );
+}
+
+function ConnectedTab({
+  toolkits,
+  activeAccountsByToolkit,
+  connectionsByToolkit,
+  onAppClick,
+}: {
+  toolkits: ComposioToolkit[];
+  activeAccountsByToolkit: Map<string, unknown[]>;
+  connectionsByToolkit: Map<string, unknown[]>;
+  onAppClick: (toolkit: ComposioToolkit) => void;
+}) {
+  if (toolkits.length === 0) {
+    return (
+      <div
+        className="p-8 text-center rounded-2xl"
+        style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}
+      >
+        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+          No connected apps yet. Head to the Marketplace tab to connect your first app.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {toolkits.map((toolkit) => {
+        const toolkitSlug = normalizeComposioToolkitSlug(toolkit.slug);
+        const activeConnections = activeAccountsByToolkit.get(toolkitSlug) ?? [];
+        const totalConnections = connectionsByToolkit.get(toolkitSlug)?.length ?? 0;
+        return (
+          <ComposioAppCard
+            key={toolkit.slug}
+            toolkit={toolkit}
+            activeConnections={activeConnections.length}
+            totalConnections={totalConnections}
+            mode="connected"
+            onClick={() => onAppClick(toolkit)}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function MarketplaceTab({
+  toolkits,
+  onAppClick,
+}: {
+  toolkits: ComposioToolkit[];
+  onAppClick: (toolkit: ComposioToolkit) => void;
+}) {
+  if (toolkits.length === 0) {
+    return (
+      <div
+        className="p-8 text-center rounded-2xl"
+        style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}
+      >
+        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+          No apps found.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {toolkits.map((toolkit) => (
+        <ComposioAppCard
+          key={toolkit.slug}
+          toolkit={toolkit}
+          activeConnections={0}
+          mode="marketplace"
+          onClick={() => onAppClick(toolkit)}
+        />
+      ))}
     </div>
   );
 }

@@ -5,151 +5,57 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { IntegrationsPanel } from "./integrations-panel";
 
+const eligiblePayload = {
+  denchCloud: {
+    hasKey: true,
+    isPrimaryProvider: true,
+    primaryModel: "dench-cloud/anthropic.claude-opus-4-6-v1",
+  },
+  metadata: { schemaVersion: 1 },
+  search: { builtIn: { enabled: false, denied: true, provider: "duckduckgo" }, effectiveOwner: "exa" },
+  integrations: [],
+};
+
+const toolkitsPayload = {
+  items: [
+    {
+      slug: "gmail",
+      name: "Gmail",
+      description: "Read and send email",
+      logo: null,
+      categories: ["Email"],
+      auth_schemes: ["oauth2"],
+      tools_count: 4,
+    },
+  ],
+  cursor: null,
+  total: 1,
+  categories: ["Email"],
+};
+
+const connectionsPayload = { connections: [] };
+
+const statusPayload = {
+  summary: { level: "healthy", verified: true, message: "Composio MCP is healthy." },
+  config: { status: "pass", detail: "OK." },
+  gatewayTools: { status: "pass", detail: "OK.", toolCount: 4 },
+  liveAgent: { status: "pass", detail: "OK.", evidence: [] },
+};
+
 describe("IntegrationsPanel", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("renders integrations data from the backend API", async () => {
-    const user = userEvent.setup();
-    const initialPayload = {
-      denchCloud: {
-        hasKey: true,
-        isPrimaryProvider: true,
-        primaryModel: "dench-cloud/anthropic.claude-opus-4-6-v1",
-      },
-      metadata: {
-        schemaVersion: 1,
-        exa: {
-          ownsSearch: true,
-          fallbackProvider: "duckduckgo",
-        },
-      },
-      search: {
-        builtIn: {
-          enabled: false,
-          denied: true,
-          provider: "duckduckgo",
-        },
-        effectiveOwner: "exa",
-      },
-      integrations: [
-        {
-          id: "exa",
-          label: "Exa Search",
-          enabled: true,
-          available: true,
-          gatewayBaseUrl: "https://gateway.merseoriginals.com",
-          auth: { configured: true, source: "config" },
-          plugin: {
-            pluginId: "exa-search",
-            configured: true,
-            enabled: true,
-            allowlisted: true,
-            loadPathConfigured: true,
-            installRecorded: true,
-            installPath: "/tmp/exa",
-            installPathExists: true,
-            sourcePath: "/repo/exa",
-          },
-          managedByDench: true,
-          healthIssues: [],
-          health: {
-            status: "healthy",
-            pluginMissing: false,
-            pluginInstalledButDisabled: false,
-            configMismatch: false,
-            missingAuth: false,
-            missingGatewayOverride: false,
-          },
-        },
-        {
-          id: "apollo",
-          label: "Apollo Enrichment",
-          enabled: false,
-          available: false,
-          gatewayBaseUrl: "https://gateway.merseoriginals.com",
-          auth: { configured: true, source: "config" },
-          plugin: {
-            pluginId: "apollo-enrichment",
-            configured: true,
-            enabled: false,
-            allowlisted: true,
-            loadPathConfigured: true,
-            installRecorded: true,
-            installPath: "/tmp/apollo",
-            installPathExists: true,
-            sourcePath: "/repo/apollo",
-          },
-          managedByDench: true,
-          healthIssues: ["plugin_disabled"],
-          health: {
-            status: "disabled",
-            pluginMissing: false,
-            pluginInstalledButDisabled: true,
-            configMismatch: false,
-            missingAuth: false,
-            missingGatewayOverride: false,
-          },
-        },
-        {
-          id: "elevenlabs",
-          label: "ElevenLabs",
-          enabled: true,
-          available: true,
-          gatewayBaseUrl: "https://gateway.merseoriginals.com",
-          auth: { configured: true, source: "config" },
-          plugin: null,
-          managedByDench: true,
-          healthIssues: [],
-          health: {
-            status: "healthy",
-            pluginMissing: false,
-            pluginInstalledButDisabled: false,
-            configMismatch: false,
-            missingAuth: false,
-            missingGatewayOverride: false,
-          },
-          overrideActive: true,
-        },
-      ],
-    };
-
-    global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+  it("renders the integrations heading and shows tabs", async () => {
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : (input as URL).href;
-      const method = init?.method ?? "GET";
-      if (url === "/api/integrations" && method === "GET") {
-        return new Response(JSON.stringify(initialPayload));
-      }
-      if (url === "/api/integrations/apollo/toggle" && method === "POST") {
-        return new Response(JSON.stringify({
-          integration: "apollo",
-          changed: true,
-          refresh: {
-            attempted: true,
-            restarted: true,
-            error: null,
-            profile: "dench",
-          },
-          ...initialPayload,
-          integrations: initialPayload.integrations.map((integration) =>
-            integration.id === "apollo"
-              ? {
-                ...integration,
-                enabled: true,
-                available: true,
-                healthIssues: [],
-                health: {
-                  ...integration.health,
-                  status: "healthy",
-                  pluginInstalledButDisabled: false,
-                },
-              }
-              : integration
-          ),
-        }));
-      }
-      throw new Error(`Unexpected fetch: ${method} ${url}`);
+      if (url === "/api/integrations") return new Response(JSON.stringify(eligiblePayload));
+      if (url === "/api/composio/toolkits") return new Response(JSON.stringify(toolkitsPayload));
+      if (url === "/api/composio/connections") return new Response(JSON.stringify(connectionsPayload));
+      if (url === "/api/composio/status") return new Response(JSON.stringify(statusPayload));
+      if (url === "/api/composio/tool-index") return new Response(JSON.stringify({ ok: true }));
+      throw new Error(`Unexpected fetch: ${url}`);
     }) as typeof fetch;
 
     render(<IntegrationsPanel />);
@@ -157,260 +63,60 @@ describe("IntegrationsPanel", () => {
     expect(screen.getByRole("heading", { name: "Integrations" })).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByText("Exa Search")).toBeInTheDocument();
+      expect(screen.getByText("Connected")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Exa Search")).toBeInTheDocument();
-    expect(screen.getByText("Apollo Enrichment")).toBeInTheDocument();
-    expect(screen.getByText("ElevenLabs")).toBeInTheDocument();
-    expect(screen.getByText("Search the web with Exa")).toBeInTheDocument();
-    expect(screen.getByText("Enrich people and company data")).toBeInTheDocument();
-    expect(screen.getByText("Generate speech with ElevenLabs")).toBeInTheDocument();
-
-    await user.click(screen.getByLabelText("Toggle Apollo Enrichment"));
-
-    await waitFor(() => {
-      expect(screen.getByText("Apollo Enrichment updated and the dench gateway restarted successfully.")).toBeInTheDocument();
-    });
+    expect(screen.getByText("Marketplace")).toBeInTheDocument();
   });
 
-  it("offers repair for older profiles when a plugin is missing", async () => {
+  it("shows the Marketplace tab with apps", async () => {
     const user = userEvent.setup();
-    const initialPayload = {
-      denchCloud: {
-        hasKey: true,
-        isPrimaryProvider: true,
-        primaryModel: "dench-cloud/anthropic.claude-opus-4-6-v1",
-      },
-      metadata: {
-        schemaVersion: 1,
-        exa: {
-          ownsSearch: false,
-          fallbackProvider: "duckduckgo",
-        },
-      },
-      search: {
-        builtIn: {
-          enabled: true,
-          denied: false,
-          provider: "duckduckgo",
-        },
-        effectiveOwner: "web_search",
-      },
-      integrations: [
-        {
-          id: "exa",
-          label: "Exa Search",
-          enabled: false,
-          available: false,
-          gatewayBaseUrl: "https://gateway.merseoriginals.com",
-          auth: { configured: true, source: "config" },
-          plugin: {
-            pluginId: "exa-search",
-            configured: false,
-            enabled: false,
-            allowlisted: false,
-            loadPathConfigured: false,
-            installRecorded: false,
-            installPath: null,
-            installPathExists: false,
-            sourcePath: null,
-          },
-          managedByDench: true,
-          healthIssues: ["missing_plugin_entry", "plugin_install_missing"],
-          health: {
-            status: "disabled",
-            pluginMissing: true,
-            pluginInstalledButDisabled: false,
-            configMismatch: true,
-            missingAuth: false,
-            missingGatewayOverride: false,
-          },
-        },
-        {
-          id: "apollo",
-          label: "Apollo Enrichment",
-          enabled: false,
-          available: false,
-          gatewayBaseUrl: "https://gateway.merseoriginals.com",
-          auth: { configured: true, source: "config" },
-          plugin: {
-            pluginId: "apollo-enrichment",
-            configured: true,
-            enabled: false,
-            allowlisted: true,
-            loadPathConfigured: true,
-            installRecorded: true,
-            installPath: "/tmp/apollo",
-            installPathExists: true,
-            sourcePath: "/repo/apollo",
-          },
-          managedByDench: true,
-          healthIssues: ["plugin_disabled"],
-          health: {
-            status: "disabled",
-            pluginMissing: false,
-            pluginInstalledButDisabled: true,
-            configMismatch: false,
-            missingAuth: false,
-            missingGatewayOverride: false,
-          },
-        },
-        {
-          id: "elevenlabs",
-          label: "ElevenLabs",
-          enabled: true,
-          available: true,
-          gatewayBaseUrl: "https://gateway.merseoriginals.com",
-          auth: { configured: true, source: "config" },
-          plugin: null,
-          managedByDench: true,
-          healthIssues: [],
-          health: {
-            status: "healthy",
-            pluginMissing: false,
-            pluginInstalledButDisabled: false,
-            configMismatch: false,
-            missingAuth: false,
-            missingGatewayOverride: false,
-          },
-          overrideActive: true,
-        },
-      ],
-    };
 
-    global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : (input as URL).href;
-      const method = init?.method ?? "GET";
-      if (url === "/api/integrations" && method === "GET") {
-        return new Response(JSON.stringify(initialPayload));
-      }
-      if (url === "/api/integrations/repair" && method === "POST") {
-        return new Response(JSON.stringify({
-          changed: true,
-          repairs: [
-            {
-              id: "exa",
-              pluginId: "exa-search",
-              assetAvailable: true,
-              assetCopied: true,
-              repaired: true,
-              issues: [],
-            },
-          ],
-          repairedIds: ["exa"],
-          refresh: {
-            attempted: true,
-            restarted: true,
-            error: null,
-            profile: "dench",
-          },
-          ...initialPayload,
-          integrations: initialPayload.integrations.map((integration) =>
-            integration.id === "exa"
-              ? {
-                ...integration,
-                healthIssues: [],
-                health: {
-                  ...integration.health,
-                  status: "disabled",
-                  pluginMissing: false,
-                  configMismatch: false,
-                },
-                plugin: {
-                  ...integration.plugin,
-                  configured: true,
-                  allowlisted: true,
-                  loadPathConfigured: true,
-                  installRecorded: true,
-                  installPath: "/tmp/exa",
-                  installPathExists: true,
-                  sourcePath: "/repo/exa",
-                },
-              }
-              : integration
-          ),
-        }));
-      }
-      throw new Error(`Unexpected fetch: ${method} ${url}`);
+      if (url === "/api/integrations") return new Response(JSON.stringify(eligiblePayload));
+      if (url === "/api/composio/toolkits") return new Response(JSON.stringify(toolkitsPayload));
+      if (url === "/api/composio/connections") return new Response(JSON.stringify(connectionsPayload));
+      if (url === "/api/composio/status") return new Response(JSON.stringify(statusPayload));
+      if (url === "/api/composio/tool-index") return new Response(JSON.stringify({ ok: true }));
+      throw new Error(`Unexpected fetch: ${url}`);
     }) as typeof fetch;
 
     render(<IntegrationsPanel />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Repair older profiles" })).toBeInTheDocument();
+      expect(screen.getByText("Marketplace")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: "Repair older profiles" }));
+    await user.click(screen.getByText("Marketplace"));
 
     await waitFor(() => {
-      expect(screen.getByText("Repair completed for exa and the dench gateway restarted successfully.")).toBeInTheDocument();
+      expect(screen.getByText("Gmail")).toBeInTheDocument();
     });
   });
 
-  it("shows Dench Cloud badges and disables locked toggles", async () => {
-    const initialPayload = {
+  it("shows Dench Cloud lock badge when not eligible", async () => {
+    const lockedPayload = {
+      ...eligiblePayload,
       denchCloud: {
         hasKey: false,
         isPrimaryProvider: false,
         primaryModel: "anthropic/claude-4",
       },
-      metadata: {
-        schemaVersion: 1,
-        exa: {
-          ownsSearch: false,
-          fallbackProvider: "duckduckgo",
-        },
-      },
-      search: {
-        builtIn: {
-          enabled: true,
-          denied: false,
-          provider: "duckduckgo",
-        },
-        effectiveOwner: "web_search",
-      },
-      integrations: [
-        {
-          id: "exa",
-          label: "Exa Search",
-          enabled: false,
-          available: false,
-          locked: true,
-          lockReason: "missing_dench_key",
-          lockBadge: "Get Dench Cloud API Key",
-          gatewayBaseUrl: "https://gateway.merseoriginals.com",
-          auth: { configured: false, source: "missing" },
-          plugin: null,
-          managedByDench: true,
-          healthIssues: ["missing_auth"],
-          health: {
-            status: "disabled",
-            pluginMissing: false,
-            pluginInstalledButDisabled: false,
-            configMismatch: false,
-            missingAuth: true,
-            missingGatewayOverride: false,
-          },
-        },
-      ],
     };
 
-    global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : (input as URL).href;
-      const method = init?.method ?? "GET";
-      if (url === "/api/integrations" && method === "GET") {
-        return new Response(JSON.stringify(initialPayload));
-      }
-      throw new Error(`Unexpected fetch: ${method} ${url}`);
+      if (url === "/api/integrations") return new Response(JSON.stringify(lockedPayload));
+      throw new Error(`Unexpected fetch: ${url}`);
     }) as typeof fetch;
 
     render(<IntegrationsPanel />);
 
     await waitFor(() => {
-      expect(screen.getAllByText("Get Dench Cloud API Key").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText("Available with Dench Cloud")).toBeInTheDocument();
     });
 
-    expect(screen.getByLabelText("Toggle Exa Search")).toBeDisabled();
+    expect(screen.getByText("Get Dench Cloud API Key")).toBeInTheDocument();
   });
 });

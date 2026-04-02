@@ -70,11 +70,12 @@ function normalizeComposioToolkitRecord(
   toolkit: ComposioToolkitRecord,
 ): ComposioToolkit {
   const meta = asRecord(toolkit.meta);
+  const metaToolsCount = typeof meta?.tools_count === "number" ? meta.tools_count : undefined;
   const toolsCount = typeof toolkit.tools_count === "number"
     ? toolkit.tools_count
     : typeof toolkit.toolsCount === "number"
       ? toolkit.toolsCount
-      : 0;
+      : metaToolsCount ?? 0;
 
   const directCats = asStringArray(toolkit.categories);
   const metaCats = asStringArray(meta?.categories);

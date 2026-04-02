@@ -100,22 +100,22 @@ const connectionsPayload = {
 
 const statusPayload = {
   summary: {
-    level: "warning" as const,
-    verified: false,
-    message: "Composio MCP is configured and the gateway is reachable, but live agent visibility has not been verified yet.",
+    level: "healthy" as const,
+    verified: true,
+    message: "Composio MCP is healthy.",
   },
   config: {
     status: "pass" as const,
-    detail: "The Composio MCP server matches the expected gateway URL, transport, and Authorization header.",
+    detail: "Config OK.",
   },
   gatewayTools: {
     status: "pass" as const,
-    detail: "The gateway returned Composio MCP tools successfully.",
+    detail: "OK.",
     toolCount: 24,
   },
   liveAgent: {
-    status: "unknown" as const,
-    detail: "Live agent visibility has not been checked yet.",
+    status: "pass" as const,
+    detail: "Agent verified.",
     evidence: [],
   },
 };
@@ -141,21 +141,22 @@ describe("ComposioAppsSection", () => {
     }) as typeof fetch;
   });
 
-  it("shows unique connected app counts and multi-account card states", async () => {
+  it("shows connected apps in the Connected tab and available apps in Marketplace", async () => {
+    const user = userEvent.setup();
     render(<ComposioAppsSection eligible lockBadge={null} />);
 
     await waitFor(() => {
-      expect(screen.getByText("2 apps connected")).toBeInTheDocument();
+      expect(screen.getByText("Gmail")).toBeInTheDocument();
     });
 
-    const activeAccountsLabel = screen.getByText("active accounts");
-    expect(activeAccountsLabel).toBeInTheDocument();
-    expect(activeAccountsLabel.previousElementSibling?.textContent).toBe("2");
-    expect(screen.getByRole("button", { name: "Manage Gmail" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Manage GitHub" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Connect Notion" })).toBeInTheDocument();
-    expect(screen.getAllByText("1 account connected")).toHaveLength(2);
-    expect(screen.getByText("2 total connections")).toBeInTheDocument();
+    expect(screen.getByText("Gmail")).toBeInTheDocument();
+    expect(screen.getByText("GitHub")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Marketplace" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Notion")).toBeInTheDocument();
+    });
   });
 
   it("opens a toolkit modal with multi-account management details", async () => {
@@ -163,7 +164,7 @@ describe("ComposioAppsSection", () => {
     render(<ComposioAppsSection eligible lockBadge={null} />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Manage Gmail" })).toBeInTheDocument();
+      expect(screen.getByText("Gmail")).toBeInTheDocument();
     });
 
     await user.click(screen.getByRole("button", { name: "Manage Gmail" }));
@@ -175,16 +176,32 @@ describe("ComposioAppsSection", () => {
     expect(screen.getByRole("button", { name: "Connect another account" })).toBeInTheDocument();
   });
 
-  it("shows MCP verification guidance and actions", async () => {
+  it("shows MCP repair bar when status is unhealthy", async () => {
+    const warningStatus = {
+      ...statusPayload,
+      summary: {
+        level: "warning" as const,
+        verified: false,
+        message: "MCP needs attention.",
+      },
+    };
+
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url === "/api/composio/toolkits") return new Response(JSON.stringify(toolkitsPayload));
+      if (url === "/api/composio/connections") return new Response(JSON.stringify(connectionsPayload));
+      if (url === "/api/composio/status") return new Response(JSON.stringify(warningStatus));
+      if (url === "/api/composio/tool-index") return new Response(JSON.stringify({ ok: true }));
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
     render(<ComposioAppsSection eligible lockBadge={null} />);
 
     await waitFor(() => {
-      expect(screen.getByText(/live agent visibility has not been verified yet/i)).toBeInTheDocument();
+      expect(screen.getByText("MCP needs attention.")).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("button", { name: "Repair MCP" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Verify Agent Access" })).toBeInTheDocument();
-    expect(screen.getByText(/Gateway tools\/list: OK/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Repair" })).toBeInTheDocument();
   });
 
   it("normalizes toolkit payloads that omit categories", () => {
@@ -208,5 +225,12 @@ describe("ComposioAppsSection", () => {
       }),
     );
     expect(normalized.categories).toEqual([]);
+  });
+
+  it("shows lock badge when not eligible", () => {
+    render(<ComposioAppsSection eligible={false} lockBadge="Get Dench Cloud API Key" />);
+
+    expect(screen.getByText("Available with Dench Cloud")).toBeInTheDocument();
+    expect(screen.getByText("Get Dench Cloud API Key")).toBeInTheDocument();
   });
 });
