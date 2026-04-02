@@ -164,7 +164,7 @@ describe("Workspace Tree & Browse API", () => {
     it("omits managed crm skill from the virtual skills folder", async () => {
       const { resolveWorkspaceRoot } = await import("@/lib/workspace");
       vi.mocked(resolveWorkspaceRoot).mockReturnValue("/ws");
-      const { readdir: mockReaddir, access: mockAccess } = await import("node:fs/promises");
+      const { readdir: mockReaddir, access: mockAccess, readFile: mockReadFile } = await import("node:fs/promises");
       vi.mocked(mockAccess).mockImplementation(async (p) => {
         const value = String(p);
         if (
@@ -188,6 +188,16 @@ describe("Workspace Tree & Browse API", () => {
           ] as unknown as Dirent[]);
         }
         return Promise.resolve([] as unknown as Dirent[]);
+      });
+      vi.mocked(mockReadFile).mockImplementation(async (p) => {
+        const value = String(p);
+        if (value === "/ws/skills/alpha/SKILL.md") {
+          return "---\nname: alpha\n---\n" as never;
+        }
+        if (value === "/ws/skills/crm/SKILL.md") {
+          return "---\nname: crm\n---\n" as never;
+        }
+        throw new Error("ENOENT");
       });
 
       const { GET } = await import("./tree/route.js");

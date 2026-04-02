@@ -1,4 +1,5 @@
 import { rebuildComposioToolIndexIfReady } from "@/lib/composio-tool-index";
+import { getComposioMcpHealth } from "@/lib/composio-mcp-health";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -17,6 +18,7 @@ export async function GET(request: Request) {
   const success = status === "success";
   if (success) {
     await rebuildComposioToolIndexIfReady();
+    await getComposioMcpHealth();
   }
   const payloadJson = serializeForInlineScript({
     type: "composio-callback",

@@ -1,4 +1,5 @@
 import { resolveComposioEligibility } from "@/lib/composio";
+import { getComposioMcpHealth } from "@/lib/composio-mcp-health";
 import { rebuildComposioToolIndexIfReady } from "@/lib/composio-tool-index";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,8 @@ export async function POST() {
     }
     return Response.json(body, { status: errorStatus(result.reason) });
   }
+
+  await getComposioMcpHealth();
 
   return Response.json({
     ok: true,

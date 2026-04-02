@@ -325,6 +325,10 @@ export async function GET(req: Request) {
   const dbObjects = await loadDbObjects();
 
   const tree = await buildTree(root, "", dbObjects, showHidden);
+  const skillsFolder = await buildSkillsVirtualFolder();
+  if (skillsFolder) {
+    tree.unshift(skillsFolder);
+  }
 
   return Response.json({ tree, exists: true, workspaceRoot: root, openclawDir, workspace });
 }

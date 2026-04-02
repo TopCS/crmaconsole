@@ -28,6 +28,10 @@ export type ComposioToolIndex = {
       description_short: string;
       required_args: string[];
       arg_hints: Record<string, string>;
+      default_args?: Record<string, unknown>;
+      example_args?: Record<string, unknown>;
+      example_prompts?: string[];
+      input_schema?: ComposioMcpTool["inputSchema"];
     }>;
     recipes: Record<string, string>;
   }>;
@@ -35,37 +39,100 @@ export type ComposioToolIndex = {
 
 const TOP_TOOLS_PER_APP = 10;
 
-/** Intent label → canonical MCP tool name (must exist in catalog for that app). */
-const RECIPES_BY_SLUG: Record<string, Record<string, string>> = {
+type ToolRoutingPreset = {
+  tool: string;
+  default_args?: Record<string, unknown>;
+  example_args?: Record<string, unknown>;
+  example_prompts?: string[];
+};
+
+/** Intent label → canonical MCP tool metadata (must exist in catalog for that app). */
+const RECIPES_BY_SLUG: Record<string, Record<string, ToolRoutingPreset>> = {
   gmail: {
-    "Read recent emails": "GMAIL_FETCH_EMAILS",
-    "Read one email": "GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID",
-    "Send email": "GMAIL_SEND_EMAIL",
+    "Read recent emails": {
+      tool: "GMAIL_FETCH_EMAILS",
+      default_args: { label_ids: ["INBOX"], max_results: 10 },
+      example_args: { label_ids: ["INBOX"], max_results: 10 },
+      example_prompts: ["check my recent emails", "show my inbox", "read recent mail"],
+    },
+    "Read one email": {
+      tool: "GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID",
+      example_prompts: ["open this email", "read one message"],
+    },
+    "Send email": {
+      tool: "GMAIL_SEND_EMAIL",
+      example_prompts: ["send an email", "draft an email reply"],
+    },
   },
   slack: {
-    "Send message": "SLACK_SEND_MESSAGE",
-    "List channels": "SLACK_LIST_CONVERSATIONS",
-    "Post to channel": "SLACK_SEND_MESSAGE",
+    "Send message": {
+      tool: "SLACK_SEND_MESSAGE",
+      example_prompts: ["send a Slack message", "post in Slack"],
+    },
+    "List channels": {
+      tool: "SLACK_LIST_CONVERSATIONS",
+      example_prompts: ["list Slack channels", "show Slack conversations"],
+    },
+    "Post to channel": {
+      tool: "SLACK_SEND_MESSAGE",
+      example_prompts: ["post to a Slack channel"],
+    },
   },
   github: {
-    "List repos": "GITHUB_LIST_REPOSITORIES_FOR_AUTHENTICATED_USER",
-    "Get repo": "GITHUB_GET_A_REPOSITORY",
-    "Create issue": "GITHUB_CREATE_AN_ISSUE",
+    "List repos": {
+      tool: "GITHUB_LIST_REPOSITORIES_FOR_AUTHENTICATED_USER",
+      example_prompts: ["list my GitHub repositories", "show my repos"],
+    },
+    "Get repo": {
+      tool: "GITHUB_GET_A_REPOSITORY",
+      example_prompts: ["inspect this repository", "get repo metadata"],
+    },
+    "Create issue": {
+      tool: "GITHUB_CREATE_AN_ISSUE",
+      example_prompts: ["create a GitHub issue", "open an issue"],
+    },
   },
   notion: {
-    "Search pages": "NOTION_SEARCH",
-    "Create page": "NOTION_CREATE_PAGE",
-    "Get page": "NOTION_GET_PAGE",
+    "Search pages": {
+      tool: "NOTION_SEARCH",
+      example_prompts: ["search Notion", "find a Notion page"],
+    },
+    "Create page": {
+      tool: "NOTION_CREATE_PAGE",
+      example_prompts: ["create a Notion page"],
+    },
+    "Get page": {
+      tool: "NOTION_GET_PAGE",
+      example_prompts: ["open this Notion page", "get a Notion page"],
+    },
   },
   "google-calendar": {
-    "List events": "GOOGLE_CALENDAR_EVENTS_LIST",
-    "Create event": "GOOGLE_CALENDAR_CREATE_EVENT",
-    "Get calendar list": "GOOGLE_CALENDAR_CALENDAR_LIST",
+    "List events": {
+      tool: "GOOGLE_CALENDAR_EVENTS_LIST",
+      example_prompts: ["show my calendar events", "list upcoming meetings"],
+    },
+    "Create event": {
+      tool: "GOOGLE_CALENDAR_CREATE_EVENT",
+      example_prompts: ["schedule a meeting", "create a calendar event"],
+    },
+    "Get calendar list": {
+      tool: "GOOGLE_CALENDAR_CALENDAR_LIST",
+      example_prompts: ["list my calendars"],
+    },
   },
   linear: {
-    "List issues": "LINEAR_LIST_ISSUES",
-    "Create issue": "LINEAR_CREATE_ISSUE",
-    "Get issue": "LINEAR_GET_ISSUE",
+    "List issues": {
+      tool: "LINEAR_LIST_ISSUES",
+      example_prompts: ["list Linear issues", "show open Linear tickets"],
+    },
+    "Create issue": {
+      tool: "LINEAR_CREATE_ISSUE",
+      example_prompts: ["create a Linear issue"],
+    },
+    "Get issue": {
+      tool: "LINEAR_GET_ISSUE",
+      example_prompts: ["open this Linear issue", "get a Linear ticket"],
+    },
   },
 };
 
@@ -135,9 +202,10 @@ function buildArgHints(toolName: string, schema: ComposioMcpTool["inputSchema"])
   return hints;
 }
 
-function toolSortKey(tool: ComposioMcpTool): [number, string] {
+function toolSortKey(tool: ComposioMcpTool, preferredNames: Set<string>): [number, number, string] {
+  const preferred = preferredNames.has(tool.name) ? 0 : 1;
   const readOnly = tool.annotations?.readOnlyHint === true ? 0 : 1;
-  return [readOnly, tool.name.toLowerCase()];
+  return [preferred, readOnly, tool.name.toLowerCase()];
 }
 
 function buildRecipesForToolkit(
@@ -146,12 +214,68 @@ function buildRecipesForToolkit(
 ): Record<string, string> {
   const recipes = RECIPES_BY_SLUG[normalizeComposioToolkitSlug(slug)] ?? {};
   const out: Record<string, string> = {};
-  for (const [intent, toolName] of Object.entries(recipes)) {
-    if (availableNames.has(toolName)) {
-      out[intent] = toolName;
+  for (const [intent, preset] of Object.entries(recipes)) {
+    if (availableNames.has(preset.tool)) {
+      out[intent] = preset.tool;
     }
   }
   return out;
+}
+
+function buildRoutingPresetsForToolkit(slug: string): Map<string, ToolRoutingPreset> {
+  const recipes = RECIPES_BY_SLUG[normalizeComposioToolkitSlug(slug)] ?? {};
+  const presets = new Map<string, ToolRoutingPreset>();
+  for (const preset of Object.values(recipes)) {
+    const existing = presets.get(preset.tool);
+    if (existing) {
+      presets.set(preset.tool, {
+        ...existing,
+        default_args: existing.default_args ?? preset.default_args,
+        example_args: existing.example_args ?? preset.example_args,
+        example_prompts: [
+          ...(existing.example_prompts ?? []),
+          ...(preset.example_prompts ?? []),
+        ],
+      });
+      continue;
+    }
+    presets.set(preset.tool, {
+      tool: preset.tool,
+      ...(preset.default_args ? { default_args: preset.default_args } : {}),
+      ...(preset.example_args ? { example_args: preset.example_args } : {}),
+      ...(preset.example_prompts ? { example_prompts: [...preset.example_prompts] } : {}),
+    });
+  }
+  return presets;
+}
+
+function selectIndexedTools(params: {
+  sortedTools: ComposioMcpTool[];
+  recipeToolNames: Set<string>;
+}): ComposioMcpTool[] {
+  const selected: ComposioMcpTool[] = [];
+  const seen = new Set<string>();
+
+  for (const tool of params.sortedTools) {
+    if (!params.recipeToolNames.has(tool.name) || seen.has(tool.name)) {
+      continue;
+    }
+    selected.push(tool);
+    seen.add(tool.name);
+  }
+
+  for (const tool of params.sortedTools) {
+    if (selected.length >= TOP_TOOLS_PER_APP && !params.recipeToolNames.has(tool.name)) {
+      break;
+    }
+    if (seen.has(tool.name)) {
+      continue;
+    }
+    selected.push(tool);
+    seen.add(tool.name);
+  }
+
+  return selected;
 }
 
 export type BuildComposioToolIndexParams = {
@@ -178,13 +302,17 @@ export async function buildComposioToolIndex(
 ): Promise<ComposioToolIndex> {
   const { workspaceDir, gatewayUrl, apiKey } = params;
 
-  const [connectionsRes, allTools] = await Promise.all([
-    fetchComposioConnections(gatewayUrl, apiKey),
-    fetchComposioMcpToolsList(gatewayUrl, apiKey),
-  ]);
-
+  const connectionsRes = await fetchComposioConnections(gatewayUrl, apiKey);
   const connections = normalizeComposioConnections(extractComposioConnections(connectionsRes));
   const active = connections.filter((c) => c.is_active);
+  const connectedToolkits = [...new Set(active.map((connection) => connection.normalized_toolkit_slug))];
+  const preferredToolNames = [...new Set(connectedToolkits.flatMap((slug) =>
+    Object.values(RECIPES_BY_SLUG[normalizeComposioToolkitSlug(slug)] ?? {}).map((preset) => preset.tool),
+  ))];
+  const allTools = await fetchComposioMcpToolsList(gatewayUrl, apiKey, {
+    connectedToolkits,
+    preferredToolNames,
+  });
   const bySlug = new Map<string, { toolkit_name: string; accounts: Set<string> }>();
 
   for (const c of active) {
@@ -208,18 +336,27 @@ export async function buildComposioToolIndex(
     const prefix = toolkitSlugToToolPrefix(slug);
     const forToolkit = allTools.filter((t) => t.name.startsWith(prefix));
     const availableNames = new Set(forToolkit.map((t) => t.name));
+    const recipes = buildRecipesForToolkit(slug, availableNames);
+    const routingPresets = buildRoutingPresetsForToolkit(slug);
+    const preferredNames = new Set(routingPresets.keys());
 
     const sorted = [...forToolkit].toSorted((a, b) => {
-      const ka = toolSortKey(a);
-      const kb = toolSortKey(b);
+      const ka = toolSortKey(a, preferredNames);
+      const kb = toolSortKey(b, preferredNames);
       if (ka[0] !== kb[0]) {
         return ka[0] - kb[0];
       }
-      return ka[1].localeCompare(kb[1]);
+      if (ka[1] !== kb[1]) {
+        return ka[1] - kb[1];
+      }
+      return ka[2].localeCompare(kb[2]);
     });
 
-    const top = sorted.slice(0, TOP_TOOLS_PER_APP);
-    const tools = top.map((tool) => {
+    const selectedTools = selectIndexedTools({
+      sortedTools: sorted,
+      recipeToolNames: new Set(Object.values(recipes)),
+    });
+    const tools = selectedTools.map((tool) => {
       const schema = tool.inputSchema;
       const title =
         tool.title?.trim() ||
@@ -227,12 +364,17 @@ export async function buildComposioToolIndex(
         tool.name.replace(/^([A-Z0-9]+_)+/i, "").replace(/_/g, " ") ||
         tool.name;
       const desc = tool.description?.trim() ?? "";
+      const preset = routingPresets.get(tool.name);
       return {
         name: tool.name,
         title,
         description_short: firstSentence(desc),
         required_args: extractRequiredArgs(schema),
         arg_hints: buildArgHints(tool.name, schema),
+        ...(preset?.default_args ? { default_args: preset.default_args } : {}),
+        ...(preset?.example_args ? { example_args: preset.example_args } : {}),
+        ...(preset?.example_prompts ? { example_prompts: preset.example_prompts } : {}),
+        ...(schema ? { input_schema: schema } : {}),
       };
     });
 
@@ -241,7 +383,7 @@ export async function buildComposioToolIndex(
       toolkit_name: meta.toolkit_name,
       account_count: meta.accounts.size,
       tools,
-      recipes: buildRecipesForToolkit(slug, availableNames),
+      recipes,
     });
   }
 

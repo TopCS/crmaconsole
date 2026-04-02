@@ -5,15 +5,25 @@ description: Connected app tool recipes for Composio integrations (Gmail, Slack,
 
 # Composio connected apps
 
-Use **Composio MCP tools** only (server name is typically `composio`). Do not use curl against the gateway or Composio REST from the agent unless a task explicitly requires it.
+Use **Composio tools** only. In DenchClaw these may already appear directly as tool names like `GMAIL_FETCH_EMAILS`; call those directly when present.
 
-The workspace may contain `composio-tool-index.json` with the exact tool names and hints for **your** connected apps — prefer that file when present.
+Do **not** use:
+- `gog`
+- shell CLIs for Gmail / Calendar / Drive / Slack / GitHub / Notion / Linear
+- `curl`
+- raw `/v1/composio/*` gateway calls
+- direct Composio REST calls
+
+If the user mentions Composio, rube, map, MCP, or says an app is already connected, Composio is the only allowed integration path. If the Composio tools are unavailable in the current session, stop and report repair guidance instead of bypassing them.
+
+The workspace may contain `composio-tool-index.json` with the exact tool names and hints for **your** connected apps — prefer that file when present. If the exact tool is not obvious, call `composio_resolve_tool` first to get the correct tool name, argument shape, and default args.
 
 ## General rules
 
 - Tool names are **uppercase** with underscores (e.g. `GMAIL_FETCH_EMAILS`).
-- Pass **JSON-shaped** arguments as the MCP tool schema requires: arrays are arrays, not comma-separated strings.
+- Pass **JSON-shaped** arguments as the tool schema requires: arrays are arrays, not comma-separated strings.
 - If a call fails on argument shape, fix the types and retry once before escalating.
+- Never fall back to `gog`, curl, or raw gateway HTTP for a connected app task unless the user explicitly asks for that non-Composio path.
 
 ## Gmail
 
@@ -70,4 +80,4 @@ The workspace may contain `composio-tool-index.json` with the exact tool names a
 
 ## Subagent handoff
 
-When delegating, include: which app, the exact MCP tool name, and the argument object you intend (copy shapes from the tool schema or `composio-tool-index.json`).
+When delegating, include: which app, the exact tool name, and the argument object you intend (copy shapes from the tool schema, `composio_resolve_tool`, or `composio-tool-index.json`).

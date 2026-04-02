@@ -6,6 +6,7 @@ import {
   readConfiguredDenchCloudSettings,
   validateDenchCloudApiKey,
 } from "./dench-cloud.js";
+import { buildDenchCloudConfigPatch as buildRuntimePluginConfigPatch } from "../../extensions/dench-ai-gateway/index.js";
 
 function createJsonResponse(params?: {
   status?: number;
@@ -148,6 +149,47 @@ describe("dench-cloud helpers", () => {
       apiKey: "dench_live_key",
     });
     expect((patch.messages.tts as Record<string, unknown>).elevenlabs).toBeUndefined();
+    expect(patch.mcp.servers.composio).toEqual({
+      url: "https://gateway.merseoriginals.com/v1/composio/mcp",
+      transport: "streamable-http",
+      headers: {
+        Authorization: "Bearer dench_live_key",
+      },
+    });
+  });
+
+  it("keeps the runtime plugin patch in parity with the CLI/web helper", () => {
+    const params = {
+      gatewayUrl: "https://gateway.merseoriginals.com",
+      apiKey: "dench_live_key",
+      models: [
+        {
+          id: "claude-opus-4.6",
+          stableId: "anthropic.claude-opus-4-6-v1",
+          displayName: "Claude Opus 4.6",
+          provider: "anthropic",
+          transportProvider: "bedrock",
+          api: "openai-completions" as const,
+          input: ["text" as const, "image" as const],
+          reasoning: false,
+          contextWindow: 200000,
+          maxTokens: 64000,
+          supportsStreaming: true,
+          supportsImages: true,
+          supportsResponses: true,
+          supportsReasoning: false,
+          cost: {
+            input: 6.75,
+            output: 33.75,
+            cacheRead: 0,
+            cacheWrite: 0,
+            marginPercent: 0.35,
+          },
+        },
+      ],
+    };
+
+    expect(buildRuntimePluginConfigPatch(params)).toEqual(buildDenchCloudConfigPatch(params));
   });
 
   it("reads existing Dench Cloud gateway config from openclaw.json", () => {

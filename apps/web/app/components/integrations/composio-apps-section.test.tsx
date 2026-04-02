@@ -98,6 +98,28 @@ const connectionsPayload = {
   ],
 };
 
+const statusPayload = {
+  summary: {
+    level: "warning" as const,
+    verified: false,
+    message: "Composio MCP is configured and the gateway is reachable, but live agent visibility has not been verified yet.",
+  },
+  config: {
+    status: "pass" as const,
+    detail: "The Composio MCP server matches the expected gateway URL, transport, and Authorization header.",
+  },
+  gatewayTools: {
+    status: "pass" as const,
+    detail: "The gateway returned Composio MCP tools successfully.",
+    toolCount: 24,
+  },
+  liveAgent: {
+    status: "unknown" as const,
+    detail: "Live agent visibility has not been checked yet.",
+    evidence: [],
+  },
+};
+
 describe("ComposioAppsSection", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -108,6 +130,12 @@ describe("ComposioAppsSection", () => {
       }
       if (url === "/api/composio/connections") {
         return new Response(JSON.stringify(connectionsPayload));
+      }
+      if (url === "/api/composio/status") {
+        return new Response(JSON.stringify(statusPayload));
+      }
+      if (url === "/api/composio/tool-index") {
+        return new Response(JSON.stringify({ ok: true }));
       }
       throw new Error(`Unexpected fetch: ${url}`);
     }) as typeof fetch;
@@ -145,6 +173,18 @@ describe("ComposioAppsSection", () => {
     expect(screen.getByText("Personal Gmail")).toBeInTheDocument();
     expect(screen.getByText("Work Gmail")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Connect another account" })).toBeInTheDocument();
+  });
+
+  it("shows MCP verification guidance and actions", async () => {
+    render(<ComposioAppsSection eligible lockBadge={null} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/live agent visibility has not been verified yet/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("button", { name: "Repair MCP" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Verify Agent Access" })).toBeInTheDocument();
+    expect(screen.getByText(/Gateway tools\/list: OK/i)).toBeInTheDocument();
   });
 
   it("normalizes toolkit payloads that omit categories", () => {

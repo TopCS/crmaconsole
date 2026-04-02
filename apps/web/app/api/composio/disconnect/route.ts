@@ -4,6 +4,7 @@ import {
   resolveComposioEligibility,
   resolveComposioGatewayUrl,
 } from "@/lib/composio";
+import { getComposioMcpHealth } from "@/lib/composio-mcp-health";
 import { rebuildComposioToolIndexIfReady } from "@/lib/composio-tool-index";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
   try {
     const data = await disconnectComposioApp(gatewayUrl, apiKey, body.connection_id.trim());
     const rebuild = await rebuildComposioToolIndexIfReady();
+    await getComposioMcpHealth();
     return Response.json({
       ...data,
       tool_index_rebuild: rebuild.ok

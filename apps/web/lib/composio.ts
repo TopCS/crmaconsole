@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { resolveOpenClawStateDir } from "@/lib/workspace";
+import { readConfiguredDenchCloudSettings } from "../../../src/cli/dench-cloud";
 
 const DEFAULT_GATEWAY_URL = "https://gateway.merseoriginals.com";
 
@@ -297,10 +298,12 @@ function readConfig(): UnknownRecord {
 
 export function resolveComposioGatewayUrl(): string {
   const config = readConfig();
+  const settings = readConfiguredDenchCloudSettings(config);
   const plugins = asRecord(config.plugins);
   const pluginEntries = asRecord(plugins?.entries);
   const gatewayConfig = asRecord(asRecord(pluginEntries?.["dench-ai-gateway"])?.config);
   return (
+    settings.gatewayUrl ||
     readString(gatewayConfig?.gatewayUrl) ||
     process.env.DENCH_GATEWAY_URL?.trim() ||
     DEFAULT_GATEWAY_URL
@@ -541,8 +544,14 @@ async function parseMcpToolsListResponse(res: Response): Promise<ComposioMcpTool
 export async function fetchComposioMcpToolsList(
   gatewayUrl: string,
   apiKey: string,
+  options?: {
+    connectedToolkits?: string[];
+    preferredToolNames?: string[];
+  },
 ): Promise<ComposioMcpTool[]> {
   const url = `${gatewayUrl.replace(/\/$/, "")}/v1/composio/mcp`;
+  const connectedToolkits = options?.connectedToolkits?.filter((slug) => slug.trim().length > 0) ?? [];
+  const preferredToolNames = options?.preferredToolNames?.filter((name) => name.trim().length > 0) ?? [];
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -554,7 +563,14 @@ export async function fetchComposioMcpToolsList(
       jsonrpc: "2.0",
       id: 1,
       method: "tools/list",
-      params: {},
+      // Forward-compatible hint payload for the external gateway. The current
+      // MCP bridge may ignore these fields; a filtered gateway implementation
+      // can use them to prioritize connected-app tools without changing the
+      // client contract.
+      params: {
+        ...(connectedToolkits.length > 0 ? { connected_toolkits: connectedToolkits } : {}),
+        ...(preferredToolNames.length > 0 ? { preferred_tool_names: preferredToolNames } : {}),
+      },
     }),
   });
   if (!res.ok) {

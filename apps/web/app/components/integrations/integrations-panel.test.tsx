@@ -13,6 +13,11 @@ describe("IntegrationsPanel", () => {
   it("renders integrations data from the backend API", async () => {
     const user = userEvent.setup();
     const initialPayload = {
+      denchCloud: {
+        hasKey: true,
+        isPrimaryProvider: true,
+        primaryModel: "dench-cloud/anthropic.claude-opus-4-6-v1",
+      },
       metadata: {
         schemaVersion: 1,
         exa: {
@@ -172,6 +177,11 @@ describe("IntegrationsPanel", () => {
   it("offers repair for older profiles when a plugin is missing", async () => {
     const user = userEvent.setup();
     const initialPayload = {
+      denchCloud: {
+        hasKey: true,
+        isPrimaryProvider: true,
+        primaryModel: "dench-cloud/anthropic.claude-opus-4-6-v1",
+      },
       metadata: {
         schemaVersion: 1,
         exa: {
@@ -398,7 +408,7 @@ describe("IntegrationsPanel", () => {
     render(<IntegrationsPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText("Get Dench Cloud API Key")).toBeInTheDocument();
+      expect(screen.getAllByText("Get Dench Cloud API Key").length).toBeGreaterThanOrEqual(1);
     });
 
     expect(screen.getByLabelText("Toggle Exa Search")).toBeDisabled();

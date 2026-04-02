@@ -37,13 +37,15 @@ describe("buildIdentityPrompt", () => {
       path.join(workspaceDir, "skills", "composio-apps", "SKILL.md"),
     );
     expect(prompt).toContain("Composio MCP");
-    expect(prompt).toContain("Never** use curl");
+    expect(prompt).toContain("Never");
+    expect(prompt).toContain("composio_resolve_tool");
   });
 
   it("prefers Composio over gog even without a generated tool index", () => {
     const prompt = buildIdentityPrompt(workspaceDir);
-    expect(prompt).toContain("Composio MCP is the default integration layer");
-    expect(prompt).toContain("Do not read or use `gog`");
+    expect(prompt).toContain("Composio is the default integration layer");
+    expect(prompt).toContain("Never use `gog`");
+    expect(prompt).toContain("If Composio MCP is unavailable in this session, stop");
     expect(prompt).toContain("GMAIL_FETCH_EMAILS");
   });
 
@@ -200,5 +202,32 @@ describe("register", () => {
     const handler = api.on.mock.calls[0][1];
     const result = handler({}, {});
     expect(result).toBeUndefined();
+  });
+
+  it("registers the Composio resolver tool when the managed skill exists", () => {
+    const tmp = path.join(
+      os.tmpdir(),
+      `dench-identity-register-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    mkdirSync(path.join(tmp, "skills", "composio-apps"), { recursive: true });
+    writeFileSync(
+      path.join(tmp, "skills", "composio-apps", "SKILL.md"),
+      "# Composio connected apps\n",
+      "utf-8",
+    );
+
+    const api = {
+      config: { plugins: { entries: {} }, agents: { defaults: { workspace: tmp } } },
+      on: vi.fn(),
+      registerTool: vi.fn(),
+    };
+
+    register(api as any);
+
+    expect(api.registerTool).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "composio_resolve_tool" }),
+    );
+
+    rmSync(tmp, { recursive: true, force: true });
   });
 });

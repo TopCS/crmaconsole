@@ -85,6 +85,54 @@ describe("loadComposioToolCheatSheetMarkdown", () => {
     const md = loadComposioToolCheatSheetMarkdown(tmp);
     expect(md).toContain("Slack (1 account connected)");
     expect(md).toContain("SLACK_SEND_MESSAGE");
+    expect(md).toContain("composio_resolve_tool");
+  });
+
+  it("only claims verified MCP availability when the status file says so", () => {
+    tmp = path.join(
+      os.tmpdir(),
+      `dench-composio-status-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    mkdirSync(tmp, { recursive: true });
+    writeFileSync(
+      path.join(tmp, "composio-tool-index.json"),
+      JSON.stringify({
+        generated_at: "2025-01-02T00:00:00.000Z",
+        connected_apps: [
+          {
+            toolkit_slug: "gmail",
+            toolkit_name: "Gmail",
+            account_count: 1,
+            tools: [
+              {
+                name: "GMAIL_FETCH_EMAILS",
+                title: "Fetch emails",
+                description_short: "List inbox messages.",
+                required_args: [],
+                arg_hints: {},
+                default_args: { label_ids: ["INBOX"], max_results: 10 },
+              },
+            ],
+            recipes: { "Read recent emails": "GMAIL_FETCH_EMAILS" },
+          },
+        ],
+      }),
+      "utf-8",
+    );
+    writeFileSync(
+      path.join(tmp, "composio-mcp-status.json"),
+      JSON.stringify({
+        summary: {
+          verified: false,
+          message: "Composio MCP is configured and the gateway is reachable, but live agent visibility has not been verified yet.",
+        },
+      }),
+      "utf-8",
+    );
+
+    const md = loadComposioToolCheatSheetMarkdown(tmp);
+    expect(md).toContain("configured integration layer");
+    expect(md).not.toContain("verified MCP tools available");
   });
 
   it("returns null when file is missing", () => {

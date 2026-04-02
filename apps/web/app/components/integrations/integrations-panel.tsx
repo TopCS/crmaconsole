@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type JSX, type SVGProps } from "react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { Switch } from "../ui/switch";
@@ -41,18 +41,20 @@ function RefreshNoticeBanner({ notice }: { notice: ActionNotice }) {
   );
 }
 
-function ExaIcon() {
+type IntegrationIconProps = SVGProps<SVGSVGElement>;
+
+function ExaIcon(props: IntegrationIconProps) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-none">
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-none" {...props}>
       <path d="M5 6h5L5 18h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M19 6h-5l5 12h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-function ApolloIcon() {
+function ApolloIcon(props: IntegrationIconProps) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-none">
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-none" {...props}>
       <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="2" />
       <path d="M9 15l3-8 3 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M10.2 12.5h3.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -60,9 +62,9 @@ function ApolloIcon() {
   );
 }
 
-function ElevenLabsIcon() {
+function ElevenLabsIcon(props: IntegrationIconProps) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-none">
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-none" {...props}>
       <path d="M7 5v14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
       <path d="M11 5v14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
       <path d="M15 5h2v14h-2" fill="currentColor" />
@@ -74,7 +76,7 @@ const INTEGRATION_ICONS = {
   exa: ExaIcon,
   apollo: ApolloIcon,
   elevenlabs: ElevenLabsIcon,
-} satisfies Record<DenchIntegrationId, () => JSX.Element>;
+} satisfies Record<DenchIntegrationId, (props: IntegrationIconProps) => JSX.Element>;
 
 const INTEGRATION_DESCRIPTIONS: Record<DenchIntegrationId, string> = {
   exa: "Search the web with Exa",
@@ -200,16 +202,17 @@ export function IntegrationsPanel({ embedded }: { embedded?: boolean } = {}) {
         throw new Error("error" in payload && payload.error ? payload.error : `Failed to update ${integration.label}`);
       }
 
-      applyState(payload);
-      if (payload.refresh.restarted) {
+      const nextState = payload as IntegrationToggleResponse;
+      applyState(nextState);
+      if (nextState.refresh.restarted) {
         setNotice({
           tone: "success",
-          message: `${integration.label} updated and the ${payload.refresh.profile} gateway restarted successfully.`,
+          message: `${integration.label} updated and the ${nextState.refresh.profile} gateway restarted successfully.`,
         });
-      } else if (payload.changed) {
+      } else if (nextState.changed) {
         setNotice({
           tone: "warning",
-          message: `${integration.label} updated, but the gateway restart did not complete: ${payload.refresh.error ?? "unknown error"}.`,
+          message: `${integration.label} updated, but the gateway restart did not complete: ${nextState.refresh.error ?? "unknown error"}.`,
         });
       } else {
         setNotice({
@@ -239,17 +242,18 @@ export function IntegrationsPanel({ embedded }: { embedded?: boolean } = {}) {
         throw new Error("error" in payload && payload.error ? payload.error : "Failed to repair integrations.");
       }
 
-      applyState(payload);
-      if (payload.changed && payload.refresh.restarted) {
-        const repairedNames = payload.repairedIds.length > 0 ? payload.repairedIds.join(", ") : "profiles";
+      const nextState = payload as IntegrationRepairResponse;
+      applyState(nextState);
+      if (nextState.changed && nextState.refresh.restarted) {
+        const repairedNames = nextState.repairedIds.length > 0 ? nextState.repairedIds.join(", ") : "profiles";
         setNotice({
           tone: "success",
-          message: `Repair completed for ${repairedNames} and the ${payload.refresh.profile} gateway restarted successfully.`,
+          message: `Repair completed for ${repairedNames} and the ${nextState.refresh.profile} gateway restarted successfully.`,
         });
-      } else if (payload.changed) {
+      } else if (nextState.changed) {
         setNotice({
           tone: "warning",
-          message: `Repair updated the profile, but the gateway restart did not complete: ${payload.refresh.error ?? "unknown error"}.`,
+          message: `Repair updated the profile, but the gateway restart did not complete: ${nextState.refresh.error ?? "unknown error"}.`,
         });
       } else {
         setNotice({

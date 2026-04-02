@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Input } from "../ui/input";
+import { Button } from "../ui/button";
 import { ComposioAppCard } from "./composio-app-card";
 import { ComposioConnectModal } from "./composio-connect-modal";
 import type {
@@ -41,6 +42,66 @@ type ComposioAppsState = {
   connectionsError: string | null;
 };
 
+type ComposioMcpStatus = {
+  summary: {
+    level: "healthy" | "warning" | "error";
+    verified: boolean;
+    message: string;
+  };
+  config: {
+    status: "pass" | "fail" | "unknown";
+    detail: string;
+  };
+  gatewayTools: {
+    status: "pass" | "fail" | "unknown";
+    detail: string;
+    toolCount: number | null;
+  };
+  liveAgent: {
+    status: "pass" | "fail" | "unknown";
+    detail: string;
+    evidence: string[];
+  };
+  refresh?: {
+    attempted: boolean;
+    restarted: boolean;
+    error: string | null;
+    profile: string;
+  };
+};
+
+function statusLabel(status: "pass" | "fail" | "unknown"): string {
+  if (status === "pass") {
+    return "OK";
+  }
+  if (status === "fail") {
+    return "Needs repair";
+  }
+  return "Not verified";
+}
+
+function statusToneStyles(level: "healthy" | "warning" | "error") {
+  if (level === "healthy") {
+    return {
+      borderColor: "rgba(16, 185, 129, 0.28)",
+      background: "rgba(16, 185, 129, 0.08)",
+      color: "rgb(110 231 183)",
+    };
+  }
+  if (level === "warning") {
+    return {
+      borderColor: "rgba(250, 204, 21, 0.28)",
+      background: "rgba(250, 204, 21, 0.08)",
+      color: "rgb(253 224 71)",
+    };
+  }
+  return {
+    borderColor: "rgba(248, 113, 113, 0.28)",
+    background: "rgba(248, 113, 113, 0.08)",
+    color: "rgb(252 165 165)",
+  };
+}
+
 export function ComposioAppsSection({
   eligible,
   lockBadge,
@@ -60,13 +121,22 @@ export function ComposioAppsSection({
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [selectedToolkit, setSelectedToolkit] = useState<ComposioToolkit | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [mcpStatus, setMcpStatus] = useState<ComposioMcpStatus | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [toolIndexError, setToolIndexError] = useState<string | null>(null);
+  const [repairingMcp, setRepairingMcp] = useState(false);
+  const [probingLiveAgent, setProbingLiveAgent] = useState(false);
 
   const fetchData = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null, connectionsError: null }));
+    setMcpStatus(null);
+    setStatusError(null);
+    setToolIndexError(null);
     try {
-      const [toolkitsRes, connectionsRes] = await Promise.all([
+      const [toolkitsRes, connectionsRes, statusRes] = await Promise.all([
         fetch("/api/composio/toolkits"),
         fetch("/api/composio/connections"),
+        fetch("/api/composio/status"),
       ]);
 
       if (!toolkitsRes.ok) {
@@ -90,6 +160,16 @@ export function ComposioAppsSection({
           ?? `Failed to load connections (${connectionsRes.status})`;
       }
 
+      if (statusRes.ok) {
+        setMcpStatus((await statusRes.json()) as ComposioMcpStatus);
+      } else {
+        setMcpStatus(null);
+        const err = await statusRes.json().catch(() => ({}));
+        setStatusError(
+          (err as { error?: string }).error ?? `Failed to load Composio MCP status (${statusRes.status})`,
+        );
+      }
+
       setState({
         toolkits: toolkitsData.items,
         connections: extractComposioConnections(connectionsData),
@@ -99,11 +179,15 @@ export function ComposioAppsSection({
         connectionsError,
       });
 
-      // Keep the agent's Composio tool cheat sheet in sync with connections (non-blocking).
-      void fetch("/api/composio/tool-index", { method: "POST" }).catch(() => {
-        /* ignore — integrations still work if index rebuild fails */
-      });
+      const toolIndexRes = await fetch("/api/composio/tool-index", { method: "POST" });
+      if (!toolIndexRes.ok) {
+        const err = await toolIndexRes.json().catch(() => ({}));
+        setToolIndexError(
+          (err as { error?: string }).error ?? `Failed to rebuild Composio tool index (${toolIndexRes.status})`,
+        );
+      }
     } catch (err) {
+      setMcpStatus(null);
       setState((prev) => ({
         ...prev,
         loading: false,
@@ -230,6 +314,48 @@ export function ComposioAppsSection({
     void fetchData();
   }, [fetchData]);
 
+  const handleStatusAction = useCallback(async (
+    action: "repair_mcp" | "probe_live_agent",
+  ) => {
+    if (action === "repair_mcp") {
+      setRepairingMcp(true);
+    } else {
+      setProbingLiveAgent(true);
+    }
+    setStatusError(null);
+    try {
+      const response = await fetch("/api/composio/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setStatusError(
+          (payload as { error?: string }).error ?? "Failed to update Composio MCP status.",
+        );
+        return;
+      }
+      setMcpStatus(payload as ComposioMcpStatus);
+      if (action === "repair_mcp") {
+        const toolIndexRes = await fetch("/api/composio/tool-index", { method: "POST" });
+        if (!toolIndexRes.ok) {
+          const err = await toolIndexRes.json().catch(() => ({}));
+          setToolIndexError(
+            (err as { error?: string }).error ?? `Failed to rebuild Composio tool index (${toolIndexRes.status})`,
+          );
+        } else {
+          setToolIndexError(null);
+        }
+      }
+    } catch (err) {
+      setStatusError(err instanceof Error ? err.message : "Failed to update Composio MCP status.");
+    } finally {
+      setRepairingMcp(false);
+      setProbingLiveAgent(false);
+    }
+  }, []);
+
   if (!eligible) {
     return (
       <div className="mt-6">
@@ -316,6 +442,75 @@ export function ComposioAppsSection({
             </div>
           </div>
         </div>
+
+        {(mcpStatus || statusError || toolIndexError) && (
+          <div
+            className="mt-4 rounded-2xl border px-4 py-3 text-sm"
+            style={statusToneStyles(statusError || toolIndexError ? "error" : (mcpStatus?.summary.level ?? "error"))}
+          >
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-2">
+                <div className="font-medium">
+                  {mcpStatus?.summary.message ?? statusError ?? "Composio MCP status is unavailable."}
+                </div>
+                <div className="grid gap-1 text-[12px] opacity-90">
+                  {mcpStatus && (
+                    <>
+                      <div>Config: {statusLabel(mcpStatus.config.status)}. {mcpStatus.config.detail}</div>
+                      <div>
+                        Gateway tools/list: {statusLabel(mcpStatus.gatewayTools.status)}.
+                        {" "}
+                        {mcpStatus.gatewayTools.detail}
+                        {typeof mcpStatus.gatewayTools.toolCount === "number"
+                          ? ` (${mcpStatus.gatewayTools.toolCount} tools)`
+                          : ""}
+                      </div>
+                      <div>
+                        Live agent: {statusLabel(mcpStatus.liveAgent.status)}. {mcpStatus.liveAgent.detail}
+                      </div>
+                      {mcpStatus.liveAgent.evidence.length > 0 && (
+                        <div>Evidence: {mcpStatus.liveAgent.evidence.join(", ")}</div>
+                      )}
+                      {mcpStatus.refresh && (
+                        <div>
+                          Gateway restart: {mcpStatus.refresh.restarted
+                            ? `Restarted ${mcpStatus.refresh.profile} successfully.`
+                            : mcpStatus.refresh.attempted
+                              ? `Restart attempt failed: ${mcpStatus.refresh.error ?? "unknown error"}.`
+                              : "No restart was attempted."}
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {statusError && <div>{statusError}</div>}
+                  {toolIndexError && <div>Tool index: {toolIndexError}</div>}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleStatusAction("repair_mcp")}
+                  disabled={repairingMcp}
+                >
+                  {repairingMcp ? "Repairing..." : "Repair MCP"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleStatusAction("probe_live_agent")}
+                  disabled={probingLiveAgent}
+                >
+                  {probingLiveAgent ? "Verifying..." : "Verify Agent Access"}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => void fetchData()}>
+                  Retry Status
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
           <Input
