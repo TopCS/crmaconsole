@@ -16,6 +16,34 @@ import {
 } from "@/lib/composio";
 import { normalizeComposioConnections } from "@/lib/composio-client";
 
+function ModalLogoBox({ logo, name }: { logo: string | null; name: string }) {
+  const [failed, setFailed] = useState(false);
+  const showImg = logo && !failed;
+  return (
+    <div
+      className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg"
+      style={{ background: "var(--color-surface-hover)" }}
+    >
+      {showImg ? (
+        <img
+          src={logo}
+          alt=""
+          className="h-7 w-7 object-contain"
+          decoding="async"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <span
+          className="text-sm font-semibold uppercase"
+          style={{ color: "var(--color-text-muted)" }}
+        >
+          {name.slice(0, 2)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function formatConnectionDate(value: string): string {
   const timestamp = Date.parse(value);
   if (!Number.isFinite(timestamp)) {
@@ -174,21 +202,7 @@ export function ComposioConnectModal({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div
-              className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg"
-              style={{ background: "var(--color-surface-hover)" }}
-            >
-              {toolkit.logo ? (
-                <img src={toolkit.logo} alt="" className="h-6 w-6 object-contain" />
-              ) : (
-                <span
-                  className="text-sm font-semibold uppercase"
-                  style={{ color: "var(--color-text-muted)" }}
-                >
-                  {toolkit.name.slice(0, 2)}
-                </span>
-              )}
-            </div>
+            <ModalLogoBox logo={toolkit.logo} name={toolkit.name} />
             <div>
               <DialogTitle>{toolkit.name}</DialogTitle>
               {toolkit.tools_count > 0 && (

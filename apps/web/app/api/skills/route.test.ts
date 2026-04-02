@@ -149,6 +149,58 @@ describe("skills browse and install APIs", () => {
         },
       ]);
     });
+
+    it("keeps store-installed skills visible when metadata parsing fails but the lock entry exists", async () => {
+      const { existsSync, readFileSync, readdirSync } = await import("node:fs");
+
+      vi.mocked(existsSync).mockImplementation((filePath) => {
+        const file = String(filePath);
+        return (
+          file === "/tmp/workspace/skills"
+          || file === "/tmp/workspace/skills/nextjs"
+          || file === "/tmp/workspace/.skills/lock.json"
+        );
+      });
+
+      vi.mocked(readdirSync).mockImplementation((dir) => {
+        if (String(dir) === "/tmp/workspace/skills") {
+          return [{
+            isDirectory: () => true,
+            name: "nextjs",
+          }] as never;
+        }
+        return [] as never;
+      });
+
+      vi.mocked(readFileSync).mockImplementation((filePath) => {
+        if (String(filePath) === "/tmp/workspace/.skills/lock.json") {
+          return JSON.stringify({
+            nextjs: {
+              slug: "nextjs",
+              source: "vercel/next.js",
+              installedAt: "2026-04-02T00:00:00.000Z",
+              installedFrom: "skills.sh",
+            },
+          }) as never;
+        }
+        throw new Error("Unreadable SKILL.md");
+      });
+
+      const { GET } = await import("./route.js");
+      const response = await GET();
+      const json = await response.json();
+
+      expect(json.skills).toEqual([
+        {
+          name: "nextjs",
+          slug: "nextjs",
+          description: "Installed from vercel/next.js",
+          source: "skills.sh",
+          filePath: "/tmp/workspace/skills/nextjs/SKILL.md",
+          protected: false,
+        },
+      ]);
+    });
   });
 
   describe("POST /api/skills/install", () => {
@@ -212,15 +264,27 @@ describe("skills browse and install APIs", () => {
       expect(response.status).toBe(200);
       expect(json.ok).toBe(true);
       expect(json.slug).toBe("nextjs-seo-optimizer");
+      expect(json.skill).toEqual({
+        name: "nextjs-seo-optimizer",
+        slug: "nextjs-seo-optimizer",
+        description: "",
+        emoji: undefined,
+        source: "skills.sh",
+        filePath: "/tmp/workspace/skills/nextjs-seo-optimizer/SKILL.md",
+        protected: false,
+      });
       expect(execFileSync).toHaveBeenCalledWith(
         "tar",
         [
           "-xzf",
-          expect.stringContaining("/tmp/skills-sh-"),
+          expect.stringContaining("skills-sh-"),
           "-C",
           "/tmp/skills-sh-extract-123",
         ],
-        expect.objectContaining({ timeout: 15_000 }),
+        {
+          stdio: "pipe",
+          timeout: 15_000,
+        },
       );
       expect(mkdirSync).toHaveBeenCalledWith("/tmp/workspace/skills", { recursive: true });
       expect(cpSync).toHaveBeenCalledWith(

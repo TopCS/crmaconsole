@@ -1,8 +1,100 @@
 import { describe, expect, it } from "vitest";
 import {
   extractComposioConnections,
+  extractComposioToolkits,
   normalizeComposioConnection,
 } from "./composio-client";
+
+describe("extractComposioToolkits", () => {
+  it("reads logo and description from standard fields", () => {
+    const result = extractComposioToolkits({
+      items: [
+        {
+          slug: "github",
+          name: "GitHub",
+          logo: "https://cdn.composio.dev/github.png",
+          description: "GitHub integration",
+        },
+      ],
+    });
+
+    expect(result.items[0]).toMatchObject({
+      slug: "github",
+      logo: "https://cdn.composio.dev/github.png",
+      description: "GitHub integration",
+    });
+  });
+
+  it("falls back to alias fields (logo_url, description_short)", () => {
+    const result = extractComposioToolkits({
+      items: [
+        {
+          slug: "slack",
+          name: "Slack",
+          logo_url: "https://cdn.composio.dev/slack.png",
+          description_short: "Slack workspace messaging",
+        },
+      ],
+    });
+
+    expect(result.items[0]!.logo).toBe("https://cdn.composio.dev/slack.png");
+    expect(result.items[0]!.description).toBe("Slack workspace messaging");
+  });
+
+  it("extracts from nested meta object", () => {
+    const result = extractComposioToolkits({
+      items: [
+        {
+          slug: "notion",
+          name: "Notion",
+          meta: {
+            logo: "https://cdn.composio.dev/notion.png",
+            description: "Notion workspace",
+          },
+        },
+      ],
+    });
+
+    expect(result.items[0]!.logo).toBe("https://cdn.composio.dev/notion.png");
+    expect(result.items[0]!.description).toBe("Notion workspace");
+  });
+
+  it("prefers direct fields over meta aliases", () => {
+    const result = extractComposioToolkits({
+      items: [
+        {
+          slug: "jira",
+          name: "Jira",
+          logo: "https://direct.dev/jira.png",
+          description: "Direct desc",
+          meta: {
+            logo: "https://meta.dev/jira.png",
+            description: "Meta desc",
+          },
+        },
+      ],
+    });
+
+    expect(result.items[0]!.logo).toBe("https://direct.dev/jira.png");
+    expect(result.items[0]!.description).toBe("Direct desc");
+  });
+
+  it("normalizes camelCase auth and count fields", () => {
+    const result = extractComposioToolkits({
+      items: [
+        {
+          slug: "linear",
+          name: "Linear",
+          toolsCount: 15,
+          authSchemes: ["oauth2"],
+        },
+      ],
+    });
+
+    expect(result.items[0]!.tools_count).toBe(15);
+    expect(result.items[0]!.auth_schemes).toEqual(["oauth2"]);
+  });
+});
 
 describe("extractComposioConnections", () => {
   it("prefers enriched gateway connections and stable account identity", () => {

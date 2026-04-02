@@ -1,6 +1,39 @@
 "use client";
 
+import { useCallback, useState } from "react";
 import type { ComposioToolkit } from "@/lib/composio";
+
+function LogoBox({ logo, name }: { logo: string | null; name: string }) {
+  const [failed, setFailed] = useState(false);
+  const showImg = logo && !failed;
+  return (
+    <div
+      className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border"
+      style={{
+        background: "var(--color-surface-hover)",
+        borderColor: "var(--color-border)",
+      }}
+    >
+      {showImg ? (
+        <img
+          src={logo}
+          alt=""
+          className="h-8 w-8 object-contain"
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <span
+          className="text-sm font-semibold uppercase"
+          style={{ color: "var(--color-text-muted)" }}
+        >
+          {name.slice(0, 2)}
+        </span>
+      )}
+    </div>
+  );
+}
 
 export function ComposioAppCard({
   toolkit,
@@ -33,29 +66,7 @@ export function ComposioAppCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border"
-            style={{
-              background: "var(--color-surface-hover)",
-              borderColor: "var(--color-border)",
-            }}
-          >
-            {toolkit.logo ? (
-              <img
-                src={toolkit.logo}
-                alt=""
-                className="h-7 w-7 object-contain"
-                loading="lazy"
-              />
-            ) : (
-              <span
-                className="text-sm font-semibold uppercase"
-                style={{ color: "var(--color-text-muted)" }}
-              >
-                {toolkit.name.slice(0, 2)}
-              </span>
-            )}
-          </div>
+          <LogoBox logo={toolkit.logo} name={toolkit.name} />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="truncate text-base font-semibold text-foreground">

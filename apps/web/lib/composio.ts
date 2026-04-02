@@ -46,10 +46,23 @@ export type ComposioToolkitRecord = {
   slug?: string | null;
   name?: string | null;
   description?: string | null;
+  description_short?: string | null;
+  summary?: string | null;
   logo?: string | null;
+  logo_url?: string | null;
+  icon?: string | null;
+  image?: string | null;
   categories?: string[] | null;
   auth_schemes?: string[] | null;
+  authSchemes?: string[] | null;
   tools_count?: number | null;
+  toolsCount?: number | null;
+  meta?: {
+    logo?: string | null;
+    description?: string | null;
+    categories?: string[] | null;
+    [key: string]: unknown;
+  } | null;
 };
 
 export type ComposioIdentityConfidence = "high" | "low" | "unknown";
@@ -128,6 +141,11 @@ export type ComposioToolkitsResponse = {
   cursor?: string | null;
   total?: number;
   categories?: string[];
+  toolkits?: ComposioToolkitRecord[];
+  data?: ComposioToolkitRecord[];
+  next_cursor?: string | null;
+  nextCursor?: string | null;
+  total_items?: number;
 };
 
 export type ComposioConnectionsResponse = {
@@ -384,6 +402,22 @@ export type FetchToolkitsOptions = {
   limit?: number;
 };
 
+function normalizeToolkitsEnvelope(raw: ComposioToolkitsResponse): ComposioToolkitsResponse {
+  const items = raw.items?.length
+    ? raw.items
+    : raw.toolkits?.length
+      ? raw.toolkits
+      : raw.data ?? [];
+  const cursor = raw.cursor ?? raw.next_cursor ?? raw.nextCursor ?? null;
+  const total = raw.total ?? raw.total_items;
+  return {
+    items,
+    cursor,
+    total,
+    categories: raw.categories,
+  };
+}
+
 export async function fetchComposioToolkits(
   gatewayUrl: string,
   apiKey: string,
@@ -400,7 +434,8 @@ export async function fetchComposioToolkits(
   if (!res.ok) {
     throw new Error(`Failed to fetch toolkits (HTTP ${res.status})`);
   }
-  return res.json() as Promise<ComposioToolkitsResponse>;
+  const raw = (await res.json()) as ComposioToolkitsResponse;
+  return normalizeToolkitsEnvelope(raw);
 }
 
 export async function fetchComposioConnections(

@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { removeSkillsLockEntry } from "@/lib/skills";
 import { resolveWorkspaceRoot } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +43,7 @@ export async function DELETE(
 
   try {
     await rm(skillDir, { recursive: true, force: true });
+    removeSkillsLockEntry(workspaceRoot, slug);
     return Response.json({ ok: true, slug });
   } catch (err) {
     return Response.json(

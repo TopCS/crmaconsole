@@ -9,20 +9,14 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
+import { parseSkillFrontmatter, readSkillsLock, writeSkillsLock } from "@/lib/skills";
 import { resolveWorkspaceRoot } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
-
-type SkillsLockEntry = {
-  slug: string;
-  source: string;
-  installedAt: string;
-  installedFrom: "skills.sh";
-};
 
 async function resolveDefaultBranch(source: string): Promise<string> {
   const repoResponse = await fetch(`https://api.github.com/repos/${source}`, {
@@ -146,23 +140,31 @@ export async function POST(req: Request) {
       throw new Error("Installed skill is missing SKILL.md");
     }
 
-    const lockDir = join(workspaceRoot, ".skills");
-    const lockFile = join(lockDir, "lock.json");
-    mkdirSync(lockDir, { recursive: true });
-
-    let lock: Record<string, SkillsLockEntry> = {};
-    if (existsSync(lockFile)) {
-      try { lock = JSON.parse(readFileSync(lockFile, "utf-8")); } catch { /* ignore bad lock */ }
-    }
+    const skillFilePath = join(targetDir, "SKILL.md");
+    const skillMetadata = parseSkillFrontmatter(readFileSync(skillFilePath, "utf-8"));
+    const lock = readSkillsLock(workspaceRoot);
     lock[slug] = {
       slug,
       source,
       installedAt: new Date().toISOString(),
       installedFrom: "skills.sh",
     };
-    writeFileSync(lockFile, JSON.stringify(lock, null, 2));
+    writeSkillsLock(workspaceRoot, lock);
 
-    return Response.json({ ok: true, slug, path: targetDir });
+    return Response.json({
+      ok: true,
+      slug,
+      path: targetDir,
+      skill: {
+        name: skillMetadata.name ?? slug,
+        slug,
+        description: skillMetadata.description ?? "",
+        emoji: skillMetadata.emoji,
+        source: "skills.sh",
+        filePath: skillFilePath,
+        protected: false,
+      },
+    });
   } catch (err) {
     return Response.json(
       { ok: false, error: `Install failed: ${err instanceof Error ? err.message : String(err)}` },

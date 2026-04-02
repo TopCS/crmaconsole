@@ -60,17 +60,47 @@ function pickString(...values: unknown[]): string | undefined {
   return undefined;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
 function normalizeComposioToolkitRecord(
   toolkit: ComposioToolkitRecord,
 ): ComposioToolkit {
+  const meta = asRecord(toolkit.meta);
+  const toolsCount = typeof toolkit.tools_count === "number"
+    ? toolkit.tools_count
+    : typeof toolkit.toolsCount === "number"
+      ? toolkit.toolsCount
+      : 0;
+
+  const directCats = asStringArray(toolkit.categories);
+  const metaCats = asStringArray(meta?.categories);
+  const categories = directCats.length > 0
+    ? directCats
+    : metaCats;
+
   return {
     slug: pickString(toolkit.slug, toolkit.name) ?? "unknown",
     name: pickString(toolkit.name, toolkit.slug) ?? "Unknown",
-    description: pickString(toolkit.description) ?? "",
-    logo: pickString(toolkit.logo) ?? null,
-    categories: asStringArray(toolkit.categories),
-    auth_schemes: asStringArray(toolkit.auth_schemes),
-    tools_count: typeof toolkit.tools_count === "number" ? toolkit.tools_count : 0,
+    description: pickString(
+      toolkit.description,
+      toolkit.description_short,
+      toolkit.summary,
+      readString(meta?.description),
+    ) ?? "",
+    logo: pickString(
+      toolkit.logo,
+      toolkit.logo_url,
+      toolkit.icon,
+      toolkit.image,
+      readString(meta?.logo),
+    ) ?? null,
+    categories,
+    auth_schemes: asStringArray(toolkit.auth_schemes ?? toolkit.authSchemes),
+    tools_count: toolsCount,
   };
 }
 
