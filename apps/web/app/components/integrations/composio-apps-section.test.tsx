@@ -160,6 +160,7 @@ const statusPayload: {
 };
 
 let intersectionHandler: IntersectionObserverCallback | null = null;
+let toolkitRequestUrls: string[] = [];
 
 function installFetchMock(statusOverride = statusPayload) {
   global.fetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -184,8 +185,19 @@ function installFetchMock(statusOverride = statusPayload) {
     }
 
     if (url.startsWith("/api/composio/toolkits")) {
+      toolkitRequestUrls.push(url);
       const parsed = new URL(url, "http://localhost");
+      const search = parsed.searchParams.get("search");
       const cursor = parsed.searchParams.get("cursor");
+
+      if (search) {
+        return new Response(JSON.stringify({
+          items: [],
+          cursor: null,
+          total: 0,
+          categories: ["Knowledge", "Communication", "Email"],
+        }));
+      }
 
       if (cursor === "page-2") {
         return new Response(JSON.stringify(marketplacePageTwo));
@@ -202,6 +214,7 @@ describe("ComposioAppsSection", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     intersectionHandler = null;
+    toolkitRequestUrls = [];
     global.IntersectionObserver = class MockIntersectionObserver implements IntersectionObserver {
       readonly root = null;
       readonly rootMargin = "";
@@ -227,6 +240,7 @@ describe("ComposioAppsSection", () => {
       expect(screen.getByText("Gmail")).toBeInTheDocument();
     });
 
+    expect(screen.queryByRole("button", { name: "All" })).not.toBeInTheDocument();
     expect(screen.getByText("Gmail")).toBeInTheDocument();
     expect(screen.getByText("GitHub")).toBeInTheDocument();
 
@@ -247,6 +261,36 @@ describe("ComposioAppsSection", () => {
     await waitFor(() => {
       expect(screen.getByText("Slack")).toBeInTheDocument();
     });
+  });
+
+  it("debounces marketplace search and shows a query-aware empty state", async () => {
+    const user = userEvent.setup();
+    render(<ComposioAppsSection eligible lockBadge={null} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Gmail")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Marketplace" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Notion")).toBeInTheDocument();
+    });
+
+    toolkitRequestUrls = [];
+    await user.type(screen.getByPlaceholderText("Search marketplace..."), "abc");
+
+    expect(screen.getByText("Notion")).toBeInTheDocument();
+
+    await new Promise((resolve) => window.setTimeout(resolve, 350));
+
+    await waitFor(() => {
+      expect(screen.getByText('No apps found for "abc".')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Try clearing search or category filters.")).toBeInTheDocument();
+    expect(toolkitRequestUrls.filter((url) => url.includes("search="))).toHaveLength(1);
+    expect(toolkitRequestUrls[0]).toContain("/api/composio/toolkits?search=abc&limit=24");
   });
 
   it("opens a toolkit modal with multi-account management details", async () => {

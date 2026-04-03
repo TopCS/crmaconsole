@@ -1,6 +1,5 @@
 import {
   buildDenchGatewayApiBaseUrl,
-  normalizeDenchGatewayUrl,
 } from "../../../src/cli/dench-cloud";
 
 const DEFAULT_TTS_MODEL_ID = "eleven_multilingual_v2";
@@ -94,9 +93,9 @@ export async function fetchElevenLabsVoices(params: {
   gatewayUrl: string;
   apiKey: string;
 }): Promise<ElevenLabsVoice[]> {
-  const rootGatewayUrl = normalizeDenchGatewayUrl(params.gatewayUrl);
+  const apiBaseUrl = buildDenchGatewayApiBaseUrl(params.gatewayUrl);
   const response = await fetch(
-    `${rootGatewayUrl}/v2/voices?page_size=100&include_total_count=false`,
+    `${apiBaseUrl}/audio/voices?page_size=100&include_total_count=false`,
     {
       headers: buildAuthHeaders(params.apiKey),
       cache: "no-store",

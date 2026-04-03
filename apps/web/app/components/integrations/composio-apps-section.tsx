@@ -172,6 +172,7 @@ export function ComposioAppsSection({
   const [activeTab, setActiveTab] = useState<IntegrationsTab>("connected");
   const [state, setState] = useState<ComposioAppsState>(buildInitialState);
   const [search, setSearch] = useState("");
+  const [debouncedMarketplaceSearch, setDebouncedMarketplaceSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [selectedToolkit, setSelectedToolkit] = useState<ComposioToolkit | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -243,6 +244,33 @@ export function ComposioAppsSection({
       connectionsError: null,
     }));
     setStatusError(null);
+
+    const marketplacePreFetch = fetchToolkitsPage({ limit: MARKETPLACE_PAGE_SIZE })
+      .then((result) => {
+        const featuredSet = new Set(FEATURED_SLUGS);
+        const ordered = [
+          ...result.items
+            .filter((toolkit) => featuredSet.has(toolkit.slug))
+            .sort((left, right) => FEATURED_SLUGS.indexOf(left.slug) - FEATURED_SLUGS.indexOf(right.slug)),
+          ...result.items.filter((toolkit) => !featuredSet.has(toolkit.slug)),
+        ];
+        setState((prev) => {
+          if (prev.marketplaceReady) {
+            return prev;
+          }
+          return {
+            ...prev,
+            marketplaceToolkits: ordered,
+            marketplaceCursor: result.cursor,
+            categories: result.categories,
+            marketplaceReady: true,
+            marketplaceLoading: false,
+          };
+        });
+        marketplaceRequestKeyRef.current = `::`;
+      })
+      .catch(() => {});
+
     try {
       const connectionsRes = await fetch(
         `/api/composio/connections?include_toolkits=1${options?.fresh ? "&fresh=1" : ""}`,
@@ -284,6 +312,7 @@ export function ComposioAppsSection({
       window.setTimeout(() => {
         void fetchMcpStatus();
       }, 0);
+      void marketplacePreFetch;
     } catch (err) {
       setMcpStatus(null);
       setState((prev) => ({
@@ -298,21 +327,23 @@ export function ComposioAppsSection({
         connectionsError: err instanceof Error ? err.message : "Failed to load connections.",
       }));
     }
-  }, [fetchMcpStatus]);
+  }, [fetchMcpStatus, fetchToolkitsPage]);
 
   const loadMarketplace = useCallback(async (options?: { reset?: boolean }) => {
     const reset = options?.reset ?? false;
-    const queryKey = `${search.trim().toLowerCase()}::${activeCategory ?? ""}`;
+    const marketplaceSearch = debouncedMarketplaceSearch.trim();
+    const queryKey = `${marketplaceSearch.toLowerCase()}::${activeCategory ?? ""}`;
+    const preserveResults = reset && activeTab === "marketplace" && state.marketplaceReady;
 
     if (reset) {
       marketplaceRequestKeyRef.current = queryKey;
       setState((prev) => ({
         ...prev,
-        marketplaceToolkits: [],
+        marketplaceToolkits: preserveResults ? prev.marketplaceToolkits : [],
         marketplaceCursor: null,
-        categories: [],
+        categories: preserveResults ? prev.categories : [],
         marketplaceLoading: true,
-        marketplaceReady: false,
+        marketplaceReady: preserveResults,
         loadingMore: false,
         error: activeTab === "marketplace" ? null : prev.error,
       }));
@@ -323,7 +354,7 @@ export function ComposioAppsSection({
     try {
       const currentCursor = reset ? null : state.marketplaceCursor;
       const result = await fetchToolkitsPage({
-        search: search.trim() || undefined,
+        search: marketplaceSearch || undefined,
         category: activeCategory ?? undefined,
         cursor: currentCursor,
         limit: MARKETPLACE_PAGE_SIZE,
@@ -338,7 +369,7 @@ export function ComposioAppsSection({
           ? result.items
           : dedupeToolkits([...prev.marketplaceToolkits, ...result.items]);
         const featuredSet = new Set(FEATURED_SLUGS);
-        const ordered = (search.trim() || activeCategory)
+        const ordered = (marketplaceSearch || activeCategory)
           ? combined
           : [
               ...combined
@@ -372,7 +403,19 @@ export function ComposioAppsSection({
           : prev.error,
       }));
     }
-  }, [activeCategory, activeTab, fetchToolkitsPage, search, state.marketplaceCursor]);
+  }, [activeCategory, activeTab, debouncedMarketplaceSearch, fetchToolkitsPage, state.marketplaceCursor, state.marketplaceReady]);
+
+  useEffect(() => {
+    if (activeTab !== "marketplace") {
+      setDebouncedMarketplaceSearch(search);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedMarketplaceSearch(search);
+    }, 300);
+    return () => window.clearTimeout(timeoutId);
+  }, [activeTab, search]);
 
   useEffect(() => {
     if (eligible) {
@@ -392,7 +435,7 @@ export function ComposioAppsSection({
       return;
     }
 
-    const queryKey = `${search.trim().toLowerCase()}::${activeCategory ?? ""}`;
+    const queryKey = `${debouncedMarketplaceSearch.trim().toLowerCase()}::${activeCategory ?? ""}`;
     if (!state.marketplaceReady || marketplaceRequestKeyRef.current !== queryKey) {
       void loadMarketplace({ reset: true });
     }
@@ -401,7 +444,7 @@ export function ComposioAppsSection({
     activeTab,
     eligible,
     loadMarketplace,
-    search,
+    debouncedMarketplaceSearch,
     state.loading,
     state.marketplaceReady,
   ]);
@@ -483,10 +526,20 @@ export function ComposioAppsSection({
   );
 
   const marketplaceToolkits = useMemo(() => {
-    return state.marketplaceToolkits.filter((toolkit) =>
-      !activeAccountsByToolkit.has(normalizeComposioToolkitSlug(toolkit.slug))
-      && !optimisticConnectedToolkitSlugs.has(normalizeComposioToolkitSlug(toolkit.slug)));
-  }, [activeAccountsByToolkit, optimisticConnectedToolkitSlugs, state.marketplaceToolkits]);
+    const q = debouncedMarketplaceSearch.trim().toLowerCase();
+    return state.marketplaceToolkits.filter((toolkit) => {
+      const slug = normalizeComposioToolkitSlug(toolkit.slug);
+      if (activeAccountsByToolkit.has(slug) || optimisticConnectedToolkitSlugs.has(slug)) {
+        return false;
+      }
+      if (!q) {
+        return true;
+      }
+      return toolkit.name.toLowerCase().includes(q)
+        || toolkit.slug.toLowerCase().includes(q)
+        || toolkit.description.toLowerCase().includes(q);
+    });
+  }, [activeAccountsByToolkit, debouncedMarketplaceSearch, optimisticConnectedToolkitSlugs, state.marketplaceToolkits]);
 
   const displayCategories = useMemo(
     () => state.categories.slice(0, MAX_CATEGORY_PILLS),
@@ -724,6 +777,12 @@ export function ComposioAppsSection({
         </div>
       )}
 
+      {activeTab === "marketplace" && state.marketplaceLoading && state.marketplaceReady && (
+        <div className="mb-4 text-xs" style={{ color: "var(--color-text-muted)" }}>
+          Searching apps...
+        </div>
+      )}
+
       {/* MCP status (collapsed into a small bar) */}
       {(statusError || (mcpStatus && mcpStatus.summary.level !== "healthy")) && (
         <div
@@ -801,6 +860,8 @@ export function ComposioAppsSection({
           hasMore={Boolean(state.marketplaceCursor)}
           loadingMore={state.loadingMore}
           loadMoreRef={loadMoreRef}
+          searchQuery={debouncedMarketplaceSearch}
+          activeCategory={activeCategory}
           onAppClick={handleAppClick}
         />
       )}
@@ -866,23 +927,40 @@ function MarketplaceTab({
   hasMore,
   loadingMore,
   loadMoreRef,
+  searchQuery,
+  activeCategory,
   onAppClick,
 }: {
   toolkits: ComposioToolkit[];
   hasMore: boolean;
   loadingMore: boolean;
   loadMoreRef: { current: HTMLDivElement | null };
+  searchQuery: string;
+  activeCategory: string | null;
   onAppClick: (toolkit: ComposioToolkit) => void;
 }) {
   if (toolkits.length === 0) {
+    const trimmedSearch = searchQuery.trim();
+    const hasSearch = trimmedSearch.length > 0;
+    const hasCategory = Boolean(activeCategory);
+    const message = hasSearch
+      ? `No apps found for "${trimmedSearch}".`
+      : hasCategory
+        ? `No apps found in "${activeCategory}".`
+        : "No apps found.";
     return (
       <div
         className="p-8 text-center rounded-2xl"
         style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}
       >
         <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-          No apps found.
+          {message}
         </p>
+        {(hasSearch || hasCategory) && (
+          <p className="mt-2 text-xs" style={{ color: "var(--color-text-muted)" }}>
+            Try clearing search or category filters.
+          </p>
+        )}
       </div>
     );
   }

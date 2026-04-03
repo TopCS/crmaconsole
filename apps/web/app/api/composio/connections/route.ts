@@ -24,8 +24,10 @@ export const runtime = "nodejs";
 
 const CONNECTIONS_CACHE_TTL_MS = 15_000;
 const TOOLKIT_LOOKUP_CACHE_TTL_MS = 5 * 60_000;
+const CONNECTED_TOOLKIT_BULK_LIMIT = 100;
 const CONNECTED_TOOLKIT_LOOKUP_LIMIT = 40;
 const BACKGROUND_TOOL_INDEX_REFRESH_TTL_MS = 60_000;
+const RESOLVED_TOOLKITS_CACHE_TTL_MS = 60_000;
 
 type CacheEntry<T> =
   | {
@@ -38,7 +40,9 @@ type CacheEntry<T> =
     };
 
 const connectionsCache = new Map<string, CacheEntry<ComposioConnectionsResponse>>();
+const toolkitBulkCache = new Map<string, CacheEntry<ComposioToolkit[]>>();
 const toolkitLookupCache = new Map<string, CacheEntry<ComposioToolkit[]>>();
+const resolvedToolkitsCache = new Map<string, CacheEntry<ComposioToolkit[]>>();
 let lastBackgroundToolIndexRefreshAt = 0;
 
 function buildCacheKey(gatewayUrl: string, apiKey: string, suffix = ""): string {
@@ -120,10 +124,25 @@ async function searchToolkitsCached(
   );
 }
 
+async function fetchBulkToolkitsCached(
+  gatewayUrl: string,
+  apiKey: string,
+): Promise<ComposioToolkit[]> {
+  return await readThroughCache(
+    toolkitBulkCache,
+    buildCacheKey(gatewayUrl, apiKey, `toolkits-bulk:${CONNECTED_TOOLKIT_BULK_LIMIT}`),
+    TOOLKIT_LOOKUP_CACHE_TTL_MS,
+    async () => extractComposioToolkits(await fetchComposioToolkits(gatewayUrl, apiKey, {
+      limit: CONNECTED_TOOLKIT_BULK_LIMIT,
+    })).items,
+  );
+}
+
 async function resolveConnectedToolkits(
   gatewayUrl: string,
   apiKey: string,
   connections: ComposioConnectionsResponse,
+  preFetchedBulkToolkits?: ComposioToolkit[],
 ): Promise<ComposioToolkit[]> {
   const normalizedConnections = normalizeComposioConnections(
     extractComposioConnections(connections),
@@ -137,23 +156,51 @@ async function resolveConnectedToolkits(
     return [];
   }
 
-  const toolkits = await Promise.all(activeSlugs.map(async (slug) => {
-    for (const search of getComposioToolkitLookupCandidates(slug)) {
-      const candidates = await searchToolkitsCached(gatewayUrl, apiKey, search).catch(() => []);
-      const exact = candidates.find((toolkit) =>
-        normalizeComposioToolkitSlug(toolkit.slug) === slug);
-      if (exact) {
-        return exact;
+  const resolvedCacheKey = buildCacheKey(
+    gatewayUrl,
+    apiKey,
+    `resolved-toolkits:${[...activeSlugs].sort().join(",")}`,
+  );
+
+  return await readThroughCache(
+    resolvedToolkitsCache,
+    resolvedCacheKey,
+    RESOLVED_TOOLKITS_CACHE_TTL_MS,
+    async () => {
+      const bulkToolkits = preFetchedBulkToolkits
+        ?? await fetchBulkToolkitsCached(gatewayUrl, apiKey).catch(() => []);
+      const bulkToolkitsBySlug = new Map<string, ComposioToolkit>();
+      for (const toolkit of bulkToolkits) {
+        const normalizedSlug = normalizeComposioToolkitSlug(toolkit.slug);
+        if (!bulkToolkitsBySlug.has(normalizedSlug)) {
+          bulkToolkitsBySlug.set(normalizedSlug, toolkit);
+        }
       }
-    }
 
-    const fallbackName = activeConnections.find((connection) =>
-      connection.normalized_toolkit_slug === slug)?.toolkit_name ?? slug;
-    return createToolkitPlaceholder(slug, fallbackName);
-  }));
+      const toolkits = await Promise.all(activeSlugs.map(async (slug) => {
+        const bulkMatch = bulkToolkitsBySlug.get(slug);
+        if (bulkMatch) {
+          return bulkMatch;
+        }
 
-  return [...toolkits]
-    .sort((left, right) => left.name.localeCompare(right.name));
+        for (const search of getComposioToolkitLookupCandidates(slug)) {
+          const candidates = await searchToolkitsCached(gatewayUrl, apiKey, search).catch(() => []);
+          const exact = candidates.find((toolkit) =>
+            normalizeComposioToolkitSlug(toolkit.slug) === slug);
+          if (exact) {
+            return exact;
+          }
+        }
+
+        const fallbackName = activeConnections.find((connection) =>
+          connection.normalized_toolkit_slug === slug)?.toolkit_name ?? slug;
+        return createToolkitPlaceholder(slug, fallbackName);
+      }));
+
+      return [...toolkits]
+        .sort((left, right) => left.name.localeCompare(right.name));
+    },
+  );
 }
 
 function maybeRefreshToolIndexInBackground(includeToolkits: boolean): void {
@@ -197,16 +244,23 @@ export async function GET(request: Request) {
   const fresh = searchParams.get("fresh") === "1";
 
   try {
-    const data = fresh
-      ? await fetchComposioConnections(gatewayUrl, apiKey)
-      : await fetchConnectionsCached(gatewayUrl, apiKey);
     if (includeToolkits) {
+      const connectionsPromise = fresh
+        ? fetchComposioConnections(gatewayUrl, apiKey)
+        : fetchConnectionsCached(gatewayUrl, apiKey);
+      const [data, bulkToolkits] = await Promise.all([
+        connectionsPromise,
+        fetchBulkToolkitsCached(gatewayUrl, apiKey).catch(() => []),
+      ]);
       maybeRefreshToolIndexInBackground(includeToolkits);
       return Response.json({
         ...data,
-        toolkits: await resolveConnectedToolkits(gatewayUrl, apiKey, data),
+        toolkits: await resolveConnectedToolkits(gatewayUrl, apiKey, data, bulkToolkits),
       });
     }
+    const data = fresh
+      ? await fetchComposioConnections(gatewayUrl, apiKey)
+      : await fetchConnectionsCached(gatewayUrl, apiKey);
     return Response.json(data);
   } catch (err) {
     return Response.json(

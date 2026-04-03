@@ -47,6 +47,9 @@ describe("Composio connections API", () => {
         {
           slug: "twitter",
           name: "Twitter",
+          description: "Post and monitor updates",
+          logo: "https://example.com/x.png",
+          categories: ["Social"],
           auth_schemes: ["OAUTH2"],
           tools_count: 12,
         },
@@ -68,10 +71,18 @@ describe("Composio connections API", () => {
       slug: "x",
       name: "X",
       connect_slug: "twitter",
+      description: "Post and monitor updates",
+      logo: "https://example.com/x.png",
+      categories: ["Social"],
     });
     expect(secondBody.toolkits[0].slug).toBe("x");
     expect(fetchComposioConnectionsMock).toHaveBeenCalledTimes(1);
     expect(fetchComposioToolkitsMock).toHaveBeenCalledTimes(1);
+    expect(fetchComposioToolkitsMock).toHaveBeenCalledWith(
+      "https://gateway.example.com",
+      "dench_test_key",
+      { limit: 100 },
+    );
     expect(rebuildComposioToolIndexIfReadyMock).toHaveBeenCalledTimes(1);
   });
 
@@ -82,5 +93,54 @@ describe("Composio connections API", () => {
 
     expect(fetchComposioConnectionsMock).toHaveBeenCalledTimes(2);
     expect(fetchComposioToolkitsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to per-slug lookup only after the bulk toolkit fetch misses", async () => {
+    fetchComposioToolkitsMock
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            slug: "gmail",
+            name: "Gmail",
+            description: "Read and send email",
+            auth_schemes: ["OAUTH2"],
+            tools_count: 9,
+          },
+        ],
+      });
+    fetchComposioConnectionsMock.mockResolvedValue({
+      connections: [
+        {
+          id: "ca_gmail_1",
+          toolkit_slug: "gmail",
+          toolkit_name: "Gmail",
+          status: "ACTIVE",
+          created_at: "2026-04-03T00:00:00.000Z",
+        },
+      ],
+    });
+
+    const { GET } = await import("./route");
+    const response = await GET(new Request("http://localhost/api/composio/connections?include_toolkits=1"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.toolkits[0]).toMatchObject({
+      slug: "gmail",
+      description: "Read and send email",
+    });
+    expect(fetchComposioToolkitsMock).toHaveBeenNthCalledWith(
+      1,
+      "https://gateway.example.com",
+      "dench_test_key",
+      { limit: 100 },
+    );
+    expect(fetchComposioToolkitsMock).toHaveBeenNthCalledWith(
+      2,
+      "https://gateway.example.com",
+      "dench_test_key",
+      { search: "gmail", limit: 40 },
+    );
   });
 });
