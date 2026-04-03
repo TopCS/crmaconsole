@@ -41,6 +41,15 @@ describe("buildIdentityPrompt", () => {
     expect(prompt).toContain("composio_resolve_tool");
   });
 
+  it("includes enrichment guidance for Apollo and Exa", () => {
+    const prompt = buildIdentityPrompt(workspaceDir);
+    expect(prompt).toContain("default tool for enrichment requests");
+    expect(prompt).toContain('`action: "people"`');
+    expect(prompt).toContain('`action: "company"`');
+    expect(prompt).toContain('`action: "people_search"`');
+    expect(prompt).toContain("Use Apollo for structured CRM enrichment and Exa for broader web research");
+  });
+
   it("prefers Composio over gog even without a generated tool index", () => {
     const prompt = buildIdentityPrompt(workspaceDir);
     expect(prompt).toContain("Composio is the default integration layer");

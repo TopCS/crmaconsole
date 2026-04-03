@@ -69,22 +69,18 @@ export async function GET(request: Request) {
   const targetOrigin = url.origin;
 
   const success = status === "success";
-  let toolIndexRebuild:
-    | Awaited<ReturnType<typeof rebuildComposioToolIndexIfReady>>
-    | undefined;
-  let runtimeRefresh:
-    | Awaited<ReturnType<typeof refreshIntegrationsRuntime>>
-    | undefined;
   let resolvedConnection:
     | Awaited<ReturnType<typeof resolveConnectedToolkitSummary>>
     | undefined;
   if (success) {
     resolvedConnection = await resolveConnectedToolkitSummary(connectedAccountId);
-    toolIndexRebuild = await rebuildComposioToolIndexIfReady();
-    if (toolIndexRebuild.ok) {
-      runtimeRefresh = await refreshIntegrationsRuntime();
-    }
-    await getComposioMcpHealth();
+    void (async () => {
+      try {
+        const rebuild = await rebuildComposioToolIndexIfReady();
+        if (rebuild.ok) await refreshIntegrationsRuntime();
+        await getComposioMcpHealth();
+      } catch {}
+    })();
   }
   const payloadJson = serializeForInlineScript({
     type: "composio-callback",
@@ -93,8 +89,6 @@ export async function GET(request: Request) {
     connected_toolkit_slug: resolvedConnection?.toolkit_slug ?? null,
     connected_toolkit_name: resolvedConnection?.toolkit_name ?? null,
     connected_status: resolvedConnection?.status ?? null,
-    tool_index_rebuild: toolIndexRebuild,
-    runtime_refresh: runtimeRefresh,
   });
   const targetOriginJson = serializeForInlineScript(targetOrigin);
 

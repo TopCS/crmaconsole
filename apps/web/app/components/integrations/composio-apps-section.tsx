@@ -93,6 +93,26 @@ type ConnectionChangePayload = {
 
 let lastConnectedAppsSnapshot: ConnectedAppsSnapshot | null = null;
 
+const SNAPSHOT_STORAGE_KEY = "composio-connected-apps-snapshot";
+
+function loadSnapshotFromStorage(): ConnectedAppsSnapshot | null {
+  try {
+    const raw = localStorage.getItem(SNAPSHOT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (Array.isArray(parsed?.connectedToolkits) && Array.isArray(parsed?.connections)) {
+      return parsed as unknown as ConnectedAppsSnapshot;
+    }
+  } catch {}
+  return null;
+}
+
+function saveSnapshotToStorage(snapshot: ConnectedAppsSnapshot): void {
+  try {
+    localStorage.setItem(SNAPSHOT_STORAGE_KEY, JSON.stringify(snapshot));
+  } catch {}
+}
+
 function dedupeToolkits(toolkits: ComposioToolkit[]): ComposioToolkit[] {
   const bySlug = new Map<string, ComposioToolkit>();
   for (const toolkit of toolkits) {
@@ -102,6 +122,9 @@ function dedupeToolkits(toolkits: ComposioToolkit[]): ComposioToolkit[] {
 }
 
 function buildInitialState(): ComposioAppsState {
+  if (!lastConnectedAppsSnapshot) {
+    lastConnectedAppsSnapshot = loadSnapshotFromStorage();
+  }
   return {
     connectedToolkits: lastConnectedAppsSnapshot?.connectedToolkits ?? [],
     marketplaceToolkits: [],
@@ -295,6 +318,7 @@ export function ComposioAppsSection({
         connectedToolkits,
         connections: extractedConnections,
       };
+      saveSnapshotToStorage(lastConnectedAppsSnapshot);
       setOptimisticConnectedToolkits((prev) => prev.filter((toolkit) =>
         !connectedToolkits.some((connectedToolkit) =>
           normalizeComposioToolkitSlug(connectedToolkit.slug)

@@ -796,7 +796,13 @@ For multi-session projects, write a session handoff summary to \`${workspaceDir}
 
 - Prefer \`exa_search\` over the built-in \`web_search\` whenever \`exa_search\` is available.
 - Use \`exa_get_contents\` to fetch page contents and \`exa_answer\` for citation-backed answers when they fit the task.
-- Use \`apollo_enrich\` for people and company enrichment lookups.
+- Use \`apollo_enrich\` as the default tool for enrichment requests.
+- Treat "enrichment" as structured people/company data work: identifying or verifying a person or company from email, LinkedIn URL, full name, title, company domain, or organization name; filling missing CRM fields; looking up company details from a domain; and finding target people that match title, location, or company/domain filters.
+- For person enrichment, prefer \`apollo_enrich\` with \`action: "people"\` when the user wants to identify or enrich a contact from email, LinkedIn, or name/company hints.
+- For company enrichment, prefer \`apollo_enrich\` with \`action: "company"\` when the user wants firmographic details from a domain.
+- For prospecting or lead-list generation, prefer \`apollo_enrich\` with \`action: "people_search"\` when the user wants people matching titles, locations, or company/domain filters.
+- Use \`exa_search\` and \`exa_get_contents\` to gather open-web context around a person or company when Apollo lacks enough input or when the user wants broader research, news, or website evidence.
+- Use Apollo for structured CRM enrichment and Exa for broader web research; combine them when helpful, but do not substitute Exa for Apollo on explicit enrichment requests unless Apollo is unavailable or insufficient.
 - For connected apps (Gmail, Slack, GitHub, etc.), use the **Composio** tools directly. Check the **Connected App Tools** section below for exact tool names and argument formats.
 - If the exact Composio tool name is unclear, call \`${COMPOSIO_RESOLVE_TOOL_NAME}\` before exploring the curated Composio tools for this workspace.
 - **Never** use curl or raw HTTP to call Composio or gateway integration endpoints — always use the Composio tools.
