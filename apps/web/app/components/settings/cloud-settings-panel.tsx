@@ -270,7 +270,7 @@ function ModelSelector({
         </span>
       </div>
 
-      <div>
+      <div className="hidden">
         <label
           className="block text-xs font-medium mb-2"
           style={{ color: "var(--color-text-muted)" }}
@@ -281,7 +281,7 @@ function ModelSelector({
           models={pickerModels}
           selectedModel={isDenchPrimary ? selectedModel : null}
           onSelect={onSelect}
-          disabled={selecting}
+          disabled
           fallbackToFirst={isDenchPrimary}
           placeholder="Choose a model..."
           ariaLabel="Select primary model"

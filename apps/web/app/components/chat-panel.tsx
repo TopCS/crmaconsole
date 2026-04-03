@@ -1070,10 +1070,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 			selectedDenchModel: cloudState?.selectedDenchModel ?? null,
 			models: cloudState?.models ?? [],
 		});
-		const hasModelPicker =
-			Boolean(currentSessionId) &&
-			Boolean(cloudState?.isDenchPrimary) &&
-			(cloudState?.models.length ?? 0) > 0;
+		const hasModelPicker = false;
 		const preferServerVoiceInput = Boolean(
 			cloudState?.status === "valid" && cloudState.elevenLabsEnabled,
 		);
