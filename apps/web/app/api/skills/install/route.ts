@@ -18,8 +18,44 @@ import { resolveWorkspaceRoot } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
-async function resolveDefaultBranch(source: string): Promise<string> {
-  const repoResponse = await fetch(`https://api.github.com/repos/${source}`, {
+const GITHUB_API_ORIGIN = "https://api.github.com";
+const GITHUB_CODELOAD_ORIGIN = "https://codeload.github.com";
+
+/** Conservative owner/repo segment; avoids SSRF/path smuggling in URL construction. */
+const GITHUB_OWNER_REPO = /^[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?\/[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?$/;
+
+function parseValidatedGitHubRepo(source: string): { owner: string; repo: string } | null {
+  const normalized = source.trim();
+  if (!GITHUB_OWNER_REPO.test(normalized)) {
+    return null;
+  }
+  const slash = normalized.indexOf("/");
+  const owner = normalized.slice(0, slash);
+  const repo = normalized.slice(slash + 1);
+  if (!owner || !repo || owner.includes("..") || repo.includes("..")) {
+    return null;
+  }
+  return { owner, repo };
+}
+
+/** Refuse refs that could alter URL structure when used as a single path segment. */
+function assertSafeGitDefaultBranch(branch: string): string {
+  const t = branch.trim();
+  if (!t || t.length > 255) {
+    throw new Error("Invalid default branch from GitHub");
+  }
+  if (t.includes("..") || t.startsWith("/") || t.includes("\\") || /[\s#?@]/.test(t)) {
+    throw new Error("Invalid default branch from GitHub");
+  }
+  if (!/^[a-zA-Z0-9/_.,[\]{}*^~:-]+$/.test(t)) {
+    throw new Error("Invalid default branch from GitHub");
+  }
+  return t;
+}
+
+async function resolveDefaultBranch(owner: string, repo: string): Promise<string> {
+  const repoUrl = new URL(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, GITHUB_API_ORIGIN);
+  const repoResponse = await fetch(repoUrl, {
     headers: {
       Accept: "application/vnd.github+json",
       "User-Agent": "DenchClaw Skill Installer",
@@ -31,8 +67,9 @@ async function resolveDefaultBranch(source: string): Promise<string> {
     throw new Error(`GitHub repo lookup failed: ${repoResponse.status} ${repoResponse.statusText}`);
   }
 
-  const repo = await repoResponse.json() as { default_branch?: string };
-  return repo.default_branch?.trim() || "main";
+  const repoJson = await repoResponse.json() as { default_branch?: string };
+  const raw = repoJson.default_branch?.trim() || "main";
+  return assertSafeGitDefaultBranch(raw);
 }
 
 function resolveExtractedSkillDir(repoRoot: string, slug: string): string {
@@ -64,7 +101,8 @@ export async function POST(req: Request) {
   if (!slug || typeof slug !== "string" || /[/\\]/.test(slug) || slug === "." || slug === "..") {
     return Response.json({ ok: false, error: "Invalid skill slug" }, { status: 400 });
   }
-  if (!source || typeof source !== "string" || !/^[^/]+\/[^/]+$/.test(source)) {
+  const parsedSource = typeof source === "string" ? parseValidatedGitHubRepo(source) : null;
+  if (!source || typeof source !== "string" || !parsedSource) {
     return Response.json({ ok: false, error: "Invalid skill source" }, { status: 400 });
   }
 
@@ -82,8 +120,11 @@ export async function POST(req: Request) {
   const tempExtractDir = mkdtempSync(join(tmpdir(), "skills-sh-extract-"));
 
   try {
-    const defaultBranch = await resolveDefaultBranch(source);
-    const downloadUrl = `https://codeload.github.com/${source}/tar.gz/refs/heads/${encodeURIComponent(defaultBranch)}`;
+    const defaultBranch = await resolveDefaultBranch(parsedSource.owner, parsedSource.repo);
+    const archivePath =
+      `/${encodeURIComponent(parsedSource.owner)}/${encodeURIComponent(parsedSource.repo)}`
+      + `/tar.gz/refs/heads/${encodeURIComponent(defaultBranch)}`;
+    const downloadUrl = new URL(archivePath, GITHUB_CODELOAD_ORIGIN);
     const res = await fetch(downloadUrl, {
       signal: AbortSignal.timeout(30_000),
     });
