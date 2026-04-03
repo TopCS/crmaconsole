@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+	classifyOpenAiModelSwitch,
 	isLikelyOpenAiModelId,
+	needsOpenAiSwitchAcknowledgement,
 	normalizeDenchModelId,
 	resolveActiveChatModelId,
-	shouldMitigateOpenAiSwitch,
 } from "./chat-models";
 
 describe("chat-models", () => {
@@ -43,21 +44,46 @@ describe("chat-models", () => {
 		expect(isLikelyOpenAiModelId("anthropic.claude-sonnet-4-6")).toBe(false);
 	});
 
-	it("flags cross-provider switches into OpenAI for mitigation", () => {
+	it("classifies cross-provider switches into OpenAI", () => {
 		expect(
-			shouldMitigateOpenAiSwitch({
+			classifyOpenAiModelSwitch({
 				sessionModel: "dench-cloud/anthropic.claude-opus-4-6-v1",
 				sessionModelProvider: "anthropic",
 				targetModel: "gpt-5.4",
 			}),
-		).toBe(true);
+		).toBe("unsafe");
 
 		expect(
-			shouldMitigateOpenAiSwitch({
+			classifyOpenAiModelSwitch({
 				sessionModel: "dench-cloud/gpt-5.4",
 				sessionModelProvider: "openai",
 				targetModel: "gpt-5.4",
 			}),
+		).toBe("safe");
+	});
+
+	it("classifies missing session model as unknown for OpenAI targets", () => {
+		expect(
+			classifyOpenAiModelSwitch({
+				sessionModel: null,
+				sessionModelProvider: null,
+				targetModel: "gpt-5.4",
+			}),
+		).toBe("unknown");
+	});
+
+	it("requires acknowledgement for unsafe or unknown with assistant history", () => {
+		expect(
+			needsOpenAiSwitchAcknowledgement("unsafe", false),
+		).toBe(true);
+		expect(
+			needsOpenAiSwitchAcknowledgement("unknown", true),
+		).toBe(true);
+		expect(
+			needsOpenAiSwitchAcknowledgement("unknown", false),
+		).toBe(false);
+		expect(
+			needsOpenAiSwitchAcknowledgement("safe", true),
 		).toBe(false);
 	});
 });

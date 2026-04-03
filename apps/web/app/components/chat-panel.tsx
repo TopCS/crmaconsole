@@ -35,6 +35,9 @@ import {
 	ChatModelSelector,
 } from "./chat-model-selector";
 import {
+	classifyOpenAiModelSwitch,
+	isLikelyOpenAiModelId,
+	needsOpenAiSwitchAcknowledgement,
 	type ChatModelOption,
 	resolveActiveChatModelId,
 } from "@/lib/chat-models";
@@ -909,6 +912,9 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 		const [cloudState, setCloudState] = useState<ChatCloudState | null>(null);
 		const [sessionRuntime, setSessionRuntime] = useState<ChatSessionRuntime | null>(null);
 		const [modelOverride, setModelOverride] = useState<string | null>(null);
+		const [openAiUnsafeSwitchConfirmed, setOpenAiUnsafeSwitchConfirmed] =
+			useState(false);
+		const openAiUnsafeSwitchConfirmedRef = useRef(false);
 
 		// ── Hero state (new chat screen) ──
 		const greeting = "What can I help with?";
@@ -955,7 +961,16 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 		useEffect(() => {
 			setModelOverride(null);
 			setSessionRuntime(null);
+			setOpenAiUnsafeSwitchConfirmed(false);
 		}, [currentSessionId]);
+
+		useEffect(() => {
+			setOpenAiUnsafeSwitchConfirmed(false);
+		}, [modelOverride]);
+
+		useEffect(() => {
+			openAiUnsafeSwitchConfirmedRef.current = openAiUnsafeSwitchConfirmed;
+		}, [openAiUnsafeSwitchConfirmed]);
 
 		// ── Ref-based session ID for transport ──
 		const sessionIdRef = useRef<string | null>(null);
@@ -988,6 +1003,9 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 						if (currentModelOverride) {
 							extra.modelOverride = currentModelOverride;
 						}
+						if (openAiUnsafeSwitchConfirmedRef.current) {
+							extra.acknowledgeUnsafeOpenAiSwitch = true;
+						}
 						if (pendingHtmlRef.current) {
 							extra.userHtml = pendingHtmlRef.current;
 							pendingHtmlRef.current = null;
@@ -1000,6 +1018,49 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 
 		const { messages, sendMessage, status, stop, error, setMessages } =
 			useChat({ transport });
+
+		const hasAssistantHistory = useMemo(
+			() => messages.some((m) => m.role === "assistant"),
+			[messages],
+		);
+
+		const openAiSwitchKind = useMemo(() => {
+			if (!modelOverride || !currentSessionId) {
+				return "safe" as const;
+			}
+			return classifyOpenAiModelSwitch({
+				sessionModel: sessionRuntime?.model ?? null,
+				sessionModelProvider: sessionRuntime?.modelProvider ?? null,
+				targetModel: modelOverride,
+			});
+		}, [
+			modelOverride,
+			currentSessionId,
+			sessionRuntime?.model,
+			sessionRuntime?.modelProvider,
+		]);
+
+		const needsOpenAiSwitchAck = useMemo(
+			() =>
+				Boolean(
+					currentSessionId &&
+						modelOverride &&
+						isLikelyOpenAiModelId(modelOverride) &&
+						needsOpenAiSwitchAcknowledgement(
+							openAiSwitchKind,
+							hasAssistantHistory,
+						),
+				),
+			[
+				currentSessionId,
+				modelOverride,
+				openAiSwitchKind,
+				hasAssistantHistory,
+			],
+		);
+
+		const openAiSwitchBlocked =
+			needsOpenAiSwitchAck && !openAiUnsafeSwitchConfirmed;
 
 		const isStreaming =
 			status === "streaming" ||
@@ -1710,6 +1771,18 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 					return;
 				}
 
+				if (
+					!isSubagentMode &&
+					!gatewaySessionKey &&
+					needsOpenAiSwitchAck &&
+					!openAiUnsafeSwitchConfirmed
+				) {
+					setStreamError(
+						"Confirm the ChatGPT switch below — earlier tool history won’t carry over.",
+					);
+					return;
+				}
+
 				const userText = text.trim();
 				const currentAttachments = [...readyFiles];
 
@@ -1841,6 +1914,10 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 				gatewaySessionKey,
 				attemptReconnect,
 				onConversationActivity,
+				isSubagentMode,
+				needsOpenAiSwitchAck,
+				openAiUnsafeSwitchConfirmed,
+				setMessages,
 			],
 		);
 
@@ -2283,7 +2360,12 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 							<button
 								type="button"
 								onClick={() => editorRef.current?.submit()}
-								disabled={(editorEmpty && attachedFiles.length === 0) || loadingSession}
+								disabled={
+									(editorEmpty && attachedFiles.length === 0) ||
+									loadingSession ||
+									(openAiSwitchBlocked &&
+										(!editorEmpty || attachedFiles.length > 0))
+								}
 								className={`${compact ? "w-6 h-6" : "w-7 h-7"} rounded-full flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed`}
 								style={{
 									background: !editorEmpty || attachedFiles.length > 0 ? "linear-gradient(to top, #0065A2, #0075AA)" : "var(--color-text-muted)",
@@ -2403,11 +2485,46 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 							</h2>
 						) : currentSessionId ? (
 							hasModelPicker ? (
-								<ChatModelSelector
-									models={cloudState?.models ?? []}
-									selectedModel={activeChatModel}
-									onSelect={setModelOverride}
-								/>
+								<div className="min-w-0 w-full max-w-full">
+									<ChatModelSelector
+										models={cloudState?.models ?? []}
+										selectedModel={activeChatModel}
+										onSelect={setModelOverride}
+									/>
+									{needsOpenAiSwitchAck && (
+										<div
+											className="mt-2 rounded-lg border px-3 py-2 text-left"
+											style={{
+												borderColor: "var(--color-border)",
+												background: "color-mix(in srgb, var(--color-accent) 6%, var(--color-surface))",
+											}}
+										>
+											<p className="text-xs leading-snug" style={{ color: "var(--color-text-secondary)" }}>
+												<strong className="font-medium text-[var(--color-text)]">Model switch:</strong>{" "}
+												ChatGPT can’t reuse earlier tool-call history from this chat. Continuing starts a
+												<strong> fresh AI context</strong> for this thread (your saved messages stay here).
+											</p>
+											{!openAiUnsafeSwitchConfirmed ? (
+												<button
+													type="button"
+													className="mt-2 text-xs font-medium rounded-md px-2.5 py-1.5 border transition-opacity hover:opacity-90"
+													style={{
+														borderColor: "var(--color-border-strong)",
+														color: "var(--color-text)",
+														background: "var(--color-surface)",
+													}}
+													onClick={() => setOpenAiUnsafeSwitchConfirmed(true)}
+												>
+													Continue with fresh context
+												</button>
+											) : (
+												<p className="mt-2 text-[11px] font-medium" style={{ color: "var(--color-text-muted)" }}>
+													Ready — you can send your message.
+												</p>
+											)}
+										</div>
+									)}
+								</div>
 							) : (
 								<h2
 									className="text-sm font-semibold"

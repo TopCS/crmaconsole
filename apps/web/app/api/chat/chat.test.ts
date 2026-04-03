@@ -29,6 +29,8 @@ vi.mock("@/lib/workspace", () => ({
 // Mock web-sessions shared module
 vi.mock("@/app/api/web-sessions/shared", () => ({
   getSessionMeta: vi.fn(() => undefined),
+  hasRotatedGatewayThread: vi.fn(() => false),
+  rotateGatewaySessionThreadForModelReset: vi.fn(),
   resolveSessionKey: vi.fn(
     (sessionId: string, fallbackAgentId: string) =>
       `agent:${fallbackAgentId}:web:${sessionId}`,
@@ -70,6 +72,8 @@ describe("Chat API routes", () => {
     }));
     vi.mock("@/app/api/web-sessions/shared", () => ({
       getSessionMeta: vi.fn(() => undefined),
+      hasRotatedGatewayThread: vi.fn(() => false),
+      rotateGatewaySessionThreadForModelReset: vi.fn(),
       resolveSessionKey: vi.fn(
         (sessionId: string, fallbackAgentId: string) =>
           `agent:${fallbackAgentId}:web:${sessionId}`,
@@ -178,7 +182,7 @@ describe("Chat API routes", () => {
       );
     });
 
-    it("blocks unsafe non-OpenAI to ChatGPT session switches with a friendly error", async () => {
+    it("returns JSON when an unsafe OpenAI switch needs acknowledgement", async () => {
       const { getAgentSession } = await import("@/app/api/sessions/shared");
       const { startRun } = await import("@/lib/active-runs");
       vi.mocked(startRun).mockClear();
@@ -196,6 +200,7 @@ describe("Chat API routes", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: [
+            { id: "m0", role: "assistant", parts: [{ type: "text", text: "hi" }] },
             { id: "m1", role: "user", parts: [{ type: "text", text: "switch me" }] },
           ],
           sessionId: "s1",
@@ -206,8 +211,89 @@ describe("Chat API routes", () => {
       const res = await POST(req);
 
       expect(res.status).toBe(409);
-      await expect(res.text()).resolves.toContain("Start a new chat");
+      const body = await res.json() as { code?: string };
+      expect(body.code).toBe("openai_unsafe_switch");
       expect(startRun).not.toHaveBeenCalled();
+    });
+
+    it("rotates gateway thread and starts run when unsafe switch is acknowledged", async () => {
+      const { getAgentSession } = await import("@/app/api/sessions/shared");
+      const {
+        getSessionMeta,
+        rotateGatewaySessionThreadForModelReset,
+      } = await import("@/app/api/web-sessions/shared");
+      const { startRun } = await import("@/lib/active-runs");
+      vi.mocked(startRun).mockClear();
+      vi.mocked(rotateGatewaySessionThreadForModelReset).mockClear();
+      vi.mocked(getAgentSession).mockReturnValue({
+        key: "agent:main:web:s1",
+        sessionId: "s1",
+        updatedAt: Date.now(),
+        model: "dench-cloud/anthropic.claude-opus-4-6-v1",
+        modelProvider: "anthropic",
+      } as never);
+
+      let gatewayThread = "s1";
+      vi.mocked(getSessionMeta).mockImplementation(
+        () =>
+          ({
+            id: "s1",
+            workspaceAgentId: "main",
+            gatewaySessionId: gatewayThread === "s1" ? undefined : gatewayThread,
+          }) as never,
+      );
+      vi.mocked(rotateGatewaySessionThreadForModelReset).mockImplementation(() => {
+        gatewayThread = "fresh-thread-id";
+      });
+
+      const { POST } = await import("./route.js");
+      const req = new Request("http://localhost/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [
+            { id: "m0", role: "assistant", parts: [{ type: "text", text: "hi" }] },
+            { id: "m1", role: "user", parts: [{ type: "text", text: "go" }] },
+          ],
+          sessionId: "s1",
+          modelOverride: "gpt-5.4",
+          acknowledgeUnsafeOpenAiSwitch: true,
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.ok).toBe(true);
+      expect(rotateGatewaySessionThreadForModelReset).toHaveBeenCalledWith("s1");
+      expect(startRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "s1",
+          agentSessionId: "fresh-thread-id",
+          modelOverride: "gpt-5.4",
+        }),
+      );
+    });
+
+    it("allows first user message with OpenAI override when session metadata is unknown", async () => {
+      const { getAgentSession } = await import("@/app/api/sessions/shared");
+      const { startRun } = await import("@/lib/active-runs");
+      vi.mocked(startRun).mockClear();
+      vi.mocked(getAgentSession).mockReturnValue(undefined);
+
+      const { POST } = await import("./route.js");
+      const req = new Request("http://localhost/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [
+            { id: "m1", role: "user", parts: [{ type: "text", text: "hello" }] },
+          ],
+          sessionId: "s1",
+          modelOverride: "gpt-5.4",
+        }),
+      });
+
+      await POST(req);
+      expect(startRun).toHaveBeenCalled();
     });
 
     it("maps partial tool output into AI SDK preliminary output chunks", async () => {

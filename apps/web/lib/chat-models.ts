@@ -51,7 +51,10 @@ export function resolveActiveChatModelId({
 	);
 }
 
-export function shouldMitigateOpenAiSwitch({
+/** Whether switching `targetModel` (OpenAI) can reuse existing gateway tool-call history safely. */
+export type OpenAiSwitchClassification = "safe" | "unsafe" | "unknown";
+
+export function classifyOpenAiModelSwitch({
 	sessionModel,
 	sessionModelProvider,
 	targetModel,
@@ -59,20 +62,38 @@ export function shouldMitigateOpenAiSwitch({
 	sessionModel: string | null | undefined;
 	sessionModelProvider: string | null | undefined;
 	targetModel: string | null | undefined;
-}): boolean {
+}): OpenAiSwitchClassification {
 	if (!isLikelyOpenAiModelId(targetModel)) {
-		return false;
+		return "safe";
 	}
 
 	const provider = sessionModelProvider?.trim().toLowerCase();
 	if (provider) {
-		return provider !== "openai";
+		return provider === "openai" ? "safe" : "unsafe";
 	}
 
 	const currentModel = normalizeDenchModelId(sessionModel);
 	if (!currentModel) {
-		return false;
+		return "unknown";
 	}
 
-	return !isLikelyOpenAiModelId(currentModel);
+	return isLikelyOpenAiModelId(currentModel) ? "safe" : "unsafe";
 }
+
+/**
+ * If true, the user should acknowledge a fresh gateway context before sending
+ * with an OpenAI model override.
+ */
+export function needsOpenAiSwitchAcknowledgement(
+	kind: OpenAiSwitchClassification,
+	hasAssistantHistory: boolean,
+): boolean {
+	if (kind === "unsafe") {
+		return true;
+	}
+	if (kind === "unknown") {
+		return hasAssistantHistory;
+	}
+	return false;
+}
+
