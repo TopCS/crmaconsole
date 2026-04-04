@@ -35,34 +35,25 @@ const FEATURED_SLUGS = [
 const MAX_CATEGORY_PILLS = 6;
 const MARKETPLACE_PAGE_SIZE = 24;
 
-type IntegrationsTab = "connected" | "marketplace";
-
-function HomeIcon() {
+function SearchIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-      <polyline points="9 22 9 12 15 12 15 22" />
+    <svg
+      className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ color: "var(--color-text-muted)" }}
+    >
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   );
 }
-
-function StorefrontIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z" />
-      <path d="M3 9l1.5-5h15L21 9" />
-      <path d="M12 9v12" />
-      <path d="M3 9c0 1.66 1.34 3 3 3s3-1.34 3-3" />
-      <path d="M9 9c0 1.66 1.34 3 3 3s3-1.34 3-3" />
-      <path d="M15 9c0 1.66 1.34 3 3 3s3-1.34 3-3" />
-    </svg>
-  );
-}
-
-const TABS: { id: IntegrationsTab; label: string; icon: () => React.JSX.Element }[] = [
-  { id: "connected", label: "Connected", icon: HomeIcon },
-  { id: "marketplace", label: "Marketplace", icon: StorefrontIcon },
-];
 
 type ComposioAppsState = {
   connectedToolkits: ComposioToolkit[];
@@ -192,9 +183,8 @@ export function ComposioAppsSection({
   eligible: boolean;
   lockBadge: string | null;
 }) {
-  const [activeTab, setActiveTab] = useState<IntegrationsTab>("connected");
   const [state, setState] = useState<ComposioAppsState>(buildInitialState);
-  const [search, setSearch] = useState("");
+  const [marketplaceSearch, setMarketplaceSearch] = useState("");
   const [debouncedMarketplaceSearch, setDebouncedMarketplaceSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [selectedToolkit, setSelectedToolkit] = useState<ComposioToolkit | null>(null);
@@ -355,9 +345,9 @@ export function ComposioAppsSection({
 
   const loadMarketplace = useCallback(async (options?: { reset?: boolean }) => {
     const reset = options?.reset ?? false;
-    const marketplaceSearch = debouncedMarketplaceSearch.trim();
-    const queryKey = `${marketplaceSearch.toLowerCase()}::${activeCategory ?? ""}`;
-    const preserveResults = reset && activeTab === "marketplace" && state.marketplaceReady;
+    const searchTerm = debouncedMarketplaceSearch.trim();
+    const queryKey = `${searchTerm.toLowerCase()}::${activeCategory ?? ""}`;
+    const preserveResults = reset && state.marketplaceReady;
 
     if (reset) {
       marketplaceRequestKeyRef.current = queryKey;
@@ -369,7 +359,7 @@ export function ComposioAppsSection({
         marketplaceLoading: true,
         marketplaceReady: preserveResults,
         loadingMore: false,
-        error: activeTab === "marketplace" ? null : prev.error,
+        error: null,
       }));
     } else {
       setState((prev) => ({ ...prev, loadingMore: true }));
@@ -378,7 +368,7 @@ export function ComposioAppsSection({
     try {
       const currentCursor = reset ? null : state.marketplaceCursor;
       const result = await fetchToolkitsPage({
-        search: marketplaceSearch || undefined,
+        search: searchTerm || undefined,
         category: activeCategory ?? undefined,
         cursor: currentCursor,
         limit: MARKETPLACE_PAGE_SIZE,
@@ -393,7 +383,7 @@ export function ComposioAppsSection({
           ? result.items
           : dedupeToolkits([...prev.marketplaceToolkits, ...result.items]);
         const featuredSet = new Set(FEATURED_SLUGS);
-        const ordered = (marketplaceSearch || activeCategory)
+        const ordered = (searchTerm || activeCategory)
           ? combined
           : [
               ...combined
@@ -410,7 +400,7 @@ export function ComposioAppsSection({
           marketplaceLoading: false,
           marketplaceReady: true,
           loadingMore: false,
-          error: activeTab === "marketplace" ? null : prev.error,
+          error: null,
         };
       });
     } catch (err) {
@@ -422,24 +412,17 @@ export function ComposioAppsSection({
         marketplaceLoading: false,
         marketplaceReady: true,
         loadingMore: false,
-        error: activeTab === "marketplace"
-          ? (err instanceof Error ? err.message : "Failed to load apps.")
-          : prev.error,
+        error: err instanceof Error ? err.message : "Failed to load apps.",
       }));
     }
-  }, [activeCategory, activeTab, debouncedMarketplaceSearch, fetchToolkitsPage, state.marketplaceCursor, state.marketplaceReady]);
+  }, [activeCategory, debouncedMarketplaceSearch, fetchToolkitsPage, state.marketplaceCursor, state.marketplaceReady]);
 
   useEffect(() => {
-    if (activeTab !== "marketplace") {
-      setDebouncedMarketplaceSearch(search);
-      return;
-    }
-
     const timeoutId = window.setTimeout(() => {
-      setDebouncedMarketplaceSearch(search);
+      setDebouncedMarketplaceSearch(marketplaceSearch);
     }, 300);
     return () => window.clearTimeout(timeoutId);
-  }, [activeTab, search]);
+  }, [marketplaceSearch]);
 
   useEffect(() => {
     if (eligible) {
@@ -455,7 +438,7 @@ export function ComposioAppsSection({
   }, [eligible, fetchData]);
 
   useEffect(() => {
-    if (!eligible || state.loading || activeTab !== "marketplace") {
+    if (!eligible || state.loading) {
       return;
     }
 
@@ -465,7 +448,6 @@ export function ComposioAppsSection({
     }
   }, [
     activeCategory,
-    activeTab,
     eligible,
     loadMarketplace,
     debouncedMarketplaceSearch,
@@ -524,29 +506,12 @@ export function ComposioAppsSection({
   );
 
   const connectedToolkits = useMemo(
-    () => {
-      const q = search.trim().toLowerCase();
-      return dedupeToolkits([...state.connectedToolkits, ...optimisticConnectedToolkits])
-        .filter((toolkit) => {
-          const slug = normalizeComposioToolkitSlug(toolkit.slug);
-          return activeAccountsByToolkit.has(slug) || optimisticConnectedToolkitSlugs.has(slug);
-        })
-        .filter((toolkit) => {
-          if (!q) {
-            return true;
-          }
-          return toolkit.name.toLowerCase().includes(q)
-            || toolkit.slug.toLowerCase().includes(q)
-            || toolkit.description.toLowerCase().includes(q);
-        });
-    },
-    [
-      activeAccountsByToolkit,
-      optimisticConnectedToolkits,
-      optimisticConnectedToolkitSlugs,
-      search,
-      state.connectedToolkits,
-    ],
+    () => dedupeToolkits([...state.connectedToolkits, ...optimisticConnectedToolkits])
+      .filter((toolkit) => {
+        const slug = normalizeComposioToolkitSlug(toolkit.slug);
+        return activeAccountsByToolkit.has(slug) || optimisticConnectedToolkitSlugs.has(slug);
+      }),
+    [activeAccountsByToolkit, optimisticConnectedToolkits, optimisticConnectedToolkitSlugs, state.connectedToolkits],
   );
 
   const marketplaceToolkits = useMemo(() => {
@@ -629,10 +594,8 @@ export function ComposioAppsSection({
         void fetchMcpStatus("probe_live_agent");
       }, 300);
     }
-    if (activeTab === "marketplace") {
-      void loadMarketplace({ reset: true });
-    }
-  }, [activeTab, fetchData, fetchMcpStatus, loadMarketplace, state.connectedToolkits, state.marketplaceToolkits]);
+    void loadMarketplace({ reset: true });
+  }, [fetchData, fetchMcpStatus, loadMarketplace, state.connectedToolkits, state.marketplaceToolkits]);
 
   const handleRepairMcp = useCallback(async () => {
     setRepairingMcp(true);
@@ -661,7 +624,6 @@ export function ComposioAppsSection({
   useEffect(() => {
     if (
       !eligible
-      || activeTab !== "marketplace"
       || state.loading
       || state.marketplaceLoading
       || state.loadingMore
@@ -682,7 +644,6 @@ export function ComposioAppsSection({
     observer.observe(node);
     return () => observer.disconnect();
   }, [
-    activeTab,
     eligible,
     loadMarketplace,
     state.loading,
@@ -724,93 +685,14 @@ export function ComposioAppsSection({
     );
   }
 
+  const trimmedSearch = debouncedMarketplaceSearch.trim();
+
   return (
     <div>
-      {/* Tab bar */}
-      <div
-        className="flex w-fit items-center gap-1 mb-6 rounded-xl p-1"
-        style={{ background: "var(--color-surface-hover)" }}
-      >
-        {TABS.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className="px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer flex items-center gap-1.5"
-              style={{
-                background: activeTab === tab.id ? "var(--color-surface)" : "transparent",
-                color: activeTab === tab.id ? "var(--color-text)" : "var(--color-text-muted)",
-                boxShadow: activeTab === tab.id ? "var(--shadow-sm)" : "none",
-              }}
-            >
-              <Icon />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Search */}
-      <div className="mb-4">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={activeTab === "connected" ? "Filter connected apps..." : "Search marketplace..."}
-          className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-          style={{
-            background: "var(--color-surface)",
-            border: "1px solid var(--color-border)",
-            color: "var(--color-text)",
-          }}
-        />
-      </div>
-
-      {/* Category pills (marketplace only) */}
-      {activeTab === "marketplace" && displayCategories.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            onClick={() => setActiveCategory(null)}
-            className="rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer"
-            style={{
-              background: !activeCategory ? "var(--color-accent)" : "var(--color-surface)",
-              color: !activeCategory ? "var(--color-bg, #fff)" : "var(--color-text-muted)",
-              border: !activeCategory ? "none" : "1px solid var(--color-border)",
-            }}
-          >
-            All
-          </button>
-          {displayCategories.map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
-              className="rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer"
-              style={{
-                background: activeCategory === cat ? "var(--color-accent)" : "var(--color-surface)",
-                color: activeCategory === cat ? "var(--color-bg, #fff)" : "var(--color-text-muted)",
-                border: activeCategory === cat ? "none" : "1px solid var(--color-border)",
-              }}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {activeTab === "marketplace" && state.marketplaceLoading && state.marketplaceReady && (
-        <div className="mb-4 text-xs" style={{ color: "var(--color-text-muted)" }}>
-          Searching apps...
-        </div>
-      )}
-
-      {/* MCP status (collapsed into a small bar) */}
+      {/* MCP status bar */}
       {(statusError || (mcpStatus && mcpStatus.summary.level !== "healthy")) && (
         <div
-          className="mb-4 flex items-start justify-between gap-3 rounded-xl px-3 py-2 text-xs"
+          className="mb-6 flex items-start justify-between gap-3 rounded-xl px-3 py-2 text-xs"
           style={{
             background: "color-mix(in srgb, var(--color-error, #ef4444) 8%, transparent)",
             color: "var(--color-error, #ef4444)",
@@ -846,7 +728,8 @@ export function ComposioAppsSection({
         </div>
       )}
 
-      {(state.loading || (activeTab === "marketplace" && state.marketplaceLoading && !state.marketplaceReady)) && (
+      {/* Initial loading */}
+      {state.loading && (
         <div className="flex items-center justify-center py-16">
           <div
             className="w-6 h-6 border-2 rounded-full animate-spin"
@@ -855,7 +738,8 @@ export function ComposioAppsSection({
         </div>
       )}
 
-      {!state.loading && !(activeTab === "marketplace" && state.marketplaceLoading && !state.marketplaceReady) && state.error && (
+      {/* Error state */}
+      {!state.loading && state.error && (
         <div
           className="p-8 text-center rounded-2xl"
           style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}
@@ -869,25 +753,171 @@ export function ComposioAppsSection({
         </div>
       )}
 
-      {!state.loading && !state.error && activeTab === "connected" && (
-        <ConnectedTab
-          toolkits={connectedToolkits}
-          activeAccountsByToolkit={activeAccountsByToolkit}
-          connectionsByToolkit={connectionsByToolkit}
-          onAppClick={handleAppClick}
-        />
-      )}
+      {!state.loading && !state.error && (
+        <>
+          {/* ─── Your Apps ─── */}
+          {connectedToolkits.length > 0 && (
+            <section className="mb-10">
+              <div className="flex items-baseline gap-2.5 mb-4">
+                <h2
+                  className="text-lg font-bold tracking-tight"
+                  style={{ color: "var(--color-text)" }}
+                >
+                  Your Apps
+                </h2>
+                <span
+                  className="text-[11px] font-medium rounded-full px-2 py-0.5"
+                  style={{
+                    background: "var(--color-surface-hover)",
+                    color: "var(--color-text-muted)",
+                  }}
+                >
+                  {connectedToolkits.length}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {connectedToolkits.map((toolkit) => {
+                  const toolkitSlug = normalizeComposioToolkitSlug(toolkit.slug);
+                  const activeConns = activeAccountsByToolkit.get(toolkitSlug) ?? [];
+                  const totalConns = connectionsByToolkit.get(toolkitSlug)?.length ?? 0;
+                  return (
+                    <ComposioAppCard
+                      key={toolkit.slug}
+                      toolkit={toolkit}
+                      activeConnections={activeConns.length}
+                      totalConnections={totalConns}
+                      mode="connected"
+                      onClick={() => handleAppClick(toolkit)}
+                    />
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
-      {!state.loading && !state.error && activeTab === "marketplace" && (
-        <MarketplaceTab
-          toolkits={marketplaceToolkits}
-          hasMore={Boolean(state.marketplaceCursor)}
-          loadingMore={state.loadingMore}
-          loadMoreRef={loadMoreRef}
-          searchQuery={debouncedMarketplaceSearch}
-          activeCategory={activeCategory}
-          onAppClick={handleAppClick}
-        />
+          {/* ─── Discover ─── */}
+          <section>
+            <h2
+              className="text-lg font-bold tracking-tight mb-4"
+              style={{ color: "var(--color-text)" }}
+            >
+              Discover
+            </h2>
+
+            {/* Search */}
+            <div className="relative mb-4">
+              <SearchIcon />
+              <input
+                type="text"
+                value={marketplaceSearch}
+                onChange={(e) => setMarketplaceSearch(e.target.value)}
+                placeholder="Search apps..."
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none transition-shadow focus:shadow-[0_0_0_3px_rgba(0,122,255,0.12)]"
+                style={{
+                  background: "var(--color-surface-hover)",
+                  color: "var(--color-text)",
+                }}
+              />
+            </div>
+
+            {/* Category pills */}
+            {displayCategories.length > 0 && (
+              <div className="mb-4 flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveCategory(null)}
+                  className="rounded-full px-3 py-1 text-[11px] font-medium transition-colors cursor-pointer"
+                  style={{
+                    background: !activeCategory ? "var(--color-accent)" : "var(--color-surface)",
+                    color: !activeCategory ? "var(--color-bg, #fff)" : "var(--color-text-muted)",
+                    border: `1px solid ${!activeCategory ? "var(--color-accent)" : "var(--color-border)"}`,
+                  }}
+                >
+                  All
+                </button>
+                {displayCategories.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
+                    className="rounded-full px-3 py-1 text-[11px] font-medium transition-colors cursor-pointer"
+                    style={{
+                      background: activeCategory === cat ? "var(--color-accent)" : "var(--color-surface)",
+                      color: activeCategory === cat ? "var(--color-bg, #fff)" : "var(--color-text-muted)",
+                      border: `1px solid ${activeCategory === cat ? "var(--color-accent)" : "var(--color-border)"}`,
+                    }}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Search loading indicator */}
+            {state.marketplaceLoading && state.marketplaceReady && (
+              <div className="mb-4 text-xs" style={{ color: "var(--color-text-muted)" }}>
+                Searching...
+              </div>
+            )}
+
+            {/* Initial marketplace loading */}
+            {!state.marketplaceReady && !state.loading && (
+              <div className="flex items-center justify-center py-12">
+                <div
+                  className="w-5 h-5 border-2 rounded-full animate-spin"
+                  style={{ borderColor: "var(--color-border)", borderTopColor: "var(--color-accent)" }}
+                />
+              </div>
+            )}
+
+            {/* Marketplace grid */}
+            {state.marketplaceReady && marketplaceToolkits.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {marketplaceToolkits.map((toolkit) => (
+                  <ComposioAppCard
+                    key={toolkit.slug}
+                    toolkit={toolkit}
+                    activeConnections={0}
+                    mode="marketplace"
+                    onClick={() => handleAppClick(toolkit)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Empty state */}
+            {state.marketplaceReady && !state.marketplaceLoading && marketplaceToolkits.length === 0 && (
+              <div
+                className="p-8 text-center rounded-2xl"
+                style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}
+              >
+                <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+                  {trimmedSearch
+                    ? `No apps found for "${trimmedSearch}".`
+                    : activeCategory
+                      ? `No apps found in "${activeCategory}".`
+                      : "No apps found."}
+                </p>
+                {(trimmedSearch || activeCategory) && (
+                  <p className="mt-2 text-xs" style={{ color: "var(--color-text-muted)" }}>
+                    Try clearing search or category filters.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Infinite scroll trigger */}
+            {(Boolean(state.marketplaceCursor) || state.loadingMore) && (
+              <div
+                ref={loadMoreRef}
+                className="flex items-center justify-center py-6 text-xs"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                {state.loadingMore ? "Loading more apps..." : "Scroll to load more"}
+              </div>
+            )}
+          </section>
+        </>
       )}
 
       <ComposioConnectModal
@@ -897,116 +927,6 @@ export function ComposioAppsSection({
         onOpenChange={setModalOpen}
         onConnectionChange={handleConnectionChange}
       />
-    </div>
-  );
-}
-
-function ConnectedTab({
-  toolkits,
-  activeAccountsByToolkit,
-  connectionsByToolkit,
-  onAppClick,
-}: {
-  toolkits: ComposioToolkit[];
-  activeAccountsByToolkit: Map<string, unknown[]>;
-  connectionsByToolkit: Map<string, unknown[]>;
-  onAppClick: (toolkit: ComposioToolkit) => void;
-}) {
-  if (toolkits.length === 0) {
-    return (
-      <div
-        className="p-8 text-center rounded-2xl"
-        style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}
-      >
-        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-          No connected apps yet. Head to the Marketplace tab to connect your first app.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {toolkits.map((toolkit) => {
-        const toolkitSlug = normalizeComposioToolkitSlug(toolkit.slug);
-        const activeConnections = activeAccountsByToolkit.get(toolkitSlug) ?? [];
-        const totalConnections = connectionsByToolkit.get(toolkitSlug)?.length ?? 0;
-        return (
-          <ComposioAppCard
-            key={toolkit.slug}
-            toolkit={toolkit}
-            activeConnections={activeConnections.length}
-            totalConnections={totalConnections}
-            mode="connected"
-            onClick={() => onAppClick(toolkit)}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function MarketplaceTab({
-  toolkits,
-  hasMore,
-  loadingMore,
-  loadMoreRef,
-  searchQuery,
-  activeCategory,
-  onAppClick,
-}: {
-  toolkits: ComposioToolkit[];
-  hasMore: boolean;
-  loadingMore: boolean;
-  loadMoreRef: { current: HTMLDivElement | null };
-  searchQuery: string;
-  activeCategory: string | null;
-  onAppClick: (toolkit: ComposioToolkit) => void;
-}) {
-  if (toolkits.length === 0) {
-    const trimmedSearch = searchQuery.trim();
-    const hasSearch = trimmedSearch.length > 0;
-    const hasCategory = Boolean(activeCategory);
-    const message = hasSearch
-      ? `No apps found for "${trimmedSearch}".`
-      : hasCategory
-        ? `No apps found in "${activeCategory}".`
-        : "No apps found.";
-    return (
-      <div
-        className="p-8 text-center rounded-2xl"
-        style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}
-      >
-        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-          {message}
-        </p>
-        {(hasSearch || hasCategory) && (
-          <p className="mt-2 text-xs" style={{ color: "var(--color-text-muted)" }}>
-            Try clearing search or category filters.
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {toolkits.map((toolkit) => (
-          <ComposioAppCard
-            key={toolkit.slug}
-            toolkit={toolkit}
-            activeConnections={0}
-            mode="marketplace"
-            onClick={() => onAppClick(toolkit)}
-          />
-        ))}
-      </div>
-      {(hasMore || loadingMore) && (
-        <div ref={loadMoreRef} className="flex items-center justify-center py-6 text-xs" style={{ color: "var(--color-text-muted)" }}>
-          {loadingMore ? "Loading more apps..." : "Scroll to load more"}
-        </div>
-      )}
     </div>
   );
 }

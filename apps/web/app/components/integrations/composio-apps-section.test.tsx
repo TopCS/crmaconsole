@@ -232,24 +232,21 @@ describe("ComposioAppsSection", () => {
     installFetchMock();
   });
 
-  it("shows connected apps in the Connected tab and paged apps in Marketplace", async () => {
-    const user = userEvent.setup();
+  it("shows connected apps in Your Apps and marketplace apps in Discover", async () => {
     render(<ComposioAppsSection eligible lockBadge={null} />);
 
     await waitFor(() => {
       expect(screen.getByText("Gmail")).toBeInTheDocument();
     });
 
-    expect(screen.queryByRole("button", { name: "All" })).not.toBeInTheDocument();
-    expect(screen.getByText("Gmail")).toBeInTheDocument();
+    expect(screen.getByText("Your Apps")).toBeInTheDocument();
     expect(screen.getByText("GitHub")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Marketplace" }));
 
     await waitFor(() => {
       expect(screen.getByText("Notion")).toBeInTheDocument();
     });
 
+    expect(screen.getByText("Discover")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "All" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Knowledge" })).toBeInTheDocument();
 
@@ -268,17 +265,11 @@ describe("ComposioAppsSection", () => {
     render(<ComposioAppsSection eligible lockBadge={null} />);
 
     await waitFor(() => {
-      expect(screen.getByText("Gmail")).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByRole("button", { name: "Marketplace" }));
-
-    await waitFor(() => {
       expect(screen.getByText("Notion")).toBeInTheDocument();
     });
 
     toolkitRequestUrls = [];
-    await user.type(screen.getByPlaceholderText("Search marketplace..."), "abc");
+    await user.type(screen.getByPlaceholderText("Search apps..."), "abc");
 
     expect(screen.getByText("Notion")).toBeInTheDocument();
 

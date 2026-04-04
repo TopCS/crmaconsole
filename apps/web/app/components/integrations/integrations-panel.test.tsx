@@ -65,7 +65,7 @@ describe("IntegrationsPanel", () => {
     }) as typeof fetch;
   }
 
-  it("renders the integrations heading and shows tabs", async () => {
+  it("renders the integrations heading and shows unified sections", async () => {
     mockFetch();
 
     render(<IntegrationsPanel />);
@@ -73,23 +73,14 @@ describe("IntegrationsPanel", () => {
     expect(screen.getByRole("heading", { name: "Integrations" })).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByText("Connected")).toBeInTheDocument();
+      expect(screen.getByText("Discover")).toBeInTheDocument();
     });
-
-    expect(screen.getByText("Marketplace")).toBeInTheDocument();
   });
 
-  it("shows the Marketplace tab with apps", async () => {
-    const user = userEvent.setup();
+  it("shows marketplace apps in the Discover section", async () => {
     mockFetch();
 
     render(<IntegrationsPanel />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Marketplace")).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByText("Marketplace"));
 
     await waitFor(() => {
       expect(screen.getByText("Gmail")).toBeInTheDocument();

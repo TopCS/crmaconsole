@@ -34,19 +34,36 @@ export function IntegrationsPanel({ embedded }: { embedded?: boolean } = {}) {
   return (
     <div className={embedded ? "" : ""}>
       {!embedded && (
-        <div className="mb-6">
-          <h1
-            className="font-instrument text-3xl tracking-tight"
-            style={{ color: "var(--color-text)" }}
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1
+              className="font-instrument text-3xl tracking-tight"
+              style={{ color: "var(--color-text)" }}
+            >
+              Integrations
+            </h1>
+            <p
+              className="mt-1 text-sm"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              Connect third-party apps to your Dench Cloud workspace.
+            </p>
+          </div>
+          <a
+            className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-opacity hover:opacity-80"
+            style={{
+              background: "var(--color-surface)",
+              border: "1px solid var(--color-border)",
+              color: "var(--color-text-muted)",
+            }}
           >
-            Integrations
-          </h1>
-          <p
-            className="mt-1 text-sm"
-            style={{ color: "var(--color-text-muted)" }}
-          >
-            Connect third-party apps via Composio.
-          </p>
+            Powered by
+            <img
+              src="/logo/composio.webp"
+              alt="Composio"
+              className="h-10 w-auto"
+            />
+          </a>
         </div>
       )}
 
