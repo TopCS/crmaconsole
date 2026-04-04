@@ -147,10 +147,7 @@ describe("Chat API routes", () => {
       expect(subscribeToRun).toHaveBeenCalledWith(
         "s1",
         expect.any(Function),
-        expect.objectContaining({
-          replay: false,
-          replayTerminalBuffer: true,
-        }),
+        { replay: true },
       );
     });
 

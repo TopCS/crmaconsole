@@ -221,6 +221,7 @@ describe("active-runs", () => {
 				"s-model",
 				undefined,
 				"gpt-5.4",
+				undefined,
 			);
 		});
 
