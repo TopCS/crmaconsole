@@ -43,6 +43,8 @@ function orgAvatarUrl(source: string): string {
   return `https://github.com/${org}.png?size=80`;
 }
 
+const WORKSPACE_SKILL_ICON_SRC = "/icons/folder.png";
+
 function AvatarImg({ source, size = 36, emoji, isManaged }: { source: string; size?: number; emoji?: string; isManaged?: boolean }) {
   const [failed, setFailed] = useState(false);
   const dim = `${size}px`;
@@ -74,6 +76,20 @@ function AvatarImg({ source, size = 36, emoji, isManaged }: { source: string; si
       >
         {emoji}
       </div>
+    );
+  }
+
+  if (source === "workspace") {
+    return (
+      <img
+        src={WORKSPACE_SKILL_ICON_SRC}
+        alt=""
+        width={size}
+        height={size}
+        className="rounded-xl shrink-0"
+        style={{ width: dim, height: dim, objectFit: "cover" }}
+        loading="lazy"
+      />
     );
   }
 
