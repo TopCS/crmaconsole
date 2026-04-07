@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { AnyAgentTool } from "openclaw/plugin-sdk";
+import { readDenchAuthProfileKey } from "../shared/dench-auth.js";
 import { buildComposioMcpServerConfig } from "./config-patch.js";
 
 type UnknownRecord = Record<string, unknown>;
@@ -111,22 +112,8 @@ function stripRuntimeComposioServer(api: any): { url?: string; authorization?: s
   return captured;
 }
 
-function resolveConfiguredApiKey(api: any): string | undefined {
-  const provider = asRecord(api?.config?.models?.providers?.["dench-cloud"]);
-  const providerKey = readString(provider?.apiKey)?.trim();
-  if (providerKey) {
-    return providerKey;
-  }
-
-  const envVars = ["DENCH_CLOUD_API_KEY", "DENCH_API_KEY"] as const;
-  for (const envVar of envVars) {
-    const value = process.env[envVar]?.trim();
-    if (value) {
-      return value;
-    }
-  }
-
-  return undefined;
+function resolveConfiguredApiKey(_api: any): string | undefined {
+  return readDenchAuthProfileKey();
 }
 
 function resolveComposioServerConfig(api: any, fallbackGatewayUrl: string) {

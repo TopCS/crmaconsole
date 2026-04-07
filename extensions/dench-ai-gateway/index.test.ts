@@ -1,12 +1,28 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import register from "./index.js";
 
+function writeAuthProfiles(stateDir: string, key: string): void {
+  const authDir = path.join(stateDir, "agents", "main", "agent");
+  mkdirSync(authDir, { recursive: true });
+  writeFileSync(
+    path.join(authDir, "auth-profiles.json"),
+    JSON.stringify({
+      version: 1,
+      profiles: {
+        "dench-cloud:default": { type: "api_key", provider: "dench-cloud", key },
+      },
+    }),
+  );
+}
+
 describe("dench-ai-gateway composio bridge", () => {
   const originalFetch = globalThis.fetch;
+  const originalStateDir = process.env.OPENCLAW_STATE_DIR;
   let workspaceDir: string | undefined;
+  let stateDir: string | undefined;
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
@@ -15,9 +31,22 @@ describe("dench-ai-gateway composio bridge", () => {
       rmSync(workspaceDir, { recursive: true, force: true });
       workspaceDir = undefined;
     }
+    if (stateDir) {
+      rmSync(stateDir, { recursive: true, force: true });
+      stateDir = undefined;
+    }
+    if (originalStateDir !== undefined) {
+      process.env.OPENCLAW_STATE_DIR = originalStateDir;
+    } else {
+      delete process.env.OPENCLAW_STATE_DIR;
+    }
   });
 
   it("strips the raw composio MCP server and registers curated direct tools", async () => {
+    stateDir = mkdtempSync(path.join(os.tmpdir(), "dench-ai-gateway-state-"));
+    process.env.OPENCLAW_STATE_DIR = stateDir;
+    writeAuthProfiles(stateDir, "dc-key");
+
     workspaceDir = mkdtempSync(path.join(os.tmpdir(), "dench-ai-gateway-"));
     writeFileSync(
       path.join(workspaceDir, "composio-tool-index.json"),
@@ -194,6 +223,10 @@ describe("dench-ai-gateway composio bridge", () => {
   });
 
   it("falls back to a permissive object schema when the index lacks input_schema", () => {
+    stateDir = mkdtempSync(path.join(os.tmpdir(), "dench-ai-gateway-state-"));
+    process.env.OPENCLAW_STATE_DIR = stateDir;
+    writeAuthProfiles(stateDir, "dc-key");
+
     workspaceDir = mkdtempSync(path.join(os.tmpdir(), "dench-ai-gateway-"));
     writeFileSync(
       path.join(workspaceDir, "composio-tool-index.json"),
