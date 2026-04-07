@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { AnyAgentTool, OpenClawPluginApi } from "openclaw/plugin-sdk";
+import { readDenchAuthProfileKey, resolveDenchGatewayUrl } from "../shared/dench-auth.js";
 import {
   loadComposioToolCheatSheetMarkdown,
   readComposioMcpStatusFile,
@@ -444,16 +445,12 @@ function chooseBestTool(
 function resolveGatewayUrlFromApi(api: OpenClawPluginApi): string | null {
   const plugins = asRecord(asRecord(api?.config)?.plugins)?.entries;
   const denchGateway = asRecord(asRecord(plugins)?.["dench-ai-gateway"]);
-  const configured = readString(asRecord(denchGateway?.config)?.gatewayUrl);
-  return configured ?? process.env.DENCH_GATEWAY_URL?.trim() ?? null;
+  const gwConfig = asRecord(denchGateway?.config);
+  return resolveDenchGatewayUrl(gwConfig as Record<string, unknown> | undefined);
 }
 
-function resolveComposioApiKeyFromApi(api: OpenClawPluginApi): string | null {
-  const provider = asRecord(asRecord(asRecord(api?.config)?.models)?.providers)?.["dench-cloud"];
-  return readString(asRecord(provider)?.apiKey)
-    ?? process.env.DENCH_CLOUD_API_KEY?.trim()
-    ?? process.env.DENCH_API_KEY?.trim()
-    ?? null;
+function resolveComposioApiKeyFromApi(_api: OpenClawPluginApi): string | null {
+  return readDenchAuthProfileKey() ?? null;
 }
 
 function extractToolsFromJsonRpcMessage(payload: unknown): ResolverMcpTool[] {

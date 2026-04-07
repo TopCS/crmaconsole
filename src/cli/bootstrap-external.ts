@@ -751,6 +751,13 @@ async function syncBundledPlugins(params: {
           ...plugin.config,
         };
       }
+      if (plugin.pluginId === "apollo-enrichment" || plugin.pluginId === "exa-search") {
+        const cfg = asRecord(existingEntry.config);
+        if (cfg && "apiKey" in cfg) {
+          delete cfg.apiKey;
+          existingEntry.config = cfg;
+        }
+      }
       if (Object.keys(existingEntry).length > 0) {
         entries[plugin.pluginId] = existingEntry;
       }
@@ -766,6 +773,12 @@ async function syncBundledPlugins(params: {
         installRecord.version = version;
       }
       installs[plugin.pluginId] = installRecord;
+    }
+
+    const sharedSrc = path.join(packageRoot, "extensions", "shared");
+    if (existsSync(sharedSrc)) {
+      const sharedDest = path.join(params.stateDir, "extensions", "shared");
+      cpSync(sharedSrc, sharedDest, { recursive: true, force: true });
     }
 
     pluginsConfig.allow = uniqueStrings(nextAllow);
@@ -1973,6 +1986,43 @@ function resolveModelProvider(stateDir: string): string | undefined {
   return undefined;
 }
 
+function authProfilesPath(stateDir: string): string {
+  return path.join(stateDir, "agents", "main", "agent", "auth-profiles.json");
+}
+
+function readAuthProfileKey(stateDir: string): string | undefined {
+  const authPath = authProfilesPath(stateDir);
+  try {
+    if (!existsSync(authPath)) return undefined;
+    const raw = json5.parse(readFileSync(authPath, "utf-8"));
+    const key = raw?.profiles?.["dench-cloud:default"]?.key;
+    return typeof key === "string" && key.trim() ? key.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeAuthProfileKey(stateDir: string, apiKey: string): void {
+  const authPath = authProfilesPath(stateDir);
+  let raw: Record<string, unknown> = { version: 1, profiles: {} };
+  try {
+    if (existsSync(authPath)) {
+      raw = json5.parse(readFileSync(authPath, "utf-8"));
+    }
+  } catch { /* fresh file */ }
+
+  const profiles = ((raw.profiles ?? {}) as Record<string, unknown>);
+  profiles["dench-cloud:default"] = {
+    type: "api_key",
+    provider: "dench-cloud",
+    key: apiKey,
+  };
+  raw.profiles = profiles;
+
+  mkdirSync(path.dirname(authPath), { recursive: true });
+  writeFileSync(authPath, `${JSON.stringify(raw, null, 2)}\n`);
+}
+
 /**
  * Check if the agent auth store has at least one key for the given provider.
  */
@@ -2258,12 +2308,14 @@ function isExplicitDenchCloudRequest(opts: BootstrapOptions): boolean {
 
 function resolveDenchCloudApiKeyCandidate(params: {
   opts: BootstrapOptions;
+  stateDir: string;
   existingApiKey?: string;
 }): string | undefined {
   return (
     params.opts.denchCloudApiKey?.trim() ||
     process.env.DENCH_CLOUD_API_KEY?.trim() ||
     process.env.DENCH_API_KEY?.trim() ||
+    readAuthProfileKey(params.stateDir) ||
     params.existingApiKey?.trim()
   );
 }
@@ -2385,6 +2437,48 @@ function renderDenchCloudRecommendationBanner(): string {
   ].join("\n");
 }
 
+function preStageDenchCloudConfig(params: {
+  stateDir: string;
+  gatewayUrl: string;
+  apiKey: string;
+  catalog?: DenchCloudCatalogLoadResult;
+  selectedModel?: string;
+}): void {
+  try {
+    const rawConfig = readBootstrapConfig(params.stateDir) ?? {};
+    const nextConfig = { ...rawConfig };
+
+    const models = { ...asRecord(nextConfig.models) };
+    models.mode = models.mode ?? "merge";
+    const providers = { ...asRecord(models.providers) };
+
+    const configPatch = buildDenchCloudConfigPatch({
+      gatewayUrl: params.gatewayUrl,
+      apiKey: params.apiKey,
+      models: params.catalog?.models ?? [],
+    });
+    providers["dench-cloud"] = configPatch.models.providers["dench-cloud"];
+    models.providers = providers;
+    nextConfig.models = models;
+
+    if (params.selectedModel) {
+      const agents = { ...asRecord(nextConfig.agents) };
+      const defaults = { ...asRecord(agents.defaults) };
+      defaults.model = { ...asRecord(defaults.model), primary: `dench-cloud/${params.selectedModel}` };
+      agents.defaults = defaults;
+      nextConfig.agents = agents;
+    }
+
+    writeFileSync(
+      path.join(params.stateDir, "openclaw.json"),
+      `${JSON.stringify(nextConfig, null, 2)}\n`,
+    );
+    writeAuthProfileKey(params.stateDir, params.apiKey);
+  } catch {
+    // Best-effort; applyDenchCloudBootstrapConfig will write the canonical version post-onboard.
+  }
+}
+
 async function applyDenchCloudBootstrapConfig(params: {
   openclawCommand: string;
   profile: string;
@@ -2489,6 +2583,8 @@ async function applyDenchCloudBootstrapConfig(params: {
       }
     }
   }
+
+  writeAuthProfileKey(params.stateDir, params.apiKey);
 }
 
 async function resolveDenchCloudBootstrapSelection(params: {
@@ -2516,6 +2612,7 @@ async function resolveDenchCloudBootstrapSelection(params: {
 
     const apiKey = resolveDenchCloudApiKeyCandidate({
       opts: params.opts,
+      stateDir: params.stateDir,
       existingApiKey: existing.apiKey,
     });
     if (!apiKey) {
@@ -2564,6 +2661,7 @@ async function resolveDenchCloudBootstrapSelection(params: {
 
   let apiKey = resolveDenchCloudApiKeyCandidate({
     opts: params.opts,
+    stateDir: params.stateDir,
     existingApiKey: existing.apiKey,
   });
   const showSpinners = !params.opts.json;
@@ -2863,11 +2961,17 @@ export async function bootstrapCommand(
       pluginId: "apollo-enrichment",
       sourceDirName: "apollo-enrichment",
       enabled: denchCloudSelection.enabled,
+      ...(denchCloudSelection.enabled
+        ? { config: { enabled: true } }
+        : {}),
     },
     {
       pluginId: "exa-search",
       sourceDirName: "exa-search",
       enabled: denchCloudSelection.enabled,
+      ...(denchCloudSelection.enabled
+        ? { config: { enabled: true } }
+        : {}),
     },
   ];
 
@@ -2883,6 +2987,16 @@ export async function bootstrapCommand(
     plugins: managedBundledPlugins,
   });
   const posthogPluginInstalled = preOnboardPlugins.installedPluginIds.includes("posthog-analytics");
+
+  if (denchCloudSelection.enabled && denchCloudSelection.apiKey) {
+    preStageDenchCloudConfig({
+      stateDir,
+      gatewayUrl: denchCloudSelection.gatewayUrl ?? DEFAULT_DENCH_CLOUD_GATEWAY_URL,
+      apiKey: denchCloudSelection.apiKey,
+      catalog: denchCloudSelection.catalog,
+      selectedModel: denchCloudSelection.selectedModel,
+    });
+  }
 
   // All pre-onboard config (workspace, gateway mode/port, plugin trust) is now
   // staged via raw JSON writes above — no CLI calls needed before the profile
