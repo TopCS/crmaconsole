@@ -460,7 +460,7 @@ function AttachmentStrip({
 								<img
 									src={af.localUrl || `/api/workspace/raw-file?path=${encodeURIComponent(af.path)}`}
 									alt={af.name}
-									className="block rounded-xl object-cover cursor-pointer"
+									className="block rounded-xl object-cover cursor-pointer hover:opacity-80"
 									style={{
 										height: 80,
 										width: "auto",
