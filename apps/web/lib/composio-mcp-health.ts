@@ -99,10 +99,11 @@ export type ComposioMcpHealth = {
   refresh?: IntegrationRuntimeRefresh;
 };
 
-const COMPOSIO_MCP_STATUS_FILE = "composio-mcp-status.json";
 const GATEWAY_TOOLS_CACHE_TTL_MS = 5 * 60_000;
 const LIVE_AGENT_NOT_CHECKED_DETAIL = "Live agent visibility has not been checked yet.";
 const LIVE_AGENT_REPAIR_PENDING_DETAIL = "Configuration repaired. Run live agent verification to confirm MCP visibility.";
+let cachedGatewayToolsCheck: ComposioMcpHealth["gatewayTools"] | null = null;
+let cachedLiveAgentCheck: ComposioMcpHealth["liveAgent"] | null = null;
 
 const COMPOSIO_LIVE_PROBE_PROMPT = [
   `You are running a ${denchIntegrationsBrand.displayName} availability probe.`,
@@ -124,35 +125,6 @@ function isFresh(checkedAt: string | undefined, ttlMs: number): boolean {
   }
   const timestamp = Date.parse(checkedAt);
   return Number.isFinite(timestamp) && Date.now() - timestamp <= ttlMs;
-}
-
-function resolveStatusFilePath(workspaceDir: string | null): string | null {
-  if (workspaceDir) {
-    return join(workspaceDir, COMPOSIO_MCP_STATUS_FILE);
-  }
-  return join(resolveOpenClawStateDir(), COMPOSIO_MCP_STATUS_FILE);
-}
-
-function writeHealthFile(health: ComposioMcpHealth): void {
-  const outPath = resolveStatusFilePath(health.workspaceDir);
-  if (!outPath) {
-    return;
-  }
-  writeFileSync(outPath, JSON.stringify(health, null, 2) + "\n", "utf-8");
-}
-
-function readPersistedHealth(workspaceDir: string | null): ComposioMcpHealth | null {
-  const filePath = resolveStatusFilePath(workspaceDir);
-  if (!filePath || !existsSync(filePath)) {
-    return null;
-  }
-  try {
-    const parsed = JSON.parse(readFileSync(filePath, "utf-8")) as unknown;
-    const record = asRecord(parsed);
-    return record ? (record as unknown as ComposioMcpHealth) : null;
-  } catch {
-    return null;
-  }
 }
 
 function readConfiguredComposioServer(config: UnknownRecord): ComposioMcpServerSnapshot {
@@ -412,7 +384,8 @@ export async function getComposioMcpHealth(options?: {
   const gatewayUrl = resolveComposioGatewayUrl();
   const apiKey = resolveComposioApiKey();
   const eligibility = resolveComposioEligibility();
-  const persisted = readPersistedHealth(workspaceDir);
+  const cachedGatewayTools = cachedGatewayToolsCheck;
+  const cachedLiveAgent = cachedLiveAgentCheck;
 
   const config = readConfig();
   const configuredServer = readConfiguredComposioServer(config);
@@ -458,13 +431,12 @@ export async function getComposioMcpHealth(options?: {
   };
 
   if (apiKey) {
-    const persistedGatewayTools = persisted?.gatewayTools;
     if (
-      persistedGatewayTools
+      cachedGatewayTools
       && !options?.repairConfig
-      && isFresh(persistedGatewayTools.checkedAt, GATEWAY_TOOLS_CACHE_TTL_MS)
+      && isFresh(cachedGatewayTools.checkedAt, GATEWAY_TOOLS_CACHE_TTL_MS)
     ) {
-      gatewayTools = persistedGatewayTools;
+      gatewayTools = cachedGatewayTools;
     } else {
       try {
         const tools = await fetchComposioMcpToolsList(gatewayUrl, apiKey);
@@ -484,10 +456,13 @@ export async function getComposioMcpHealth(options?: {
           toolCount: null,
         };
       }
+      cachedGatewayToolsCheck = gatewayTools;
     }
   }
 
-  let liveAgent: ComposioMcpHealth["liveAgent"] = persisted?.liveAgent ?? {
+  let liveAgent: ComposioMcpHealth["liveAgent"] = apiKey && cachedLiveAgent
+    ? cachedLiveAgent
+    : {
     status: "unknown",
     detail: LIVE_AGENT_NOT_CHECKED_DETAIL,
     checkedAt: generatedAt,
@@ -498,6 +473,7 @@ export async function getComposioMcpHealth(options?: {
 
   if (options?.includeLiveAgentProbe && apiKey) {
     liveAgent = await runLiveAgentProbe();
+    cachedLiveAgentCheck = liveAgent;
   } else if (options?.repairConfig) {
     liveAgent = {
       status: "unknown",
@@ -507,7 +483,8 @@ export async function getComposioMcpHealth(options?: {
       evidence: [],
       toolCallsDetected: false,
     };
-  } else if (!persisted) {
+    cachedLiveAgentCheck = liveAgent;
+  } else if (!cachedLiveAgent) {
     liveAgent = {
       ...liveAgent,
       checkedAt: generatedAt,
@@ -535,7 +512,5 @@ export async function getComposioMcpHealth(options?: {
     summary,
     ...(refresh ? { refresh } : {}),
   };
-
-  writeHealthFile(health);
   return health;
 }

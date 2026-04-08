@@ -3,11 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   fetchComposioConnectionsMock,
   fetchComposioToolkitsMock,
-  rebuildComposioToolIndexIfReadyMock,
 } = vi.hoisted(() => ({
   fetchComposioConnectionsMock: vi.fn(),
   fetchComposioToolkitsMock: vi.fn(),
-  rebuildComposioToolIndexIfReadyMock: vi.fn(),
 }));
 
 vi.mock("@/lib/composio", () => ({
@@ -20,10 +18,6 @@ vi.mock("@/lib/composio", () => ({
     lockBadge: null,
   })),
   resolveComposioGatewayUrl: vi.fn(() => "https://gateway.example.com"),
-}));
-
-vi.mock("@/lib/composio-tool-index", () => ({
-  rebuildComposioToolIndexIfReady: rebuildComposioToolIndexIfReadyMock,
 }));
 
 describe("Composio connections API", () => {
@@ -82,7 +76,6 @@ describe("Composio connections API", () => {
       "dench_test_key",
       { limit: 100 },
     );
-    expect(rebuildComposioToolIndexIfReadyMock).not.toHaveBeenCalled();
   });
 
   it("bypasses the connections cache when fresh=1 is requested", async () => {

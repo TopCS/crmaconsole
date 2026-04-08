@@ -1,5 +1,3 @@
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
 import type { AnyAgentTool } from "openclaw/plugin-sdk";
 import { readDenchAuthProfileKey } from "../shared/dench-auth.js";
 import {
@@ -9,45 +7,6 @@ import {
 import { buildComposioMcpServerConfig } from "./config-patch.js";
 
 type UnknownRecord = Record<string, unknown>;
-
-type ComposioManagedAccount = {
-  connected_account_id: string;
-  account_identity: string;
-  account_identity_source: "gateway_stable_id" | "legacy_heuristic" | "connection_id";
-  identity_confidence: "high" | "low" | "unknown";
-  display_label: string;
-  account_label?: string | null;
-  account_name?: string | null;
-  account_email?: string | null;
-  external_account_id?: string | null;
-  related_connection_ids: string[];
-  is_same_account_reconnect: boolean;
-};
-
-type ComposioToolSummary = {
-  name: string;
-  title: string;
-  description_short: string;
-  required_args: string[];
-  arg_hints: Record<string, string>;
-  default_args?: Record<string, unknown>;
-  example_args?: Record<string, unknown>;
-  example_prompts?: string[];
-  input_schema?: Record<string, unknown>;
-};
-
-type ComposioToolIndexFile = {
-  generated_at: string;
-  managed_tools?: string[];
-  connected_apps: Array<{
-    toolkit_slug: string;
-    toolkit_name: string;
-    account_count: number;
-    accounts?: ComposioManagedAccount[];
-    tools: ComposioToolSummary[];
-    recipes: Record<string, string>;
-  }>;
-};
 
 type ComposioToolCallResult = {
   content?: unknown[];
@@ -118,82 +77,12 @@ function jsonResult(payload: unknown, details?: Record<string, unknown>) {
   };
 }
 
-function isComposioToolIndexFile(value: unknown): value is ComposioToolIndexFile {
-  const rec = asRecord(value);
-  return typeof rec?.generated_at === "string" && Array.isArray(rec.connected_apps);
-}
-
-function readComposioToolIndex(workspaceDir: string): ComposioToolIndexFile | null {
-  const filePath = path.join(workspaceDir, "composio-tool-index.json");
-  if (!existsSync(filePath)) {
-    return null;
-  }
-  try {
-    const raw = JSON.parse(readFileSync(filePath, "utf-8")) as unknown;
-    return isComposioToolIndexFile(raw) ? raw : null;
-  } catch {
-    return null;
-  }
-}
-
 function normalizeToolkitSlug(value: string): string {
   return value.trim().toLowerCase();
 }
 
 function toolkitSlugToToolPrefix(slug: string): string {
   return normalizeToolkitSlug(slug).toUpperCase().replace(/-/g, "_") + "_";
-}
-
-function resolveAppEntry(
-  index: ComposioToolIndexFile,
-  requestedApp: string,
-  toolName: string,
-): ComposioToolIndexFile["connected_apps"][number] | null {
-  const normalized = normalizeToolkitSlug(requestedApp);
-  const direct = index.connected_apps.find((app) =>
-    normalizeToolkitSlug(app.toolkit_slug) === normalized
-      || normalizeToolkitSlug(app.toolkit_name) === normalized
-  );
-  if (direct) {
-    return direct;
-  }
-
-  const matchingPrefix = index.connected_apps.find((app) =>
-    toolName.toUpperCase().startsWith(toolkitSlugToToolPrefix(app.toolkit_slug))
-  );
-  return matchingPrefix ?? null;
-}
-
-function resolveAccountSelection(
-  app: ComposioToolIndexFile["connected_apps"][number],
-  connectedAccountId: string | undefined,
-  accountIdentity: string | undefined,
-): ComposioManagedAccount | null {
-  const accounts = app.accounts ?? [];
-  if (accounts.length === 0) {
-    return null;
-  }
-
-  if (connectedAccountId) {
-    const exact = accounts.find((account) => account.connected_account_id === connectedAccountId);
-    if (exact) {
-      return exact;
-    }
-  }
-
-  if (accountIdentity) {
-    const normalized = accountIdentity.toLowerCase();
-    const exact = accounts.find((account) => account.account_identity.toLowerCase() === normalized);
-    if (exact) {
-      return exact;
-    }
-  }
-
-  if (accounts.length === 1) {
-    return accounts[0] ?? null;
-  }
-
-  return null;
 }
 
 function buildToolCallUrl(baseUrl: string, connectedAccountId?: string): string {
@@ -833,7 +722,24 @@ function createRegisteredComposioTools(params: {
             error: "The supplied search_session_id does not match the verified search result. Re-run composio_search_tools and reuse the returned dispatcher_input.",
           });
         }
-        if (!requestedAccount && (connectedAccountId || accountIdentity)) {
+        const tokenBoundAccount = readString(searchContext.account)?.trim();
+        const accountSelectionRequired = searchContext.account_required === true;
+        if (
+          requestedAccount
+          && tokenBoundAccount
+          && normalizeToolkitSlug(requestedAccount) !== normalizeToolkitSlug(tokenBoundAccount)
+        ) {
+          return jsonResult({
+            error: "The supplied `account` does not match the verified search result. Re-run composio_search_tools and reuse the returned dispatcher_input unchanged.",
+          });
+        }
+        const effectiveAccount = requestedAccount ?? tokenBoundAccount;
+        if (accountSelectionRequired && !effectiveAccount) {
+          return jsonResult({
+            error: "This integration search result requires an explicit account selection before execution. Re-run composio_search_tools, choose the account, and use the returned dispatcher_input unchanged.",
+          });
+        }
+        if (!effectiveAccount && (connectedAccountId || accountIdentity)) {
           return jsonResult({
             error: "Use the canonical `account` field returned by composio_search_tools for gateway-backed integration execution. Do not supply legacy account identifiers.",
           });
@@ -845,13 +751,13 @@ function createRegisteredComposioTools(params: {
           sessionId: searchContext.session_id ?? searchSessionId ?? "",
           toolName,
           input: toolArgs,
-          account: requestedAccount,
+          account: effectiveAccount,
           app: requestedApp,
         });
         const toolRouterDetails = asRecord(toolRouterResult.details);
         const failureKind = readString(toolRouterDetails?.failureKind ?? toolRouterDetails?.failure_kind);
         const shouldTryMcpFallback = toolRouterDetails?.status === "error"
-          && (failureKind === "session_issue" || failureKind === "connection_issue");
+          && (failureKind === "session_issue" || failureKind === "connection_issue" || failureKind === "account_issue");
         if (shouldTryMcpFallback) {
           const activeConnections = await fetchGatewayActiveConnectionsForToolkit({
             gatewayBaseUrl: params.serverConfig.gatewayBaseUrl,
@@ -860,7 +766,7 @@ function createRegisteredComposioTools(params: {
           });
           const fallbackSelection = resolveGatewayMcpFallbackSelection({
             activeConnections: activeConnections ?? [],
-            requestedAccount,
+            requestedAccount: effectiveAccount,
           });
           if (fallbackSelection.canFallback) {
             const mcpResult = await executeComposioTool({

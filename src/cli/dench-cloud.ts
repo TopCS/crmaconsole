@@ -128,6 +128,12 @@ export function buildDenchGatewayCatalogUrl(gatewayUrl: string | undefined): str
 
 export const RECOMMENDED_DENCH_CLOUD_MODEL_ID = "claude-opus-4.6";
 
+export const DENCH_COMPOSIO_WRAPPER_TOOLS = [
+  "composio_search_tools",
+  "composio_resolve_tool",
+  "composio_call_tool",
+] as const;
+
 export const FALLBACK_DENCH_CLOUD_MODELS: DenchCloudCatalogModel[] = [
   {
     id: "claude-opus-4.6",
@@ -433,6 +439,9 @@ export function buildDenchCloudConfigPatch(params: {
       servers: {
         composio: buildComposioMcpServerConfig(params.gatewayUrl, params.apiKey),
       },
+    },
+    tools: {
+      alsoAllow: [...DENCH_COMPOSIO_WRAPPER_TOOLS],
     },
   };
 }

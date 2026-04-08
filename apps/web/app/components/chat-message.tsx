@@ -22,7 +22,7 @@ import {
 	parseComposioChatAction,
 } from "@/lib/composio-chat-actions";
 import { Dialog, DialogContent } from "./ui/dialog";
-import { resolveComposioToolkitLogo } from "@/lib/composio-toolkit-brand";
+import { useComposioToolkitBrand } from "@/lib/composio-toolkit-brand";
 
 // Lazy-load ReportCard (uses Recharts which is heavy)
 const ReportCard = dynamic(
@@ -743,10 +743,15 @@ function ComposioActionButton({
 	children: ReactNode;
 	onPress?: (action: ComposioChatAction) => void;
 }) {
-	const toolkitName = action.toolkitName?.trim()
+	const brand = useComposioToolkitBrand({
+		toolkitSlug: action.toolkitSlug ?? null,
+		toolkitName: action.toolkitName ?? null,
+	});
+	const toolkitName = brand.name?.trim()
+		|| action.toolkitName?.trim()
 		|| action.toolkitSlug?.trim().replace(/-/g, " ")
 		|| "app";
-	const logo = resolveComposioToolkitLogo(null, action.toolkitSlug ?? null);
+	const logo = brand.logo;
 	const initials = toolkitName
 		.split(/\s+/)
 		.filter(Boolean)

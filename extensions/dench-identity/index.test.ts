@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import os from "node:os";
+import {
+  createComposioSearchContextSecret,
+  verifyComposioSearchContext,
+} from "../shared/composio-search-context.ts";
 import { buildIdentityPrompt, resolveWorkspaceDir } from "./index.ts";
 import register from "./index.ts";
 import path from "node:path";
@@ -693,6 +697,119 @@ describe("register", () => {
     expect(payload.account_selection_required).toBe(true);
     expect(payload.account_candidates).toHaveLength(2);
     expect(payload.instruction).toContain("which connected Stripe account");
+
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it("forwards the selected account to gateway search and binds it into the signed dispatcher context", async () => {
+    const tmp = path.join(
+      os.tmpdir(),
+      `dench-identity-selected-account-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    mkdirSync(tmp, { recursive: true });
+    process.env.DENCH_API_KEY = "dench-test-key";
+    process.env.DENCH_GATEWAY_URL = "https://gateway.example.com";
+
+    globalThis.fetch = vi.fn(async (input, init) => {
+      const url = typeof input === "string" ? input : input.url;
+      expect(url).toBe("https://gateway.example.com/v1/composio/tool-router/search");
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(String(init?.body ?? "{}"))).toMatchObject({
+        account: "acct_prod",
+      });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          error: null,
+          results: [
+            {
+              index: 1,
+              use_case: "list Stripe subscriptions",
+              execution_guidance: "Use STRIPE_LIST_SUBSCRIPTIONS.",
+              difficulty: "easy",
+              recommended_plan_steps: ["List subscriptions."],
+              known_pitfalls: [],
+              primary_tool_slugs: ["STRIPE_LIST_SUBSCRIPTIONS"],
+              related_tool_slugs: [],
+              toolkits: ["stripe"],
+            },
+          ],
+          toolkit_connection_statuses: [
+            {
+              toolkit: "stripe",
+              has_active_connection: true,
+              accounts: [
+                {
+                  id: "acct_prod",
+                  alias: "Prod Stripe",
+                  user_info: {
+                    email: "ops@example.com",
+                    name: "Prod Stripe",
+                  },
+                },
+                {
+                  id: "acct_test",
+                  alias: "Test Stripe",
+                  user_info: {
+                    email: "dev@example.com",
+                    name: "Test Stripe",
+                  },
+                },
+              ],
+            },
+          ],
+          tool_schemas: {
+            STRIPE_LIST_SUBSCRIPTIONS: {
+              toolkit: "stripe",
+              tool_slug: "STRIPE_LIST_SUBSCRIPTIONS",
+              description: "List subscriptions.",
+              hasFullSchema: true,
+              input_schema: { type: "object", properties: {} },
+            },
+          },
+          session: {
+            id: "trs_acct_prod",
+            generate_id: true,
+          },
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        },
+      );
+    }) as typeof fetch;
+
+    const api = {
+      config: { plugins: { entries: {} }, agents: { defaults: { workspace: tmp } } },
+      on: vi.fn(),
+      registerTool: vi.fn(),
+    };
+
+    register(api as any);
+
+    const searchTool = getRegisteredTool(api as any, "composio_search_tools");
+    const result = await executeTool(searchTool, {
+      app: "stripe",
+      account: "acct_prod",
+      query: "list Stripe subscriptions",
+    });
+    const payload = JSON.parse(result.content[0].text);
+    const dispatcherInput = payload.recommended_result.dispatcher_input;
+    const verifiedContext = verifyComposioSearchContext(
+      dispatcherInput.search_context_token,
+      createComposioSearchContextSecret({
+        workspaceDir: tmp,
+        gatewayUrl: "https://gateway.example.com",
+        apiKey: "dench-test-key",
+      }),
+    );
+
+    expect(payload.recommended_result.account_selection_required).toBe(false);
+    expect(payload.recommended_result.selected_account.account).toBe("acct_prod");
+    expect(dispatcherInput.account).toBe("acct_prod");
+    expect(verifiedContext?.account).toBe("acct_prod");
 
     rmSync(tmp, { recursive: true, force: true });
   });

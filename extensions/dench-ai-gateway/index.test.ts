@@ -30,6 +30,8 @@ function buildSearchContextToken(params: {
   toolName: string;
   mode: "gateway_tool_router" | "local_catalog_mcp";
   sessionId?: string;
+  account?: string;
+  accountRequired?: boolean;
 }) {
   return signComposioSearchContext({
     version: 1,
@@ -37,6 +39,8 @@ function buildSearchContextToken(params: {
     app: params.app,
     tool_name: params.toolName,
     ...(params.sessionId ? { session_id: params.sessionId } : {}),
+    ...(params.account ? { account: params.account } : {}),
+    ...(params.accountRequired ? { account_required: true } : {}),
     issued_at: "2026-04-06T00:00:00.000Z",
   }, createComposioSearchContextSecret({
     workspaceDir: params.workspaceDir,
@@ -515,6 +519,233 @@ describe("dench-ai-gateway composio bridge", () => {
       },
     });
     expect(result.content[0]?.text).toContain('"sub_123"');
+  });
+
+  it("uses the account bound in the search context when the tool call omits it", async () => {
+    stateDir = mkdtempSync(path.join(os.tmpdir(), "dench-ai-gateway-state-"));
+    process.env.OPENCLAW_STATE_DIR = stateDir;
+    writeAuthProfiles(stateDir, "dc-key");
+
+    workspaceDir = mkdtempSync(path.join(os.tmpdir(), "dench-ai-gateway-"));
+    writeFileSync(
+      path.join(workspaceDir, "composio-tool-index.json"),
+      JSON.stringify(
+        {
+          generated_at: "2026-04-02T00:00:00.000Z",
+          managed_tools: ["composio_search_tools", "composio_resolve_tool", "composio_call_tool"],
+          connected_apps: [
+            {
+              toolkit_slug: "stripe",
+              toolkit_name: "Stripe",
+              account_count: 2,
+              accounts: [
+                {
+                  connected_account_id: "acct_primary",
+                  account_identity: "stripe:acct_primary",
+                  account_identity_source: "gateway_stable_id",
+                  identity_confidence: "high",
+                  display_label: "Primary Stripe",
+                  related_connection_ids: [],
+                  is_same_account_reconnect: false,
+                },
+                {
+                  connected_account_id: "acct_secondary",
+                  account_identity: "stripe:acct_secondary",
+                  account_identity_source: "gateway_stable_id",
+                  identity_confidence: "high",
+                  display_label: "Secondary Stripe",
+                  related_connection_ids: [],
+                  is_same_account_reconnect: false,
+                },
+              ],
+              tools: [],
+              recipes: {},
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    const tools: any[] = [];
+    globalThis.fetch = vi.fn(async (input, init) => {
+      const url = typeof input === "string" ? input : input.url;
+      const payload = JSON.parse(String(init?.body ?? "{}"));
+      expect(url).toBe("https://gateway.example.com/v1/composio/tool-router/execute");
+      expect(payload).toEqual({
+        session_id: "trs_456",
+        tool_slug: "STRIPE_LIST_SUBSCRIPTIONS",
+        arguments: {
+          limit: 25,
+        },
+        account: "acct_primary",
+      });
+
+      return new Response(
+        JSON.stringify({
+          data: {
+            data: [{ id: "sub_primary" }],
+            has_more: false,
+          },
+          error: null,
+          log_id: "log_stripe_primary",
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        },
+      );
+    }) as typeof fetch;
+
+    const api: any = {
+      config: {
+        agents: { defaults: { workspace: workspaceDir } },
+        plugins: {
+          entries: {
+            "dench-ai-gateway": {
+              config: { enabled: true, gatewayUrl: "https://gateway.example.com" },
+            },
+          },
+        },
+      },
+      registerProvider() {},
+      registerTool(tool: any) {
+        tools.push(tool);
+      },
+      registerService() {},
+      logger: { info: vi.fn() },
+    };
+
+    register(api);
+
+    const searchContextToken = buildSearchContextToken({
+      workspaceDir,
+      gatewayUrl: "https://gateway.example.com",
+      apiKey: "dc-key",
+      app: "stripe",
+      toolName: "STRIPE_LIST_SUBSCRIPTIONS",
+      mode: "gateway_tool_router",
+      sessionId: "trs_456",
+      account: "acct_primary",
+    });
+    const result = await tools[0].execute("call-1", {
+      app: "stripe",
+      tool_name: "STRIPE_LIST_SUBSCRIPTIONS",
+      search_context_token: searchContextToken,
+      search_session_id: "trs_456",
+      arguments: {
+        limit: 25,
+      },
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(result.details).toMatchObject({
+      composioBridge: true,
+      composioMode: "gateway_tool_router",
+      toolRouterSessionId: "trs_456",
+      mcpTool: "STRIPE_LIST_SUBSCRIPTIONS",
+      toolkit: "stripe",
+      account: "acct_primary",
+    });
+    expect(result.content[0]?.text).toContain('"sub_primary"');
+  });
+
+  it("rejects gateway execution when the verified search context still requires account selection", async () => {
+    stateDir = mkdtempSync(path.join(os.tmpdir(), "dench-ai-gateway-state-"));
+    process.env.OPENCLAW_STATE_DIR = stateDir;
+    writeAuthProfiles(stateDir, "dc-key");
+
+    workspaceDir = mkdtempSync(path.join(os.tmpdir(), "dench-ai-gateway-"));
+    writeFileSync(
+      path.join(workspaceDir, "composio-tool-index.json"),
+      JSON.stringify(
+        {
+          generated_at: "2026-04-02T00:00:00.000Z",
+          managed_tools: ["composio_search_tools", "composio_resolve_tool", "composio_call_tool"],
+          connected_apps: [
+            {
+              toolkit_slug: "stripe",
+              toolkit_name: "Stripe",
+              account_count: 2,
+              accounts: [
+                {
+                  connected_account_id: "acct_primary",
+                  account_identity: "stripe:acct_primary",
+                  account_identity_source: "gateway_stable_id",
+                  identity_confidence: "high",
+                  display_label: "Primary Stripe",
+                  related_connection_ids: [],
+                  is_same_account_reconnect: false,
+                },
+                {
+                  connected_account_id: "acct_secondary",
+                  account_identity: "stripe:acct_secondary",
+                  account_identity_source: "gateway_stable_id",
+                  identity_confidence: "high",
+                  display_label: "Secondary Stripe",
+                  related_connection_ids: [],
+                  is_same_account_reconnect: false,
+                },
+              ],
+              tools: [],
+              recipes: {},
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    const tools: any[] = [];
+    globalThis.fetch = vi.fn() as typeof fetch;
+
+    const api: any = {
+      config: {
+        agents: { defaults: { workspace: workspaceDir } },
+        plugins: {
+          entries: {
+            "dench-ai-gateway": {
+              config: { enabled: true, gatewayUrl: "https://gateway.example.com" },
+            },
+          },
+        },
+      },
+      registerProvider() {},
+      registerTool(tool: any) {
+        tools.push(tool);
+      },
+      registerService() {},
+      logger: { info: vi.fn() },
+    };
+
+    register(api);
+
+    const searchContextToken = buildSearchContextToken({
+      workspaceDir,
+      gatewayUrl: "https://gateway.example.com",
+      apiKey: "dc-key",
+      app: "stripe",
+      toolName: "STRIPE_LIST_SUBSCRIPTIONS",
+      mode: "gateway_tool_router",
+      sessionId: "trs_789",
+      accountRequired: true,
+    });
+    const result = await tools[0].execute("call-1", {
+      app: "stripe",
+      tool_name: "STRIPE_LIST_SUBSCRIPTIONS",
+      search_context_token: searchContextToken,
+      search_session_id: "trs_789",
+      arguments: {},
+    });
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(result.content[0]?.text).toContain("requires an explicit account selection");
   });
 
   it("rejects legacy local-catalog search context and asks for a fresh gateway search", async () => {
