@@ -419,7 +419,7 @@ function AttachedFilesCard({ paths }: { paths: string[] }) {
 				return (
 					<div
 						key={i}
-						className="relative rounded-xl overflow-hidden shrink-0 cursor-pointer transition-all duration-200 hover:opacity-85 hover:scale-[1.02]"
+						className="relative rounded-xl overflow-hidden shrink-0 cursor-pointer transition-opacity duration-200 hover:opacity-85"
 						onClick={() => setPreviewSrc(src)}
 					>
 						<img
@@ -620,7 +620,7 @@ function PreviewableImage({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLIm
 				src={src}
 				alt={alt ?? ""}
 				loading="lazy"
-				className="cursor-pointer transition-all duration-200 hover:opacity-85 hover:scale-[1.02]"
+				className="cursor-pointer transition-opacity duration-200 hover:opacity-85"
 				onClick={() => setOpen(true)}
 				{...props}
 			/>
