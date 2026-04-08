@@ -530,7 +530,15 @@ function AttachmentStrip({
 			</div>
 
 			<Dialog open={previewSrc !== null} onOpenChange={(open) => { if (!open) {setPreviewSrc(null);} }}>
-				<DialogContent className="!max-w-[90vw] !w-auto !p-2 !rounded-2xl" showCloseButton>
+				<DialogContent className="!max-w-[90vw] !w-auto !p-2 !rounded-2xl" showCloseButton={false}>
+					<button
+						type="button"
+						onClick={() => setPreviewSrc(null)}
+						className="absolute top-3 right-3 z-10 w-7 h-7 rounded-full flex items-center justify-center cursor-pointer"
+						style={{ background: "rgba(0,0,0,0.55)", color: "white", backdropFilter: "blur(4px)" }}
+					>
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+					</button>
 					{previewSrc && (
 						<img
 							src={previewSrc}
