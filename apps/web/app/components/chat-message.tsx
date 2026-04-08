@@ -21,6 +21,7 @@ import {
 	type ComposioChatAction,
 	parseComposioChatAction,
 } from "@/lib/composio-chat-actions";
+import { Dialog, DialogContent } from "./ui/dialog";
 
 // Lazy-load ReportCard (uses Recharts which is heavy)
 const ReportCard = dynamic(
@@ -403,7 +404,10 @@ function _AttachFileIcon({ category }: { category: string }) {
 }
 
 function AttachedFilesCard({ paths }: { paths: string[] }) {
+	const [previewSrc, setPreviewSrc] = useState<string | null>(null);
+
 	return (
+		<>
 		<div className="flex flex-wrap gap-1.5 mb-2 justify-end">
 			{paths.map((filePath, i) => {
 				const category = getCategoryFromPath(filePath);
@@ -415,7 +419,8 @@ function AttachedFilesCard({ paths }: { paths: string[] }) {
 				return (
 					<div
 						key={i}
-						className="relative rounded-xl overflow-hidden shrink-0"
+						className="relative rounded-xl overflow-hidden shrink-0 cursor-pointer"
+						onClick={() => setPreviewSrc(src)}
 					>
 						<img
 							src={src}
@@ -441,6 +446,19 @@ function AttachedFilesCard({ paths }: { paths: string[] }) {
 				);
 			})}
 		</div>
+		<Dialog open={previewSrc !== null} onOpenChange={(open) => { if (!open) {setPreviewSrc(null);} }}>
+			<DialogContent className="!max-w-[90vw] !w-auto !p-2 !rounded-2xl" showCloseButton>
+				{previewSrc && (
+					<img
+						src={previewSrc}
+						alt="Preview"
+						className="block rounded-xl"
+						style={{ maxHeight: "80vh", maxWidth: "85vw", objectFit: "contain" }}
+					/>
+				)}
+			</DialogContent>
+		</Dialog>
+		</>
 	);
 }
 
@@ -593,6 +611,35 @@ function FilePathCode({
 	);
 }
 
+function PreviewableImage({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) {
+	const [open, setOpen] = useState(false);
+	return (
+		<>
+			{/* eslint-disable-next-line @next/next/no-img-element */}
+			<img
+				src={src}
+				alt={alt ?? ""}
+				loading="lazy"
+				className="cursor-pointer"
+				onClick={() => setOpen(true)}
+				{...props}
+			/>
+			<Dialog open={open} onOpenChange={setOpen}>
+				<DialogContent className="!max-w-[90vw] !w-auto !p-2 !rounded-2xl" showCloseButton>
+					{src && (
+						<img
+							src={src}
+							alt={alt ?? "Preview"}
+							className="block rounded-xl"
+							style={{ maxHeight: "80vh", maxWidth: "85vw", objectFit: "contain" }}
+						/>
+					)}
+				</DialogContent>
+			</Dialog>
+		</>
+	);
+}
+
 /* ─── Markdown component overrides for chat ─── */
 
 function createMarkdownComponents(
@@ -645,15 +692,11 @@ function createMarkdownComponents(
 				</a>
 			);
 		},
-		// Route local image paths through raw-file API so workspace images render
 		img: ({ src, alt, ...props }) => {
 			const resolvedSrc = typeof src === "string" && !src.startsWith("http://") && !src.startsWith("https://") && !src.startsWith("data:")
 				? `/api/workspace/raw-file?path=${encodeURIComponent(src)}`
 				: src;
-			return (
-				// eslint-disable-next-line @next/next/no-img-element
-				<img src={resolvedSrc} alt={alt ?? ""} loading="lazy" {...props} />
-			);
+			return <PreviewableImage src={resolvedSrc} alt={alt ?? ""} {...props} />;
 		},
 		// Syntax-highlighted fenced code blocks
 		pre: ({ children, ...props }) => {
