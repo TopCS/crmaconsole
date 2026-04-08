@@ -2,12 +2,16 @@
 
 import { useState } from "react";
 import type { ComposioToolkit } from "@/lib/composio";
-import { resolveComposioToolkitLogo } from "@/lib/composio-toolkit-brand";
+import { useComposioToolkitBrand } from "@/lib/composio-toolkit-brand";
 
 function AppIcon({ logo, name, slug }: { logo: string | null; name: string; slug: string }) {
   const [failed, setFailed] = useState(false);
-  const resolvedLogo = resolveComposioToolkitLogo(logo, slug);
-  const showImg = resolvedLogo && !failed;
+  const brand = useComposioToolkitBrand({
+    toolkitSlug: slug,
+    toolkitName: name,
+    initialLogo: logo,
+  });
+  const showImg = brand.logo && !failed;
   return (
     <div
       className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden"
@@ -19,7 +23,7 @@ function AppIcon({ logo, name, slug }: { logo: string | null; name: string; slug
     >
       {showImg ? (
         <img
-          src={resolvedLogo}
+          src={brand.logo ?? undefined}
           alt=""
           className="h-7 w-7 object-contain"
           loading="lazy"

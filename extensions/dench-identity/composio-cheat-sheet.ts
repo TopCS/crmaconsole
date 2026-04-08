@@ -1,10 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-
 /**
- * Shape written by `apps/web/lib/composio-tool-index.ts` to
- * `<workspace>/composio-tool-index.json`. Kept in the extension package so the
- * agent runtime can format the cheat sheet without importing the Next app.
+ * Shared Composio response shapes kept in the extension package so the agent
+ * runtime can format human-readable guidance without importing the web app.
  */
 export type ComposioManagedAccount = {
   connected_account_id: string;
@@ -54,60 +50,18 @@ export type ComposioToolCatalogFile = {
   }>;
 };
 
-type ComposioMcpStatusFile = {
-  summary?: {
-    verified?: boolean;
-    message?: string;
-  };
-  config?: {
-    status?: "pass" | "fail" | "unknown";
-  };
-  gatewayTools?: {
-    status?: "pass" | "fail" | "unknown";
-  };
-  liveAgent?: {
-    status?: "pass" | "fail" | "unknown";
-  };
-};
-
-function isComposioToolIndexFile(value: unknown): value is ComposioToolIndexFile {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-  const rec = value as Record<string, unknown>;
-  if (typeof rec.generated_at !== "string" || !Array.isArray(rec.connected_apps)) {
-    return false;
-  }
-  return true;
-}
-
-function isComposioToolCatalogFile(value: unknown): value is ComposioToolCatalogFile {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-  const rec = value as Record<string, unknown>;
-  return typeof rec.generated_at === "string" && Array.isArray(rec.connected_apps);
-}
-
 /**
- * Build markdown for the identity system prompt from a parsed index file.
+ * Build markdown from a parsed app/tool summary.
  */
 export function formatComposioToolCheatSheetFromIndex(index: ComposioToolIndexFile): string {
-  return formatComposioToolCheatSheet(index, null);
+  return formatComposioToolCheatSheet(index);
 }
 
-function formatComposioToolCheatSheet(
-  index: ComposioToolIndexFile,
-  status: ComposioMcpStatusFile | null,
-): string {
-  const verified = status?.summary?.verified === true;
-  const summaryMessage = typeof status?.summary?.message === "string" ? status.summary.message : null;
+function formatComposioToolCheatSheet(index: ComposioToolIndexFile): string {
   const lines: string[] = [
     "## Connected App Tools (Dench Integrations)",
     "",
-    verified
-      ? "You have verified Dench Integrations tools available for these connected apps. Always search first, inspect the returned full schemas and plan guidance, then execute the selected tool via `composio_call_tool`."
-      : "Dench Integrations is the configured integration layer for these connected apps. If the tools are missing in this session, stop and report the Dench Integrations repair status instead of bypassing it.",
+    "Dench Integrations is the configured integration layer for these connected apps. Always search first, inspect the returned full schemas and plan guidance, then execute the selected tool via `composio_call_tool`.",
     "",
     "- Use `composio_search_tools` first for every connected-app task unless you are intentionally consuming a compatibility response from `composio_resolve_tool`.",
     "- Inspect the returned full `input_schema`, `recommended_plan_steps`, `known_pitfalls`, and any pagination hints before executing anything.",
@@ -118,9 +72,6 @@ function formatComposioToolCheatSheet(
     "- If an integration tool fails because of argument shape, fix the JSON arguments and retry once.",
     "",
   ];
-  if (summaryMessage) {
-    lines.push(`Current verification status: ${summaryMessage}`, "");
-  }
 
   for (const app of index.connected_apps) {
     const accounts = app.accounts ?? [];
@@ -198,69 +149,4 @@ function formatComposioToolCheatSheet(
   }
 
   return lines.join("\n").trimEnd() + "\n";
-}
-
-function readComposioToolIndex(workspaceDir: string): ComposioToolIndexFile | null {
-  const filePath = path.join(workspaceDir, "composio-tool-index.json");
-  if (!existsSync(filePath)) {
-    return null;
-  }
-  try {
-    const raw = JSON.parse(readFileSync(filePath, "utf-8")) as unknown;
-    return isComposioToolIndexFile(raw) ? raw : null;
-  } catch {
-    return null;
-  }
-}
-
-export function readComposioToolIndexFile(workspaceDir: string): ComposioToolIndexFile | null {
-  return readComposioToolIndex(workspaceDir);
-}
-
-function readComposioToolCatalog(workspaceDir: string): ComposioToolCatalogFile | null {
-  const filePath = path.join(workspaceDir, "composio-tool-catalog.json");
-  if (!existsSync(filePath)) {
-    return null;
-  }
-  try {
-    const raw = JSON.parse(readFileSync(filePath, "utf-8")) as unknown;
-    return isComposioToolCatalogFile(raw) ? raw : null;
-  } catch {
-    return null;
-  }
-}
-
-export function readComposioToolCatalogFile(workspaceDir: string): ComposioToolCatalogFile | null {
-  return readComposioToolCatalog(workspaceDir);
-}
-
-function readComposioMcpStatus(workspaceDir: string): ComposioMcpStatusFile | null {
-  const filePath = path.join(workspaceDir, "composio-mcp-status.json");
-  if (!existsSync(filePath)) {
-    return null;
-  }
-  try {
-    const raw = JSON.parse(readFileSync(filePath, "utf-8")) as unknown;
-    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-      return raw as ComposioMcpStatusFile;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-export function readComposioMcpStatusFile(workspaceDir: string): ComposioMcpStatusFile | null {
-  return readComposioMcpStatus(workspaceDir);
-}
-
-/**
- * Loads and formats the cheat sheet, or returns null if no index file / invalid JSON.
- */
-export function loadComposioToolCheatSheetMarkdown(workspaceDir: string): string | null {
-  const index = readComposioToolIndex(workspaceDir);
-  if (!index || index.connected_apps.length === 0) {
-    return null;
-  }
-  return formatComposioToolCheatSheet(index, readComposioMcpStatus(workspaceDir));
 }

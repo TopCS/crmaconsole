@@ -15,12 +15,16 @@ import {
   type ComposioConnection,
 } from "@/lib/composio";
 import { normalizeComposioConnections } from "@/lib/composio-client";
-import { resolveComposioToolkitLogo } from "@/lib/composio-toolkit-brand";
+import { useComposioToolkitBrand } from "@/lib/composio-toolkit-brand";
 
 function ModalLogoBox({ logo, name, slug }: { logo: string | null; name: string; slug: string }) {
   const [failed, setFailed] = useState(false);
-  const resolvedLogo = resolveComposioToolkitLogo(logo, slug);
-  const showImg = resolvedLogo && !failed;
+  const brand = useComposioToolkitBrand({
+    toolkitSlug: slug,
+    toolkitName: name,
+    initialLogo: logo,
+  });
+  const showImg = brand.logo && !failed;
   return (
     <div
       className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl"
@@ -28,7 +32,7 @@ function ModalLogoBox({ logo, name, slug }: { logo: string | null; name: string;
     >
       {showImg ? (
         <img
-          src={resolvedLogo}
+          src={brand.logo ?? undefined}
           alt=""
           className="h-8 w-8 object-contain"
           decoding="async"

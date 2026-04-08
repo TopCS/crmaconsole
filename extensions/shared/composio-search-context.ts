@@ -8,6 +8,8 @@ export type ComposioSearchContext = {
   app: string;
   tool_name: string;
   session_id?: string;
+  account?: string;
+  account_required?: boolean;
   issued_at: string;
 };
 
@@ -40,6 +42,8 @@ function validateContext(value: unknown): ComposioSearchContext | null {
   const app = record.app;
   const toolName = record.tool_name;
   const sessionId = record.session_id;
+  const account = record.account;
+  const accountRequired = record.account_required;
   const issuedAt = record.issued_at;
   if (
     version !== 1
@@ -49,6 +53,8 @@ function validateContext(value: unknown): ComposioSearchContext | null {
     || typeof toolName !== "string"
     || toolName.trim().length === 0
     || (sessionId !== undefined && (typeof sessionId !== "string" || sessionId.trim().length === 0))
+    || (account !== undefined && (typeof account !== "string" || account.trim().length === 0))
+    || (accountRequired !== undefined && typeof accountRequired !== "boolean")
     || typeof issuedAt !== "string"
     || issuedAt.trim().length === 0
   ) {
@@ -61,6 +67,8 @@ function validateContext(value: unknown): ComposioSearchContext | null {
     app: app.trim(),
     tool_name: toolName.trim(),
     ...(typeof sessionId === "string" ? { session_id: sessionId.trim() } : {}),
+    ...(typeof account === "string" ? { account: account.trim() } : {}),
+    ...(accountRequired === true ? { account_required: true } : {}),
     issued_at: issuedAt.trim(),
   };
 }

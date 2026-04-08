@@ -20,6 +20,12 @@ export type ComposioMcpServerConfig = {
   };
 };
 
+const DENCH_COMPOSIO_WRAPPER_TOOLS = [
+  "composio_search_tools",
+  "composio_resolve_tool",
+  "composio_call_tool",
+] as const;
+
 export function buildComposioMcpServerConfig(
   gatewayUrl: string,
   apiKey: string,
@@ -78,6 +84,9 @@ export function buildDenchCloudConfigPatch(params: {
       servers: {
         composio: buildComposioMcpServerConfig(params.gatewayUrl, params.apiKey),
       },
+    },
+    tools: {
+      alsoAllow: [...DENCH_COMPOSIO_WRAPPER_TOOLS],
     },
   };
 }

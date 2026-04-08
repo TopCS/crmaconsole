@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatMessage } from "./chat-message";
 import { buildComposioChatActionHref } from "@/lib/composio-chat-actions";
 
@@ -23,6 +23,43 @@ vi.mock("posthog-js/react/surveys", () => ({
     triggerRef: { current: null },
   })),
 }));
+
+beforeEach(() => {
+  global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input.toString();
+    if (url.startsWith("/api/composio/toolkits?")) {
+      const search = new URL(url, "http://localhost").searchParams.get("search")?.toLowerCase();
+      if (search === "slack") {
+        return new Response(JSON.stringify({
+          items: [{
+            slug: "slack",
+            name: "Slack",
+            description: "Messages and channels",
+            logo: "https://gateway.example/slack.svg",
+            categories: ["Communication"],
+            auth_schemes: ["oauth2"],
+            tools_count: 4,
+          }],
+        }));
+      }
+      if (search === "stripe") {
+        return new Response(JSON.stringify({
+          items: [{
+            slug: "stripe",
+            name: "Stripe",
+            description: "Payments infrastructure",
+            logo: "https://gateway.example/stripe.svg",
+            categories: ["Payments"],
+            auth_schemes: ["oauth2"],
+            tools_count: 12,
+          }],
+        }));
+      }
+      return new Response(JSON.stringify({ items: [] }));
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  }) as typeof fetch;
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -132,7 +169,7 @@ describe("ChatMessage", () => {
     });
   });
 
-  it("renders the branded Stripe connect action", () => {
+  it("renders the branded Stripe connect action from gateway toolkit data", async () => {
     render(
       <ChatMessage
         message={{
@@ -147,8 +184,11 @@ describe("ChatMessage", () => {
     );
 
     const button = screen.getByRole("button", { name: "Connect Stripe" });
-    const logo = button.querySelector('img[src="/integrations/stripe-logomark.svg"]');
+    await waitFor(() => {
+      const logo = button.querySelector('img[src="https://gateway.example/stripe.svg"]');
+      expect(logo).toBeTruthy();
+    });
 
-    expect(logo).toBeTruthy();
+    expect(button.querySelector('img[src="/integrations/stripe-logomark.svg"]')).toBeNull();
   });
 });

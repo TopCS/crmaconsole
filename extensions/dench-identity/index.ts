@@ -6,16 +6,10 @@ import {
   signComposioSearchContext,
 } from "../shared/composio-search-context.js";
 import {
-  readComposioToolCatalogFile,
-  readComposioMcpStatusFile,
-  readComposioToolIndexFile,
   type ComposioManagedAccount,
   type ComposioToolIndexFile,
 } from "./composio-cheat-sheet.js";
-import {
-  searchComposioTools,
-  type ComposioToolSearchResult,
-} from "./composio-tool-search.js";
+import { type ComposioToolSearchResult } from "./composio-tool-search.js";
 
 export const id = "dench-identity";
 
@@ -669,7 +663,7 @@ async function postComposioGatewayJson(params: {
           ?? `Gateway request failed with HTTP ${response.status}.`,
       };
     }
-    return asRecord(parsed);
+    return asRecord(parsed) ?? {};
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : String(error),
@@ -913,6 +907,7 @@ function mergeToolSummaryFromSchema(params: {
     arg_hints: Object.keys(localTool?.arg_hints ?? {}).length > 0
       ? localTool?.arg_hints ?? {}
       : argHints,
+    source: localTool?.source ?? "catalog",
     default_args: localTool?.default_args,
     example_args: localTool?.example_args,
     example_prompts: localTool?.example_prompts,
@@ -1029,14 +1024,9 @@ function loadCatalogCandidatesFromCache(
   workspaceDir: string,
   appSlug: string,
 ): ResolverToolCandidate[] {
-  const catalog = readComposioToolCatalogFile(workspaceDir);
-  const app = catalog?.connected_apps.find((entry) =>
-    normalizeResolverApp(entry.toolkit_slug) === normalizeResolverApp(appSlug)
-  );
-  return app?.tools.map((tool) => ({
-    ...tool,
-    source: "catalog",
-  })) ?? [];
+  void workspaceDir;
+  void appSlug;
+  return [];
 }
 
 async function fetchCatalogCandidatesLive(
@@ -1108,10 +1098,10 @@ function describeStatusForResolver(workspaceDir: string): {
   verified: boolean;
   message: string | null;
 } {
-  const status = readComposioMcpStatusFile(workspaceDir);
+  void workspaceDir;
   return {
-    verified: status?.summary?.verified === true,
-    message: typeof status?.summary?.message === "string" ? status.summary.message : null,
+    verified: false,
+    message: null,
   };
 }
 
@@ -1268,14 +1258,14 @@ type ComposioSearchPresentationResult = {
   known_pitfalls: string[];
   difficulty?: string | null;
   pagination_input_hints: string[];
-  search_source: "gateway_tool_router" | "local_catalog_mcp";
+  search_source: "gateway_tool_router";
   search_session_id?: string;
 };
 
 type ComposioSearchRun = {
   top_confidence: "high" | "medium" | "low";
   results: ComposioSearchPresentationResult[];
-  search_source: "gateway_tool_router" | "local_catalog_fallback";
+  search_source: "gateway_tool_router";
   search_session_id?: string;
   tool_schemas?: Record<string, UnknownRecord>;
   toolkit_connection_statuses?: UnknownRecord[];
@@ -1338,37 +1328,21 @@ function loadLocalResolverCandidate(
   toolkitSlug: string,
   toolName: string,
 ): ResolverToolCandidate | undefined {
-  const normalizedToolkit = normalizeResolverApp(toolkitSlug);
-  const featuredApp = index?.connected_apps.find((app) =>
-    normalizeResolverApp(app.toolkit_slug) === normalizedToolkit
-  );
-  if (featuredApp) {
-    const featured = buildFeaturedToolCandidates(featuredApp).find((tool) => tool.name === toolName);
-    if (featured) {
-      return featured;
-    }
-  }
-
-  const catalogApp = readComposioToolCatalogFile(workspaceDir)?.connected_apps.find((app) =>
-    normalizeResolverApp(app.toolkit_slug) === normalizedToolkit
-  );
-  const catalogTool = catalogApp?.tools.find((tool) => tool.name === toolName);
-  return catalogTool
-    ? {
-      ...catalogTool,
-      source: "catalog",
-    }
-    : undefined;
+  void workspaceDir;
+  void index;
+  void toolkitSlug;
+  void toolName;
+  return undefined;
 }
 
 function buildDispatcherInput(params: {
   appSlug: string;
   toolName: string;
   secret: string;
-  mode: "gateway_tool_router" | "local_catalog_mcp";
+  mode: "gateway_tool_router";
   sessionId?: string;
   selectedAccount?: ComposioSearchPresentationResult["selected_account"];
-  includeLegacyAccountFields?: boolean;
+  accountSelectionRequired?: boolean;
 }) {
   const token = signComposioSearchContext({
     version: 1,
@@ -1376,6 +1350,8 @@ function buildDispatcherInput(params: {
     app: params.appSlug,
     tool_name: params.toolName,
     ...(params.sessionId ? { session_id: params.sessionId } : {}),
+    ...(params.selectedAccount?.account ? { account: params.selectedAccount.account } : {}),
+    ...(params.accountSelectionRequired ? { account_required: true } : {}),
     issued_at: new Date().toISOString(),
   }, params.secret);
 
@@ -1385,12 +1361,6 @@ function buildDispatcherInput(params: {
     search_context_token: token,
     ...(params.sessionId ? { search_session_id: params.sessionId } : {}),
     ...(params.selectedAccount?.account ? { account: params.selectedAccount.account } : {}),
-    ...(params.includeLegacyAccountFields && params.selectedAccount?.connected_account_id
-      ? { connected_account_id: params.selectedAccount.connected_account_id }
-      : {}),
-    ...(params.includeLegacyAccountFields && params.selectedAccount?.account_identity
-      ? { account_identity: params.selectedAccount.account_identity }
-      : {}),
   };
   return dispatcherInput;
 }
@@ -1536,6 +1506,8 @@ function buildGatewayPresentationResults(params: {
       localApp: undefined,
     });
     const selectedAccount = chooseSearchAccountCandidate(accountCandidates, params.requestedAccount);
+    const accountSelectionRequired = !selectedAccount
+      && (accountCandidates.length > 1 || Boolean(params.requestedAccount?.trim()));
     const app = buildGatewayAppEntry({
       toolkitSlug,
       toolkitName,
@@ -1560,8 +1532,7 @@ function buildGatewayPresentationResults(params: {
       },
       account_candidates: accountCandidates,
       selected_account: selectedAccount,
-      account_selection_required: !selectedAccount
-        && (accountCandidates.length > 1 || Boolean(params.requestedAccount?.trim())),
+      account_selection_required: accountSelectionRequired,
       dispatcher_input: buildDispatcherInput({
         appSlug: toolkitSlug,
         toolName,
@@ -1569,6 +1540,7 @@ function buildGatewayPresentationResults(params: {
         mode: "gateway_tool_router",
         sessionId: sessionId ?? undefined,
         selectedAccount,
+        accountSelectionRequired,
       }),
       execution_guidance: readString(queryResult.execution_guidance) ?? null,
       recommended_plan_steps: readStringArray(queryResult.recommended_plan_steps),
@@ -1625,6 +1597,7 @@ async function runGatewayComposioToolSearch(params: {
       session: params.sessionId
         ? { id: params.sessionId }
         : { generate_id: true },
+      ...(params.requestedAccount?.trim() ? { account: params.requestedAccount.trim() } : {}),
       model: "gpt-5.4",
     },
   });
@@ -1697,27 +1670,28 @@ function buildSearchPresentationResults(params: {
           candidate.connected_account_id === localSelected.connected_account_id
         ) ?? null;
       })();
+    const accountSelectionRequired = !selectedAccount
+      && (app.account_count > 1 || Boolean(params.requestedAccount?.trim()));
     return [{
       app,
       search: result,
       account_candidates: accountCandidates,
       selected_account: selectedAccount,
-      account_selection_required: !selectedAccount
-        && (app.account_count > 1 || Boolean(params.requestedAccount?.trim())),
+      account_selection_required: accountSelectionRequired,
       dispatcher_input: buildDispatcherInput({
         appSlug: app.toolkit_slug,
         toolName: result.tool.name,
         secret: params.searchSecret,
-        mode: "local_catalog_mcp",
+        mode: "gateway_tool_router",
         selectedAccount,
-        includeLegacyAccountFields: true,
+        accountSelectionRequired,
       }),
       execution_guidance: null,
       recommended_plan_steps: [],
       known_pitfalls: [],
       difficulty: null,
       pagination_input_hints: detectPaginationInputHints(result.tool.input_schema),
-      search_source: "local_catalog_mcp",
+      search_source: "gateway_tool_router",
     }];
   });
 }
@@ -1731,24 +1705,11 @@ function runLocalComposioToolSearch(params: {
   topK?: number;
   searchSecret: string;
 }): ComposioSearchRun {
-  const catalog = readComposioToolCatalogFile(params.workspaceDir);
-  const search = searchComposioTools({
-    index: params.index,
-    catalog,
-    query: params.queryText,
-    app: params.requestedApp,
-    topK: params.topK,
-  });
+  void params;
   return {
-    top_confidence: search.top_confidence,
-    results: buildSearchPresentationResults({
-      index: params.index,
-      queryText: params.queryText,
-      requestedAccount: params.requestedAccount,
-      searchResults: search.results,
-      searchSecret: params.searchSecret,
-    }),
-    search_source: "local_catalog_fallback",
+    top_confidence: "low",
+    results: [],
+    search_source: "gateway_tool_router",
     next_steps_guidance: [],
   };
 }
