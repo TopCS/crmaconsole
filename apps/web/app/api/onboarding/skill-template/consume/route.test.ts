@@ -8,6 +8,7 @@ import {
   writeOnboardingState,
   type OnboardingState,
 } from "@/lib/denchclaw-state";
+import { buildSkillTemplatePrompt } from "@/lib/skill-templates";
 
 const { POST } = await import("./route");
 
@@ -40,7 +41,7 @@ describe("skill template consume API", () => {
     expect(first.status).toBe(200);
     const firstJson = (await first.json()) as { prompt: string | null; templateId?: string };
     expect(firstJson.templateId).toBe("icp-outreach-builder");
-    expect(firstJson.prompt).toContain("ICP Outreach Builder");
+    expect(firstJson.prompt).toBe(buildSkillTemplatePrompt("icp-outreach-builder"));
     expect(readOnboardingState().skillTemplate?.promptConsumedAt).toBeTruthy();
 
     const second = await POST();

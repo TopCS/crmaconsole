@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildSkillTemplatePrompt } from "./skill-templates";
 import { parseQuestionBlock, splitQuestionBlocks } from "./question-blocks";
 
 describe("question blocks", () => {
@@ -90,5 +91,28 @@ After.`);
   it("keeps invalid dench-question fences as text", () => {
     const text = "Pick:\n\n```dench-question\nnot json\n```";
     expect(splitQuestionBlocks(text)).toEqual([{ type: "text", text }]);
+  });
+
+  it("parses the canonical dench-question shape embedded in template prompts", () => {
+    const prompt = buildSkillTemplatePrompt("icp-outreach-builder");
+    const segments = splitQuestionBlocks(prompt);
+    const questionSegments = segments.filter(
+      (segment) => segment.type === "question",
+    );
+
+    expect(questionSegments).toHaveLength(1);
+    expect(questionSegments[0]).toMatchObject({
+      type: "question",
+      question: {
+        id: "short-stable-question-id",
+        prompt: "The one question you need answered",
+        allowMultiple: false,
+        optional: false,
+        options: [
+          { id: "first-option", label: "First option" },
+          { id: "second-option", label: "Second option" },
+        ],
+      },
+    });
   });
 });

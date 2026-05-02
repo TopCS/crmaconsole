@@ -273,6 +273,50 @@ describe("ChatMessage", () => {
     expect(answer).toContain("Raised funding (funding)");
   });
 
+  it("lets optional dench-question cards be skipped with context", async () => {
+    const user = userEvent.setup();
+    const onQuestionAnswer = vi.fn();
+
+    render(
+      <ChatMessage
+        message={{
+          id: "assistant-question-optional",
+          role: "assistant",
+          parts: [{
+            type: "text",
+            text: `\`\`\`dench-question
+{
+  "id": "crm-write-policy",
+  "prompt": "Should the skill update CRM fields automatically?",
+  "optional": true,
+  "optionalDetailsPlaceholder": "Describe your CRM rule...",
+  "options": [
+    { "id": "draft-only", "label": "Draft updates only" },
+    { "id": "auto-write", "label": "Write with source notes" }
+  ]
+}
+\`\`\``,
+          }],
+        }}
+        onQuestionAnswer={onQuestionAnswer}
+      />,
+    );
+
+    await user.type(
+      screen.getByPlaceholderText("Describe your CRM rule..."),
+      "Decide this after the first run.",
+    );
+    await user.click(screen.getByRole("button", { name: "Skip" }));
+
+    expect(onQuestionAnswer).toHaveBeenCalledWith(
+      [
+        'Skipped question "Should the skill update CRM fields automatically?"',
+        "Question ID: crm-write-policy",
+        "Additional context:\nDecide this after the first run.",
+      ].join("\n\n"),
+    );
+  });
+
   it("renders persisted Dench Integration failures with their error details", async () => {
     const user = userEvent.setup();
 
