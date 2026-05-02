@@ -739,11 +739,12 @@ export function AddColumnPopover({
 				body: JSON.stringify(body),
 			});
 
-			const result = await res.json().catch(() => ({ error: "Failed" }));
 			if (!res.ok) {
+				const result = await res.json().catch(() => ({ error: "Failed" }));
 				setError(result.error ?? "Failed to create enrichment field");
 				return;
 			}
+			const result = await res.json();
 
 			handleClose();
 			onCreated();

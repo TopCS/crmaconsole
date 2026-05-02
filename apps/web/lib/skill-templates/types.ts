@@ -111,11 +111,19 @@ export type SkillTemplate = {
   userUseCase: string;
   personas: readonly SkillTemplatePersona[];
   requiredApps: readonly SkillTemplateApp[];
+  suggestedApps: readonly SkillTemplateApp[];
   triggerModes: readonly SkillTemplateTriggerMode[];
   autonomy: SkillTemplateAutonomy;
   interviewQuestions: readonly SkillTemplateInterviewQuestion[];
   skillInstructions: readonly string[];
   buildPrompt: () => string;
+};
+
+export type SkillTemplateDefinitionInput = Omit<
+  SkillTemplate,
+  "buildPrompt" | "suggestedApps"
+> & {
+  suggestedApps?: readonly SkillTemplateApp[];
 };
 
 export type SkillTemplateDefinition = Omit<SkillTemplate, "buildPrompt">;

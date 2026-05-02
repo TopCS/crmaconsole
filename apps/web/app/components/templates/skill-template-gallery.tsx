@@ -38,7 +38,7 @@ function templateMatches(template: SkillTemplate, query: string): boolean {
     template.userUseCase,
     ...template.personas,
     ...template.triggerModes,
-    ...template.requiredApps.map((app) => app.name),
+    ...template.suggestedApps.map((app) => app.name),
     ...template.interviewQuestions.map((question) => question.prompt),
     ...template.interviewQuestions.flatMap((question) =>
       question.options?.map((option) => `${option.label} ${option.description ?? ""}`) ?? [],

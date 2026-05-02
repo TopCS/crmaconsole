@@ -198,8 +198,8 @@ export async function transcribeElevenLabsAudio(params: {
     body,
   });
 
-  const payload = await response.json().catch(() => null);
   if (!response.ok) {
+    const payload = await response.json().catch(() => null);
     throw new Error(
       readString(asRecord(payload)?.detail)
       ?? readString(asRecord(payload)?.error)
@@ -208,6 +208,7 @@ export async function transcribeElevenLabsAudio(params: {
     );
   }
 
+  const payload = await response.json();
   const text = extractTranscriptText(payload);
   if (!text) {
     throw new Error("Transcription completed without any text.");

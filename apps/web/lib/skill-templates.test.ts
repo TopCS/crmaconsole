@@ -52,7 +52,11 @@ describe("skill templates", () => {
     expect(prompt).toContain("Which buyer personas should DenchClaw");
     expect(prompt).toContain("Who this skill is for");
     expect(prompt).toContain("idempotency checks");
-    expect(prompt).toContain("Required external setup");
+    expect(prompt).toContain("Suggested app connections");
+    expect(prompt).toContain("[Connect Gmail](dench://composio/connect?toolkit=gmail&name=Gmail)");
+    expect(prompt).toContain("[Connect HubSpot](dench://composio/connect?toolkit=hubspot&name=HubSpot)");
+    expect(prompt).toContain("[Connect LinkedIn](dench://composio/connect?toolkit=linkedin&name=LinkedIn)");
+    expect(prompt).toContain("not required to start the interview");
   });
 
   it("marks every template with hand-authored UI and prompt metadata", () => {
@@ -77,6 +81,14 @@ describe("skill templates", () => {
       for (const app of template.requiredApps) {
         expect(app.slug).not.toBe("apollo");
         expect(app.name).not.toBe("Apollo");
+      }
+      expect(template.suggestedApps.length).toBeGreaterThan(0);
+      for (const app of template.suggestedApps) {
+        expect(app.slug).not.toBe("apollo");
+        expect(app.name).not.toBe("Apollo");
+      }
+      for (const requiredApp of template.requiredApps) {
+        expect(template.suggestedApps.map((app) => app.slug)).toContain(requiredApp.slug);
       }
       expect(template.triggerModes.length).toBeGreaterThan(0);
       expect(template.interviewQuestions.length).toBeGreaterThanOrEqual(4);

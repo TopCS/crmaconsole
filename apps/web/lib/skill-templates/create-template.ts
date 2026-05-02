@@ -2,6 +2,7 @@ import type {
   SkillTemplateApp,
   SkillTemplateCategory,
   SkillTemplateDefinition,
+  SkillTemplateDefinitionInput,
 } from "./types";
 
 export const externalApps = {
@@ -49,11 +50,79 @@ const categoryValidatedInstructions: Record<SkillTemplateCategory, readonly stri
   ],
 };
 
+const categorySuggestedApps: Record<SkillTemplateCategory, readonly SkillTemplateApp[]> = {
+  "Find Leads": [
+    externalApps.gmail,
+    externalApps.hubspot,
+    externalApps.linkedin,
+  ],
+  "Follow Up": [
+    externalApps.gmail,
+    externalApps.hubspot,
+    externalApps.googleCalendar,
+  ],
+  "Keep CRM Clean": [
+    externalApps.hubspot,
+    externalApps.gmail,
+    externalApps.slack,
+  ],
+  "Prep Meetings": [
+    externalApps.googleCalendar,
+    externalApps.gmail,
+    externalApps.hubspot,
+    externalApps.notion,
+  ],
+  "Research Anything": [
+    externalApps.notion,
+    externalApps.slack,
+    externalApps.gmail,
+    externalApps.linkedin,
+    externalApps.github,
+  ],
+  "Hire People": [
+    externalApps.linkedin,
+    externalApps.gmail,
+    externalApps.googleCalendar,
+    externalApps.notion,
+    externalApps.github,
+  ],
+  "Grow Customers": [
+    externalApps.hubspot,
+    externalApps.gmail,
+    externalApps.slack,
+    externalApps.googleCalendar,
+  ],
+  "Run Founder Ops": [
+    externalApps.gmail,
+    externalApps.googleCalendar,
+    externalApps.notion,
+    externalApps.slack,
+    externalApps.hubspot,
+  ],
+};
+
+function dedupeApps(apps: readonly SkillTemplateApp[]): readonly SkillTemplateApp[] {
+  const seen = new Set<string>();
+  return apps.filter((app) => {
+    if (seen.has(app.slug)) {
+      return false;
+    }
+    seen.add(app.slug);
+    return true;
+  });
+}
+
 export function defineSkillTemplate(
-  template: SkillTemplateDefinition,
+  template: SkillTemplateDefinitionInput,
 ): SkillTemplateDefinition {
   return {
     ...template,
+    suggestedApps: dedupeApps(
+      template.suggestedApps ?? [
+        ...template.requiredApps,
+        ...categorySuggestedApps[template.category],
+      ],
+    ),
     skillInstructions: [
       ...template.skillInstructions,
       ...customerValidatedInstructions,

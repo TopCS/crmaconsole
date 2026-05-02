@@ -2,6 +2,7 @@ import type {
   SkillTemplateDefinition,
   SkillTemplateInterviewQuestion,
 } from "./types";
+import { buildComposioChatActionHref } from "../composio-chat-actions";
 
 function bulletList(items: readonly string[]): string {
   return items.map((item) => `- ${item}`).join("\n");
@@ -26,14 +27,31 @@ function formatQuestion(question: SkillTemplateInterviewQuestion, index: number)
   return `${index + 1}. ${question.prompt} [id: ${question.id}; ${required}; ${mode}].${optionText}${freeform}`;
 }
 
+function formatSuggestedAppConnections(template: SkillTemplateDefinition): string {
+  if (!template.suggestedApps.length) {
+    return "No suggested app connections for this template.";
+  }
+
+  return template.suggestedApps
+    .map((app) => {
+      const href = buildComposioChatActionHref("connect", {
+        toolkitSlug: app.slug,
+        toolkitName: app.name,
+      });
+      return `- [Connect ${app.name}](${href})`;
+    })
+    .join("\n");
+}
+
 export function buildSkillTemplatePromptText(template: SkillTemplateDefinition): string {
   const triggerModes = template.triggerModes
     .map((mode) => (mode === "scheduled" ? "cron/scheduled agent message" : "manual trigger"))
     .join(" and ");
   const personas = template.personas.join(", ");
-  const requiredApps = template.requiredApps.length
-    ? template.requiredApps.map((app) => app.name).join(", ")
+  const suggestedApps = template.suggestedApps.length
+    ? template.suggestedApps.map((app) => app.name).join(", ")
     : "no external apps; use Dench-native CRM, enrichment, web search, local files, and workspace context";
+  const suggestedAppConnections = formatSuggestedAppConnections(template);
 
   return `I want to create a reusable DenchClaw skill called "${template.title}".
 
@@ -41,7 +59,10 @@ This should become a durable DenchClaw skill, not a one-off chat. DenchClaw is m
 
 This template is mainly for these personas: ${personas}.
 
-Required external setup for this template: ${requiredApps}.
+Suggested app connections for this template: ${suggestedApps}. These are not required to start the interview; they only unlock stronger source context or write-back later.
+
+If suggested app connections exist, before the first interview question briefly show them as optional setup buttons and tell me I can skip them for now. Use exactly these markdown links so the chat renders Connect buttons:
+${suggestedAppConnections}
 
 Who this skill is for and when it should help:
 ${template.userUseCase}
