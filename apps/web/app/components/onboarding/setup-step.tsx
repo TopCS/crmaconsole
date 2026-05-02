@@ -71,6 +71,7 @@ const ONBOARDING_STEP_ORDER = [
   "connect-gmail",
   "connect-calendar",
   "backfill",
+  "skill-template",
   "complete",
 ] as const;
 

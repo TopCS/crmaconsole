@@ -131,7 +131,7 @@ export function SyncStep({
       const res = await fetch("/api/onboarding/state", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from: "backfill", to: "complete" }),
+        body: JSON.stringify({ from: "backfill", to: "skill-template" }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -201,7 +201,7 @@ export function SyncStep({
             (e.currentTarget as HTMLElement).style.opacity = "1";
           }}
         >
-          {completing ? "Opening workspace…" : "Let's go"}
+          {completing ? "Loading templates…" : "Choose starter skill"}
         </button>
       </div>
     </div>
