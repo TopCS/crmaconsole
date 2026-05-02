@@ -1,22 +1,55 @@
 export const SKILL_TEMPLATE_IDS = [
-  "icp-outreach-builder",
   "target-account-list-builder",
-  "morning-lead-research-brief",
-  "crm-contact-enricher",
+  "icp-outreach-builder",
+  "lookalike-customer-finder",
+  "funding-signal-prospector",
+  "hiring-signal-prospector",
+  "website-visitor-follow-up",
+  "conference-lead-researcher",
+  "linkedin-style-outreach",
   "stale-thread-follow-up-agent",
-  "meeting-prep-brief",
-  "post-meeting-follow-through",
+  "warm-lead-nurture",
+  "proposal-chaser",
+  "no-show-recovery",
+  "crm-contact-enricher",
+  "duplicate-record-cleaner",
+  "relationship-strength-scorer",
   "pipeline-hygiene-digest",
+  "meeting-prep-brief",
+  "executive-daily-brief",
+  "investor-meeting-prep",
+  "post-meeting-follow-through",
+  "company-deep-researcher",
+  "competitor-monitor",
+  "news-signal-digest",
+  "customer-voice-miner",
+  "market-map-builder",
+  "candidate-research-brief",
+  "interview-follow-up-agent",
+  "talent-pipeline-hygiene",
+  "hiring-manager-weekly-digest",
+  "recruiting-outreach-builder",
+  "lost-customer-winback",
+  "account-health-monitor",
+  "renewal-risk-digest",
+  "weekly-founder-digest",
+  "fundraising-target-builder",
+  "board-meeting-prep",
+  "partner-pipeline-builder",
+  "investor-update-builder",
 ] as const;
 
 export type SkillTemplateId = (typeof SKILL_TEMPLATE_IDS)[number];
 
 export const SKILL_TEMPLATE_CATEGORIES = [
-  "Find leads",
-  "Research",
-  "Follow up",
-  "Meetings",
-  "CRM hygiene",
+  "Find Leads",
+  "Follow Up",
+  "Keep CRM Clean",
+  "Prep Meetings",
+  "Research Anything",
+  "Hire People",
+  "Grow Customers",
+  "Run Founder Ops",
 ] as const;
 
 export type SkillTemplateCategory =
@@ -29,6 +62,20 @@ export type SkillTemplateAutonomy =
   | "Updates CRM"
   | "Can automate";
 
+export const SKILL_TEMPLATE_PERSONAS = [
+  "Founder",
+  "Sales",
+  "RevOps",
+  "Recruiter",
+  "Customer Success",
+  "Investor/BD",
+  "Operator",
+  "Knowledge Worker",
+] as const;
+
+export type SkillTemplatePersona =
+  (typeof SKILL_TEMPLATE_PERSONAS)[number];
+
 export type SkillTemplateApp = {
   slug: string;
   name: string;
@@ -40,6 +87,7 @@ export type SkillTemplate = {
   summary: string;
   category: SkillTemplateCategory;
   outcome: string;
+  personas: readonly SkillTemplatePersona[];
   requiredApps: readonly SkillTemplateApp[];
   triggerModes: readonly SkillTemplateTriggerMode[];
   autonomy: SkillTemplateAutonomy;

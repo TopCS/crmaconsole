@@ -1,32 +1,13 @@
-import type { SkillTemplateDefinition } from "./types";
+import { createSkillTemplate, externalApps } from "./create-template";
 
-export const postMeetingFollowThrough: SkillTemplateDefinition = {
+export const postMeetingFollowThrough = createSkillTemplate({
   id: "post-meeting-follow-through",
-  title: "Post-Meeting Follow-Through",
-  summary: "Convert meeting notes into CRM updates, tasks, and follow-up emails.",
-  category: "Meetings",
-  outcome:
-    "A follow-through skill that turns meeting notes or a short user recap into CRM updates, next steps, owner tasks, and follow-up drafts or sends.",
-  requiredApps: [
-    { slug: "google-calendar", name: "Google Calendar" },
-    { slug: "gmail", name: "Gmail" },
-    { slug: "hubspot", name: "HubSpot" },
-  ],
+  title: "Post-meeting Follow-through",
+  summary: "Turn meeting notes into follow-ups, CRM updates, and owner-specific tasks.",
+  category: "Prep Meetings",
+  outcome: "Summarizes meeting outcomes, drafts or sends next-step emails, updates CRM, and creates scheduled reminders.",
+  personas: ["Founder", "Sales", "Customer Success", "Recruiter"],
+  requiredApps: [externalApps.googleCalendar, externalApps.gmail, externalApps.hubspot],
   triggerModes: ["manual", "scheduled"],
-  autonomy: "Can automate",
-  interviewTopics: [
-    "Where meeting notes or recaps will come from and whether transcripts are available.",
-    "Which CRM objects, stages, fields, and tasks should be updated after meetings.",
-    "The user's preferred follow-up email structure and tone.",
-    "What should require confirmation before writing to CRM or sending externally.",
-    "How to detect meetings that have not yet been processed in scheduled lookbacks.",
-    "How next steps, dates, and owners should be represented.",
-  ],
-  skillInstructions: [
-    "A manual flow for processing pasted notes or selected meeting context.",
-    "A scheduled lookback flow that finds recently ended meetings without assuming webhooks.",
-    "CRM update, task creation, and follow-up drafting/sending rules.",
-    "Idempotency checks to avoid processing the same meeting twice.",
-    "Examples of concise CRM notes, next-step summaries, and follow-up messages.",
-  ],
-};
+  focusAreas: ["meeting types", "notes source", "follow-up SLA", "CRM updates"],
+});

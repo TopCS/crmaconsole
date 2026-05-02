@@ -1,32 +1,13 @@
-import type { SkillTemplateDefinition } from "./types";
+import { createSkillTemplate, externalApps } from "./create-template";
 
-export const icpOutreachBuilder: SkillTemplateDefinition = {
+export const icpOutreachBuilder = createSkillTemplate({
   id: "icp-outreach-builder",
   title: "ICP Outreach Builder",
-  summary: "Turn an ICP, offer, and lead source into reusable personalized outreach.",
-  category: "Find leads",
-  outcome:
-    "A repeatable outreach skill that finds or accepts target leads, researches each person, writes personalized messages, and follows a configured send or approval policy.",
-  requiredApps: [
-    { slug: "gmail", name: "Gmail" },
-    { slug: "hubspot", name: "HubSpot" },
-    { slug: "apollo", name: "Apollo" },
-  ],
+  summary: "Build a guardrailed outbound skill from an ICP, offer, and send policy.",
+  category: "Find Leads",
+  outcome: "Researches ICP-matched leads, writes personalized messages, follows the configured send policy, and logs activity to CRM.",
+  personas: ["Founder", "Sales"],
+  requiredApps: [externalApps.gmail, externalApps.hubspot],
   triggerModes: ["manual", "scheduled"],
-  autonomy: "Can automate",
-  interviewTopics: [
-    "The exact ICP, buyer persona, geography, company size, and exclusion criteria.",
-    "The offer, call to action, proof points, and why this audience should care now.",
-    "Where leads should come from: Dench CRM, manual lists, enrichment, web search, HubSpot, Notion, or another source.",
-    "Personalization depth, voice, message length, and channels to prepare for.",
-    "Whether the skill should draft only, batch for approval, or send automatically after rules are configured.",
-    "Follow-up cadence, send caps, stop rules, and what should be written back to CRM.",
-  ],
-  skillInstructions: [
-    "A clear trigger description for when future agents should use the outreach skill.",
-    "Step-by-step research, personalization, drafting, sending, follow-up, and CRM logging instructions.",
-    "Required inputs and sensible defaults for ICP, offer, source list, tone, cadence, and limits.",
-    "Safety checks for duplicate outreach, reply detection, blocked domains, and disallowed recipients.",
-    "Examples of high-quality personalized outputs and a cron message for scheduled follow-up runs.",
-  ],
-};
+  focusAreas: ["ICP and buyer persona", "offer and CTA", "send rules", "follow-up cadence"],
+});

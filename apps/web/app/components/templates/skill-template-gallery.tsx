@@ -72,6 +72,7 @@ function templateMatches(template: SkillTemplate, query: string): boolean {
     template.category,
     template.outcome,
     template.autonomy,
+    ...template.personas,
     ...template.triggerModes,
     ...template.requiredApps.map((app) => app.name),
     ...template.interviewTopics,
@@ -98,10 +99,10 @@ function DefaultHeader({ mode }: { mode: SkillTemplateGalleryMode }) {
       ? {
           title: "Start from a template.",
           description:
-            "Pick a proven GTM workflow and DenchClaw will open a chat to shape it into your own reusable skill.",
+            "Pick a proven workflow and DenchClaw will open a chat to shape it into your own reusable skill.",
         }
       : {
-          title: "Choose your first GTM skill.",
+          title: "Choose your first skill.",
           description:
             "Pick one concrete workflow. DenchClaw will interview you, then turn your answers into a reusable skill.",
         };
@@ -137,16 +138,22 @@ function outputLabel(template: SkillTemplate): string {
 
 function contextLabel(template: SkillTemplate): string {
   switch (template.category) {
-    case "Find leads":
+    case "Find Leads":
       return "ICP + lead source";
-    case "Research":
-      return "Signals + CRM";
-    case "Follow up":
-      return "Threads + timing";
-    case "Meetings":
-      return "Calendar + CRM";
-    case "CRM hygiene":
+    case "Follow Up":
+      return "Thread + timing";
+    case "Keep CRM Clean":
       return "Records + gaps";
+    case "Prep Meetings":
+      return "Calendar + context";
+    case "Research Anything":
+      return "Signals + CRM";
+    case "Hire People":
+      return "Role + pipeline";
+    case "Grow Customers":
+      return "Accounts + risks";
+    case "Run Founder Ops":
+      return "Sources + cadence";
   }
 }
 
@@ -166,7 +173,7 @@ function buildWorkflowPreviewSteps(template: SkillTemplate): WorkflowPreviewStep
       id: "context",
       eyebrow: "Context",
       label: contextLabel(template),
-      Icon: template.category === "Meetings" ? FiCalendar : FiDatabase,
+      Icon: template.category === "Prep Meetings" ? FiCalendar : FiDatabase,
     },
     {
       id: "agent",
@@ -654,6 +661,9 @@ function TemplateSetupModal({
 
               <div className="mt-5 flex flex-wrap gap-1.5">
                 <TemplateBadge>{template.category}</TemplateBadge>
+                {template.personas.slice(0, 2).map((persona) => (
+                  <TemplateBadge key={persona}>{persona}</TemplateBadge>
+                ))}
                 {template.triggerModes.map((mode) => (
                   <TemplateBadge key={mode}>{badgeText(mode)}</TemplateBadge>
                 ))}
@@ -667,7 +677,9 @@ function TemplateSetupModal({
                       Connect required apps
                     </h3>
                     <p className="mt-1 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-                      {connectedCount}/{requiredApps.length} connected
+                      {requiredApps.length === 0
+                        ? "No external apps needed"
+                        : `${connectedCount}/${requiredApps.length} connected`}
                     </p>
                   </div>
                   {allConnected && (
@@ -685,17 +697,31 @@ function TemplateSetupModal({
                 </div>
 
                 <div className="space-y-2.5">
-                  {requiredApps.map(({ app, toolkit, activeConnections }, index) => (
-                    <RequiredAppConnectionRow
-                      key={app.slug}
-                      app={app}
-                      toolkit={toolkit}
-                      activeConnections={activeConnections.length}
-                      loading={state.loading}
-                      index={index}
-                      onConnect={() => handleOpenConnectModal(toolkit)}
-                    />
-                  ))}
+                  {requiredApps.length === 0 ? (
+                    <p
+                      className="rounded-2xl border px-3 py-3 text-[12.5px] leading-relaxed"
+                      style={{
+                        borderColor: "var(--color-border)",
+                        background: "var(--color-background)",
+                        color: "var(--color-text-muted)",
+                      }}
+                    >
+                      This template uses Dench-native CRM, enrichment, web search,
+                      files, and workspace context by default.
+                    </p>
+                  ) : (
+                    requiredApps.map(({ app, toolkit, activeConnections }, index) => (
+                      <RequiredAppConnectionRow
+                        key={app.slug}
+                        app={app}
+                        toolkit={toolkit}
+                        activeConnections={activeConnections.length}
+                        loading={state.loading}
+                        index={index}
+                        onConnect={() => handleOpenConnectModal(toolkit)}
+                      />
+                    ))
+                  )}
                 </div>
 
                 {state.error && (
@@ -712,15 +738,7 @@ function TemplateSetupModal({
                 )}
               </div>
 
-              <div className="mt-auto flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={handleStart}
-                  className="text-[12px] font-semibold transition-colors hover:text-[var(--color-text)]"
-                  style={{ color: "var(--color-text-muted)" }}
-                >
-                  Skip setup
-                </button>
+              <div className="mt-auto flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={handleStart}

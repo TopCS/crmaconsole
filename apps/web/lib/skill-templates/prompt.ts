@@ -4,21 +4,29 @@ function bulletList(items: readonly string[]): string {
   return items.map((item) => `- ${item}`).join("\n");
 }
 
-export function buildGtmSkillPrompt(template: SkillTemplateDefinition): string {
+export function buildSkillTemplatePromptText(template: SkillTemplateDefinition): string {
   const triggerModes = template.triggerModes
     .map((mode) => (mode === "scheduled" ? "cron/scheduled agent message" : "manual trigger"))
     .join(" and ");
+  const personas = template.personas.join(", ");
+  const requiredApps = template.requiredApps.length
+    ? template.requiredApps.map((app) => app.name).join(", ")
+    : "no external apps; use Dench-native CRM, enrichment, web search, local files, and workspace context";
 
   return `I want to create a reusable DenchClaw skill called "${template.title}".
 
-This should become a durable GTM skill, not a one-off chat. DenchClaw is my AI workspace with CRM, Gmail, Calendar, enrichment, web search, and optional HubSpot or Notion context. Treat Dench CRM as the default system of record, and use Gmail and Calendar as first-class context when they are connected.
+This should become a durable DenchClaw skill, not a one-off chat. DenchClaw is my AI workspace with built-in CRM, enrichment, Apollo-style data, web search, local files, and optional connected apps. Treat Dench-native capabilities as available by default, and use connected apps only when they are required or helpful.
+
+This template is mainly for these personas: ${personas}.
+
+Required external setup for this template: ${requiredApps}.
 
 The desired outcome is:
 ${template.outcome}
 
 Available trigger modes for this product are only manual trigger and cron/scheduled agent messages. For this skill, design around ${triggerModes}. Do not assume webhooks, event listeners, or automatic app callbacks exist.
 
-Start by interviewing me one question at a time. Do not echo this setup back to me. Ask the smallest next question needed, keep each interview turn under 120 words unless options are essential, wait for my answer, then ask the next question. Do not create or edit any files until you have enough context to tailor the workflow.
+Start by interviewing me one question at a time. Do not echo this setup back to me. Ask only 3-5 focused questions before creating the skill unless a safety-critical automation rule is still missing. Ask the smallest next question needed, keep each interview turn under 120 words unless options are essential, wait for my answer, then ask the next question. Do not create or edit any files until you have enough context to tailor the workflow.
 
 When the next question has clear choices, ask it with a Dench question card instead of plain text bullets. Use this exact fenced JSON shape, then stop and wait for my selection:
 \`\`\`dench-question

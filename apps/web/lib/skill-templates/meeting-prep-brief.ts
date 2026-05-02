@@ -1,32 +1,13 @@
-import type { SkillTemplateDefinition } from "./types";
+import { createSkillTemplate, externalApps } from "./create-template";
 
-export const meetingPrepBrief: SkillTemplateDefinition = {
+export const meetingPrepBrief = createSkillTemplate({
   id: "meeting-prep-brief",
   title: "Meeting Prep Brief",
-  summary: "Prepare for sales calls with CRM, Gmail, Calendar, and web context.",
-  category: "Meetings",
-  outcome:
-    "A prep skill that turns upcoming meetings into concise briefs with relationship context, company research, open questions, and suggested agenda.",
-  requiredApps: [
-    { slug: "google-calendar", name: "Google Calendar" },
-    { slug: "gmail", name: "Gmail" },
-    { slug: "hubspot", name: "HubSpot" },
-  ],
-  triggerModes: ["scheduled", "manual"],
-  autonomy: "Creates drafts",
-  interviewTopics: [
-    "Which meetings should receive prep briefs and how far ahead to prepare them.",
-    "Which context matters most: CRM stage, prior emails, calendar history, company research, LinkedIn-style background, or notes.",
-    "Preferred brief format, length, and where it should be saved.",
-    "Questions the user always wants answered before a call.",
-    "Whether the skill should draft agenda emails or internal notes.",
-    "What data should never be included in a brief.",
-  ],
-  skillInstructions: [
-    "A calendar scanning workflow for finding eligible meetings.",
-    "Research steps across CRM, Gmail, Calendar, web search, and optional notes systems.",
-    "A structured brief format with priorities, risks, open loops, agenda, and suggested asks.",
-    "Privacy and relevance filters so briefs stay useful and concise.",
-    "A cron message for preparing briefs before the user's workday or before each call window.",
-  ],
-};
+  summary: "Prepare concise briefs before sales, customer, partner, or recruiting calls.",
+  category: "Prep Meetings",
+  outcome: "Researches attendees, recent context, CRM history, open asks, risks, and recommended agenda before important meetings.",
+  personas: ["Founder", "Sales", "Customer Success", "Investor/BD"],
+  requiredApps: [externalApps.googleCalendar, externalApps.gmail],
+  triggerModes: ["manual", "scheduled"],
+  focusAreas: ["meeting types", "research depth", "brief timing", "sensitive topics"],
+});

@@ -70,13 +70,13 @@ describe("SkillTemplateGallery", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Meetings" }));
+    await user.click(screen.getByRole("button", { name: "Prep Meetings" }));
 
     expect(
       screen.getByRole("button", { name: /Meeting Prep Brief/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Post-Meeting Follow-Through/i }),
+      screen.getByRole("button", { name: /Post-meeting Follow-through/i }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /ICP Outreach Builder/i }),
@@ -96,7 +96,7 @@ describe("SkillTemplateGallery", () => {
     );
 
     const templateCard = screen.getByRole("button", {
-      name: /Morning Lead Research Brief/i,
+      name: /Company Deep Researcher/i,
     });
 
     expect(templateCard).toHaveAccessibleName(/Start/i);
@@ -104,12 +104,39 @@ describe("SkillTemplateGallery", () => {
     await user.click(templateCard);
 
     expect(
-      await screen.findByRole("heading", { name: /Morning Lead Research Brief/i }),
+      await screen.findByRole("heading", { name: /Company Deep Researcher/i }),
     ).toBeInTheDocument();
     expect(screen.getByText("Connect required apps")).toBeInTheDocument();
+    expect(screen.getByText("No external apps needed")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Skip setup" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
 
-    expect(onSelectTemplate).toHaveBeenCalledWith("morning-lead-research-brief");
+    expect(onSelectTemplate).toHaveBeenCalledWith("company-deep-researcher");
+  });
+
+  it("requires connected external apps before starting a template", async () => {
+    const user = userEvent.setup();
+    const onSelectTemplate = vi.fn();
+
+    render(
+      <SkillTemplateGallery
+        selectedTemplateId="icp-outreach-builder"
+        onSelectTemplate={onSelectTemplate}
+        actionLabel="Start"
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /ICP Outreach Builder/i,
+      }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: /ICP Outreach Builder/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Skip setup" })).not.toBeInTheDocument();
+    expect(onSelectTemplate).not.toHaveBeenCalled();
   });
 });
