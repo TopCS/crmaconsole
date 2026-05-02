@@ -75,6 +75,7 @@ import { displayObjectName, displayObjectNameSingular } from "@/lib/object-displ
 import { isSeedPeopleObjectId, isSeedCompanyObjectId } from "@/lib/seed-object-ids";
 import { CronDashboard } from "../components/cron/cron-dashboard";
 import { SkillStorePanel } from "../components/skill-store/skill-store-panel";
+import { SkillTemplateGalleryPanel } from "../components/templates/skill-template-gallery-panel";
 import { IntegrationsPanel } from "../components/integrations/integrations-panel";
 import { ChatComposioModalHost } from "../components/integrations/chat-composio-modal-host";
 import { CloudSettingsPanel } from "../components/settings/cloud-settings-panel";
@@ -131,6 +132,8 @@ import {
 } from "@/lib/workspace-paths";
 import dynamic from "next/dynamic";
 import type { ComposioChatAction } from "@/lib/composio-chat-actions";
+import { startSkillTemplateChatFromDashboard } from "@/lib/skill-template-chat-start";
+import type { SkillTemplateId } from "@/lib/skill-templates";
 
 const TerminalDrawer = dynamic(
   () => import("../components/terminal/terminal-drawer"),
@@ -579,6 +582,7 @@ function WorkspacePageInner() {
 
   // Terminal drawer state
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [templatesPanelOpen, setTemplatesPanelOpen] = useState(false);
   const [pendingComposioAction, setPendingComposioAction] = useState<ComposioChatAction | null>(null);
   const [tableSelectionContext, setTableSelectionContext] = useState<TableSelectionContext | null>(null);
 
@@ -808,6 +812,18 @@ function WorkspacePageInner() {
       });
     });
   }, []);
+
+  const handleStartDashboardTemplate = useCallback(
+    (templateId: SkillTemplateId) => {
+      setTemplatesPanelOpen(false);
+      startSkillTemplateChatFromDashboard({
+        templateId,
+        openChatTab: openPermanentBlankChatTab,
+        sendMessageInChatTab,
+      });
+    },
+    [openPermanentBlankChatTab, sendMessageInChatTab],
+  );
 
   // Navigate to a subagent panel when its card is clicked in the chat.
   // The identifier may be a childSessionKey (preferred) or a task label (legacy fallback).
@@ -2358,6 +2374,7 @@ function WorkspacePageInner() {
     onNewChatSession: () => {
       openPermanentBlankChatTab();
     },
+    onOpenTemplates: () => setTemplatesPanelOpen(true),
     onSelectHistorySubagent: handleSelectSubagent,
     onSelectHistoryGatewaySession: (sessionKey: string, sessionId: string) => {
       const gs = gatewaySessions.find((s) => s.sessionKey === sessionKey);
@@ -2657,6 +2674,12 @@ function WorkspacePageInner() {
           request={pendingComposioAction}
           onRequestHandled={handleComposioActionHandled}
           onFallbackToIntegrations={handleComposioFallbackToIntegrations}
+        />
+
+        <SkillTemplateGalleryPanel
+          open={templatesPanelOpen}
+          onOpenChange={setTemplatesPanelOpen}
+          onStartTemplate={handleStartDashboardTemplate}
         />
 
         {terminalOpen && (
