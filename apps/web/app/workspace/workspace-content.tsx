@@ -159,6 +159,11 @@ type WebSession = {
   filePath?: string;
 };
 
+type SkillTemplateConsumeResponse = {
+  prompt: string | null;
+  templateId?: string;
+};
+
 // Left sidebar has two visual modes driven by width:
 // - compact (icon-only) at LEFT_SIDEBAR_COMPACT_WIDTH
 // - full (labels, chat list, CRM nav) at >= LEFT_SIDEBAR_FULL_MIN
@@ -495,6 +500,8 @@ function WorkspacePageInner() {
   const chatRef = useRef<ChatPanelHandle>(null);
   // Mounted main chat panels keyed by tab id so inactive tabs can keep streaming.
   const chatPanelRefs = useRef<Record<string, ChatPanelHandle | null>>({});
+  const skillTemplateHandoffCheckedRef = useRef(false);
+  const skillTemplatePromptSentRef = useRef(false);
   // Root layout ref for resize handle position (handle follows cursor)
   const layoutRef = useRef<HTMLDivElement>(null);
   const [layoutWidth, setLayoutWidth] = useState(0);
@@ -1908,6 +1915,43 @@ function WorkspacePageInner() {
     const tab = openBlankChatTab();
     sendMessageInChatTab(tab.id, sendParam);
   }, [openBlankChatTab, searchParams, router, sendMessageInChatTab]);
+
+  // After onboarding, consume a selected starter template once and use the
+  // same blank-chat path as other in-app auto-send entry points.
+  useEffect(() => {
+    if (searchParams.get("send")) {return;}
+    if (
+      skillTemplateHandoffCheckedRef.current ||
+      skillTemplatePromptSentRef.current
+    ) {
+      return;
+    }
+    skillTemplateHandoffCheckedRef.current = true;
+
+    async function consumeSkillTemplatePrompt() {
+      try {
+        const res = await fetch("/api/onboarding/skill-template/consume", {
+          method: "POST",
+        });
+        if (!res.ok) {return;}
+        const data = (await res.json()) as SkillTemplateConsumeResponse;
+        if (
+          typeof data.prompt !== "string" ||
+          !data.prompt.trim() ||
+          skillTemplatePromptSentRef.current
+        ) {
+          return;
+        }
+        skillTemplatePromptSentRef.current = true;
+        const tab = openBlankChatTab();
+        sendMessageInChatTab(tab.id, data.prompt);
+      } catch {
+        // This is a best-effort first-run handoff; the workspace should still load.
+      }
+    }
+
+    void consumeSkillTemplatePrompt();
+  }, [openBlankChatTab, searchParams, sendMessageInChatTab]);
 
   const formatBreadcrumbSegment = useCallback(
     (segment: string, partialPath: string) => {
