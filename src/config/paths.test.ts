@@ -3,12 +3,12 @@ import {
   isDaemonlessMode,
   resolveGatewayPort,
   DEFAULT_GATEWAY_PORT,
-  DENCHCLAW_DEFAULT_GATEWAY_PORT,
+  CRM_A_CONSOLE_DEFAULT_GATEWAY_PORT,
 } from "./paths.js";
 
 describe("resolveGatewayPort", () => {
-  it("returns DenchClaw port when profile is dench and no config/env override (prevents OpenClaw port hijack)", () => {
-    const port = resolveGatewayPort(undefined, { OPENCLAW_PROFILE: "dench" });
+  it("returns Crm-A Console port when profile is crm-a and no config/env override (prevents OpenClaw port hijack)", () => {
+    const port = resolveGatewayPort(undefined, { OPENCLAW_PROFILE: "crm-a" });
     expect(port).toBe(19001);
     expect(port).not.toBe(DEFAULT_GATEWAY_PORT);
   });
@@ -20,7 +20,7 @@ describe("resolveGatewayPort", () => {
   it("env OPENCLAW_GATEWAY_PORT overrides profile-based default (supports runtime override)", () => {
     expect(
       resolveGatewayPort(undefined, {
-        OPENCLAW_PROFILE: "dench",
+        OPENCLAW_PROFILE: "crm-a",
         OPENCLAW_GATEWAY_PORT: "19500",
       }),
     ).toBe(19500);
@@ -31,7 +31,7 @@ describe("resolveGatewayPort", () => {
   });
 
   it("config port overrides profile-based default (honours persisted config)", () => {
-    expect(resolveGatewayPort({ gateway: { port: 19005 } }, { OPENCLAW_PROFILE: "dench" })).toBe(
+    expect(resolveGatewayPort({ gateway: { port: 19005 } }, { OPENCLAW_PROFILE: "crm-a" })).toBe(
       19005,
     );
   });
@@ -45,35 +45,35 @@ describe("resolveGatewayPort", () => {
   it("ignores non-numeric env values and falls through to profile default (malformed input)", () => {
     expect(
       resolveGatewayPort(undefined, {
-        OPENCLAW_PROFILE: "dench",
+        OPENCLAW_PROFILE: "crm-a",
         OPENCLAW_GATEWAY_PORT: "not-a-number",
       }),
-    ).toBe(DENCHCLAW_DEFAULT_GATEWAY_PORT);
+    ).toBe(CRM_A_CONSOLE_DEFAULT_GATEWAY_PORT);
   });
 
   it("ignores zero and negative config ports (invalid config)", () => {
-    expect(resolveGatewayPort({ gateway: { port: 0 } }, { OPENCLAW_PROFILE: "dench" })).toBe(
-      DENCHCLAW_DEFAULT_GATEWAY_PORT,
+    expect(resolveGatewayPort({ gateway: { port: 0 } }, { OPENCLAW_PROFILE: "crm-a" })).toBe(
+      CRM_A_CONSOLE_DEFAULT_GATEWAY_PORT,
     );
-    expect(resolveGatewayPort({ gateway: { port: -1 } }, { OPENCLAW_PROFILE: "dench" })).toBe(
-      DENCHCLAW_DEFAULT_GATEWAY_PORT,
+    expect(resolveGatewayPort({ gateway: { port: -1 } }, { OPENCLAW_PROFILE: "crm-a" })).toBe(
+      CRM_A_CONSOLE_DEFAULT_GATEWAY_PORT,
     );
   });
 
   it("treats whitespace-only env as absent (trims before parsing)", () => {
     expect(
       resolveGatewayPort(undefined, {
-        OPENCLAW_PROFILE: "dench",
+        OPENCLAW_PROFILE: "crm-a",
         OPENCLAW_GATEWAY_PORT: "   ",
       }),
-    ).toBe(DENCHCLAW_DEFAULT_GATEWAY_PORT);
+    ).toBe(CRM_A_CONSOLE_DEFAULT_GATEWAY_PORT);
   });
 
   it("undefined config falls through to profile/global default", () => {
     expect(resolveGatewayPort(undefined, {})).toBe(DEFAULT_GATEWAY_PORT);
     expect(resolveGatewayPort({}, {})).toBe(DEFAULT_GATEWAY_PORT);
-    expect(resolveGatewayPort({ gateway: {} }, { OPENCLAW_PROFILE: "dench" })).toBe(
-      DENCHCLAW_DEFAULT_GATEWAY_PORT,
+    expect(resolveGatewayPort({ gateway: {} }, { OPENCLAW_PROFILE: "crm-a" })).toBe(
+      CRM_A_CONSOLE_DEFAULT_GATEWAY_PORT,
     );
   });
 });
@@ -88,26 +88,28 @@ describe("isDaemonlessMode", () => {
     expect(isDaemonlessMode({ skipDaemonInstall: true }, {})).toBe(true);
   });
 
-  it("returns true when DENCHCLAW_DAEMONLESS=1 env var is set", () => {
-    expect(isDaemonlessMode(undefined, { DENCHCLAW_DAEMONLESS: "1" })).toBe(true);
-    expect(isDaemonlessMode({}, { DENCHCLAW_DAEMONLESS: "1" })).toBe(true);
+  it("returns true when CRM_A_CONSOLE_DAEMONLESS=1 env var is set", () => {
+    expect(isDaemonlessMode(undefined, { CRM_A_CONSOLE_DAEMONLESS: "1" })).toBe(true);
+    expect(isDaemonlessMode({}, { CRM_A_CONSOLE_DAEMONLESS: "1" })).toBe(true);
   });
 
   it("returns false for non-'1' env values", () => {
-    expect(isDaemonlessMode(undefined, { DENCHCLAW_DAEMONLESS: "true" })).toBe(false);
-    expect(isDaemonlessMode(undefined, { DENCHCLAW_DAEMONLESS: "yes" })).toBe(false);
-    expect(isDaemonlessMode(undefined, { DENCHCLAW_DAEMONLESS: "0" })).toBe(false);
+    expect(isDaemonlessMode(undefined, { CRM_A_CONSOLE_DAEMONLESS: "true" })).toBe(false);
+    expect(isDaemonlessMode(undefined, { CRM_A_CONSOLE_DAEMONLESS: "yes" })).toBe(false);
+    expect(isDaemonlessMode(undefined, { CRM_A_CONSOLE_DAEMONLESS: "0" })).toBe(false);
   });
 
   it("opts.skipDaemonInstall=true wins even without env var", () => {
-    expect(isDaemonlessMode({ skipDaemonInstall: true }, { DENCHCLAW_DAEMONLESS: "0" })).toBe(true);
+    expect(isDaemonlessMode({ skipDaemonInstall: true }, { CRM_A_CONSOLE_DAEMONLESS: "0" })).toBe(
+      true,
+    );
   });
 });
 
 describe("port constants", () => {
-  it("DenchClaw default port is distinct from OpenClaw default (prevents port collision)", () => {
-    expect(DENCHCLAW_DEFAULT_GATEWAY_PORT).not.toBe(DEFAULT_GATEWAY_PORT);
-    expect(DENCHCLAW_DEFAULT_GATEWAY_PORT).toBe(19001);
+  it("Crm-A Console default port is distinct from OpenClaw default (prevents port collision)", () => {
+    expect(CRM_A_CONSOLE_DEFAULT_GATEWAY_PORT).not.toBe(DEFAULT_GATEWAY_PORT);
+    expect(CRM_A_CONSOLE_DEFAULT_GATEWAY_PORT).toBe(19001);
     expect(DEFAULT_GATEWAY_PORT).toBe(18789);
   });
 });

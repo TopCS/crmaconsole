@@ -44,7 +44,7 @@ describe("posthog-analytics plugin key fallback", () => {
   it("uses api.config.apiKey when provided", async () => {
     vi.doMock("../../extensions/posthog-analytics/lib/build-env.js", () => ({
       POSTHOG_KEY: "built-in-key",
-      DENCHCLAW_VERSION: "",
+      CRM_A_CONSOLE_VERSION: "",
       OPENCLAW_VERSION: "",
     }));
 
@@ -62,7 +62,7 @@ describe("posthog-analytics plugin key fallback", () => {
   it("falls back to built-in key when api.config has no apiKey", async () => {
     vi.doMock("../../extensions/posthog-analytics/lib/build-env.js", () => ({
       POSTHOG_KEY: "built-in-key",
-      DENCHCLAW_VERSION: "",
+      CRM_A_CONSOLE_VERSION: "",
       OPENCLAW_VERSION: "",
     }));
 
@@ -80,7 +80,7 @@ describe("posthog-analytics plugin key fallback", () => {
   it("does not initialize when neither config nor built-in key is available", async () => {
     vi.doMock("../../extensions/posthog-analytics/lib/build-env.js", () => ({
       POSTHOG_KEY: "",
-      DENCHCLAW_VERSION: "",
+      CRM_A_CONSOLE_VERSION: "",
       OPENCLAW_VERSION: "",
     }));
 
@@ -95,7 +95,7 @@ describe("posthog-analytics plugin key fallback", () => {
   it("registers lifecycle hooks when built-in key is used", async () => {
     vi.doMock("../../extensions/posthog-analytics/lib/build-env.js", () => ({
       POSTHOG_KEY: "built-in-key",
-      DENCHCLAW_VERSION: "",
+      CRM_A_CONSOLE_VERSION: "",
       OPENCLAW_VERSION: "",
     }));
 

@@ -116,7 +116,7 @@ describe("classifySender — Tier B aggregate scoring", () => {
     const v = classifySender(makeParams({
       fromAddress: "notifications@github.com",
       labelIds: ["INBOX", "CATEGORY_UPDATES"],
-      subject: "Re: [DenchHQ/DenchClaw] PR review",
+      subject: "Re: [TopCS/crmaconsole] PR review",
     }));
     expect(v.isBulk).toBe(true);
     expect(v.kind).toBe("notification");
@@ -199,7 +199,7 @@ describe("classifySender — real-person paths", () => {
     // We accept this — they ARE a person typing real text, just at scale.
     const v = classifySender(makeParams({
       fromAddress: "alex@startup.com",
-      subject: "Quick intro - I think Dench would love what we do",
+      subject: "Quick intro - I think Crm-A would love what we do",
     }));
     expect(v.kind).toBe("person");
   });

@@ -17,7 +17,7 @@ export type QuestionBlockSegment =
   | { type: "text"; text: string }
   | { type: "question"; question: QuestionBlock };
 
-const QUESTION_FENCE_PATTERN = /```dench-question[^\n]*\n([\s\S]*?)```/g;
+const QUESTION_FENCE_PATTERN = /```crm-a-question[^\n]*\n([\s\S]*?)```/g;
 
 export function splitQuestionBlocks(text: string): QuestionBlockSegment[] {
   const segments: QuestionBlockSegment[] = [];

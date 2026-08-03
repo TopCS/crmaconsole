@@ -12,7 +12,7 @@ let _identified = false;
 export function isTelemetryEnabled(): boolean {
   if (!POSTHOG_KEY) return false;
   if (process.env.DO_NOT_TRACK === "1") return false;
-  if (process.env.DENCHCLAW_TELEMETRY_DISABLED === "1") return false;
+  if (process.env.CRM_A_CONSOLE_TELEMETRY_DISABLED === "1") return false;
   if (process.env.CI) return false;
 
   try {
@@ -30,7 +30,7 @@ function getMachineContext(): Record<string, unknown> {
     os: process.platform,
     arch: process.arch,
     node_version: process.version,
-    denchclaw_version: VERSION,
+    crm_a_console_version: VERSION,
     openclaw_version: resolveOpenClawVersion(),
   };
 }
@@ -50,7 +50,7 @@ function ensureClient(): PostHog | null {
 export function track(event: string, properties?: Record<string, unknown>): void {
   if (!isTelemetryEnabled()) return;
 
-  if (process.env.DENCHCLAW_TELEMETRY_DEBUG === "1") {
+  if (process.env.CRM_A_CONSOLE_TELEMETRY_DEBUG === "1") {
     process.stderr.write(`[telemetry:debug] ${JSON.stringify({ event, properties }, null, 2)}\n`);
     return;
   }
@@ -86,7 +86,7 @@ function personInfoToPostHogProps(person: PersonInfo): Record<string, string> {
   if (person.name) props.$name = person.name;
   if (person.email) props.$email = person.email;
   if (person.avatar) props.$avatar = person.avatar;
-  if (person.denchOrgId) props.dench_org_id = person.denchOrgId;
+  if (person.crmAOrgId) props.crm_a_org_id = person.crmAOrgId;
   return props;
 }
 

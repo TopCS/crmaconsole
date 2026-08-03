@@ -1,0 +1,23 @@
+{
+  "id": "crm-a-identity",
+  "name": "Crm-A Console Identity",
+  "version": "1.0.0",
+  "description": "Injects the Crm-A Console identity and behavioral contracts into the agent system prompt.",
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": ["crm_a_search_integrations"]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true
+      }
+    },
+    "required": []
+  }
+}

@@ -1,39 +1,39 @@
 ---
 name: platform-api
-description: Platform API reference for DenchClaw apps — UI integration, per-app storage, HTTP proxy, real-time events, inter-app messaging, cron scheduling, webhooks, clipboard, context, and widget mode.
+description: Platform API reference for Crm-A Console apps — UI integration, per-app storage, HTTP proxy, real-time events, inter-app messaging, cron scheduling, webhooks, clipboard, context, and widget mode.
 metadata: { "openclaw": { "inject": true, "always": true, "emoji": "⚡" } }
 ---
 
 # App Platform API
 
-This skill documents the platform-level APIs available to DenchClaw apps. For core app structure, see the parent **app-builder** skill. For data/objects, see **data-builder**. For AI chat, see **agent-builder**.
+This skill documents the platform-level APIs available to Crm-A Console apps. For core app structure, see the parent **app-builder** skill. For data/objects, see **data-builder**. For AI chat, see **agent-builder**.
 
 ## UI Integration (`ui` permission required)
 
 ```javascript
-// Show a toast notification in the parent DenchClaw UI
-await dench.ui.toast("Record saved successfully", { type: "success" });
-await dench.ui.toast("Something went wrong", { type: "error" });
-await dench.ui.toast("Processing...", { type: "info" });
+// Show a toast notification in the parent Crm-A Console UI
+await crmA.ui.toast("Record saved successfully", { type: "success" });
+await crmA.ui.toast("Something went wrong", { type: "error" });
+await crmA.ui.toast("Processing...", { type: "info" });
 
-// Navigate DenchClaw to a workspace path (opens object, file, or app)
-await dench.ui.navigate("/people"); // open the people object
-await dench.ui.navigate("/apps/my-app.dench.app"); // open another app
+// Navigate Crm-A Console to a workspace path (opens object, file, or app)
+await crmA.ui.navigate("/people"); // open the people object
+await crmA.ui.navigate("/apps/my-app.crm-a.app"); // open another app
 
 // Open an entry detail modal
-await dench.ui.openEntry("people", "entry_id_here");
+await crmA.ui.openEntry("people", "entry_id_here");
 
 // Update the app's tab title dynamically
-await dench.ui.setTitle("My App — 5 results");
+await crmA.ui.setTitle("My App — 5 results");
 
 // Show a confirmation dialog
-const confirmed = await dench.ui.confirm("Delete this record?");
+const confirmed = await crmA.ui.confirm("Delete this record?");
 if (confirmed) {
   /* proceed */
 }
 
 // Show a prompt dialog
-const name = await dench.ui.prompt("Enter a name:", "Default Name");
+const name = await crmA.ui.prompt("Enter a name:", "Default Name");
 if (name !== null) {
   /* use name */
 }
@@ -45,38 +45,38 @@ Persistent key-value storage scoped to each app. Data survives app reloads and i
 
 ```javascript
 // Store a value (any JSON-serializable value)
-await dench.store.set("lastQuery", { sql: "SELECT * FROM people", timestamp: Date.now() });
-await dench.store.set("theme", "custom-dark");
-await dench.store.set("counter", 42);
+await crmA.store.set("lastQuery", { sql: "SELECT * FROM people", timestamp: Date.now() });
+await crmA.store.set("theme", "custom-dark");
+await crmA.store.set("counter", 42);
 
 // Read a value
-const lastQuery = await dench.store.get("lastQuery");
+const lastQuery = await crmA.store.get("lastQuery");
 // Returns the value, or null if not found
 
 // Delete a key
-await dench.store.delete("lastQuery");
+await crmA.store.delete("lastQuery");
 
 // List all keys
-const keys = await dench.store.list();
+const keys = await crmA.store.list();
 // Returns ["theme", "counter"]
 
 // Clear all stored data
-await dench.store.clear();
+await crmA.store.clear();
 ```
 
-Storage is backed by a JSON file at `{workspace}/.dench-app-data/{appName}/store.json`. Each app gets its own isolated namespace.
+Storage is backed by a JSON file at `{workspace}/.crm-a-app-data/{appName}/store.json`. Each app gets its own isolated namespace.
 
 ## HTTP Proxy (`http` permission required)
 
-Make HTTP requests from apps without CORS restrictions. Requests are proxied through the DenchClaw server.
+Make HTTP requests from apps without CORS restrictions. Requests are proxied through the Crm-A Console server.
 
 ```javascript
 // Simple GET
-const data = await dench.http.fetch("https://api.example.com/data");
+const data = await crmA.http.fetch("https://api.example.com/data");
 // Returns { status, statusText, headers, body }
 
 // POST with headers and body
-const result = await dench.http.fetch("https://api.example.com/submit", {
+const result = await crmA.http.fetch("https://api.example.com/submit", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
@@ -89,7 +89,7 @@ console.log(result.status); // 200
 console.log(result.body); // response body as string
 ```
 
-Security: requests to localhost, private IPs, and internal DenchClaw URLs are blocked.
+Security: requests to localhost, private IPs, and internal Crm-A Console URLs are blocked.
 
 ## Real-time Events (`events` permission required)
 
@@ -97,50 +97,50 @@ Subscribe to workspace events for live updates.
 
 ```javascript
 // Subscribe to theme changes
-dench.events.on("theme.changed", (data) => {
+crmA.events.on("theme.changed", (data) => {
   document.body.className = data.theme;
 });
 
 // Subscribe to object entry changes
-dench.events.on("object.entry.created", (data) => {
+crmA.events.on("object.entry.created", (data) => {
   console.log(`New entry in ${data.objectName}: ${data.entryId}`);
   refreshList();
 });
 
-dench.events.on("object.entry.updated", (data) => {
+crmA.events.on("object.entry.updated", (data) => {
   console.log(`Entry ${data.entryId} updated in ${data.objectName}`);
 });
 
-dench.events.on("object.entry.deleted", (data) => {
+crmA.events.on("object.entry.deleted", (data) => {
   console.log(`Entry ${data.entryId} deleted from ${data.objectName}`);
 });
 
 // App visibility events
-dench.events.on("app.visible", () => {
+crmA.events.on("app.visible", () => {
   resumeAnimations();
 });
-dench.events.on("app.hidden", () => {
+crmA.events.on("app.hidden", () => {
   pauseAnimations();
 });
 
 // File change events
-dench.events.on("file.changed", (data) => {
+crmA.events.on("file.changed", (data) => {
   console.log(`File changed: ${data.path}`);
 });
 
 // Unsubscribe
-dench.events.off("theme.changed");
+crmA.events.off("theme.changed");
 ```
 
 ## Context (no permission required)
 
 ```javascript
 // Get workspace info
-const workspace = await dench.context.getWorkspace();
+const workspace = await crmA.context.getWorkspace();
 // Returns { name, path, agentId }
 
 // Get app info
-const app = await dench.context.getAppInfo();
+const app = await crmA.context.getAppInfo();
 // Returns { appPath, folderName, permissions, manifest }
 ```
 
@@ -150,13 +150,13 @@ Apps can communicate with other open apps for composite workflows.
 
 ```javascript
 // Send a message to another app
-await dench.apps.send("analytics-dashboard.dench.app", {
+await crmA.apps.send("analytics-dashboard.crm-a.app", {
   action: "refresh",
   filter: { status: "Active" },
 });
 
 // Listen for messages from other apps
-dench.apps.on("message", (event) => {
+crmA.apps.on("message", (event) => {
   console.log(`Message from ${event.from}:`, event.message);
   if (event.message.action === "refresh") {
     reloadData(event.message.filter);
@@ -164,8 +164,8 @@ dench.apps.on("message", (event) => {
 });
 
 // List currently active (open) apps
-const activeApps = await dench.apps.list();
-// Returns [{ name: "analytics-dashboard.dench.app", manifest: {...} }, ...]
+const activeApps = await crmA.apps.list();
+// Returns [{ name: "analytics-dashboard.crm-a.app", manifest: {...} }, ...]
 ```
 
 ## Cron Scheduling (`cron` permission required)
@@ -174,21 +174,21 @@ Schedule recurring tasks that send messages to the agent.
 
 ```javascript
 // Schedule a cron job
-const { jobId } = await dench.cron.schedule({
+const { jobId } = await crmA.cron.schedule({
   expression: "0 9 * * *", // 9 AM daily
   message: "Generate the daily sales report and save it to workspace",
   channel: "announce", // "announce" (delivers result) or "none" (silent)
 });
 
 // List all cron jobs
-const jobs = await dench.cron.list();
+const jobs = await crmA.cron.list();
 // Returns array of { id, expression, message, enabled, nextRunAt, ... }
 
 // Run a job immediately
-await dench.cron.run(jobId);
+await crmA.cron.run(jobId);
 
 // Cancel/remove a job
-await dench.cron.cancel(jobId);
+await crmA.cron.cancel(jobId);
 ```
 
 ## Webhooks (`webhooks` permission required)
@@ -197,32 +197,32 @@ Receive external HTTP webhooks inside your app.
 
 ```javascript
 // Register a webhook endpoint
-const hook = await dench.webhooks.register("github-push");
+const hook = await crmA.webhooks.register("github-push");
 console.log(hook.url);
-// e.g. "https://your-denchclaw-host/api/apps/webhooks/my-app.dench.app/github-push"
+// e.g. "https://your-crm-a-console-host/api/apps/webhooks/my-app.crm-a.app/github-push"
 
 // Listen for incoming webhooks
-dench.webhooks.on("github-push", (payload) => {
+crmA.webhooks.on("github-push", (payload) => {
   console.log("Received webhook:", payload);
   // payload: { method: "POST", headers: {...}, body: "...", receivedAt: 1234567890 }
   processGithubPush(JSON.parse(payload.body));
 });
 
 // Poll for webhooks (useful for catching events received while app was closed)
-const events = await dench.webhooks.poll("github-push", { since: lastTimestamp });
+const events = await crmA.webhooks.poll("github-push", { since: lastTimestamp });
 ```
 
 ## Clipboard (`clipboard` permission required)
 
 ```javascript
 // Write to clipboard
-await dench.clipboard.write("Copied text content");
+await crmA.clipboard.write("Copied text content");
 
 // Read from clipboard
-const text = await dench.clipboard.read();
+const text = await crmA.clipboard.read();
 ```
 
-Note: clipboard operations are proxied through the parent DenchClaw window.
+Note: clipboard operations are proxied through the parent Crm-A Console window.
 
 ## Widget Mode
 
@@ -293,10 +293,10 @@ permissions:
     <div class="metric" id="count">—</div>
     <script>
       async function init() {
-        const theme = await dench.app.getTheme().catch(() => "dark");
+        const theme = (await crm) - a.app.getTheme().catch(() => "dark");
         document.body.className = theme;
 
-        const result = await dench.db.query("SELECT SUM(entry_count) as total FROM objects");
+        const result = await crmA.db.query("SELECT SUM(entry_count) as total FROM objects");
         document.getElementById("count").textContent = result.rows[0]?.total ?? 0;
       }
       init();
@@ -305,7 +305,7 @@ permissions:
 </html>
 ```
 
-Widget-mode apps appear in the DenchClaw dashboard view alongside other widgets, arranged in a responsive grid.
+Widget-mode apps appear in the Crm-A Console dashboard view alongside other widgets, arranged in a responsive grid.
 
 ## Patterns
 
@@ -316,16 +316,16 @@ Build a dashboard that aggregates data from multiple widget apps:
 ```javascript
 // In the main dashboard app
 async function loadWidgetData() {
-  const apps = await dench.apps.list();
+  const apps = await crmA.apps.list();
   const widgets = apps.filter((a) => a.manifest.display === "widget");
 
   for (const widget of widgets) {
     // Request data from each widget app
-    await dench.apps.send(widget.name, { action: "getData" });
+    await crmA.apps.send(widget.name, { action: "getData" });
   }
 }
 
-dench.apps.on("message", (event) => {
+crmA.apps.on("message", (event) => {
   if (event.message.action === "dataResponse") {
     updateDashboardPanel(event.from, event.message.data);
   }
@@ -337,7 +337,7 @@ dench.apps.on("message", (event) => {
 ```javascript
 // Fetch data from an external API via proxy
 async function loadWeather(city) {
-  const result = await dench.http.fetch(
+  const result = await crmA.http.fetch(
     `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=YOUR_KEY`,
   );
   if (result.status === 200) {
@@ -352,12 +352,12 @@ async function loadWeather(city) {
 ```javascript
 // Set up a cron job that processes data and sends results
 async function setupAutomation() {
-  const { jobId } = await dench.cron.schedule({
+  const { jobId } = await crmA.cron.schedule({
     expression: "0 */6 * * *",
     message: "Check the tasks object for overdue items and send a summary to Telegram",
   });
 
-  await dench.store.set("automationJobId", jobId);
-  dench.ui.toast("Automation scheduled every 6 hours", { type: "success" });
+  await crmA.store.set("automationJobId", jobId);
+  crmA.ui.toast("Automation scheduled every 6 hours", { type: "success" });
 }
 ```

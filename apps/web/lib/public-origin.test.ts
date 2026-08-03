@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resolveAppPublicOrigin } from "./public-origin";
 
-const ORIGINAL_ENV = process.env.DENCHCLAW_PUBLIC_URL;
+const ORIGINAL_ENV = process.env.CRM_A_CONSOLE_PUBLIC_URL;
 
 afterEach(() => {
   if (ORIGINAL_ENV === undefined) {
-    delete process.env.DENCHCLAW_PUBLIC_URL;
+    delete process.env.CRM_A_CONSOLE_PUBLIC_URL;
   } else {
-    process.env.DENCHCLAW_PUBLIC_URL = ORIGINAL_ENV;
+    process.env.CRM_A_CONSOLE_PUBLIC_URL = ORIGINAL_ENV;
   }
 });
 
 beforeEach(() => {
-  delete process.env.DENCHCLAW_PUBLIC_URL;
+  delete process.env.CRM_A_CONSOLE_PUBLIC_URL;
 });
 
 function makeRequest(opts: {
@@ -42,11 +42,11 @@ describe("resolveAppPublicOrigin", () => {
     it("uses X-Forwarded-Host + X-Forwarded-Proto when both are present", () => {
       const origin = resolveAppPublicOrigin(
         makeRequest({
-          forwardedHost: "dench-com.sandbox.merseoriginals.com",
+          forwardedHost: "crm-a-com.sandbox.merseoriginals.com",
           forwardedProto: "https",
         }),
       );
-      expect(origin).toBe("https://dench-com.sandbox.merseoriginals.com");
+      expect(origin).toBe("https://crm-a-com.sandbox.merseoriginals.com");
     });
 
     it("defaults to http when X-Forwarded-Proto is missing or unrecognized", () => {
@@ -78,8 +78,8 @@ describe("resolveAppPublicOrigin", () => {
       expect(origin).toBe("https://real.example.com");
     });
 
-    it("prefers forwarded headers over DENCHCLAW_PUBLIC_URL — needed for warm-pool slug rebinds where the env var is stale but the Host header is live", () => {
-      process.env.DENCHCLAW_PUBLIC_URL =
+    it("prefers forwarded headers over CRM_A_CONSOLE_PUBLIC_URL — needed for warm-pool slug rebinds where the env var is stale but the Host header is live", () => {
+      process.env.CRM_A_CONSOLE_PUBLIC_URL =
         "https://stale-warm-pool-slug.sandbox.merseoriginals.com";
       const origin = resolveAppPublicOrigin(
         makeRequest({
@@ -91,23 +91,23 @@ describe("resolveAppPublicOrigin", () => {
     });
   });
 
-  describe("DENCHCLAW_PUBLIC_URL fallback", () => {
+  describe("CRM_A_CONSOLE_PUBLIC_URL fallback", () => {
     it("uses the env var when no forwarded headers are present", () => {
-      process.env.DENCHCLAW_PUBLIC_URL =
+      process.env.CRM_A_CONSOLE_PUBLIC_URL =
         "https://acme.sandbox.merseoriginals.com";
       const origin = resolveAppPublicOrigin(makeRequest({}));
       expect(origin).toBe("https://acme.sandbox.merseoriginals.com");
     });
 
     it("normalizes the env var to its origin (drops path/query)", () => {
-      process.env.DENCHCLAW_PUBLIC_URL =
+      process.env.CRM_A_CONSOLE_PUBLIC_URL =
         "https://acme.sandbox.merseoriginals.com/some/path?query=1";
       const origin = resolveAppPublicOrigin(makeRequest({}));
       expect(origin).toBe("https://acme.sandbox.merseoriginals.com");
     });
 
     it("ignores a malformed env var and falls through to request.url", () => {
-      process.env.DENCHCLAW_PUBLIC_URL = "this is not a url";
+      process.env.CRM_A_CONSOLE_PUBLIC_URL = "this is not a url";
       const origin = resolveAppPublicOrigin(
         makeRequest({
           url: "http://localhost:3100/api/composio/connect",

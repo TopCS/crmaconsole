@@ -6,7 +6,7 @@ import { PostHog } from "posthog-node";
 
 const POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY || "";
 const POSTHOG_HOST = "https://us.i.posthog.com";
-const DENCHCLAW_VERSION = process.env.NEXT_PUBLIC_DENCHCLAW_VERSION || "";
+const CRM_A_CONSOLE_VERSION = process.env.NEXT_PUBLIC_CRM_A_CONSOLE_VERSION || "";
 const OPENCLAW_VERSION = process.env.NEXT_PUBLIC_OPENCLAW_VERSION || "";
 
 let client: PostHog | null = null;
@@ -27,7 +27,7 @@ export type PersonInfo = {
   name?: string;
   email?: string;
   avatar?: string;
-  denchOrgId?: string;
+  crmAOrgId?: string;
 };
 
 let _cachedAnonymousId: string | null = null;
@@ -35,14 +35,14 @@ let _cachedPersonInfo: PersonInfo | null | undefined = undefined;
 let _cachedPrivacyMode: boolean | undefined = undefined;
 
 /**
- * Read the persisted install-scoped anonymous ID from ~/.openclaw-dench/telemetry.json,
+ * Read the persisted install-scoped anonymous ID from ~/.openclaw-crm-a/telemetry.json,
  * generating and writing one if absent.
  */
 export function getOrCreateAnonymousId(): string {
   if (_cachedAnonymousId) return _cachedAnonymousId;
 
   try {
-    const stateDir = join(process.env.HOME || homedir(), ".openclaw-dench");
+    const stateDir = join(process.env.HOME || homedir(), ".openclaw-crm-a");
     const configPath = join(stateDir, "telemetry.json");
 
     let raw: Record<string, unknown> = {};
@@ -67,14 +67,14 @@ export function getOrCreateAnonymousId(): string {
 }
 
 /**
- * Persist a partial PersonInfo into ~/.openclaw-dench/telemetry.json,
+ * Persist a partial PersonInfo into ~/.openclaw-crm-a/telemetry.json,
  * merging with the existing record. Mirrors `writeTelemetryConfig` in the
  * CLI's `src/telemetry/config.ts` so onboarding-collected name/email shows
  * up in PostHog the same way CLI-collected fields would.
  */
 export function writePersonInfo(person: Partial<PersonInfo>): PersonInfo | null {
   try {
-    const stateDir = join(process.env.HOME || homedir(), ".openclaw-dench");
+    const stateDir = join(process.env.HOME || homedir(), ".openclaw-crm-a");
     const configPath = join(stateDir, "telemetry.json");
 
     let raw: Record<string, unknown> = {};
@@ -95,8 +95,8 @@ export function writePersonInfo(person: Partial<PersonInfo>): PersonInfo | null 
     if (typeof person.avatar === "string" && person.avatar.trim()) {
       raw.avatar = person.avatar.trim();
     }
-    if (typeof person.denchOrgId === "string" && person.denchOrgId.trim()) {
-      raw.denchOrgId = person.denchOrgId.trim();
+    if (typeof person.crmAOrgId === "string" && person.crmAOrgId.trim()) {
+      raw.crmAOrgId = person.crmAOrgId.trim();
     }
 
     mkdirSync(dirname(configPath), { recursive: true });
@@ -120,7 +120,7 @@ export function readPersonInfo(): PersonInfo | null {
   if (_cachedPersonInfo !== undefined) return _cachedPersonInfo;
 
   try {
-    const stateDir = join(process.env.HOME || homedir(), ".openclaw-dench");
+    const stateDir = join(process.env.HOME || homedir(), ".openclaw-crm-a");
     const configPath = join(stateDir, "telemetry.json");
 
     if (!existsSync(configPath)) {
@@ -132,7 +132,7 @@ export function readPersonInfo(): PersonInfo | null {
     if (typeof raw.name === "string" && raw.name) info.name = raw.name;
     if (typeof raw.email === "string" && raw.email) info.email = raw.email;
     if (typeof raw.avatar === "string" && raw.avatar) info.avatar = raw.avatar;
-    if (typeof raw.denchOrgId === "string" && raw.denchOrgId) info.denchOrgId = raw.denchOrgId;
+    if (typeof raw.crmAOrgId === "string" && raw.crmAOrgId) info.crmAOrgId = raw.crmAOrgId;
 
     _cachedPersonInfo = Object.keys(info).length > 0 ? info : null;
     return _cachedPersonInfo;
@@ -150,7 +150,7 @@ export function readPrivacyMode(): boolean {
   if (_cachedPrivacyMode !== undefined) return _cachedPrivacyMode;
 
   try {
-    const stateDir = join(process.env.HOME || homedir(), ".openclaw-dench");
+    const stateDir = join(process.env.HOME || homedir(), ".openclaw-crm-a");
     const configPath = join(stateDir, "telemetry.json");
 
     if (!existsSync(configPath)) {
@@ -171,7 +171,7 @@ function personInfoToPostHogProps(person: PersonInfo): Record<string, string> {
   if (person.name) props.$name = person.name;
   if (person.email) props.$email = person.email;
   if (person.avatar) props.$avatar = person.avatar;
-  if (person.denchOrgId) props.dench_org_id = person.denchOrgId;
+  if (person.crmAOrgId) props.crm_a_org_id = person.crmAOrgId;
   return props;
 }
 
@@ -203,7 +203,7 @@ export function trackServer(
     event,
     properties: {
       ...properties,
-      denchclaw_version: DENCHCLAW_VERSION || undefined,
+      crm_a_console_version: CRM_A_CONSOLE_VERSION || undefined,
       openclaw_version: OPENCLAW_VERSION || undefined,
     },
   });

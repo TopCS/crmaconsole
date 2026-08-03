@@ -1,6 +1,6 @@
 ---
 name: data-builder
-description: Build data-driven DenchClaw apps with full CRUD access to workspace objects (.object.yaml tables), DuckDB queries and mutations, data dashboards with Chart.js and D3.js, and interactive tools.
+description: Build data-driven Crm-A Console apps with full CRUD access to workspace objects (.object.yaml tables), DuckDB queries and mutations, data dashboards with Chart.js and D3.js, and interactive tools.
 metadata: { "openclaw": { "inject": true, "always": true, "emoji": "📊" } }
 ---
 
@@ -12,7 +12,7 @@ This skill covers building data apps that interact with workspace objects and Du
 
 ## Objects CRUD API (`objects` permission required)
 
-The `window.dench.objects.*` API provides full CRUD access to workspace objects (`.object.yaml` tables). Add `objects` to your manifest permissions:
+The `window.crmA.objects.*` API provides full CRUD access to workspace objects (`.object.yaml` tables). Add `objects` to your manifest permissions:
 
 ```yaml
 permissions:
@@ -22,7 +22,7 @@ permissions:
 ### List Entries
 
 ```javascript
-const result = await dench.objects.list("people", {
+const result = await crmA.objects.list("people", {
   search: "john",
   filters: JSON.stringify([{ field: "Status", operator: "eq", value: "Active" }]),
   sort: JSON.stringify({ field: "Full Name", direction: "asc" }),
@@ -37,14 +37,14 @@ Filter operators: `eq`, `neq`, `contains`, `not_contains`, `starts_with`, `ends_
 ### Get a Single Entry
 
 ```javascript
-const entry = await dench.objects.get("people", "entry_id_here");
+const entry = await crmA.objects.get("people", "entry_id_here");
 // Returns { entry: { id, fields: { "Full Name": "...", ... }, created_at, updated_at } }
 ```
 
 ### Create an Entry
 
 ```javascript
-const { entryId } = await dench.objects.create("people", {
+const { entryId } = await crmA.objects.create("people", {
   "Full Name": "Jane Doe",
   "Email Address": "jane@example.com",
   Status: "Active",
@@ -54,7 +54,7 @@ const { entryId } = await dench.objects.create("people", {
 ### Update an Entry
 
 ```javascript
-await dench.objects.update("people", entryId, {
+await crmA.objects.update("people", entryId, {
   Status: "Lead",
 });
 ```
@@ -62,26 +62,26 @@ await dench.objects.update("people", entryId, {
 ### Delete an Entry
 
 ```javascript
-await dench.objects.delete("people", entryId);
+await crmA.objects.delete("people", entryId);
 ```
 
 ### Bulk Delete Entries
 
 ```javascript
-await dench.objects.bulkDelete("people", [id1, id2, id3]);
+await crmA.objects.bulkDelete("people", [id1, id2, id3]);
 ```
 
 ### Get Object Schema
 
 ```javascript
-const schema = await dench.objects.getSchema("people");
+const schema = await crmA.objects.getSchema("people");
 // Returns { object, fields, statuses }
 ```
 
 ### Get Relation Options
 
 ```javascript
-const options = await dench.objects.getOptions("people", "jane");
+const options = await crmA.objects.getOptions("people", "jane");
 // Returns filtered list of entries matching query
 ```
 
@@ -102,17 +102,17 @@ permissions:
 ### Read Queries (`database` permission)
 
 ```javascript
-const result = await dench.db.query("SELECT * FROM objects");
+const result = await crmA.db.query("SELECT * FROM objects");
 // Returns { rows: [...] }
 ```
 
 ### Mutations (`database:write` permission)
 
 ```javascript
-await dench.db.execute("INSERT INTO game_scores (game, score) VALUES ('my-game', 1500)");
-await dench.db.execute("CREATE TABLE IF NOT EXISTS app_data (key TEXT PRIMARY KEY, value TEXT)");
-await dench.db.execute("UPDATE app_data SET value = 'new' WHERE key = 'setting1'");
-await dench.db.execute("DELETE FROM app_data WHERE key = 'old'");
+await crmA.db.execute("INSERT INTO game_scores (game, score) VALUES ('my-game', 1500)");
+await crmA.db.execute("CREATE TABLE IF NOT EXISTS app_data (key TEXT PRIMARY KEY, value TEXT)");
+await crmA.db.execute("UPDATE app_data SET value = 'new' WHERE key = 'setting1'");
+await crmA.db.execute("DELETE FROM app_data WHERE key = 'old'");
 ```
 
 ### DuckDB Workspace Schema
@@ -140,20 +140,20 @@ The view name is `v_{object_name}` where the object name is lowercased with spac
 
 ```javascript
 // List all objects
-const objects = await dench.db.query("SELECT * FROM objects");
+const objects = await crmA.db.query("SELECT * FROM objects");
 
 // Get entries via PIVOT view
-const people = await dench.db.query("SELECT * FROM v_people");
+const people = await crmA.db.query("SELECT * FROM v_people");
 
 // Aggregate stats
-const stats = await dench.db.query(`
+const stats = await crmA.db.query(`
   SELECT o.name, COUNT(e.id) as count
   FROM objects o LEFT JOIN entries e ON e.object_id = o.id
   GROUP BY o.name ORDER BY count DESC
 `);
 
 // Get field definitions
-const fields = await dench.db.query(
+const fields = await crmA.db.query(
   "SELECT * FROM fields WHERE object_id = (SELECT id FROM objects WHERE name = 'people')",
 );
 ```
@@ -163,7 +163,7 @@ const fields = await dench.db.query(
 Apps can create their own tables for storing app-specific data. Always use `CREATE TABLE IF NOT EXISTS` for idempotency:
 
 ```javascript
-await dench.db.execute(`
+await crmA.db.execute(`
   CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY, value TEXT,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -240,14 +240,14 @@ await dench.db.execute(`
     <script>
       async function init() {
         try {
-          const theme = await window.dench.app.getTheme();
+          const theme = (await window.crm) - a.app.getTheme();
           document.body.className = theme;
         } catch {
           document.body.className = "dark";
         }
 
         try {
-          const result = await window.dench.db.query(`
+          const result = await window.crmA.db.query(`
           SELECT o.name, COUNT(e.id) as entry_count
           FROM objects o LEFT JOIN entries e ON e.object_id = o.id
           GROUP BY o.name ORDER BY entry_count DESC
@@ -370,14 +370,14 @@ await dench.db.execute(`
     <script>
       async function init() {
         try {
-          const theme = await window.dench.app.getTheme();
+          const theme = (await window.crm) - a.app.getTheme();
           document.body.className = theme;
         } catch {
           document.body.className = "dark";
         }
 
         try {
-          const result = await window.dench.db.query(`
+          const result = await window.crmA.db.query(`
           SELECT o.name, COUNT(e.id) as count
           FROM objects o LEFT JOIN entries e ON e.object_id = o.id
           GROUP BY o.name ORDER BY count DESC
@@ -602,7 +602,7 @@ Use SortableJS for draggable interfaces backed by workspace objects:
 
 ```javascript
 async function initKanban() {
-  const schema = await dench.objects.getSchema("tasks");
+  const schema = await crmA.objects.getSchema("tasks");
   const statuses = schema.statuses || [];
 
   const board = document.getElementById("board");
@@ -619,7 +619,7 @@ async function initKanban() {
     board.appendChild(column);
   }
 
-  const result = await dench.objects.list("tasks", { pageSize: 200 });
+  const result = await crmA.objects.list("tasks", { pageSize: 200 });
   for (const entry of result.entries) {
     const status = entry.fields["Status"] || statuses[0]?.name;
     const body = board.querySelector(`.column-body[data-status="${status}"]`);
@@ -641,7 +641,7 @@ async function initKanban() {
         const entryId = evt.item.dataset.id;
         const newStatus = evt.to.dataset.status;
         try {
-          await dench.objects.update("tasks", entryId, { Status: newStatus });
+          await crmA.objects.update("tasks", entryId, { Status: newStatus });
         } catch (err) {
           console.error("Failed to update status:", err);
         }
@@ -664,7 +664,7 @@ let currentEntries = [];
 let editingId = null;
 
 async function loadEntries() {
-  const result = await dench.objects.list("tasks", { pageSize: 100 });
+  const result = await crmA.objects.list("tasks", { pageSize: 100 });
   currentEntries = result.entries;
   renderTable(result.entries);
 }
@@ -690,34 +690,34 @@ function renderTable(entries) {
 
 async function createEntry(formData) {
   try {
-    const { entryId } = await dench.objects.create("tasks", formData);
+    const { entryId } = await crmA.objects.create("tasks", formData);
     await loadEntries();
-    dench.ui.toast("Entry created", { type: "success" });
+    crmA.ui.toast("Entry created", { type: "success" });
     resetForm();
   } catch (err) {
-    dench.ui.toast("Failed: " + err.message, { type: "error" });
+    crmA.ui.toast("Failed: " + err.message, { type: "error" });
   }
 }
 
 async function updateEntry(id, formData) {
   try {
-    await dench.objects.update("tasks", id, formData);
+    await crmA.objects.update("tasks", id, formData);
     await loadEntries();
-    dench.ui.toast("Entry updated", { type: "success" });
+    crmA.ui.toast("Entry updated", { type: "success" });
     resetForm();
   } catch (err) {
-    dench.ui.toast("Failed: " + err.message, { type: "error" });
+    crmA.ui.toast("Failed: " + err.message, { type: "error" });
   }
 }
 
 async function deleteEntry(id) {
   if (!confirm("Delete this entry?")) return;
   try {
-    await dench.objects.delete("tasks", id);
+    await crmA.objects.delete("tasks", id);
     await loadEntries();
-    dench.ui.toast("Entry deleted", { type: "success" });
+    crmA.ui.toast("Entry deleted", { type: "success" });
   } catch (err) {
-    dench.ui.toast("Failed: " + err.message, { type: "error" });
+    crmA.ui.toast("Failed: " + err.message, { type: "error" });
   }
 }
 
@@ -762,7 +762,7 @@ let refreshTimer = null;
 
 async function loadDashboard() {
   try {
-    const stats = await dench.db.query(`
+    const stats = await crmA.db.query(`
       SELECT o.name, COUNT(e.id) as count
       FROM objects o LEFT JOIN entries e ON e.object_id = o.id
       GROUP BY o.name ORDER BY count DESC
@@ -805,7 +805,7 @@ startAutoRefresh();
 
 A complete workspace dashboard app with stat cards, theme support, and live data from DuckDB.
 
-**`.dench.yaml`:**
+**`.crm-a.yaml`:**
 
 ```yaml
 name: "Dashboard"
@@ -994,7 +994,7 @@ permissions:
     <script>
       async function init() {
         try {
-          const theme = await window.dench.app.getTheme();
+          const theme = (await window.crm) - a.app.getTheme();
           document.body.className = theme;
         } catch {
           document.body.className = "dark";
@@ -1005,7 +1005,7 @@ permissions:
 
       async function loadDashboard() {
         try {
-          const result = await window.dench.db.query(`
+          const result = await window.crmA.db.query(`
           SELECT o.name, o.description, COUNT(e.id) as entry_count
           FROM objects o
           LEFT JOIN entries e ON e.object_id = o.id

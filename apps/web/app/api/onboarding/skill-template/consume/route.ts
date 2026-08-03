@@ -1,7 +1,7 @@
 import {
   readOnboardingState,
   writeOnboardingState,
-} from "@/lib/denchclaw-state";
+} from "@/lib/crm-a-console-state";
 import {
   buildSkillTemplatePrompt,
   isSkillTemplateId,

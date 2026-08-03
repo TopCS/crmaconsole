@@ -64,7 +64,7 @@ export type FileData = {
   type: "markdown" | "yaml" | "code" | "text";
 };
 
-export type DenchAppManifest = {
+export type CrmAAppManifest = {
   name: string;
   description?: string;
   icon?: string;
@@ -103,7 +103,7 @@ export type ContentState =
   | { kind: "cron-session"; jobId: string; job: CronJob; sessionId: string; run: CronRunLogEntry }
   | { kind: "duckdb-missing" }
   | { kind: "richDocument"; html: string; filePath: string; mode: "docx" | "txt" }
-  | { kind: "app"; appPath: string; manifest: DenchAppManifest; filename: string }
+  | { kind: "app"; appPath: string; manifest: CrmAAppManifest; filename: string }
   | { kind: "crm-inbox" }
   | { kind: "crm-calendar" }
   | { kind: "crm-person"; entryId: string; profileTab?: string }

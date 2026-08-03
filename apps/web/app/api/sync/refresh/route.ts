@@ -1,12 +1,12 @@
 /**
- * Manual sync trigger — shared by the agent's `denchclaw_refresh_sync` /
- * `denchclaw_resync_full` tools (in `extensions/dench-ai-gateway/`) and
+ * Manual sync trigger — shared by the agent's `crm_a_console_refresh_sync` /
+ * `crm_a_console_resync_full` tools (in `extensions/crm-a-ai-gateway/`) and
  * the workspace `SyncHealthBanner`'s "Refresh now" button.
  *
  * Why this exists alongside `/api/sync/poll-tick`:
  *
  * - `poll-tick` is the gateway-cron path. It demands a Bearer token
- *   matching the Dench Cloud API key — appropriate for the long-lived
+ *   matching the Crm-A Cloud API key — appropriate for the long-lived
  *   gateway daemon, but the browser can't read that key from the
  *   workspace state directory, so a UI "Refresh now" button can't use
  *   it.

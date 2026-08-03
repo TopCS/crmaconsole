@@ -23,35 +23,35 @@ type CoreCliEntry = {
 const CORE_CLI_ENTRIES: CoreCliEntry[] = [
   {
     name: "bootstrap",
-    description: "Bootstrap DenchClaw + OpenClaw and launch the web UI",
+    description: "Bootstrap Crm-A Console + OpenClaw and launch the web UI",
     register: ({ program }) => {
       registerBootstrapCommand(program);
     },
   },
   {
     name: "update",
-    description: "Update Dench web runtime without onboarding",
+    description: "Update Crm-A web runtime without onboarding",
     register: ({ program }) => {
       registerUpdateCommand(program);
     },
   },
   {
     name: "stop",
-    description: "Stop Dench managed web runtime",
+    description: "Stop Crm-A managed web runtime",
     register: ({ program }) => {
       registerStopCommand(program);
     },
   },
   {
     name: "start",
-    description: "Start Dench managed web runtime",
+    description: "Start Crm-A managed web runtime",
     register: ({ program }) => {
       registerStartCommand(program);
     },
   },
   {
     name: "restart",
-    description: "Restart Dench managed web runtime",
+    description: "Restart Crm-A managed web runtime",
     register: ({ program }) => {
       registerRestartCommand(program);
     },

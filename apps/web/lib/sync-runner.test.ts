@@ -28,7 +28,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 // All external dependencies are mocked so the test exercises only the
 // orchestration logic in `tickPoller` / `recordSync*`. Real Composio
 // calls, DuckDB writes, and FS IO are out of scope here.
-vi.mock("./denchclaw-state", () => ({
+vi.mock("./crm-a-console-state", () => ({
   readConnections: vi.fn(),
   readSyncCursors: vi.fn(),
   writeSyncCursors: vi.fn(),
@@ -58,16 +58,16 @@ vi.mock("./people-merge", () => ({
 
 const { ComposioToolNoConnectionError } = await import("./composio-execute");
 const sync = await import("./sync-runner");
-const denchclawState = await import("./denchclaw-state");
+const crmAConsoleState = await import("./crm-a-console-state");
 const gmailSync = await import("./gmail-sync");
 const calendarSync = await import("./calendar-sync");
 
-const mockedConnections = vi.mocked(denchclawState.readConnections);
-const mockedCursors = vi.mocked(denchclawState.readSyncCursors);
+const mockedConnections = vi.mocked(crmAConsoleState.readConnections);
+const mockedCursors = vi.mocked(crmAConsoleState.readSyncCursors);
 const mockedGmailIncr = vi.mocked(gmailSync.runGmailIncremental);
 const mockedCalIncr = vi.mocked(calendarSync.runCalendarIncremental);
 
-function defaultConnections(): import("./denchclaw-state").ConnectionsFile {
+function defaultConnections(): import("./crm-a-console-state").ConnectionsFile {
   return {
     version: 1,
     gmail: {
@@ -84,7 +84,7 @@ function defaultConnections(): import("./denchclaw-state").ConnectionsFile {
   };
 }
 
-function defaultCursors(): import("./denchclaw-state").SyncCursors {
+function defaultCursors(): import("./crm-a-console-state").SyncCursors {
   return {
     version: 1,
     gmail: { historyId: "1000" },

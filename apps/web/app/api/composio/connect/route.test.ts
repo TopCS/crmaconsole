@@ -29,19 +29,19 @@ vi.mock("@/lib/composio", () => ({
   resolveComposioGatewayUrl: resolveComposioGatewayUrlMock,
 }));
 
-vi.mock("@/lib/denchclaw-state", () => ({
+vi.mock("@/lib/crm-a-console-state", () => ({
   readOnboardingState: readOnboardingStateMock,
   writeConnection: writeConnectionMock,
   writeOnboardingState: writeOnboardingStateMock,
 }));
 
-const ORIGINAL_PUBLIC_URL = process.env.DENCHCLAW_PUBLIC_URL;
+const ORIGINAL_PUBLIC_URL = process.env.CRM_A_CONSOLE_PUBLIC_URL;
 
 describe("Composio connect API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.DENCHCLAW_PUBLIC_URL;
-    resolveComposioApiKeyMock.mockReturnValue("dench_test_key");
+    delete process.env.CRM_A_CONSOLE_PUBLIC_URL;
+    resolveComposioApiKeyMock.mockReturnValue("crm_a_test_key");
     resolveComposioEligibilityMock.mockReturnValue({
       eligible: true,
       lockReason: null,
@@ -55,7 +55,7 @@ describe("Composio connect API", () => {
     readOnboardingStateMock.mockReturnValue({
       version: 1,
       currentStep: "connect-gmail",
-      completedSteps: ["welcome", "identity", "dench-cloud"],
+      completedSteps: ["welcome", "identity", "crm-a-cloud"],
       startedAt: "2026-04-01T00:00:00.000Z",
       updatedAt: "2026-04-01T00:00:00.000Z",
     });
@@ -63,9 +63,9 @@ describe("Composio connect API", () => {
 
   afterEach(() => {
     if (ORIGINAL_PUBLIC_URL === undefined) {
-      delete process.env.DENCHCLAW_PUBLIC_URL;
+      delete process.env.CRM_A_CONSOLE_PUBLIC_URL;
     } else {
-      process.env.DENCHCLAW_PUBLIC_URL = ORIGINAL_PUBLIC_URL;
+      process.env.CRM_A_CONSOLE_PUBLIC_URL = ORIGINAL_PUBLIC_URL;
     }
   });
 
@@ -85,7 +85,7 @@ describe("Composio connect API", () => {
     expect(response.status).toBe(200);
     expect(initiateComposioConnectMock).toHaveBeenCalledWith(
       "https://gateway.example.com",
-      "dench_test_key",
+      "crm_a_test_key",
       "zoho",
       "http://localhost/api/composio/callback",
     );
@@ -96,9 +96,9 @@ describe("Composio connect API", () => {
     });
   });
 
-  it("uses DENCHCLAW_PUBLIC_URL for the callback origin when set (Dench Cloud sandbox)", async () => {
-    process.env.DENCHCLAW_PUBLIC_URL =
-      "https://dench-com.sandbox.merseoriginals.com";
+  it("uses CRM_A_CONSOLE_PUBLIC_URL for the callback origin when set (Crm-A Cloud sandbox)", async () => {
+    process.env.CRM_A_CONSOLE_PUBLIC_URL =
+      "https://crm-a-com.sandbox.merseoriginals.com";
 
     const response = await POST(
       new Request("http://localhost/api/composio/connect", {
@@ -111,14 +111,14 @@ describe("Composio connect API", () => {
     expect(response.status).toBe(200);
     expect(initiateComposioConnectMock).toHaveBeenCalledWith(
       "https://gateway.example.com",
-      "dench_test_key",
+      "crm_a_test_key",
       "zoho",
-      "https://dench-com.sandbox.merseoriginals.com/api/composio/callback",
+      "https://crm-a-com.sandbox.merseoriginals.com/api/composio/callback",
     );
   });
 
-  it("prefers X-Forwarded-* headers over DENCHCLAW_PUBLIC_URL — needed for warm-pool rebinds where the running container has a stale env value", async () => {
-    process.env.DENCHCLAW_PUBLIC_URL =
+  it("prefers X-Forwarded-* headers over CRM_A_CONSOLE_PUBLIC_URL — needed for warm-pool rebinds where the running container has a stale env value", async () => {
+    process.env.CRM_A_CONSOLE_PUBLIC_URL =
       "https://stale-warm-pool-slug.sandbox.merseoriginals.com";
 
     const response = await POST(
@@ -136,7 +136,7 @@ describe("Composio connect API", () => {
     expect(response.status).toBe(200);
     expect(initiateComposioConnectMock).toHaveBeenCalledWith(
       "https://gateway.example.com",
-      "dench_test_key",
+      "crm_a_test_key",
       "zoho",
       "https://real-org.sandbox.merseoriginals.com/api/composio/callback",
     );

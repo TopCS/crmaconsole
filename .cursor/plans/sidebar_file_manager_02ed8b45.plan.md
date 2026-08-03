@@ -148,7 +148,7 @@ Add to `[apps/web/app/api/workspace/](apps/web/app/api/workspace/)`:
 
 `**GET /api/workspace/watch**` - SSE endpoint for live changes (new route file)
 
-- Uses `chokidar` to watch the dench workspace root
+- Uses `chokidar` to watch the crm-a workspace root
 - Streams SSE events: `{ type: "add"|"change"|"unlink"|"addDir"|"unlinkDir", path: string }`
 - Client reconnects on close; debounce events (200ms)
 

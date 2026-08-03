@@ -3,7 +3,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { OnboardingState } from "@/lib/denchclaw-state";
+import type { OnboardingState } from "@/lib/crm-a-console-state";
 import { SkillTemplateStep } from "./skill-template-step";
 
 const baseState: OnboardingState = {
@@ -12,7 +12,7 @@ const baseState: OnboardingState = {
   completedSteps: [
     "welcome",
     "identity",
-    "dench-cloud",
+    "crm-a-cloud",
     "connect-gmail",
     "connect-calendar",
     "backfill",

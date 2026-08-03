@@ -2,7 +2,7 @@ import {
   advanceOnboardingStep,
   readOnboardingState,
   writeOnboardingState,
-} from "@/lib/denchclaw-state";
+} from "@/lib/crm-a-console-state";
 import { trackServer, writePersonInfo } from "@/lib/telemetry";
 
 export const dynamic = "force-dynamic";
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
   const current = readOnboardingState();
   const identity = { name, email, capturedAt: new Date().toISOString() };
   if (current.currentStep === "identity") {
-    const next = advanceOnboardingStep("identity", "dench-cloud", { identity });
+    const next = advanceOnboardingStep("identity", "crm-a-cloud", { identity });
     trackServer("onboarding_identity_captured", { has_email: true });
     return Response.json(next);
   }

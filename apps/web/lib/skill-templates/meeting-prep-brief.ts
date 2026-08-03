@@ -10,7 +10,7 @@ export const meetingPrepBrief = defineSkillTemplate({
   requiredApps: [externalApps.googleCalendar, externalApps.gmail],
   triggerModes: ["manual", "scheduled"],
   autonomy: "Can automate",
-  userUseCase: "Use this before important external meetings so DenchClaw turns calendar, inbox, CRM, enrichment, and notes into a concise brief with context, risks, open asks, and suggested agenda.",
+  userUseCase: "Use this before important external meetings so Crm-A Console turns calendar, inbox, CRM, enrichment, and notes into a concise brief with context, risks, open asks, and suggested agenda.",
   interviewQuestions: [
     {
       id: "meeting-types",
@@ -57,7 +57,7 @@ export const meetingPrepBrief = defineSkillTemplate({
       required: true,
       allowMultiple: true,
       options: [
-        { id: "dench-chat", label: "Dench chat" },
+        { id: "crm-a-chat", label: "Crm-A chat" },
         { id: "calendar-note", label: "Calendar note" },
         { id: "gmail-draft", label: "Gmail draft" },
         { id: "notion", label: "Notion" },

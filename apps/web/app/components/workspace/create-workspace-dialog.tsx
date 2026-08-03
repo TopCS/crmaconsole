@@ -164,7 +164,7 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onCreated }: CreateWork
                   }}
                 />
                 <p className="text-xs mt-1" style={{ color: "var(--color-text-muted)" }}>
-                  This creates a workspace under ~/.openclaw-dench/workspace-{"{name}"}.
+                  This creates a workspace under ~/.openclaw-crm-a/workspace-{"{name}"}.
                 </p>
               </div>
 

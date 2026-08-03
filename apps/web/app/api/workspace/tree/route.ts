@@ -126,18 +126,18 @@ async function resolveEntryType(
   return null;
 }
 
-/** Read .dench.yaml manifest from a .dench.app directory. */
+/** Read .crm-a.yaml manifest from a .crm-a.app directory. */
 async function readAppManifest(
   dirPath: string,
 ): Promise<TreeNode["appManifest"] | null> {
-  const yamlPath = join(dirPath, ".dench.yaml");
+  const yamlPath = join(dirPath, ".crm-a.yaml");
   if (!await pathExists(yamlPath)) {return null;}
 
   try {
     const content = await readFile(yamlPath, "utf-8");
     const parsed = parseSimpleYaml(content);
     return {
-      name: (parsed.name as string) || dirPath.split("/").pop()?.replace(/\.dench\.app$/, "") || "App",
+      name: (parsed.name as string) || dirPath.split("/").pop()?.replace(/\.crm-a\.app$/, "") || "App",
       description: parsed.description as string | undefined,
       icon: parsed.icon as string | undefined,
       version: parsed.version as string | undefined,
@@ -200,10 +200,10 @@ async function buildTree(
     const isSymlink = entry.isSymbolicLink();
 
     if (effectiveType === "directory") {
-      // Detect .dench.app folders -- treat as app nodes
-      if (entry.name.endsWith(".dench.app")) {
+      // Detect .crm-a.app folders -- treat as app nodes
+      if (entry.name.endsWith(".crm-a.app")) {
         const manifest = await readAppManifest(absPath);
-        const displayName = manifest?.name || entry.name.replace(/\.dench\.app$/, "");
+        const displayName = manifest?.name || entry.name.replace(/\.crm-a\.app$/, "");
         const children = showHidden ? await buildTree(absPath, relPath, dbObjects, showHidden) : undefined;
         nodes.push({
           name: displayName,

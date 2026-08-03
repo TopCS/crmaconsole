@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { OnboardingState } from "@/lib/denchclaw-state";
+import type { OnboardingState } from "@/lib/crm-a-console-state";
 import { ConnectionCard, type ConnectionStatus } from "./connection-card";
 import { readOnboardingResponse } from "./response";
 
-type DenchCloudStatus = {
+type CrmACloudStatus = {
   configured: boolean;
   source: "cli" | "web" | null;
   primaryModel: string | null;
@@ -68,7 +68,7 @@ type PersistConnectionInput = {
 const ONBOARDING_STEP_ORDER = [
   "welcome",
   "identity",
-  "dench-cloud",
+  "crm-a-cloud",
   "connect-gmail",
   "connect-calendar",
   "backfill",
@@ -189,12 +189,12 @@ function GhostAction({
   );
 }
 
-/** DenchClaw workspace mark. Uses the existing asset so it themes correctly. */
-function DenchCloudIcon() {
+/** Crm-A Console workspace mark. Uses the existing asset so it themes correctly. */
+function CrmACloudIcon() {
   return (
     /* eslint-disable-next-line @next/next/no-img-element */
     <img
-      src="/dench-workspace-icon.png"
+      src="/crm-a-workspace-icon.png"
       alt=""
       width={28}
       height={28}
@@ -232,13 +232,13 @@ function GoogleCalendarIcon() {
 }
 
 /**
- * Step 2. Consolidates Dench Cloud + Gmail + Calendar into a single
+ * Step 2. Consolidates Crm-A Cloud + Gmail + Calendar into a single
  * checklist-style screen. Each card owns its own connect logic but we keep
  * the shared surface (header, status bar, primary CTA) here so the three
  * sources feel like one setup moment, not three.
  *
  * Server-side state machine expects sequential advance events (welcome →
- * identity → dench-cloud → connect-gmail → connect-calendar → backfill).
+ * identity → crm-a-cloud → connect-gmail → connect-calendar → backfill).
  * We replay those under the hood on the user's behalf as they complete the
  * cards, so the wizard's notion of "where we are" stays consistent with what
  * the state machine records. When the final card lands and we're already on
@@ -252,15 +252,15 @@ export function SetupStep({
 }: {
   state: OnboardingState;
   onAdvance: (next: OnboardingState) => void;
-  onStageChange: (stage: "empty" | "dench-cloud" | "gmail" | "calendar") => void;
+  onStageChange: (stage: "empty" | "crm-a-cloud" | "gmail" | "calendar") => void;
   onRefresh: () => Promise<void>;
 }) {
-  const [denchCloudStatus, setDenchCloudStatus] = useState<DenchCloudStatus | null>(null);
-  const [denchCloudLoading, setDenchCloudLoading] = useState(true);
-  const [denchCloudKeyInput, setDenchCloudKeyInput] = useState("");
-  const [denchCloudSubmitting, setDenchCloudSubmitting] = useState(false);
+  const [crmACloudStatus, setCrmACloudStatus] = useState<CrmACloudStatus | null>(null);
+  const [crmACloudLoading, setCrmACloudLoading] = useState(true);
+  const [crmACloudKeyInput, setCrmACloudKeyInput] = useState("");
+  const [crmACloudSubmitting, setCrmACloudSubmitting] = useState(false);
   const [showKeyForm, setShowKeyForm] = useState(false);
-  const [denchCloudError, setDenchCloudError] = useState<string | null>(null);
+  const [crmACloudError, setCrmACloudError] = useState<string | null>(null);
 
   const [activeToolkit, setActiveToolkit] = useState<ToolkitKey | null>(null);
   const [toolkitError, setToolkitError] = useState<string | null>(null);
@@ -273,15 +273,15 @@ export function SetupStep({
   const callbackToolkitRef = useRef<ToolkitKey | null>(null);
   const reconciledExistingConnectionsRef = useRef(false);
 
-  // Derived connection flags. `state.denchCloud` is present whenever the user
+  // Derived connection flags. `state.crmACloud` is present whenever the user
   // has either configured it or explicitly skipped — `skipped: true` means
   // "user opted out", which for our UI counts as "not connected" (but still
   // allows the state machine to have moved forward).
-  const denchCloudRecorded = Boolean(
-    state.denchCloud && !state.denchCloud.skipped,
+  const crmACloudRecorded = Boolean(
+    state.crmACloud && !state.crmACloud.skipped,
   );
-  const denchCloudConnected = Boolean(
-    denchCloudRecorded || denchCloudStatus?.configured,
+  const crmACloudConnected = Boolean(
+    crmACloudRecorded || crmACloudStatus?.configured,
   );
   const gmailConnected = Boolean(state.connections?.gmail);
   const calendarConnected = Boolean(state.connections?.calendar);
@@ -290,30 +290,30 @@ export function SetupStep({
   // show the matching mock fidelity without the parent having to know every
   // server-state combination.
   useEffect(() => {
-    let stage: "empty" | "dench-cloud" | "gmail" | "calendar" = "empty";
-    if (denchCloudConnected) {stage = "dench-cloud";}
+    let stage: "empty" | "crm-a-cloud" | "gmail" | "calendar" = "empty";
+    if (crmACloudConnected) {stage = "crm-a-cloud";}
     if (gmailConnected) {stage = "gmail";}
     if (calendarConnected) {stage = "calendar";}
     onStageChange(stage);
-  }, [denchCloudConnected, gmailConnected, calendarConnected, onStageChange]);
+  }, [crmACloudConnected, gmailConnected, calendarConnected, onStageChange]);
 
-  // Load Dench Cloud status (checks env/CLI config on disk).
+  // Load Crm-A Cloud status (checks env/CLI config on disk).
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch("/api/onboarding/dench-cloud", { cache: "no-store" });
+        const res = await fetch("/api/onboarding/crm-a-cloud", { cache: "no-store" });
         if (!res.ok) {throw new Error(`HTTP ${res.status}`);}
-        const data = (await res.json()) as DenchCloudStatus;
+        const data = (await res.json()) as CrmACloudStatus;
         if (cancelled) {return;}
-        setDenchCloudStatus(data);
+        setCrmACloudStatus(data);
       } catch (err) {
         if (cancelled) {return;}
-        setDenchCloudError(
-          err instanceof Error ? err.message : "Could not check Dench Cloud.",
+        setCrmACloudError(
+          err instanceof Error ? err.message : "Could not check Crm-A Cloud.",
         );
       } finally {
-        if (!cancelled) {setDenchCloudLoading(false);}
+        if (!cancelled) {setCrmACloudLoading(false);}
       }
     })();
     return () => {
@@ -321,15 +321,15 @@ export function SetupStep({
     };
   }, []);
 
-  // If Dench Cloud was configured via CLI but not yet recorded in onboarding
+  // If Crm-A Cloud was configured via CLI but not yet recorded in onboarding
   // state, auto-accept it so the step advances without a redundant click.
   useEffect(() => {
-    if (denchCloudLoading) {return;}
-    if (!denchCloudStatus?.configured) {return;}
-    if (state.denchCloud) {return;}
+    if (crmACloudLoading) {return;}
+    if (!crmACloudStatus?.configured) {return;}
+    if (state.crmACloud) {return;}
     void (async () => {
       try {
-        const res = await fetch("/api/onboarding/dench-cloud", {
+        const res = await fetch("/api/onboarding/crm-a-cloud", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ acceptCli: true }),
@@ -337,15 +337,15 @@ export function SetupStep({
         const next = await readOnboardingResponse<OnboardingState>(res);
         onAdvance(next);
       } catch (err) {
-        setDenchCloudError(
-          err instanceof Error ? err.message : "Could not record Dench Cloud.",
+        setCrmACloudError(
+          err instanceof Error ? err.message : "Could not record Crm-A Cloud.",
         );
       }
     })();
   }, [
-    denchCloudLoading,
-    denchCloudStatus?.configured,
-    state.denchCloud,
+    crmACloudLoading,
+    crmACloudStatus?.configured,
+    state.crmACloud,
     onAdvance,
   ]);
 
@@ -406,12 +406,12 @@ export function SetupStep({
     [persistToolkitConnection],
   );
 
-  // Dench Cloud/Composio is the source of truth for OAuth. If a user already
+  // Crm-A Cloud/Composio is the source of truth for OAuth. If a user already
   // connected Gmail in a prior attempt but local onboarding metadata was never
   // written, adopt that active account instead of showing a misleading
   // "Connect" button that can only end in an "already connected" error.
   useEffect(() => {
-    if (!denchCloudConnected) {
+    if (!crmACloudConnected) {
       return;
     }
     if (reconciledExistingConnectionsRef.current) {
@@ -469,7 +469,7 @@ export function SetupStep({
     };
   }, [
     calendarConnected,
-    denchCloudConnected,
+    crmACloudConnected,
     gmailConnected,
     persistToolkitConnection,
     state,
@@ -559,7 +559,7 @@ export function SetupStep({
         );
         if (!popup) {
           throw new Error(
-            "Popup was blocked. Allow popups for DenchClaw and try again.",
+            "Popup was blocked. Allow popups for Crm-A Console and try again.",
           );
         }
         popupRef.current = popup;
@@ -588,17 +588,17 @@ export function SetupStep({
     [persistToolkitConnection, stopPopupPolling],
   );
 
-  async function handleDenchCloudSubmit(event: React.FormEvent) {
+  async function handleCrmACloudSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setDenchCloudError(null);
-    const trimmed = denchCloudKeyInput.trim();
+    setCrmACloudError(null);
+    const trimmed = crmACloudKeyInput.trim();
     if (!trimmed) {
-      setDenchCloudError("Paste your Dench Cloud API key to continue.");
+      setCrmACloudError("Paste your Crm-A Cloud API key to continue.");
       return;
     }
-    setDenchCloudSubmitting(true);
+    setCrmACloudSubmitting(true);
     try {
-      const res = await fetch("/api/onboarding/dench-cloud", {
+      const res = await fetch("/api/onboarding/crm-a-cloud", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ apiKey: trimmed }),
@@ -606,30 +606,30 @@ export function SetupStep({
       const next = await readOnboardingResponse<OnboardingState>(res);
       onAdvance(next);
       setShowKeyForm(false);
-      setDenchCloudKeyInput("");
+      setCrmACloudKeyInput("");
     } catch (err) {
-      setDenchCloudError(
+      setCrmACloudError(
         err instanceof Error ? err.message : "Could not save the API key.",
       );
     } finally {
-      setDenchCloudSubmitting(false);
+      setCrmACloudSubmitting(false);
     }
   }
 
-  async function handleDenchCloudSkip() {
-    setDenchCloudSubmitting(true);
-    setDenchCloudError(null);
+  async function handleCrmACloudSkip() {
+    setCrmACloudSubmitting(true);
+    setCrmACloudError(null);
     try {
-      const res = await fetch("/api/onboarding/dench-cloud", { method: "DELETE" });
+      const res = await fetch("/api/onboarding/crm-a-cloud", { method: "DELETE" });
       const next = await readOnboardingResponse<OnboardingState>(res);
       onAdvance(next);
       setShowKeyForm(false);
     } catch (err) {
-      setDenchCloudError(
+      setCrmACloudError(
         err instanceof Error ? err.message : "Could not skip.",
       );
     } finally {
-      setDenchCloudSubmitting(false);
+      setCrmACloudSubmitting(false);
     }
   }
 
@@ -690,12 +690,12 @@ export function SetupStep({
     }
   }
 
-  const gmailBlocked = !denchCloudConnected;
+  const gmailBlocked = !crmACloudConnected;
   const calendarBlocked = !gmailConnected;
 
-  const denchCloudStatusValue: ConnectionStatus = denchCloudConnected
+  const crmACloudStatusValue: ConnectionStatus = crmACloudConnected
     ? "connected"
-    : denchCloudSubmitting
+    : crmACloudSubmitting
       ? "connecting"
       : "idle";
 
@@ -715,12 +715,12 @@ export function SetupStep({
         ? "blocked"
         : "idle";
 
-  const requiredComplete = denchCloudConnected && gmailConnected;
-  // User may have skipped Dench Cloud (which also implicitly means skipping
+  const requiredComplete = crmACloudConnected && gmailConnected;
+  // User may have skipped Crm-A Cloud (which also implicitly means skipping
   // Gmail). In that case they still need a path forward: the state machine
   // auto-advances through subsequent steps when DC is skipped, so we treat
   // being past `connect-calendar` as "ready for sync".
-  // Continue is live as soon as the two required connections (Dench Cloud
+  // Continue is live as soon as the two required connections (Crm-A Cloud
   // + Gmail) are in place. If calendar isn't connected we silently skip
   // it on click (see handleContinueToSync). This replaces the old
   // separate "Skip" affordance on the calendar row.
@@ -789,31 +789,31 @@ export function SetupStep({
       </div>
 
       <div className="divide-y divide-[var(--color-border)]">
-        {/* Dench Cloud */}
+        {/* Crm-A Cloud */}
         <ConnectionCard
           id="dc-card"
           required
-          icon={<DenchCloudIcon />}
-          title="Dench Cloud"
+          icon={<CrmACloudIcon />}
+          title="Crm-A Cloud"
           description="Runs the models that power Gmail and Calendar sync."
           secondaryLabel={
-            denchCloudConnected
+            crmACloudConnected
               ? "Connected"
               : "Runs the models that power Gmail and Calendar sync."
           }
-          status={denchCloudStatusValue}
+          status={crmACloudStatusValue}
           actions={
-            denchCloudLoading ? (
+            crmACloudLoading ? (
               <span
                 className="text-[12px]"
                 style={{ color: "var(--color-text-muted)" }}
               >
                 Checking…
               </span>
-            ) : denchCloudConnected ? null : showKeyForm ? (
+            ) : crmACloudConnected ? null : showKeyForm ? (
               <GhostAction
                 onClick={() => setShowKeyForm(false)}
-                disabled={denchCloudSubmitting}
+                disabled={crmACloudSubmitting}
               >
                 Cancel
               </GhostAction>
@@ -825,9 +825,9 @@ export function SetupStep({
           }
         />
 
-        {showKeyForm && !denchCloudConnected && (
+        {showKeyForm && !crmACloudConnected && (
           <form
-            onSubmit={(e) => void handleDenchCloudSubmit(e)}
+            onSubmit={(e) => void handleCrmACloudSubmit(e)}
             className="ml-14 space-y-3 rounded-xl px-4 py-4"
             style={{
               background: "var(--color-surface-hover)",
@@ -836,21 +836,21 @@ export function SetupStep({
           >
             <div className="space-y-1.5">
               <label
-                htmlFor="dench-cloud-key"
+                htmlFor="crm-a-cloud-key"
                 className="text-[11px] font-medium uppercase tracking-[0.06em]"
                 style={{ color: "var(--color-text-muted)" }}
               >
-                Dench Cloud API key
+                Crm-A Cloud API key
               </label>
               <input
-                id="dench-cloud-key"
+                id="crm-a-cloud-key"
                 type="password"
-                placeholder="dench_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                value={denchCloudKeyInput}
-                onChange={(e) => setDenchCloudKeyInput(e.target.value)}
+                placeholder="crm_a_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                value={crmACloudKeyInput}
+                onChange={(e) => setCrmACloudKeyInput(e.target.value)}
                 autoComplete="off"
                 autoFocus
-                disabled={denchCloudSubmitting}
+                disabled={crmACloudSubmitting}
                 className="w-full rounded-md px-3 py-2 text-[13px] outline-none transition-[border-color,box-shadow]"
                 style={{
                   height: 36,
@@ -887,15 +887,15 @@ export function SetupStep({
             <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
-                onClick={() => void handleDenchCloudSkip()}
-                disabled={denchCloudSubmitting}
+                onClick={() => void handleCrmACloudSkip()}
+                disabled={crmACloudSubmitting}
                 className="text-[12px] underline-offset-4 transition-colors hover:underline disabled:opacity-50"
                 style={{ color: "var(--color-text-muted)" }}
               >
                 Skip — use without Gmail sync
               </button>
-              <PrimaryAction type="submit" disabled={denchCloudSubmitting}>
-                {denchCloudSubmitting ? "Validating…" : "Save key"}
+              <PrimaryAction type="submit" disabled={crmACloudSubmitting}>
+                {crmACloudSubmitting ? "Validating…" : "Save key"}
               </PrimaryAction>
             </div>
           </form>
@@ -910,11 +910,11 @@ export function SetupStep({
             gmailConnected
               ? formatAccountLabel(state.connections?.gmail?.accountEmail)
               : gmailBlocked
-                ? "Connect Dench Cloud first."
+                ? "Connect Crm-A Cloud first."
                 : "We read your inbox so People and Companies can appear."
           }
           status={gmailStatusValue}
-          disabledReason={gmailBlocked ? "Requires Dench Cloud." : undefined}
+          disabledReason={gmailBlocked ? "Requires Crm-A Cloud." : undefined}
           actions={
             gmailConnected ? null : (
               <div className="flex items-center gap-3">
@@ -976,7 +976,7 @@ export function SetupStep({
         />
       </div>
 
-      {(denchCloudError || toolkitError) && (
+      {(crmACloudError || toolkitError) && (
         <div
           className="rounded-xl px-4 py-3 text-[13px]"
           style={{
@@ -985,7 +985,7 @@ export function SetupStep({
             border: "1px solid rgba(239, 68, 68, 0.2)",
           }}
         >
-          {denchCloudError ?? toolkitError}
+          {crmACloudError ?? toolkitError}
         </div>
       )}
 
@@ -993,9 +993,9 @@ export function SetupStep({
         <p className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
           {requiredComplete
             ? null
-            : denchCloudConnected
+            : crmACloudConnected
               ? "Connect Gmail for the full experience, or skip ahead."
-              : "Dench Cloud unlocks the other two."}
+              : "Crm-A Cloud unlocks the other two."}
         </p>
         <button
           type="button"

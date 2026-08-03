@@ -1,6 +1,6 @@
 # Telemetry
 
-DenchClaw collects **anonymous, non-identifiable** telemetry data to help us
+Crm-A Console collects **anonymous, non-identifiable** telemetry data to help us
 understand how the product is used and where to focus improvements. Participation
 is optional and can be disabled at any time.
 
@@ -18,7 +18,7 @@ Both layers share the same opt-out controls and privacy mode setting.
 
 | Event                     | When                                    | Properties                                                                          |
 | ------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------- |
-| `cli_bootstrap_started`   | `denchclaw bootstrap` begins            | `version`                                                                           |
+| `cli_bootstrap_started`   | `crm-a-console bootstrap` begins        | `version`                                                                           |
 | `cli_bootstrap_completed` | Bootstrap finishes                      | `duration_ms`, `workspace_created`, `gateway_reachable`, `web_reachable`, `version` |
 | `chat_message_sent`       | User sends a chat message in the web UI | `message_length`, `is_subagent`                                                     |
 | `chat_stopped`            | User stops an active agent run          | —                                                                                   |
@@ -37,9 +37,9 @@ Every event includes baseline machine context: `os` (platform), `arch`, and
 ### Anonymous install ID
 
 A single anonymous UUID is generated on first run and persisted in
-`~/.openclaw-dench/telemetry.json` as `anonymousId`. This install-scoped ID is
+`~/.openclaw-crm-a/telemetry.json` as `anonymousId`. This install-scoped ID is
 shared across all telemetry layers — CLI, web server, browser, and the OpenClaw
-PostHog plugin — so a single DenchClaw installation maps to exactly one PostHog
+PostHog plugin — so a single Crm-A Console installation maps to exactly one PostHog
 person.
 
 The ID is:
@@ -47,8 +47,8 @@ The ID is:
 - **Stable** — survives restarts, upgrades, and re-bootstrap.
 - **Anonymous** — a random UUID with no relation to your machine, username, or
   IP address.
-- **Install-scoped** — deleting `~/.openclaw-dench` resets it.
-- **Inspectable** — run `npx denchclaw telemetry status` to see your current ID.
+- **Install-scoped** — deleting `~/.openclaw-crm-a` resets it.
+- **Inspectable** — run `npx crm-a-console telemetry status` to see your current ID.
 
 ### Optional identity fields
 
@@ -56,25 +56,25 @@ The ID is:
 empty and the install remains anonymous. When any field is populated, a PostHog
 person profile is created with those properties:
 
-| Field        | PostHog property | Description                                                    |
-| ------------ | ---------------- | -------------------------------------------------------------- |
-| `name`       | `$name`          | Display name shown in PostHog                                  |
-| `email`      | `$email`         | Email address                                                  |
-| `avatar`     | `$avatar`        | Avatar URL                                                     |
-| `denchOrgId` | `dench_org_id`   | Dench Cloud organization ID (set automatically by Dench Cloud) |
+| Field       | PostHog property | Description                                                    |
+| ----------- | ---------------- | -------------------------------------------------------------- |
+| `name`      | `$name`          | Display name shown in PostHog                                  |
+| `email`     | `$email`         | Email address                                                  |
+| `avatar`    | `$avatar`        | Avatar URL                                                     |
+| `crmAOrgId` | `crm_a_org_id`   | Crm-A Cloud organization ID (set automatically by Crm-A Cloud) |
 
 These fields are **never written automatically** by the open-source CLI or web
 app. They are only populated when:
 
-- A user manually edits `~/.openclaw-dench/telemetry.json`, or
-- Dench Cloud provisions the install and writes `denchOrgId`.
+- A user manually edits `~/.openclaw-crm-a/telemetry.json`, or
+- Crm-A Cloud provisions the install and writes `crmAOrgId`.
 
 ---
 
 ## AI Observability
 
 The `posthog-analytics` OpenClaw plugin captures LLM interactions as PostHog AI
-events. It is installed automatically during `denchclaw bootstrap` when a
+events. It is installed automatically during `crm-a-console bootstrap` when a
 PostHog project key is available.
 
 ### Event hierarchy
@@ -96,10 +96,10 @@ Session ($ai_session_id)
 | `$ai_span`               | Each tool call completes               | `$ai_span_name` (tool name), `$ai_latency`, `$ai_is_error`, `$ai_parent_id`                                                            |
 | `$ai_trace`              | Agent run completes                    | `$ai_trace_id`, `$ai_session_id`, `$ai_latency`, `tool_count`                                                                          |
 | `survey sent`            | User clicks Like/Dislike in the web UI | `$survey_response` (1=like, 2=dislike), `$ai_trace_id`, `message_id`                                                                   |
-| `dench_message_received` | User sends a message (gateway-side)    | `channel`, `session_id`, `has_attachments`                                                                                             |
-| `dench_session_start`    | Agent session begins                   | `session_id`, `channel`                                                                                                                |
-| `dench_session_end`      | Agent session ends                     | `session_id`, `channel`                                                                                                                |
-| `dench_turn_completed`   | Agent run completes                    | `session_id`, `run_id`, `model`                                                                                                        |
+| `crm_a_message_received` | User sends a message (gateway-side)    | `channel`, `session_id`, `has_attachments`                                                                                             |
+| `crm_a_session_start`    | Agent session begins                   | `session_id`, `channel`                                                                                                                |
+| `crm_a_session_end`      | Agent session ends                     | `session_id`, `channel`                                                                                                                |
+| `crm_a_turn_completed`   | Agent run completes                    | `session_id`, `run_id`, `model`                                                                                                        |
 
 ### Privacy mode
 
@@ -117,8 +117,8 @@ of privacy mode.
 Toggle privacy mode:
 
 ```bash
-npx denchclaw telemetry privacy off    # capture full content
-npx denchclaw telemetry privacy on     # redact content (default)
+npx crm-a-console telemetry privacy off    # capture full content
+npx crm-a-console telemetry privacy on     # redact content (default)
 ```
 
 ### PostHog evaluations
@@ -170,13 +170,13 @@ and AI observability):
 ### CLI command
 
 ```bash
-npx denchclaw telemetry disable
+npx crm-a-console telemetry disable
 ```
 
 ### Environment variable
 
 ```bash
-export DENCHCLAW_TELEMETRY_DISABLED=1
+export CRM_A_CONSOLE_TELEMETRY_DISABLED=1
 ```
 
 ### DO_NOT_TRACK standard
@@ -192,7 +192,7 @@ Telemetry is automatically disabled when `CI=true` is set.
 ### Check status
 
 ```bash
-npx denchclaw telemetry status
+npx crm-a-console telemetry status
 ```
 
 ---
@@ -202,11 +202,11 @@ npx denchclaw telemetry status
 ### Privacy mode
 
 ```bash
-npx denchclaw telemetry privacy on     # redact message content (default)
-npx denchclaw telemetry privacy off    # send full message content
+npx crm-a-console telemetry privacy on     # redact message content (default)
+npx crm-a-console telemetry privacy off    # send full message content
 ```
 
-Privacy mode is stored in `~/.openclaw-dench/telemetry.json` and is read by both
+Privacy mode is stored in `~/.openclaw-crm-a/telemetry.json` and is read by both
 the CLI/web telemetry layer and the OpenClaw analytics plugin.
 
 ### PostHog analytics plugin
@@ -214,30 +214,30 @@ the CLI/web telemetry layer and the OpenClaw analytics plugin.
 The plugin is configured via OpenClaw's plugin config:
 
 ```bash
-openclaw --profile dench config set plugins.entries.posthog-analytics.enabled true
-openclaw --profile dench config set plugins.entries.posthog-analytics.config.apiKey <key>
+openclaw --profile crm-a config set plugins.entries.posthog-analytics.enabled true
+openclaw --profile crm-a config set plugins.entries.posthog-analytics.config.apiKey <key>
 ```
 
-This is handled automatically by `denchclaw bootstrap`.
+This is handled automatically by `crm-a-console bootstrap`.
 
 ---
 
 ## Debug Mode
 
-Set `DENCHCLAW_TELEMETRY_DEBUG=1` to print telemetry events to stderr instead of
+Set `CRM_A_CONSOLE_TELEMETRY_DEBUG=1` to print telemetry events to stderr instead of
 sending them. Useful for inspecting exactly what would be reported.
 
 ## Re-enabling
 
 ```bash
-npx denchclaw telemetry enable
+npx crm-a-console telemetry enable
 ```
 
 ## How It Works
 
 - **Shared identity**: All layers read the same `anonymousId` from
-  `~/.openclaw-dench/telemetry.json`. The first component to run (usually the
-  CLI during `denchclaw bootstrap`) generates the UUID; every subsequent layer
+  `~/.openclaw-crm-a/telemetry.json`. The first component to run (usually the
+  CLI during `crm-a-console bootstrap`) generates the UUID; every subsequent layer
   reuses it.
 - **CLI**: The `posthog-node` SDK sends events from the Node.js process. Events
   are batched and flushed asynchronously — telemetry never blocks the CLI.

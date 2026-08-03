@@ -23,7 +23,7 @@ export function buildComposioChatActionHref(action: ComposioChatAction["action"]
     search.set("name", params.toolkitName.trim());
   }
   const query = search.toString();
-  return `dench://composio/${action}${query ? `?${query}` : ""}`;
+  return `crm-a://composio/${action}${query ? `?${query}` : ""}`;
 }
 
 export function parseComposioChatAction(href: string): ComposioChatAction | null {
@@ -39,7 +39,7 @@ export function parseComposioChatAction(href: string): ComposioChatAction | null
     return null;
   }
 
-  if (parsed.protocol !== "dench:" || parsed.hostname !== "composio") {
+  if (parsed.protocol !== "crm-a:" || parsed.hostname !== "composio") {
     return null;
   }
 

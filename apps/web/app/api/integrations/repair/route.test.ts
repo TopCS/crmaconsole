@@ -5,20 +5,20 @@ vi.mock("@/lib/integrations", () => ({
     changed: true,
     repairs: [
       {
-        id: "dench-ai-gateway",
-        pluginId: "dench-ai-gateway",
+        id: "crm-a-ai-gateway",
+        pluginId: "crm-a-ai-gateway",
         assetAvailable: true,
         assetCopied: true,
         repaired: true,
         issues: [],
       },
     ],
-    repairedIds: ["dench-ai-gateway"],
+    repairedIds: ["crm-a-ai-gateway"],
     state: {
-      denchCloud: {
+      crmACloud: {
         hasKey: true,
         isPrimaryProvider: true,
-        primaryModel: "dench-cloud/claude-sonnet-4.6",
+        primaryModel: "crm-a-cloud/claude-sonnet-4.6",
       },
       metadata: { schemaVersion: 1, exa: { ownsSearch: false, fallbackProvider: "duckduckgo" } },
       search: {
@@ -37,7 +37,7 @@ vi.mock("@/lib/integrations", () => ({
     attempted: true,
     restarted: true,
     error: null,
-    profile: "dench",
+    profile: "crm-a",
   })),
 }));
 
@@ -53,7 +53,7 @@ describe("integrations repair API", () => {
     expect(response.status).toBe(200);
     const json = await response.json();
     expect(json.changed).toBe(true);
-    expect(json.repairedIds).toEqual(["dench-ai-gateway"]);
+    expect(json.repairedIds).toEqual(["crm-a-ai-gateway"]);
     expect(json.refresh.restarted).toBe(true);
   });
 });

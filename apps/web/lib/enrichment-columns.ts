@@ -14,7 +14,7 @@ export type EnrichmentColumnDef = {
 	/** Dot-path into the Apollo response payload to extract the value. */
 	apolloPath: string;
 	/**
-	 * Canonical Dench gateway field names sent in the `requiredFields` contract.
+	 * Canonical Crm-A gateway field names sent in the `requiredFields` contract.
 	 * Each entry must be on the gateway allowlist when non-empty.
 	 * Omit (empty array) so the gateway uses its default backfill behavior.
 	 */

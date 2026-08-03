@@ -60,7 +60,7 @@ async function fetchFromAllowedPhotoOrigin(initial: URL): Promise<Response> {
 			// rate-limits requests with a browser-like Referer when they
 			// don't originate from a Google property.
 			headers: {
-				"User-Agent": "DenchClaw/1.0 (+contact-photo-proxy)",
+				"User-Agent": "Crm-A Console/1.0 (+contact-photo-proxy)",
 				"Accept": "image/*",
 			},
 			redirect: "manual",

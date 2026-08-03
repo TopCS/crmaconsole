@@ -46,7 +46,7 @@ export type WebProfilesPayloadEvaluation = {
 
 export type ManagedWebRuntimeManifest = {
   schemaVersion: 1;
-  deployedDenchVersion: string;
+  deployedCrmAVersion: string;
   deployedAt: string;
   sourceStandaloneServer: string;
   lastPort?: number;
@@ -260,7 +260,7 @@ export function resolveProfileStateDir(
 ): string {
   void profile;
   const home = resolveRequiredHomeDir(env, os.homedir);
-  return path.join(home, ".openclaw-dench");
+  return path.join(home, ".openclaw-crm-a");
 }
 
 export function resolveManagedWebRuntimeDir(stateDir: string): string {
@@ -739,7 +739,7 @@ function preservePreviousStaticAssets(backupDir: string, runtimeAppDir: string):
 export function installManagedWebRuntime(params: {
   stateDir: string;
   packageRoot: string;
-  denchVersion: string;
+  crmAVersion: string;
   webPort?: number;
   gatewayPort?: number;
 }): InstallManagedWebRuntimeResult {
@@ -782,7 +782,7 @@ export function installManagedWebRuntime(params: {
 
   const manifest: ManagedWebRuntimeManifest = {
     schemaVersion: 1,
-    deployedDenchVersion: params.denchVersion,
+    deployedCrmAVersion: params.crmAVersion,
     deployedAt: new Date().toISOString(),
     sourceStandaloneServer,
     ...(typeof params.webPort === "number" ? { lastPort: params.webPort } : {}),
@@ -919,7 +919,7 @@ export function startManagedWebRuntime(params: {
 export async function ensureManagedWebRuntime(params: {
   stateDir: string;
   packageRoot: string;
-  denchVersion: string;
+  crmAVersion: string;
   port: number;
   gatewayPort: number;
   startFn?: (p: {
@@ -931,7 +931,7 @@ export async function ensureManagedWebRuntime(params: {
   const install = installManagedWebRuntime({
     stateDir: params.stateDir,
     packageRoot: params.packageRoot,
-    denchVersion: params.denchVersion,
+    crmAVersion: params.crmAVersion,
     webPort: params.port,
     gatewayPort: params.gatewayPort,
   });
@@ -953,7 +953,7 @@ export async function ensureManagedWebRuntime(params: {
       .join(", ");
     return {
       ready: false,
-      reason: `port ${params.port} is owned by non-Dench process(es): ${detail}`,
+      reason: `port ${params.port} is owned by non-Crm-A process(es): ${detail}`,
     };
   }
 

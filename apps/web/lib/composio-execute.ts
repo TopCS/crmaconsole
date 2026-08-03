@@ -1,5 +1,5 @@
 /**
- * Typed wrapper for `POST /v1/composio/tools/execute` on the Dench gateway.
+ * Typed wrapper for `POST /v1/composio/tools/execute` on the Crm-A gateway.
  *
  * The gateway forwards Composio's v3.1 stateless tool execution; the
  * surface is small (tool slug + connected account id + arguments) but
@@ -174,7 +174,7 @@ async function gatewayFetch(
 ): Promise<Response> {
   const apiKey = resolveComposioApiKey();
   if (!apiKey) {
-    throw new Error("Dench Cloud API key is not configured.");
+    throw new Error("Crm-A Cloud API key is not configured.");
   }
   const url = `${resolveComposioGatewayUrl()}${path}`;
   const headers = new Headers({

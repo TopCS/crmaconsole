@@ -6,10 +6,10 @@ import userEvent from "@testing-library/user-event";
 import { IntegrationsPanel } from "./integrations-panel";
 
 const eligiblePayload = {
-  denchCloud: {
+  crmACloud: {
     hasKey: true,
     isPrimaryProvider: true,
-    primaryModel: "dench-cloud/anthropic.claude-opus-4-6-v1",
+    primaryModel: "crm-a-cloud/anthropic.claude-opus-4-6-v1",
   },
   metadata: { schemaVersion: 1 },
   search: { builtIn: { enabled: false, denied: true, provider: "duckduckgo" }, effectiveOwner: "exa" },
@@ -37,7 +37,7 @@ const toolkitsPayload = {
 const connectionsPayload = { connections: [] };
 
 const statusPayload = {
-  summary: { level: "healthy", verified: true, message: "Dench Integrations is healthy." },
+  summary: { level: "healthy", verified: true, message: "Crm-A Integrations is healthy." },
   config: { status: "pass", detail: "OK." },
   gatewayTools: { status: "pass", detail: "OK.", toolCount: 4 },
   liveAgent: { status: "pass", detail: "OK.", evidence: [] },
@@ -89,10 +89,10 @@ describe("IntegrationsPanel", () => {
     });
   });
 
-  it("shows Dench Cloud lock badge when not eligible", async () => {
+  it("shows Crm-A Cloud lock badge when not eligible", async () => {
     const lockedPayload = {
       ...eligiblePayload,
-      denchCloud: {
+      crmACloud: {
         hasKey: false,
         isPrimaryProvider: false,
         primaryModel: "anthropic/claude-4",
@@ -108,9 +108,9 @@ describe("IntegrationsPanel", () => {
     render(<IntegrationsPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText("Available with Dench Cloud")).toBeInTheDocument();
+      expect(screen.getByText("Available with Crm-A Cloud")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Get Dench Cloud API Key")).toBeInTheDocument();
+    expect(screen.getByText("Get Crm-A Cloud API Key")).toBeInTheDocument();
   });
 });

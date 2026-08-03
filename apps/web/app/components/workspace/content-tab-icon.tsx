@@ -43,7 +43,7 @@ function resolveIconKind(tab: ContentTab): IconKind {
   if (tab.kind === "skills") return "skills";
   if (tab.kind === "integrations") return "integrations";
   if (tab.kind === "cron-dashboard" || tab.kind === "cron-job") return "cron";
-  if (tab.kind === "app" || path.includes(".dench.app")) return "app";
+  if (tab.kind === "app" || path.includes(".crm-a.app")) return "app";
   if (tab.kind === "object") return "object";
   if (tab.kind === "directory" || tab.kind === "browse") return "folder";
   return "file";

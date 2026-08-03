@@ -197,7 +197,7 @@ export async function POST(request: Request): Promise<Response> {
       client = await registerOAuthClient({
         asMetadata: discovered.authServer,
         redirectUri,
-        clientName: `DenchClaw (${key})`,
+        clientName: `Crm-A Console (${key})`,
         scope,
       });
     } catch (err) {

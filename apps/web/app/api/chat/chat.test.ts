@@ -28,13 +28,13 @@ vi.mock("@/lib/workspace", () => ({
   getActiveWorkspaceName: vi.fn(() => "default"),
   resolveActiveAgentId: vi.fn(() => "main"),
   resolveAgentWorkspacePrefix: vi.fn(() => null),
-  resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw-dench"),
+  resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw-crm-a"),
   resolveWorkspaceDirForName: vi.fn((name: string) =>
     name === "default"
-      ? "/home/testuser/.openclaw-dench/workspace"
-      : `/home/testuser/.openclaw-dench/workspace-${name}`,
+      ? "/home/testuser/.openclaw-crm-a/workspace"
+      : `/home/testuser/.openclaw-crm-a/workspace-${name}`,
   ),
-  resolveWorkspaceRoot: vi.fn(() => "/home/testuser/.openclaw-dench/workspace"),
+  resolveWorkspaceRoot: vi.fn(() => "/home/testuser/.openclaw-crm-a/workspace"),
 }));
 
 // Mock web-sessions shared module
@@ -76,13 +76,13 @@ describe("Chat API routes", () => {
       getActiveWorkspaceName: vi.fn(() => "default"),
       resolveActiveAgentId: vi.fn(() => "main"),
       resolveAgentWorkspacePrefix: vi.fn(() => null),
-      resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw-dench"),
+      resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw-crm-a"),
       resolveWorkspaceDirForName: vi.fn((name: string) =>
         name === "default"
-          ? "/home/testuser/.openclaw-dench/workspace"
-          : `/home/testuser/.openclaw-dench/workspace-${name}`,
+          ? "/home/testuser/.openclaw-crm-a/workspace"
+          : `/home/testuser/.openclaw-crm-a/workspace-${name}`,
       ),
-      resolveWorkspaceRoot: vi.fn(() => "/home/testuser/.openclaw-dench/workspace"),
+      resolveWorkspaceRoot: vi.fn(() => "/home/testuser/.openclaw-crm-a/workspace"),
     }));
     vi.mock("@/app/api/web-sessions/shared", () => ({
       getSessionMeta: vi.fn(() => undefined),
@@ -203,7 +203,7 @@ describe("Chat API routes", () => {
         key: "agent:main:web:s1",
         sessionId: "s1",
         updatedAt: Date.now(),
-        model: "dench-cloud/anthropic.claude-opus-4-6-v1",
+        model: "crm-a-cloud/anthropic.claude-opus-4-6-v1",
         modelProvider: "anthropic",
       } as never);
 
@@ -242,7 +242,7 @@ describe("Chat API routes", () => {
         key: "agent:main:web:s1",
         sessionId: "s1",
         updatedAt: Date.now(),
-        model: "dench-cloud/anthropic.claude-opus-4-6-v1",
+        model: "crm-a-cloud/anthropic.claude-opus-4-6-v1",
         modelProvider: "anthropic",
       } as never);
 
@@ -401,7 +401,7 @@ describe("Chat API routes", () => {
         updatedAt: 1,
         messageCount: 1,
         workspaceName: "default",
-        workspaceRoot: "/home/testuser/.openclaw-dench/workspace",
+        workspaceRoot: "/home/testuser/.openclaw-crm-a/workspace",
         workspaceAgentId: "main",
       } as never);
 

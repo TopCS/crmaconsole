@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "./route";
 
-vi.mock("@/lib/dench-cloud-settings", () => ({
+vi.mock("@/lib/crm-a-cloud-settings", () => ({
   getCloudVoiceState: vi.fn(),
 }));
 
@@ -9,7 +9,7 @@ vi.mock("@/lib/elevenlabs-voice", () => ({
   fetchElevenLabsVoices: vi.fn(),
 }));
 
-const { getCloudVoiceState } = await import("@/lib/dench-cloud-settings");
+const { getCloudVoiceState } = await import("@/lib/crm-a-cloud-settings");
 const { fetchElevenLabsVoices } = await import("@/lib/elevenlabs-voice");
 
 const mockedVoiceState = vi.mocked(getCloudVoiceState);
@@ -20,7 +20,7 @@ describe("voice voices API", () => {
     vi.clearAllMocks();
   });
 
-  it("returns 409 when the Dench key is missing", async () => {
+  it("returns 409 when the Crm-A key is missing", async () => {
     mockedVoiceState.mockResolvedValue({
       status: "no_key",
       apiKeySource: "missing",
@@ -39,7 +39,7 @@ describe("voice voices API", () => {
       status: "valid",
       apiKeySource: "config",
       gatewayUrl: "https://gateway.merseoriginals.com",
-      apiKey: "dench-key",
+      apiKey: "crm-a-key",
       selectedVoiceId: "voice_123",
       elevenLabsEnabled: true,
     });
@@ -61,7 +61,7 @@ describe("voice voices API", () => {
     expect(body.voices).toHaveLength(1);
     expect(mockedFetchVoices).toHaveBeenCalledWith({
       gatewayUrl: "https://gateway.merseoriginals.com",
-      apiKey: "dench-key",
+      apiKey: "crm-a-key",
     });
   });
 });

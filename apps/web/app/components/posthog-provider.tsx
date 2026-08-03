@@ -7,14 +7,14 @@ import { usePathname, useSearchParams } from "next/navigation";
 
 const POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY || "";
 const POSTHOG_HOST = "https://us.i.posthog.com";
-const DENCHCLAW_VERSION = process.env.NEXT_PUBLIC_DENCHCLAW_VERSION || "";
+const CRM_A_CONSOLE_VERSION = process.env.NEXT_PUBLIC_CRM_A_CONSOLE_VERSION || "";
 const OPENCLAW_VERSION = process.env.NEXT_PUBLIC_OPENCLAW_VERSION || "";
 
 type PersonInfo = {
   name?: string;
   email?: string;
   avatar?: string;
-  denchOrgId?: string;
+  crmAOrgId?: string;
 };
 
 let initialized = false;
@@ -42,7 +42,7 @@ function initPostHog(anonymousId?: string, personInfo?: PersonInfo, privacyMode?
   });
 
   const superProps: Record<string, string> = {};
-  if (DENCHCLAW_VERSION) superProps.denchclaw_version = DENCHCLAW_VERSION;
+  if (CRM_A_CONSOLE_VERSION) superProps.crm_a_console_version = CRM_A_CONSOLE_VERSION;
   if (OPENCLAW_VERSION) superProps.openclaw_version = OPENCLAW_VERSION;
   if (Object.keys(superProps).length > 0) posthog.register(superProps);
 
@@ -60,7 +60,7 @@ function initPostHog(anonymousId?: string, personInfo?: PersonInfo, privacyMode?
       props.$avatar = personInfo.avatar;
       props.avatar = personInfo.avatar;
     }
-    if (personInfo.denchOrgId) props.dench_org_id = personInfo.denchOrgId;
+    if (personInfo.crmAOrgId) props.crm_a_org_id = personInfo.crmAOrgId;
     posthog.identify(anonymousId, props);
   }
 

@@ -10,7 +10,7 @@ import {
   type StartManagedWebRuntimeResult,
 } from "./web-runtime.js";
 
-const LAUNCH_AGENT_LABEL = "ai.denchclaw.web-runtime";
+const LAUNCH_AGENT_LABEL = "ai.crm-a-console.web-runtime";
 
 export function resolveLaunchAgentPlistPath(): string {
   return path.join(os.homedir(), "Library", "LaunchAgents", `${LAUNCH_AGENT_LABEL}.plist`);

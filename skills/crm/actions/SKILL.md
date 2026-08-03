@@ -147,14 +147,14 @@ Runtime auto-detection by file extension:
 
 ### Inline scripts (`script`)
 
-Short JavaScript snippets stored directly in the action config. Executed server-side via `node` with the Dench SDK pre-loaded:
+Short JavaScript snippets stored directly in the action config. Executed server-side via `node` with the Crm-A SDK pre-loaded:
 
 ```json
 {
   "id": "act_mark_contacted",
   "label": "Mark Contacted",
   "variant": "success",
-  "script": "await dench.objects.update(context.objectName, context.entryId, { Status: 'Contacted' });\nreturn { message: 'Updated' };",
+  "script": "await crmA.objects.update(context.objectName, context.entryId, { Status: 'Contacted' });\nreturn { message: 'Updated' };",
   "runtime": "inline"
 }
 ```
@@ -191,50 +191,50 @@ Every script receives these environment variables:
 
 | Variable               | Description                            |
 | ---------------------- | -------------------------------------- |
-| `DENCH_ENTRY_ID`       | The entry ID this action is running on |
-| `DENCH_ENTRY_DATA`     | Full entry data as JSON string         |
-| `DENCH_OBJECT_NAME`    | Object name (e.g. `"leads"`)           |
-| `DENCH_OBJECT_ID`      | Object ID                              |
-| `DENCH_ACTION_ID`      | Action ID from config                  |
-| `DENCH_FIELD_ID`       | Field ID the action belongs to         |
-| `DENCH_WORKSPACE_PATH` | Absolute path to workspace root        |
-| `DENCH_DB_PATH`        | Absolute path to `workspace.duckdb`    |
-| `DENCH_API_URL`        | Base URL for workspace REST APIs       |
+| `CRM_A_ENTRY_ID`       | The entry ID this action is running on |
+| `CRM_A_ENTRY_DATA`     | Full entry data as JSON string         |
+| `CRM_A_OBJECT_NAME`    | Object name (e.g. `"leads"`)           |
+| `CRM_A_OBJECT_ID`      | Object ID                              |
+| `CRM_A_ACTION_ID`      | Action ID from config                  |
+| `CRM_A_FIELD_ID`       | Field ID the action belongs to         |
+| `CRM_A_WORKSPACE_PATH` | Absolute path to workspace root        |
+| `CRM_A_DB_PATH`        | Absolute path to `workspace.duckdb`    |
+| `CRM_A_API_URL`        | Base URL for workspace REST APIs       |
 
 This means **any language** can participate — just read env vars and print JSON to stdout.
 
 ### File-Based Script Patterns
 
-File-based scripts do NOT have the `dench` SDK. Use env vars + CLI/HTTP instead:
+File-based scripts do NOT have the `crm-a` SDK. Use env vars + CLI/HTTP instead:
 
 **Read entry data (any language):**
 
 ```bash
 # Entry data is already in env as JSON
-echo "$DENCH_ENTRY_DATA" | jq '.["Full Name"]'
+echo "$CRM_A_ENTRY_DATA" | jq '.["Full Name"]'
 ```
 
 **Query DuckDB from a file-based script:**
 
 ```bash
-duckdb "$DENCH_DB_PATH" -json "SELECT * FROM v_lead WHERE entry_id = '$DENCH_ENTRY_ID'"
+duckdb "$CRM_A_DB_PATH" -json "SELECT * FROM v_lead WHERE entry_id = '$CRM_A_ENTRY_ID'"
 ```
 
 **Update DuckDB from a file-based script:**
 
 ```bash
-FIELD_ID=$(duckdb "$DENCH_DB_PATH" -noheader -list \
-  "SELECT id FROM fields WHERE object_id = '$DENCH_OBJECT_ID' AND name = 'Status'")
-duckdb "$DENCH_DB_PATH" \
+FIELD_ID=$(duckdb "$CRM_A_DB_PATH" -noheader -list \
+  "SELECT id FROM fields WHERE object_id = '$CRM_A_OBJECT_ID' AND name = 'Status'")
+duckdb "$CRM_A_DB_PATH" \
   "INSERT INTO entry_fields (entry_id, field_id, value)
-   VALUES ('$DENCH_ENTRY_ID', '$FIELD_ID', 'Contacted')
+   VALUES ('$CRM_A_ENTRY_ID', '$FIELD_ID', 'Contacted')
    ON CONFLICT (entry_id, field_id) DO UPDATE SET value = excluded.value, updated_at = now()"
 ```
 
 **Call the workspace REST API from a file-based script:**
 
 ```bash
-curl -s -X PATCH "$DENCH_API_URL/workspace/objects/$DENCH_OBJECT_NAME/entries/$DENCH_ENTRY_ID" \
+curl -s -X PATCH "$CRM_A_API_URL/workspace/objects/$CRM_A_OBJECT_NAME/entries/$CRM_A_ENTRY_ID" \
   -H "Content-Type: application/json" \
   -d '{"fields":{"Status":"Contacted"}}'
 ```
@@ -244,13 +244,13 @@ curl -s -X PATCH "$DENCH_API_URL/workspace/objects/$DENCH_OBJECT_NAME/entries/$D
 ```python
 import os, json, requests
 
-entry = json.loads(os.environ['DENCH_ENTRY_DATA'])
-api = os.environ['DENCH_API_URL']
+entry = json.loads(os.environ['CRM_A_ENTRY_DATA'])
+api = os.environ['CRM_A_API_URL']
 email = entry.get('Email Address', '')
 
 print(json.dumps({"type": "progress", "percent": 50, "message": "Sending..."}))
 
-requests.post(f"{api}/workspace/objects/people/entries/{os.environ['DENCH_ENTRY_ID']}",
+requests.post(f"{api}/workspace/objects/people/entries/{os.environ['CRM_A_ENTRY_ID']}",
     json={"fields": {"Status": "Contacted"}},
     headers={"Content-Type": "application/json"})
 
@@ -261,9 +261,9 @@ print(json.dumps({"type": "result", "status": "success", "data": {"email": email
 
 ```bash
 #!/bin/bash
-ENTRY=$(echo "$DENCH_ENTRY_DATA" | jq -r '.["Email Address"]')
+ENTRY=$(echo "$CRM_A_ENTRY_DATA" | jq -r '.["Email Address"]')
 echo "{\"type\":\"log\",\"level\":\"info\",\"message\":\"Processing $ENTRY\"}"
-curl -s -X PATCH "$DENCH_API_URL/workspace/objects/$DENCH_OBJECT_NAME/entries/$DENCH_ENTRY_ID" \
+curl -s -X PATCH "$CRM_A_API_URL/workspace/objects/$CRM_A_OBJECT_NAME/entries/$CRM_A_ENTRY_ID" \
   -H "Content-Type: application/json" \
   -d '{"fields":{"Status":"Contacted"}}'
 echo '{"type":"result","status":"success","data":{"sent":true}}'
@@ -273,29 +273,29 @@ echo '{"type":"result","status":"success","data":{"sent":true}}'
 
 ## Inline JS SDK (inline scripts only)
 
-**The `dench` global and `context` object are ONLY available for inline scripts (`runtime: "inline"`).** File-based scripts do NOT have access to the SDK — they must use environment variables and raw HTTP/CLI calls (see [Environment Variables](#environment-variables) and [File-Based Script Patterns](#file-based-script-patterns) below).
+**The `crm-a` global and `context` object are ONLY available for inline scripts (`runtime: "inline"`).** File-based scripts do NOT have access to the SDK — they must use environment variables and raw HTTP/CLI calls (see [Environment Variables](#environment-variables) and [File-Based Script Patterns](#file-based-script-patterns) below).
 
-For inline JS actions, the `dench` global provides:
+For inline JS actions, the `crm-a` global provides:
 
-| Method                                   | Description                                 |
-| ---------------------------------------- | ------------------------------------------- |
-| `dench.objects.get(name, id)`            | Get entry by object name and ID             |
-| `dench.objects.list(name)`               | List entries for an object                  |
-| `dench.objects.create(name, fields)`     | Create a new entry                          |
-| `dench.objects.update(name, id, fields)` | Update entry fields                         |
-| `dench.objects.delete(name, id)`         | Delete an entry                             |
-| `dench.objects.bulkDelete(name, ids)`    | Bulk delete entries                         |
-| `dench.db.query(sql)`                    | Run read-only SQL on workspace DB           |
-| `dench.db.execute(sql)`                  | Execute SQL (write operations)              |
-| `dench.files.read(path)`                 | Read a workspace file                       |
-| `dench.files.write(path, content)`       | Write a workspace file                      |
-| `dench.http.fetch(url, opts)`            | Standard fetch (no proxy)                   |
-| `dench.exec(cmd)`                        | Run a shell command synchronously           |
-| `dench.progress(percent, message)`       | Report progress to UI                       |
-| `dench.log(message, level)`              | Log a message                               |
-| `dench.complete(data)`                   | Signal successful completion                |
-| `dench.fail(message)`                    | Signal failure and exit                     |
-| `dench.env.*`                            | Access all DENCH\_\* env vars as properties |
+| Method                                  | Description                                 |
+| --------------------------------------- | ------------------------------------------- |
+| `crmA.objects.get(name, id)`            | Get entry by object name and ID             |
+| `crmA.objects.list(name)`               | List entries for an object                  |
+| `crmA.objects.create(name, fields)`     | Create a new entry                          |
+| `crmA.objects.update(name, id, fields)` | Update entry fields                         |
+| `crmA.objects.delete(name, id)`         | Delete an entry                             |
+| `crmA.objects.bulkDelete(name, ids)`    | Bulk delete entries                         |
+| `crmA.db.query(sql)`                    | Run read-only SQL on workspace DB           |
+| `crmA.db.execute(sql)`                  | Execute SQL (write operations)              |
+| `crmA.files.read(path)`                 | Read a workspace file                       |
+| `crmA.files.write(path, content)`       | Write a workspace file                      |
+| `crmA.http.fetch(url, opts)`            | Standard fetch (no proxy)                   |
+| `crmA.exec(cmd)`                        | Run a shell command synchronously           |
+| `crmA.progress(percent, message)`       | Report progress to UI                       |
+| `crmA.log(message, level)`              | Log a message                               |
+| `crmA.complete(data)`                   | Signal successful completion                |
+| `crmA.fail(message)`                    | Signal failure and exit                     |
+| `crmA.env.*`                            | Access all CRM_A\_\* env vars as properties |
 
 The `context` object is also available:
 
@@ -339,7 +339,7 @@ When the user selects multiple rows in the table and clicks an action button in 
 
 1. The UI sends a single POST with all selected `entryIds`.
 2. The server spawns up to 8 concurrent child processes (one per entry).
-3. Each process gets its own `DENCH_ENTRY_ID` and `DENCH_ENTRY_DATA`.
+3. Each process gets its own `CRM_A_ENTRY_ID` and `CRM_A_ENTRY_DATA`.
 4. Results stream back as SSE events per entry.
 5. The UI updates each entry's button state independently.
 
@@ -404,8 +404,8 @@ Write `.actions/mark-contacted.sh`:
 # .actions/mark-contacted.sh — Updates lead status to "Contacted"
 echo '{"type":"progress","percent":30,"message":"Looking up lead..."}'
 
-FIELD_ID=$(duckdb "$DENCH_DB_PATH" -noheader -list \
-  "SELECT id FROM fields WHERE object_id = '$DENCH_OBJECT_ID' AND name = 'Status'")
+FIELD_ID=$(duckdb "$CRM_A_DB_PATH" -noheader -list \
+  "SELECT id FROM fields WHERE object_id = '$CRM_A_OBJECT_ID' AND name = 'Status'")
 
 if [ -z "$FIELD_ID" ]; then
   echo '{"type":"result","status":"error","data":{"message":"Status field not found"}}'
@@ -414,9 +414,9 @@ fi
 
 echo '{"type":"progress","percent":70,"message":"Updating status..."}'
 
-duckdb "$DENCH_DB_PATH" \
+duckdb "$CRM_A_DB_PATH" \
   "INSERT INTO entry_fields (entry_id, field_id, value)
-   VALUES ('$DENCH_ENTRY_ID', '$FIELD_ID', 'Contacted')
+   VALUES ('$CRM_A_ENTRY_ID', '$FIELD_ID', 'Contacted')
    ON CONFLICT (entry_id, field_id) DO UPDATE SET value = excluded.value, updated_at = now()"
 
 echo '{"type":"result","status":"success","data":{"newStatus":"Contacted"}}'
@@ -428,9 +428,9 @@ Write `.actions/export-csv.py`:
 # .actions/export-csv.py — Exports entry data to CSV
 import os, json, csv, subprocess
 
-entry = json.loads(os.environ['DENCH_ENTRY_DATA'])
-workspace = os.environ['DENCH_WORKSPACE_PATH']
-entry_id = os.environ['DENCH_ENTRY_ID']
+entry = json.loads(os.environ['CRM_A_ENTRY_DATA'])
+workspace = os.environ['CRM_A_WORKSPACE_PATH']
+entry_id = os.environ['CRM_A_ENTRY_ID']
 
 print(json.dumps({"type": "progress", "percent": 50, "message": "Generating CSV..."}))
 
@@ -500,7 +500,7 @@ duckdb {{WORKSPACE_PATH}}/workspace.duckdb "SELECT COUNT(*) FROM v_lead"
   "id": "act_mark_done",
   "label": "Mark Done",
   "variant": "success",
-  "script": "await dench.objects.update(context.objectName, context.entryId, { Status: 'Done' });\nreturn { message: 'Marked as done' };",
+  "script": "await crmA.objects.update(context.objectName, context.entryId, { Status: 'Done' });\nreturn { message: 'Marked as done' };",
   "runtime": "inline",
   "successLabel": "Done!",
   "autoResetMs": 2000
@@ -511,8 +511,8 @@ duckdb {{WORKSPACE_PATH}}/workspace.duckdb "SELECT COUNT(*) FROM v_lead"
 
 ```javascript
 // .actions/send-notification.js
-// File-based scripts use env vars — the `dench` SDK is NOT available here.
-const entry = JSON.parse(process.env.DENCH_ENTRY_DATA);
+// File-based scripts use env vars — the `crm-a` SDK is NOT available here.
+const entry = JSON.parse(process.env.CRM_A_ENTRY_DATA);
 const name = entry["Full Name"] || "Unknown";
 
 console.log(
@@ -545,10 +545,10 @@ if (result.ok) {
 // .actions/enrich-lead.js
 // Use child_process to query DuckDB directly from file-based scripts
 const { execSync } = require("child_process");
-const entry = JSON.parse(process.env.DENCH_ENTRY_DATA);
-const dbPath = process.env.DENCH_DB_PATH;
-const entryId = process.env.DENCH_ENTRY_ID;
-const objectId = process.env.DENCH_OBJECT_ID;
+const entry = JSON.parse(process.env.CRM_A_ENTRY_DATA);
+const dbPath = process.env.CRM_A_DB_PATH;
+const entryId = process.env.CRM_A_ENTRY_ID;
+const objectId = process.env.CRM_A_OBJECT_ID;
 
 console.log(JSON.stringify({ type: "progress", percent: 20, message: "Enriching..." }));
 
@@ -588,7 +588,7 @@ The script file `.actions/archive.sh` must also be created:
 #!/bin/bash
 # .actions/archive.sh
 echo '{"type":"progress","percent":50,"message":"Archiving entry..."}'
-duckdb "$DENCH_DB_PATH" "DELETE FROM entries WHERE id = '$DENCH_ENTRY_ID'"
+duckdb "$CRM_A_DB_PATH" "DELETE FROM entries WHERE id = '$CRM_A_ENTRY_ID'"
 echo '{"type":"result","status":"success","data":{"archived":true}}'
 ```
 
@@ -599,8 +599,8 @@ echo '{"type":"result","status":"success","data":{"archived":true}}'
 **1. Creating action field SQL but forgetting to write the script files.**
 The button renders in the UI but clicking it shows "Script not found: .actions/my-script.js". You MUST `mkdir -p` the `.actions/` directory and write every script file referenced by `scriptPath`.
 
-**2. Using the `dench` SDK in file-based scripts.**
-The `dench` global and `context` object are ONLY available for inline scripts (`runtime: "inline"`). File-based scripts must use `process.env.DENCH_*` variables and shell/HTTP calls. See [File-Based Script Patterns](#file-based-script-patterns).
+**2. Using the `crm-a` SDK in file-based scripts.**
+The `crm-a` global and `context` object are ONLY available for inline scripts (`runtime: "inline"`). File-based scripts must use `process.env.CRM_A_*` variables and shell/HTTP calls. See [File-Based Script Patterns](#file-based-script-patterns).
 
 **3. Forgetting to update `.object.yaml` with the action field.**
 The `.object.yaml` must include the action field with `action_config` in its fields list. Without it, the sidebar and UI may not render the action buttons correctly.

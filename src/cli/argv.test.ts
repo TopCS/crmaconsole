@@ -13,66 +13,75 @@ import {
 
 describe("argv helpers", () => {
   it("detects help/version flags and root -v alias only in root-flag contexts", () => {
-    expect(hasHelpOrVersion(["node", "denchclaw", "--help"])).toBe(true);
-    expect(hasHelpOrVersion(["node", "denchclaw", "-V"])).toBe(true);
-    expect(hasHelpOrVersion(["node", "denchclaw", "-v"])).toBe(true);
-    expect(hasRootVersionAlias(["node", "denchclaw", "-v", "chat"])).toBe(false);
+    expect(hasHelpOrVersion(["node", "crm-a-console", "--help"])).toBe(true);
+    expect(hasHelpOrVersion(["node", "crm-a-console", "-V"])).toBe(true);
+    expect(hasHelpOrVersion(["node", "crm-a-console", "-v"])).toBe(true);
+    expect(hasRootVersionAlias(["node", "crm-a-console", "-v", "chat"])).toBe(false);
   });
 
   it("extracts flag values across --name value and --name=value forms", () => {
-    expect(getFlagValue(["node", "denchclaw", "--profile", "dev"], "--profile")).toBe("dev");
-    expect(getFlagValue(["node", "denchclaw", "--profile=team-a"], "--profile")).toBe("team-a");
-    expect(getFlagValue(["node", "denchclaw", "--profile", "--verbose"], "--profile")).toBeNull();
-    expect(getFlagValue(["node", "denchclaw", "--profile="], "--profile")).toBeNull();
+    expect(getFlagValue(["node", "crm-a-console", "--profile", "dev"], "--profile")).toBe("dev");
+    expect(getFlagValue(["node", "crm-a-console", "--profile=team-a"], "--profile")).toBe("team-a");
+    expect(
+      getFlagValue(["node", "crm-a-console", "--profile", "--verbose"], "--profile"),
+    ).toBeNull();
+    expect(getFlagValue(["node", "crm-a-console", "--profile="], "--profile")).toBeNull();
   });
 
   it("parses positive integer flags and rejects invalid numeric values", () => {
-    expect(getPositiveIntFlagValue(["node", "denchclaw", "--port", "19001"], "--port")).toBe(19001);
-    expect(getPositiveIntFlagValue(["node", "denchclaw", "--port", "0"], "--port")).toBeUndefined();
+    expect(getPositiveIntFlagValue(["node", "crm-a-console", "--port", "19001"], "--port")).toBe(
+      19001,
+    );
     expect(
-      getPositiveIntFlagValue(["node", "denchclaw", "--port", "-1"], "--port"),
+      getPositiveIntFlagValue(["node", "crm-a-console", "--port", "0"], "--port"),
     ).toBeUndefined();
     expect(
-      getPositiveIntFlagValue(["node", "denchclaw", "--port", "abc"], "--port"),
+      getPositiveIntFlagValue(["node", "crm-a-console", "--port", "-1"], "--port"),
+    ).toBeUndefined();
+    expect(
+      getPositiveIntFlagValue(["node", "crm-a-console", "--port", "abc"], "--port"),
     ).toBeUndefined();
   });
 
   it("derives command path while skipping leading flags and stopping at terminator", () => {
     // Low-level parser skips flag tokens but not their values.
-    expect(getCommandPath(["node", "denchclaw", "--profile", "dev", "chat"], 2)).toEqual([
+    expect(getCommandPath(["node", "crm-a-console", "--profile", "dev", "chat"], 2)).toEqual([
       "dev",
       "chat",
     ]);
-    expect(getCommandPath(["node", "denchclaw", "config", "get"], 2)).toEqual(["config", "get"]);
-    expect(getCommandPath(["node", "denchclaw", "--", "chat", "send"], 2)).toEqual([]);
-    expect(getPrimaryCommand(["node", "denchclaw", "--verbose", "status"])).toBe("status");
+    expect(getCommandPath(["node", "crm-a-console", "config", "get"], 2)).toEqual([
+      "config",
+      "get",
+    ]);
+    expect(getCommandPath(["node", "crm-a-console", "--", "chat", "send"], 2)).toEqual([]);
+    expect(getPrimaryCommand(["node", "crm-a-console", "--verbose", "status"])).toBe("status");
   });
 
   it("builds parse argv consistently across runtime invocation styles", () => {
     expect(
       buildParseArgv({
-        programName: "denchclaw",
+        programName: "crm-a-console",
         rawArgs: ["node", "cli.js", "status"],
       }),
     ).toEqual(["node", "cli.js", "status"]);
 
     expect(
       buildParseArgv({
-        programName: "denchclaw",
-        rawArgs: ["denchclaw", "status"],
+        programName: "crm-a-console",
+        rawArgs: ["crm-a-console", "status"],
       }),
-    ).toEqual(["node", "denchclaw", "status"]);
+    ).toEqual(["node", "crm-a-console", "status"]);
 
     expect(
       buildParseArgv({
-        programName: "denchclaw",
+        programName: "crm-a-console",
         rawArgs: ["node-22.12.0.exe", "cli.js", "agent", "run"],
       }),
     ).toEqual(["node-22.12.0.exe", "cli.js", "agent", "run"]);
 
     expect(
       buildParseArgv({
-        programName: "denchclaw",
+        programName: "crm-a-console",
         rawArgs: ["bun", "cli.ts", "status"],
       }),
     ).toEqual(["bun", "cli.ts", "status"]);
@@ -89,7 +98,7 @@ describe("argv helpers", () => {
     expect(shouldMigrateStateFromPath(["agent"])).toBe(false);
     expect(shouldMigrateStateFromPath(["chat", "send"])).toBe(true);
 
-    expect(shouldMigrateState(["node", "denchclaw", "health"])).toBe(false);
-    expect(shouldMigrateState(["node", "denchclaw", "chat", "send"])).toBe(true);
+    expect(shouldMigrateState(["node", "crm-a-console", "health"])).toBe(false);
+    expect(shouldMigrateState(["node", "crm-a-console", "chat", "send"])).toBe(true);
   });
 });

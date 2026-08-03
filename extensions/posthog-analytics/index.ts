@@ -1,6 +1,6 @@
 import {
   POSTHOG_KEY as BUILT_IN_KEY,
-  DENCHCLAW_VERSION,
+  CRM_A_CONSOLE_VERSION,
   OPENCLAW_VERSION,
 } from "./lib/build-env.js";
 import { emitGeneration, emitToolSpan, emitTrace, emitCustomEvent } from "./lib/event-mappers.js";
@@ -11,7 +11,7 @@ import type { PluginConfig } from "./lib/types.js";
 
 export const id = "posthog-analytics";
 
-const DEBUG = process.env.DENCHCLAW_POSTHOG_DEBUG === "1";
+const DEBUG = process.env.CRM_A_CONSOLE_POSTHOG_DEBUG === "1";
 
 function debugLog(label: string, data: unknown): void {
   if (!DEBUG) return;
@@ -36,8 +36,8 @@ export default function register(api: any) {
   }
 
   const versionProps: Record<string, unknown> = {};
-  const dcv = DENCHCLAW_VERSION || process.env.npm_package_version;
-  if (dcv) versionProps.denchclaw_version = dcv;
+  const dcv = CRM_A_CONSOLE_VERSION || process.env.npm_package_version;
+  if (dcv) versionProps.crm_a_console_version = dcv;
   const ocv =
     OPENCLAW_VERSION || process.env.OPENCLAW_VERSION || process.env.OPENCLAW_SERVICE_VERSION;
   if (ocv) versionProps.openclaw_version = ocv;
@@ -52,7 +52,7 @@ export default function register(api: any) {
     if (person.name) props.$name = person.name;
     if (person.email) props.$email = person.email;
     if (person.avatar) props.$avatar = person.avatar;
-    if (person.denchOrgId) props.dench_org_id = person.denchOrgId;
+    if (person.crmAOrgId) props.crm_a_org_id = person.crmAOrgId;
     ph.identify(distinctId, props);
   }
 
@@ -163,7 +163,7 @@ export default function register(api: any) {
 
       emitGeneration(ph, traceCtx, sk, event, getPrivacyMode());
       emitTrace(ph, traceCtx, sk, event, getPrivacyMode());
-      emitCustomEvent(ph, "dench_turn_completed", {
+      emitCustomEvent(ph, "crm_a_turn_completed", {
         session_id: sk,
         run_id: ctx.runId,
         model: traceCtx.getModel(sk),
@@ -176,7 +176,7 @@ export default function register(api: any) {
   api.on(
     "message_received",
     (event: any, ctx: any) => {
-      emitCustomEvent(ph, "dench_message_received", {
+      emitCustomEvent(ph, "crm_a_message_received", {
         channel: ctx.channel ?? ctx.channelId,
         session_id: ctx.sessionId,
         has_attachments: Boolean(event.attachments?.length),
@@ -188,7 +188,7 @@ export default function register(api: any) {
   api.on(
     "session_start",
     (_event: any, ctx: any) => {
-      emitCustomEvent(ph, "dench_session_start", {
+      emitCustomEvent(ph, "crm_a_session_start", {
         session_id: ctx.sessionId,
         channel: ctx.channel ?? ctx.channelId,
       });
@@ -199,7 +199,7 @@ export default function register(api: any) {
   api.on(
     "session_end",
     (_event: any, ctx: any) => {
-      emitCustomEvent(ph, "dench_session_end", {
+      emitCustomEvent(ph, "crm_a_session_end", {
         session_id: ctx.sessionId,
         channel: ctx.channel ?? ctx.channelId,
       });

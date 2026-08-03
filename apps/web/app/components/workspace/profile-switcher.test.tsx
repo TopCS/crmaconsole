@@ -109,15 +109,15 @@ describe("ProfileSwitcher workspace delete action", () => {
           workspaces: [
             {
               name: "ghost",
-              stateDir: "/home/testuser/.openclaw-dench",
+              stateDir: "/home/testuser/.openclaw-crm-a",
               workspaceDir: null,
               isActive: true,
               hasConfig: true,
             },
             {
-              name: "dench",
-              stateDir: "/home/testuser/.openclaw-dench",
-              workspaceDir: "/home/testuser/.openclaw-dench/workspace",
+              name: "crm-a",
+              stateDir: "/home/testuser/.openclaw-crm-a",
+              workspaceDir: "/home/testuser/.openclaw-crm-a/workspace",
               isActive: false,
               hasConfig: true,
             },
@@ -136,8 +136,8 @@ describe("ProfileSwitcher workspace delete action", () => {
     await user.click(screen.getByTitle("Switch workspace"));
 
     await waitFor(() => {
-      const allDench = screen.getAllByText("dench");
-      expect(allDench.length).toBeGreaterThanOrEqual(1);
+      const allCrmA = screen.getAllByText("crm-a");
+      expect(allCrmA.length).toBeGreaterThanOrEqual(1);
       expect(screen.queryByText("ghost")).not.toBeInTheDocument();
     });
 

@@ -1,6 +1,6 @@
 ---
 name: agent-builder
-description: Build AI-powered DenchClaw apps that interact with the OpenClaw agent — create chat sessions, send and receive messages with streaming, expose app tools for agent invocation, and access agent memory.
+description: Build AI-powered Crm-A Console apps that interact with the OpenClaw agent — create chat sessions, send and receive messages with streaming, expose app tools for agent invocation, and access agent memory.
 metadata: { "openclaw": { "inject": true, "always": true, "emoji": "🤖" } }
 ---
 
@@ -14,17 +14,17 @@ This skill covers building apps that interact with the AI agent. For core app st
 
 ```javascript
 // Create a new chat session
-const { sessionId } = await dench.chat.createSession("My Analysis Session");
+const { sessionId } = await crmA.chat.createSession("My Analysis Session");
 
 // List existing sessions
-const sessions = await dench.chat.getSessions({ limit: 20 });
+const sessions = await crmA.chat.getSessions({ limit: 20 });
 // Returns array of { id, title, createdAt, ... }
 ```
 
 ### Sending Messages with Streaming
 
 ```javascript
-const result = await dench.chat.send(sessionId, "Analyze the people table and summarize trends", {
+const result = await crmA.chat.send(sessionId, "Analyze the people table and summarize trends", {
   onEvent(event) {
     switch (event.type) {
       case "text-delta":
@@ -49,21 +49,21 @@ const result = await dench.chat.send(sessionId, "Analyze the people table and su
 
 ```javascript
 // Get message history for a session
-const messages = await dench.chat.getHistory(sessionId);
+const messages = await crmA.chat.getHistory(sessionId);
 // Returns array of { role, content, toolCalls?, ... }
 
 // Check if a session has an active run
-const isActive = await dench.chat.isActive(sessionId);
+const isActive = await crmA.chat.isActive(sessionId);
 
 // Abort an active run
-await dench.chat.abort(sessionId);
+await crmA.chat.abort(sessionId);
 ```
 
 ### Simple Agent Message (fire-and-forget)
 
 ```javascript
 // Send a one-off message to the agent (no streaming, no session management)
-await dench.agent.send("Remind me to check the reports tomorrow at 9am");
+await crmA.agent.send("Remind me to check the reports tomorrow at 9am");
 ```
 
 ## App-as-Tool (`agent` permission required)
@@ -92,7 +92,7 @@ tools:
 Register tool handlers in the app:
 
 ```javascript
-dench.tool.register("analyze-chart", async (input) => {
+crmA.tool.register("analyze-chart", async (input) => {
   const { data, chartType } = input;
 
   // Process the data and generate the chart
@@ -114,7 +114,7 @@ When the agent invokes the tool, the app receives the input, processes it, and r
 
 ```javascript
 // Read the agent's memory (MEMORY.md + daily logs)
-const memory = await dench.memory.get();
+const memory = await crmA.memory.get();
 // Returns { memory: "...", dailyLogs: [...] }
 ```
 
@@ -126,7 +126,7 @@ For advanced apps that want to build their own chat UI or need direct Gateway ac
 
 ```javascript
 const ws = new WebSocket("ws://127.0.0.1:18789");
-// Port is configurable via gateway.port in ~/.openclaw-dench/openclaw.json
+// Port is configurable via gateway.port in ~/.openclaw-crm-a/openclaw.json
 ```
 
 ### Frame Types
@@ -222,7 +222,7 @@ ws.onmessage = (e) => {
 };
 ```
 
-NOTE: For most apps, the bridge chat API (`dench.chat.*`) is much simpler than direct WebSocket usage. Use the Gateway WS only when you need full control over the connection.
+NOTE: For most apps, the bridge chat API (`crmA.chat.*`) is much simpler than direct WebSocket usage. Use the Gateway WS only when you need full control over the connection.
 
 ## Patterns
 
@@ -233,7 +233,7 @@ let currentSessionId = null;
 const chatContainer = document.getElementById("chat");
 
 async function startNewChat() {
-  const { sessionId } = await dench.chat.createSession("App Chat");
+  const { sessionId } = await crmA.chat.createSession("App Chat");
   currentSessionId = sessionId;
   chatContainer.innerHTML = "";
 }
@@ -242,7 +242,7 @@ async function sendMessage(text) {
   appendMessage("user", text);
   const responseEl = appendMessage("assistant", "");
 
-  await dench.chat.send(currentSessionId, text, {
+  await crmA.chat.send(currentSessionId, text, {
     onEvent(event) {
       if (event.type === "text-delta") {
         responseEl.textContent += event.data;
@@ -265,10 +265,10 @@ function appendMessage(role, content) {
 
 ```javascript
 async function analyzeData(objectName) {
-  const schema = await dench.objects.getSchema(objectName);
-  const { sessionId } = await dench.chat.createSession("Data Analysis");
+  const schema = await crmA.objects.getSchema(objectName);
+  const { sessionId } = await crmA.chat.createSession("Data Analysis");
 
-  const result = await dench.chat.send(
+  const result = await crmA.chat.send(
     sessionId,
     `Analyze the ${objectName} object. It has these fields: ${schema.fields.map((f) => f.name).join(", ")}. ` +
       `Query the data and provide insights.`,

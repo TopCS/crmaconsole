@@ -472,7 +472,7 @@ describe("storage", () => {
   it("normalizes a stale activeContentId from storage to null", () => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(
-      "dench:workspace-tabs:ws-3",
+      "crm-a:workspace-tabs:ws-3",
       JSON.stringify({
         contentTabs: [{ id: "a.md", kind: "file", path: "a.md", title: "A", preview: false, pinned: false }],
         chatTabs: [],

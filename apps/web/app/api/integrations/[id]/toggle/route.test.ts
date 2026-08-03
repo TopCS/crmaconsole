@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/integrations", () => ({
-  normalizeLockedDenchIntegrations: vi.fn(() => ({
+  normalizeLockedCrmAIntegrations: vi.fn(() => ({
     changed: false,
     state: {
-      denchCloud: {
+      crmACloud: {
         hasKey: true,
         isPrimaryProvider: true,
-        primaryModel: "dench-cloud/claude-sonnet-4.6",
+        primaryModel: "crm-a-cloud/claude-sonnet-4.6",
       },
       metadata: { schemaVersion: 1, exa: { ownsSearch: false, fallbackProvider: "duckduckgo" } },
       search: {
@@ -31,7 +31,7 @@ vi.mock("@/lib/integrations", () => ({
           gatewayBaseUrl: "https://gateway.merseoriginals.com",
           auth: { configured: true, source: "config" },
           plugin: null,
-          managedByDench: true,
+          managedByCrmA: true,
           healthIssues: [],
           health: {
             status: "disabled",
@@ -53,7 +53,7 @@ vi.mock("@/lib/integrations", () => ({
           gatewayBaseUrl: "https://gateway.merseoriginals.com",
           auth: { configured: true, source: "config" },
           plugin: null,
-          managedByDench: true,
+          managedByCrmA: true,
           healthIssues: [],
           health: {
             status: "disabled",
@@ -75,7 +75,7 @@ vi.mock("@/lib/integrations", () => ({
           gatewayBaseUrl: "https://gateway.merseoriginals.com",
           auth: { configured: true, source: "config" },
           plugin: null,
-          managedByDench: true,
+          managedByCrmA: true,
           healthIssues: [],
           health: {
             status: "disabled",
@@ -93,10 +93,10 @@ vi.mock("@/lib/integrations", () => ({
     changed: true,
     error: null,
     state: {
-      denchCloud: {
+      crmACloud: {
         hasKey: true,
         isPrimaryProvider: true,
-        primaryModel: "dench-cloud/claude-sonnet-4.6",
+        primaryModel: "crm-a-cloud/claude-sonnet-4.6",
       },
       metadata: { schemaVersion: 1, exa: { ownsSearch: enabled, fallbackProvider: "duckduckgo" } },
       search: {
@@ -115,10 +115,10 @@ vi.mock("@/lib/integrations", () => ({
     changed: true,
     error: null,
     state: {
-      denchCloud: {
+      crmACloud: {
         hasKey: true,
         isPrimaryProvider: true,
-        primaryModel: "dench-cloud/claude-sonnet-4.6",
+        primaryModel: "crm-a-cloud/claude-sonnet-4.6",
       },
       metadata: { schemaVersion: 1, exa: { ownsSearch: false, fallbackProvider: "duckduckgo" } },
       search: {
@@ -137,10 +137,10 @@ vi.mock("@/lib/integrations", () => ({
     changed: true,
     error: null,
     state: {
-      denchCloud: {
+      crmACloud: {
         hasKey: true,
         isPrimaryProvider: true,
-        primaryModel: "dench-cloud/claude-sonnet-4.6",
+        primaryModel: "crm-a-cloud/claude-sonnet-4.6",
       },
       metadata: { schemaVersion: 1, exa: { ownsSearch: false, fallbackProvider: "duckduckgo" } },
       search: {
@@ -159,7 +159,7 @@ vi.mock("@/lib/integrations", () => ({
     attempted: true,
     restarted: true,
     error: null,
-    profile: "dench",
+    profile: "crm-a",
   })),
 }));
 
@@ -223,10 +223,10 @@ describe("integrations toggle API", () => {
 
   it("rejects enabling a locked integration", async () => {
     const integrations = await import("@/lib/integrations");
-    vi.mocked(integrations.normalizeLockedDenchIntegrations).mockReturnValueOnce({
+    vi.mocked(integrations.normalizeLockedCrmAIntegrations).mockReturnValueOnce({
       changed: false,
       state: {
-        denchCloud: {
+        crmACloud: {
           hasKey: false,
           isPrimaryProvider: false,
           primaryModel: "anthropic/claude-4",
@@ -248,12 +248,12 @@ describe("integrations toggle API", () => {
             enabled: false,
             available: false,
             locked: true,
-            lockReason: "missing_dench_key",
-            lockBadge: "Get Dench Cloud API Key",
+            lockReason: "missing_crm_a_key",
+            lockBadge: "Get Crm-A Cloud API Key",
             gatewayBaseUrl: "https://gateway.merseoriginals.com",
             auth: { configured: false, source: "missing" },
             plugin: null,
-            managedByDench: true,
+            managedByCrmA: true,
             healthIssues: ["missing_auth"],
             health: {
               status: "disabled",
@@ -277,6 +277,6 @@ describe("integrations toggle API", () => {
     const response = await POST(request, { params: Promise.resolve({ id: "exa" }) });
     expect(response.status).toBe(409);
     const json = await response.json();
-    expect(json.error).toBe("This integration requires a Dench Cloud API key.");
+    expect(json.error).toBe("This integration requires a Crm-A Cloud API key.");
   });
 });

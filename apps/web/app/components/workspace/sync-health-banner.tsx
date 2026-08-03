@@ -26,7 +26,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
  *   because operators care about both: an explicit Composio 4xx is
  *   actionable today, while a stale-but-no-error tick usually means
  *   the gateway daemon crashed or the web app got OOM-killed and
- *   needs a `denchclaw start`.
+ *   needs a `crm-a-console start`.
  *
  * Why a persistent banner instead of a toast: a transient toast
  * disappears in 6s and the user goes "huh? was that important?".
@@ -62,10 +62,10 @@ type BannerEntry = {
 
 const POLL_INTERVAL_MS = 60_000;
 // Backoff multiplier when the endpoint itself fails (e.g., during a
-// `denchclaw update`). Caps at ~10 min to avoid a polling stampede
+// `crm-a-console update`). Caps at ~10 min to avoid a polling stampede
 // after a long downtime and to give the rest of the workspace UI air.
 const POLL_FAILURE_BACKOFF_CAP_MS = 10 * 60 * 1000;
-const DISMISS_STORAGE_KEY = "denchclaw:sync-banner-dismissed";
+const DISMISS_STORAGE_KEY = "crm-a-console:sync-banner-dismissed";
 
 function safeReadDismissedKeys(): Set<string> {
   if (typeof window === "undefined") {return new Set();}
@@ -137,7 +137,7 @@ function buildEntry(
       errorKey: `${source}:stale:${status.lastPolledAt ?? "never"}`,
       title: `${sourceLabel} sync hasn't run recently`,
       description:
-        "The gateway daemon may be down. Try `denchclaw start` to relaunch the cron.",
+        "The gateway daemon may be down. Try `crm-a-console start` to relaunch the cron.",
       needsReconnect: false,
     };
   }
@@ -271,7 +271,7 @@ export function SyncHealthBanner({
 
   /**
    * "Refresh now" hits the same `/api/sync/refresh` endpoint the agent's
-   * `denchclaw_refresh_sync` tool calls — incremental mode, no body.
+   * `crm_a_console_refresh_sync` tool calls — incremental mode, no body.
    * On success we immediately re-poll `/api/sync/status` so the banner
    * either disappears (sync recovered) or updates with the latest error
    * (sync still broken with a possibly different message). On failure

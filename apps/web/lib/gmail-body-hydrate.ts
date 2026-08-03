@@ -22,7 +22,7 @@ import {
   resolveToolSlug,
   ComposioToolNoConnectionError,
 } from "./composio-execute";
-import { readConnections } from "./denchclaw-state";
+import { readConnections } from "./crm-a-console-state";
 
 // ---------------------------------------------------------------------------
 // Types that mirror Composio's Gmail shape (kept local so callers don't

@@ -3,11 +3,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("@/lib/workspace", () => ({
   discoverWorkspaces: vi.fn(() => []),
   getActiveWorkspaceName: vi.fn(() => null),
-  resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw-dench"),
+  resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw-crm-a"),
   resolveWorkspaceDirForName: vi.fn((name: string) =>
     name === "default"
-      ? "/home/testuser/.openclaw-dench/workspace"
-      : `/home/testuser/.openclaw-dench/workspace-${name}`,
+      ? "/home/testuser/.openclaw-crm-a/workspace"
+      : `/home/testuser/.openclaw-crm-a/workspace-${name}`,
   ),
   resolveWorkspaceRoot: vi.fn(() => null),
   setUIActiveWorkspace: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock("node:fs", () => ({
 
 describe("profiles API", () => {
   const originalEnv = { ...process.env };
-  const STATE_DIR = "/home/testuser/.openclaw-dench";
+  const STATE_DIR = "/home/testuser/.openclaw-crm-a";
 
   beforeEach(() => {
     vi.resetModules();

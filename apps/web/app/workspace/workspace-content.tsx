@@ -148,10 +148,10 @@ type WorkspaceContext = {
   members?: Array<{ id: string; name: string; email: string; role: string }>;
 };
 
-// `ContentState`, `ObjectData`, `FileData`, and `DenchAppManifest` live in
+// `ContentState`, `ObjectData`, `FileData`, and `CrmAAppManifest` live in
 // `./content-state` so they can be shared with `useTabContent` and
 // `RightPanelContent` without pulling in the whole god-component.
-export type { DenchAppManifest } from "./content-state";
+export type { CrmAAppManifest } from "./content-state";
 
 type WebSession = {
   id: string;
@@ -181,10 +181,10 @@ const LEFT_SIDEBAR_MAX = 480;
 const CENTER_PANEL_MIN = 300;
 const RIGHT_PANEL_MIN = 360;
 const RIGHT_PANEL_MAX = 2000;
-const STORAGE_LEFT = "dench-workspace-left-sidebar-width";
-const STORAGE_RIGHT_PANEL = "dench-workspace-right-panel-width";
-const STORAGE_RIGHT_PANEL_COLLAPSED = "dench-workspace-right-panel-collapsed";
-const STORAGE_FILE_TREE_COLLAPSED = "dench-workspace-file-tree-collapsed";
+const STORAGE_LEFT = "crm-a-workspace-left-sidebar-width";
+const STORAGE_RIGHT_PANEL = "crm-a-workspace-right-panel-width";
+const STORAGE_RIGHT_PANEL_COLLAPSED = "crm-a-workspace-right-panel-collapsed";
+const STORAGE_FILE_TREE_COLLAPSED = "crm-a-workspace-file-tree-collapsed";
 const FILE_TREE_WIDTH = 240;
 
 function clamp(n: number, min: number, max: number): number {
@@ -395,7 +395,7 @@ function nodeToContentTabKind(nodeType: string, path: string): ContentTabKind {
 
 /** Infer a tree node type from filename extension for ad-hoc path previews. */
 function inferNodeTypeFromFileName(fileName: string): TreeNode["type"] {
-  if (fileName.endsWith(".dench.app")) return "app";
+  if (fileName.endsWith(".crm-a.app")) return "app";
   const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
   if (ext === "md" || ext === "mdx") {return "document";}
   if (ext === "duckdb" || ext === "sqlite" || ext === "sqlite3" || ext === "db") {return "database";}
@@ -1686,7 +1686,7 @@ function WorkspacePageInner() {
   const handleOpenEntry = useCallback(
     (objectName: string, entryId: string, relatedObjectId?: string) => {
       // People + Company entries swap the MAIN panel for an Attio-style
-      // profile (mirroring dench-2025's base-object-vs-generic-object
+      // profile (mirroring crm-a-2025's base-object-vs-generic-object
       // pattern). All other objects keep the existing side-panel modal.
       // The parent tab points at the resolved workspace object so the
       // back-to-list affordance lands on the unified ObjectView.
@@ -3035,7 +3035,7 @@ function ContentRenderer({
           <div className="mx-auto max-w-5xl p-6">
             <div className="mb-6">
               <h1 className="font-instrument text-3xl tracking-tight" style={{ color: "var(--color-text)" }}>Cloud</h1>
-              <p className="mt-1 text-sm" style={{ color: "var(--color-text-muted)" }}>Manage your Dench Cloud connection and model settings.</p>
+              <p className="mt-1 text-sm" style={{ color: "var(--color-text-muted)" }}>Manage your Crm-A Cloud connection and model settings.</p>
             </div>
             <CloudSettingsPanel />
           </div>

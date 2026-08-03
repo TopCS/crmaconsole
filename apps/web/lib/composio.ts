@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { resolveOpenClawStateDir } from "@/lib/workspace";
 import { normalizeComposioToolkitSlug } from "@/lib/composio-normalization";
-import { readConfiguredDenchCloudSettings } from "../../../src/cli/dench-cloud";
+import { readConfiguredCrmACloudSettings } from "../../../src/cli/crm-a-cloud";
 
 const DEFAULT_GATEWAY_URL = "https://gateway.merseoriginals.com";
 
@@ -163,7 +163,7 @@ export type ComposioConnectResponse = {
 
 export type ComposioState = {
   eligible: boolean;
-  lockReason: "missing_dench_key" | "dench_not_primary" | null;
+  lockReason: "missing_crm_a_key" | "crm_a_not_primary" | null;
   lockBadge: string | null;
   toolkits: ComposioToolkit[];
   connections: ComposioConnection[];
@@ -314,14 +314,14 @@ function readConfig(): UnknownRecord {
 
 export function resolveComposioGatewayUrl(): string {
   const config = readConfig();
-  const settings = readConfiguredDenchCloudSettings(config);
+  const settings = readConfiguredCrmACloudSettings(config);
   const plugins = asRecord(config.plugins);
   const pluginEntries = asRecord(plugins?.entries);
-  const gatewayConfig = asRecord(asRecord(pluginEntries?.["dench-ai-gateway"])?.config);
+  const gatewayConfig = asRecord(asRecord(pluginEntries?.["crm-a-ai-gateway"])?.config);
   return (
     settings.gatewayUrl ||
     readString(gatewayConfig?.gatewayUrl) ||
-    process.env.DENCH_GATEWAY_URL?.trim() ||
+    process.env.CRM_A_GATEWAY_URL?.trim() ||
     DEFAULT_GATEWAY_URL
   );
 }
@@ -329,22 +329,22 @@ export function resolveComposioGatewayUrl(): string {
 export function resolveComposioApiKey(): string | null {
   const config = readConfig();
   const models = asRecord(config.models);
-  const provider = asRecord(asRecord(models?.providers)?.["dench-cloud"]);
+  const provider = asRecord(asRecord(models?.providers)?.["crm-a-cloud"]);
   if (readString(provider?.apiKey)) {
     return readString(provider?.apiKey) ?? null;
   }
-  if (process.env.DENCH_CLOUD_API_KEY?.trim()) {
-    return process.env.DENCH_CLOUD_API_KEY.trim();
+  if (process.env.CRM_A_CLOUD_API_KEY?.trim()) {
+    return process.env.CRM_A_CLOUD_API_KEY.trim();
   }
-  if (process.env.DENCH_API_KEY?.trim()) {
-    return process.env.DENCH_API_KEY.trim();
+  if (process.env.CRM_A_API_KEY?.trim()) {
+    return process.env.CRM_A_API_KEY.trim();
   }
   return null;
 }
 
 export function resolveComposioEligibility(): {
   eligible: boolean;
-  lockReason: "missing_dench_key" | "dench_not_primary" | null;
+  lockReason: "missing_crm_a_key" | "crm_a_not_primary" | null;
   lockBadge: string | null;
 } {
   const config = readConfig();
@@ -352,8 +352,8 @@ export function resolveComposioEligibility(): {
   if (!apiKey) {
     return {
       eligible: false,
-      lockReason: "missing_dench_key",
-      lockBadge: "Get Dench Cloud API Key",
+      lockReason: "missing_crm_a_key",
+      lockBadge: "Get Crm-A Cloud API Key",
     };
   }
   const agents = asRecord(config.agents);
@@ -362,11 +362,11 @@ export function resolveComposioEligibility(): {
   const primary = typeof model === "string"
     ? readString(model)
     : readString(asRecord(model)?.primary);
-  if (!primary?.startsWith("dench-cloud/")) {
+  if (!primary?.startsWith("crm-a-cloud/")) {
     return {
       eligible: false,
-      lockReason: "dench_not_primary",
-      lockBadge: "Use Dench Cloud",
+      lockReason: "crm_a_not_primary",
+      lockBadge: "Use Crm-A Cloud",
     };
   }
   return { eligible: true, lockReason: null, lockBadge: null };

@@ -1,12 +1,12 @@
 ---
 name: app-builder
-description: Build and manage DenchClaw apps — self-contained web applications that run inside the workspace with access to DuckDB data, workspace objects, AI chat, and the full DenchClaw platform API.
+description: Build and manage Crm-A Console apps — self-contained web applications that run inside the workspace with access to DuckDB data, workspace objects, AI chat, and the full Crm-A Console platform API.
 metadata: { "openclaw": { "inject": true, "always": true, "emoji": "🔨" } }
 ---
 
 # App Builder
 
-You can build **Dench Apps** — self-contained web applications that run inside DenchClaw's workspace. Apps appear in the sidebar with their own icon and name, and open as tabs in the main content area. They run in a sandboxed iframe with `allow-same-origin allow-scripts allow-popups allow-forms`.
+You can build **Crm-A Apps** — self-contained web applications that run inside Crm-A Console's workspace. Apps appear in the sidebar with their own icon and name, and open as tabs in the main content area. They run in a sandboxed iframe with `allow-same-origin allow-scripts allow-popups allow-forms`.
 
 ---
 
@@ -28,12 +28,12 @@ You can build **Dench Apps** — self-contained web applications that run inside
 
 ## App Structure
 
-Every app is a folder ending in `.dench.app/`. The default location is `{{WORKSPACE_PATH}}/apps/`, but apps can live anywhere in the workspace.
+Every app is a folder ending in `.crm-a.app/`. The default location is `{{WORKSPACE_PATH}}/apps/`, but apps can live anywhere in the workspace.
 
 ```
 apps/
-  my-app.dench.app/
-    .dench.yaml          # Required manifest
+  my-app.crm-a.app/
+    .crm-a.yaml          # Required manifest
     index.html           # Entry point
     style.css            # Styles (optional, can inline)
     app.js               # Logic (optional, can inline)
@@ -46,10 +46,10 @@ apps/
 
 ### Critical Rules
 
-- The folder name MUST end with `.dench.app`
-- The `.dench.yaml` manifest is REQUIRED inside every `.dench.app` folder
-- The entry HTML file gets the bridge SDK (`window.dench`) auto-injected before `</head>`
-- All file paths within the app are relative to the `.dench.app` folder root
+- The folder name MUST end with `.crm-a.app`
+- The `.crm-a.yaml` manifest is REQUIRED inside every `.crm-a.app` folder
+- The entry HTML file gets the bridge SDK (`window.crmA`) auto-injected before `</head>`
+- All file paths within the app are relative to the `.crm-a.app` folder root
 - The app is served at `/api/apps/serve/<appPath>/<filePath>` — relative references (CSS, JS, images) resolve correctly
 - Apps run in an iframe sandbox: `allow-same-origin allow-scripts allow-popups allow-forms`
 
@@ -57,7 +57,7 @@ apps/
 
 ## Manifest Reference
 
-Every `.dench.app` folder MUST contain a `.dench.yaml` manifest.
+Every `.crm-a.app` folder MUST contain a `.crm-a.yaml` manifest.
 
 ### Full Schema
 
@@ -123,22 +123,22 @@ Supported image formats: PNG, SVG, JPG, JPEG, WebP. Use square aspect ratio (128
 
 ### Choosing Permissions
 
-| Permission       | Grants                                                                 | Use When                                                 |
-| ---------------- | ---------------------------------------------------------------------- | -------------------------------------------------------- |
-| `database`       | `dench.db.query()`                                                     | App reads workspace DuckDB data (SELECT)                 |
-| `database:write` | `dench.db.execute()`                                                   | App writes to DuckDB (INSERT/UPDATE/DELETE/CREATE)       |
-| `objects`        | `dench.objects.*`                                                      | App does CRUD on workspace objects (people, tasks, etc.) |
-| `files`          | `dench.files.read()`, `dench.files.list()`                             | App reads workspace files                                |
-| `files:write`    | `dench.files.write()`, `dench.files.delete()`, `dench.files.mkdir()`   | App writes/deletes workspace files                       |
-| `agent`          | `dench.chat.*`, `dench.agent.send()`, `dench.tool.*`, `dench.memory.*` | App interacts with the AI agent                          |
-| `ui`             | `dench.ui.*`                                                           | App shows toasts, navigates, opens entries               |
-| `store`          | `dench.store.*`                                                        | App needs persistent key-value storage                   |
-| `http`           | `dench.http.fetch()`                                                   | App fetches external URLs (CORS-free)                    |
-| `events`         | `dench.events.*`                                                       | App subscribes to real-time workspace events             |
-| `apps`           | `dench.apps.*`                                                         | App communicates with other open apps                    |
-| `cron`           | `dench.cron.*`                                                         | App schedules recurring agent tasks                      |
-| `webhooks`       | `dench.webhooks.*`                                                     | App receives external webhooks                           |
-| `clipboard`      | `dench.clipboard.*`                                                    | App reads/writes the clipboard                           |
+| Permission       | Grants                                                             | Use When                                                 |
+| ---------------- | ------------------------------------------------------------------ | -------------------------------------------------------- |
+| `database`       | `crmA.db.query()`                                                  | App reads workspace DuckDB data (SELECT)                 |
+| `database:write` | `crmA.db.execute()`                                                | App writes to DuckDB (INSERT/UPDATE/DELETE/CREATE)       |
+| `objects`        | `crmA.objects.*`                                                   | App does CRUD on workspace objects (people, tasks, etc.) |
+| `files`          | `crmA.files.read()`, `crmA.files.list()`                           | App reads workspace files                                |
+| `files:write`    | `crmA.files.write()`, `crmA.files.delete()`, `crmA.files.mkdir()`  | App writes/deletes workspace files                       |
+| `agent`          | `crmA.chat.*`, `crmA.agent.send()`, `crmA.tool.*`, `crmA.memory.*` | App interacts with the AI agent                          |
+| `ui`             | `crmA.ui.*`                                                        | App shows toasts, navigates, opens entries               |
+| `store`          | `crmA.store.*`                                                     | App needs persistent key-value storage                   |
+| `http`           | `crmA.http.fetch()`                                                | App fetches external URLs (CORS-free)                    |
+| `events`         | `crmA.events.*`                                                    | App subscribes to real-time workspace events             |
+| `apps`           | `crmA.apps.*`                                                      | App communicates with other open apps                    |
+| `cron`           | `crmA.cron.*`                                                      | App schedules recurring agent tasks                      |
+| `webhooks`       | `crmA.webhooks.*`                                                  | App receives external webhooks                           |
+| `clipboard`      | `crmA.clipboard.*`                                                 | App reads/writes the clipboard                           |
 
 Only request what you need. A game with no data access needs no permissions at all.
 
@@ -146,36 +146,36 @@ Only request what you need. A game with no data access needs no permissions at a
 
 ## Bridge API Overview
 
-The bridge SDK is auto-injected into every app's HTML. It provides `window.dench` with the following namespaces. All methods return Promises with a 30-second timeout.
+The bridge SDK is auto-injected into every app's HTML. It provides `window.crmA` with the following namespaces. All methods return Promises with a 30-second timeout.
 
-| Namespace         | Permission                    | Methods                                                                                              | Details In        |
-| ----------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------- |
-| `dench.db`        | `database` / `database:write` | `query(sql)`, `execute(sql)`                                                                         | **data-builder**  |
-| `dench.objects`   | `objects`                     | `list()`, `get()`, `create()`, `update()`, `delete()`, `bulkDelete()`, `getSchema()`, `getOptions()` | **data-builder**  |
-| `dench.files`     | `files` / `files:write`       | `read()`, `list()`, `write()`, `delete()`, `mkdir()`                                                 | below             |
-| `dench.app`       | _(none)_                      | `getManifest()`, `getTheme()`                                                                        | below             |
-| `dench.chat`      | `agent`                       | `createSession()`, `send()`, `getHistory()`, `getSessions()`, `abort()`, `isActive()`                | **agent-builder** |
-| `dench.agent`     | `agent`                       | `send(message)`                                                                                      | **agent-builder** |
-| `dench.tool`      | `agent`                       | `register(name, handler)`                                                                            | **agent-builder** |
-| `dench.memory`    | `agent`                       | `get()`                                                                                              | **agent-builder** |
-| `dench.ui`        | `ui`                          | `toast()`, `navigate()`, `openEntry()`, `setTitle()`, `confirm()`, `prompt()`                        | **platform-api**  |
-| `dench.store`     | `store`                       | `get()`, `set()`, `delete()`, `list()`, `clear()`                                                    | **platform-api**  |
-| `dench.http`      | `http`                        | `fetch(url, opts)`                                                                                   | **platform-api**  |
-| `dench.events`    | `events`                      | `on(channel, cb)`, `off(channel)`                                                                    | **platform-api**  |
-| `dench.context`   | _(none)_                      | `getWorkspace()`, `getAppInfo()`                                                                     | **platform-api**  |
-| `dench.apps`      | `apps`                        | `send()`, `on()`, `list()`                                                                           | **platform-api**  |
-| `dench.cron`      | `cron`                        | `schedule()`, `list()`, `run()`, `cancel()`                                                          | **platform-api**  |
-| `dench.webhooks`  | `webhooks`                    | `register()`, `on()`, `poll()`                                                                       | **platform-api**  |
-| `dench.clipboard` | `clipboard`                   | `read()`, `write()`                                                                                  | **platform-api**  |
+| Namespace        | Permission                    | Methods                                                                                              | Details In        |
+| ---------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------- |
+| `crmA.db`        | `database` / `database:write` | `query(sql)`, `execute(sql)`                                                                         | **data-builder**  |
+| `crmA.objects`   | `objects`                     | `list()`, `get()`, `create()`, `update()`, `delete()`, `bulkDelete()`, `getSchema()`, `getOptions()` | **data-builder**  |
+| `crmA.files`     | `files` / `files:write`       | `read()`, `list()`, `write()`, `delete()`, `mkdir()`                                                 | below             |
+| `crm-a.app`      | _(none)_                      | `getManifest()`, `getTheme()`                                                                        | below             |
+| `crmA.chat`      | `agent`                       | `createSession()`, `send()`, `getHistory()`, `getSessions()`, `abort()`, `isActive()`                | **agent-builder** |
+| `crmA.agent`     | `agent`                       | `send(message)`                                                                                      | **agent-builder** |
+| `crmA.tool`      | `agent`                       | `register(name, handler)`                                                                            | **agent-builder** |
+| `crmA.memory`    | `agent`                       | `get()`                                                                                              | **agent-builder** |
+| `crmA.ui`        | `ui`                          | `toast()`, `navigate()`, `openEntry()`, `setTitle()`, `confirm()`, `prompt()`                        | **platform-api**  |
+| `crmA.store`     | `store`                       | `get()`, `set()`, `delete()`, `list()`, `clear()`                                                    | **platform-api**  |
+| `crmA.http`      | `http`                        | `fetch(url, opts)`                                                                                   | **platform-api**  |
+| `crmA.events`    | `events`                      | `on(channel, cb)`, `off(channel)`                                                                    | **platform-api**  |
+| `crmA.context`   | _(none)_                      | `getWorkspace()`, `getAppInfo()`                                                                     | **platform-api**  |
+| `crmA.apps`      | `apps`                        | `send()`, `on()`, `list()`                                                                           | **platform-api**  |
+| `crmA.cron`      | `cron`                        | `schedule()`, `list()`, `run()`, `cancel()`                                                          | **platform-api**  |
+| `crmA.webhooks`  | `webhooks`                    | `register()`, `on()`, `poll()`                                                                       | **platform-api**  |
+| `crmA.clipboard` | `clipboard`                   | `read()`, `write()`                                                                                  | **platform-api**  |
 
 ### Core APIs (no child skill needed)
 
 ```javascript
 // Get the app's own parsed manifest
-const manifest = await dench.app.getManifest();
+const manifest = (await crm) - a.app.getManifest();
 
-// Get current DenchClaw UI theme
-const theme = await dench.app.getTheme();
+// Get current Crm-A Console UI theme
+const theme = (await crm) - a.app.getTheme();
 // Returns: "dark" or "light"
 ```
 
@@ -183,39 +183,39 @@ const theme = await dench.app.getTheme();
 
 ```javascript
 // Read a workspace file
-const content = await dench.files.read("path/to/file.md");
+const content = await crmA.files.read("path/to/file.md");
 
 // List workspace directory tree (optionally scoped to a directory)
-const tree = await dench.files.list();
-const subTree = await dench.files.list("documents/");
+const tree = await crmA.files.list();
+const subTree = await crmA.files.list("documents/");
 
 // Write a file (files:write permission)
-await dench.files.write("path/to/file.md", "# Hello\n\nFile content here.");
+await crmA.files.write("path/to/file.md", "# Hello\n\nFile content here.");
 
 // Delete a file (files:write permission)
-await dench.files.delete("path/to/old-file.md");
+await crmA.files.delete("path/to/old-file.md");
 
 // Create a directory (files:write permission)
-await dench.files.mkdir("path/to/new-dir");
+await crmA.files.mkdir("path/to/new-dir");
 ```
 
 ### Waiting for Bridge Readiness
 
-The bridge script is injected into `<head>`, so it's available by the time your scripts run. However, if you use `defer` or `type="module"` scripts, you can safely access `window.dench` immediately since module scripts run after the document is parsed.
+The bridge script is injected into `<head>`, so it's available by the time your scripts run. However, if you use `defer` or `type="module"` scripts, you can safely access `window.crmA` immediately since module scripts run after the document is parsed.
 
 ```javascript
-function whenDenchReady(fn) {
-  if (window.dench) return fn();
+function whenCrmAReady(fn) {
+  if (window.crmA) return fn();
   const check = setInterval(() => {
-    if (window.dench) {
+    if (window.crmA) {
       clearInterval(check);
       fn();
     }
   }, 50);
 }
 
-whenDenchReady(async () => {
-  const theme = await dench.app.getTheme();
+whenCrmAReady(async () => {
+  const theme = (await crm) - a.app.getTheme();
   document.body.className = theme;
 });
 ```
@@ -224,7 +224,7 @@ whenDenchReady(async () => {
 
 ## Theme & Styling System
 
-Apps should respect the DenchClaw theme. The bridge provides the current theme ("dark" or "light"). Build your CSS to support both.
+Apps should respect the Crm-A Console theme. The bridge provides the current theme ("dark" or "light"). Build your CSS to support both.
 
 ### Recommended Base Styles
 
@@ -286,7 +286,7 @@ Always apply the theme as the first action in your app:
 ```javascript
 async function initTheme() {
   try {
-    const theme = await dench.app.getTheme();
+    const theme = (await crm) - a.app.getTheme();
     document.body.className = theme;
   } catch {
     document.body.className = "dark";
@@ -384,8 +384,8 @@ For Three.js and other module-based libraries, use import maps:
 For complex apps, split code across multiple files:
 
 ```
-apps/complex-app.dench.app/
-  .dench.yaml
+apps/complex-app.crm-a.app/
+  .crm-a.yaml
   index.html
   css/
     main.css
@@ -419,8 +419,8 @@ const renderer = new Renderer(game);
 const ui = new UI(game);
 
 async function init() {
-  if (window.dench) {
-    const theme = await dench.app.getTheme();
+  if (window.crmA) {
+    const theme = (await crm) - a.app.getTheme();
     renderer.setTheme(theme);
   }
   game.start();
@@ -460,7 +460,7 @@ Relative imports (`./game.js`) work because all files are served from the same `
 
 ### Referencing Assets
 
-All asset paths are relative to the `.dench.app` folder root:
+All asset paths are relative to the `.crm-a.app` folder root:
 
 ```javascript
 // In p5.js
@@ -539,7 +539,7 @@ function createCheckerTexture(size = 256, divisions = 8) {
 
 - **Always use `runtime: "static"`** unless explicitly asked for React/TSX/npm
 - **Request only needed permissions** — no permissions needed for pure games/tools
-- **Keep apps self-contained** — all resources within the `.dench.app` folder
+- **Keep apps self-contained** — all resources within the `.crm-a.app` folder
 - **Use semantic HTML** and responsive design
 - **Handle errors** for all bridge API calls
 - **Apply the theme** as the very first thing on load
@@ -595,7 +595,7 @@ Always wrap bridge calls in try/catch:
 ```javascript
 async function loadData() {
   try {
-    const result = await dench.db.query("SELECT * FROM objects");
+    const result = await crmA.db.query("SELECT * FROM objects");
     return result.rows || [];
   } catch (err) {
     console.error("Failed to load data:", err.message);
@@ -635,14 +635,14 @@ function showError(message) {
 ```javascript
 async function init() {
   try {
-    const theme = await dench.app.getTheme();
+    const theme = (await crm) - a.app.getTheme();
     document.body.className = theme;
   } catch {
     document.body.className = "dark";
   }
 
   try {
-    const data = await dench.db.query("SELECT * FROM objects");
+    const data = await crmA.db.query("SELECT * FROM objects");
     renderDashboard(data.rows);
   } catch {
     renderEmptyState("No data available. Make sure the app has database permission.");
@@ -661,16 +661,16 @@ When asked to build an app, follow these steps:
    - 2D game / simulation / generative art → **p5.js** (always) — see **game-builder** child skill
    - 3D game / scene / visualization → **Three.js** (always) — see **game-builder** child skill
    - Data dashboard / CRUD app → **Chart.js** or **plain HTML/CSS** — see **data-builder** child skill
-   - AI-powered app / chat UI → use `dench.chat.*` API — see **agent-builder** child skill
+   - AI-powered app / chat UI → use `crmA.chat.*` API — see **agent-builder** child skill
    - Interactive tool / form → **plain HTML/CSS/JS**
-3. **Create the app folder**: `apps/<name>.dench.app/`
-4. **Create `.dench.yaml`** with manifest (always include `name`, `entry`, `runtime`, and needed `permissions`)
+3. **Create the app folder**: `apps/<name>.crm-a.app/`
+4. **Create `.crm-a.yaml`** with manifest (always include `name`, `entry`, `runtime`, and needed `permissions`)
 5. **Create `index.html`** as the entry point with CDN script tags
 6. **Create separate JS file(s)** for app logic — avoid massive inline scripts
-7. **Apply theme** via `dench.app.getTheme()` on init
+7. **Apply theme** via `crm-a.app.getTheme()` on init
 8. **Handle window resizing** (canvas-based apps must call `resizeCanvas` / update renderer)
 9. **Add error handling** for all bridge API calls
-10. **Test the app** opens correctly as a tab in DenchClaw
+10. **Test the app** opens correctly as a tab in Crm-A Console
 
 ---
 
@@ -678,11 +678,11 @@ When asked to build an app, follow these steps:
 
 This skill covers app fundamentals. For specialized APIs, see these child skills (all inside the `app-builder/` skill folder):
 
-| Skill             | Path                                 | Covers                                                                                                                                                                                                                                                                                            |
-| ----------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Game Builder**  | `app-builder/game-builder/SKILL.md`  | 2D games with p5.js, 3D games with Three.js, physics (Matter.js), audio, sprites, particles, tilemaps, game state machines, complete game examples                                                                                                                                                |
-| **Data Builder**  | `app-builder/data-builder/SKILL.md`  | Workspace objects CRUD (`dench.objects.*`), DuckDB queries and mutations (`dench.db.*`), Chart.js and D3.js dashboards, stat cards, interactive tools, CRUD form patterns                                                                                                                         |
-| **Agent Builder** | `app-builder/agent-builder/SKILL.md` | AI chat API (`dench.chat.*`), streaming responses, app-as-tool (`dench.tool.*`), agent memory access, Gateway WebSocket protocol, chat UI patterns                                                                                                                                                |
-| **Platform API**  | `app-builder/platform-api/SKILL.md`  | UI integration (`dench.ui.*`), per-app KV store (`dench.store.*`), HTTP proxy (`dench.http.*`), real-time events (`dench.events.*`), inter-app messaging (`dench.apps.*`), cron scheduling (`dench.cron.*`), webhooks (`dench.webhooks.*`), clipboard (`dench.clipboard.*`), widget mode, context |
+| Skill             | Path                                 | Covers                                                                                                                                                                                                                                                                                    |
+| ----------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Game Builder**  | `app-builder/game-builder/SKILL.md`  | 2D games with p5.js, 3D games with Three.js, physics (Matter.js), audio, sprites, particles, tilemaps, game state machines, complete game examples                                                                                                                                        |
+| **Data Builder**  | `app-builder/data-builder/SKILL.md`  | Workspace objects CRUD (`crmA.objects.*`), DuckDB queries and mutations (`crmA.db.*`), Chart.js and D3.js dashboards, stat cards, interactive tools, CRUD form patterns                                                                                                                   |
+| **Agent Builder** | `app-builder/agent-builder/SKILL.md` | AI chat API (`crmA.chat.*`), streaming responses, app-as-tool (`crmA.tool.*`), agent memory access, Gateway WebSocket protocol, chat UI patterns                                                                                                                                          |
+| **Platform API**  | `app-builder/platform-api/SKILL.md`  | UI integration (`crmA.ui.*`), per-app KV store (`crmA.store.*`), HTTP proxy (`crmA.http.*`), real-time events (`crmA.events.*`), inter-app messaging (`crmA.apps.*`), cron scheduling (`crmA.cron.*`), webhooks (`crmA.webhooks.*`), clipboard (`crmA.clipboard.*`), widget mode, context |
 
 All child skills are seeded into the workspace alongside this parent skill and can be read at `{{WORKSPACE_PATH}}/skills/app-builder/<child>/SKILL.md`.

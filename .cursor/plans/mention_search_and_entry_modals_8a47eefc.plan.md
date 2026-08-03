@@ -72,7 +72,7 @@ flowchart TB
   end
 
   searchEndpoint -->|"JSON: files + entries"| fuseIndex
-  mentionPlugin -->|"insert link"| internalLink["dench://entry/leads/abc123"]
+  mentionPlugin -->|"insert link"| internalLink["crm-a://entry/leads/abc123"]
   internalLink -->|"onNavigate resolves"| routing
 ```
 

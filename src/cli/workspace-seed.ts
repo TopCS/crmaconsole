@@ -141,7 +141,7 @@ export const MANAGED_SKILLS: ReadonlyArray<{ name: string; templatePaths?: boole
   { name: "crm", templatePaths: true },
   { name: "app-builder", templatePaths: true },
   { name: "gstack" },
-  { name: "dench-integrations" },
+  { name: "crm-a-integrations" },
 ];
 
 export function seedSkill(
@@ -238,15 +238,15 @@ export function syncManagedSkills(params: {
 }
 
 export function seedSampleApp(appsDir: string): void {
-  const appDir = path.join(appsDir, "hello.dench.app");
+  const appDir = path.join(appsDir, "hello.crm-a.app");
   if (existsSync(appDir)) return;
 
   mkdirSync(appDir, { recursive: true });
 
   writeFileSync(
-    path.join(appDir, ".dench.yaml"),
+    path.join(appDir, ".crm-a.yaml"),
     `name: "Hello World"
-description: "A sample DenchClaw app"
+description: "A sample Crm-A Console app"
 icon: "sparkles"
 version: "1.0.0"
 entry: "index.html"
@@ -279,24 +279,24 @@ permissions:
   </style>
 </head>
 <body>
-  <h1>Hello from DenchClaw!</h1>
+  <h1>Hello from Crm-A Console!</h1>
   <p>This is a sample app running inside your workspace.</p>
   <div class="stats" id="stats">Loading...</div>
   <script>
     async function init() {
       try {
-        const theme = await window.dench.app.getTheme();
+        const theme = await window.crm-a.app.getTheme();
         document.body.className = theme;
       } catch { document.body.className = 'light'; }
       try {
-        const result = await window.dench.db.query("SELECT name, entry_count FROM objects");
+        const result = await window.crmA.db.query("SELECT name, entry_count FROM objects");
         const el = document.getElementById('stats');
         el.innerHTML = '';
         for (const row of (result.rows || [])) {
           el.innerHTML += '<div class="stat"><div class="label">' + row.name + '</div><div class="value">' + (row.entry_count || 0) + '</div></div>';
         }
         if (!result.rows || result.rows.length === 0) {
-          el.textContent = 'No objects found yet. Create some in DenchClaw!';
+          el.textContent = 'No objects found yet. Create some in Crm-A Console!';
         }
       } catch (err) {
         document.getElementById('stats').textContent = 'Could not load data: ' + err.message;

@@ -61,19 +61,19 @@ export function shouldEnsureCliPath(argv: string[]): boolean {
   return true;
 }
 
-export function isBareDenchclawInvocation(argv: string[]): boolean {
+export function isBareCrmAConsoleInvocation(argv: string[]): boolean {
   if (hasHelpOrVersion(argv)) {
     return false;
   }
   if (getPrimaryCommand(argv)) {
     return false;
   }
-  return resolveCliName(argv) === "denchclaw";
+  return resolveCliName(argv) === "crm-a-console";
 }
 
 function isDelegationDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return (
-    isTruthyEnvValue(env.DENCHCLAW_DISABLE_OPENCLAW_DELEGATION) ||
+    isTruthyEnvValue(env.CRM_A_CONSOLE_DISABLE_OPENCLAW_DELEGATION) ||
     isTruthyEnvValue(env.OPENCLAW_DISABLE_OPENCLAW_DELEGATION)
   );
 }
@@ -102,7 +102,7 @@ export function shouldDelegateToGlobalOpenClaw(
 export function shouldHideCliBanner(argv: string[], env: NodeJS.ProcessEnv = process.env): boolean {
   const commandPath = getCommandPath(argv, 2);
   return (
-    isTruthyEnvValue(env.DENCHCLAW_HIDE_BANNER) ||
+    isTruthyEnvValue(env.CRM_A_CONSOLE_HIDE_BANNER) ||
     isTruthyEnvValue(env.OPENCLAW_HIDE_BANNER) ||
     commandPath[0] === "completion" ||
     (commandPath[0] === "plugins" && commandPath[1] === "update")
@@ -111,7 +111,7 @@ export function shouldHideCliBanner(argv: string[], env: NodeJS.ProcessEnv = pro
 
 async function delegateToGlobalOpenClaw(argv: string[]): Promise<number> {
   if (
-    isTruthyEnvValue(process.env.DENCHCLAW_DELEGATED) ||
+    isTruthyEnvValue(process.env.CRM_A_CONSOLE_DELEGATED) ||
     isTruthyEnvValue(process.env.OPENCLAW_DELEGATED)
   ) {
     throw new Error(
@@ -125,7 +125,7 @@ async function delegateToGlobalOpenClaw(argv: string[]): Promise<number> {
       cwd: safeChildCwd(),
       env: {
         ...process.env,
-        DENCHCLAW_DELEGATED: "1",
+        CRM_A_CONSOLE_DELEGATED: "1",
         OPENCLAW_DELEGATED: "1",
       },
       ...(process.platform === "win32" ? { shell: true, windowsHide: true } : {}),
@@ -167,19 +167,19 @@ export async function runCli(argv: string[] = process.argv) {
   // Enforce the minimum supported runtime before doing any work.
   assertSupportedRuntime();
 
-  // Show the animated DenchClaw banner early so it appears for ALL invocations
-  // (bare `denchclaw`, subcommands, help, etc.). The bannerEmitted flag inside
+  // Show the animated Crm-A Console banner early so it appears for ALL invocations
+  // (bare `crm-a-console`, subcommands, help, etc.). The bannerEmitted flag inside
   // emitCliBanner prevents double-emission from the route / preAction hooks.
   if (!shouldHideCliBanner(normalizedArgv, process.env)) {
     await emitCliBanner(VERSION, { argv: normalizedArgv });
   }
 
-  // Bare `denchclaw` gets a minimal welcome flow: the Dench Cloud banner plus
+  // Bare `crm-a-console` gets a minimal welcome flow: the Crm-A Cloud banner plus
   // a single "Continue with Dench.com" action. The full local setup pipeline
-  // is reachable explicitly via `denchclaw bootstrap`.
-  if (isBareDenchclawInvocation(normalizedArgv)) {
-    const { runDenchCloudWelcome } = await import("./dench-cloud-welcome.js");
-    await runDenchCloudWelcome();
+  // is reachable explicitly via `crm-a-console bootstrap`.
+  if (isBareCrmAConsoleInvocation(normalizedArgv)) {
+    const { runCrmACloudWelcome } = await import("./crm-a-cloud-welcome.js");
+    await runCrmACloudWelcome();
     return;
   }
 

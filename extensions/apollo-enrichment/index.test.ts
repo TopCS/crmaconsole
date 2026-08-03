@@ -12,7 +12,7 @@ function writeAuthProfiles(stateDir: string, key: string): void {
     JSON.stringify({
       version: 1,
       profiles: {
-        "dench-cloud:default": { type: "api_key", provider: "dench-cloud", key },
+        "crm-a-cloud:default": { type: "api_key", provider: "crm-a-cloud", key },
       },
     }),
   );
@@ -24,13 +24,13 @@ function writeOpenClawConfig(stateDir: string): void {
     JSON.stringify({
       models: {
         providers: {
-          "dench-cloud": {},
+          "crm-a-cloud": {},
         },
       },
     }),
   );
   writeFileSync(
-    path.join(stateDir, ".dench-integrations.json"),
+    path.join(stateDir, ".crm-a-integrations.json"),
     JSON.stringify({
       schemaVersion: 1,
       apollo: {},
@@ -44,7 +44,7 @@ function createApi() {
     config: {
       plugins: {
         entries: {
-          "dench-ai-gateway": {
+          "crm-a-ai-gateway": {
             config: {
               enabled: true,
               gatewayUrl: "https://gateway.example.com",
@@ -203,7 +203,7 @@ describe("apollo-enrichment requiredFields", () => {
       expect(body).toMatchObject({
         first_name: "Mark",
         last_name: "Rachapoom",
-        organization_name: "Dench",
+        organization_name: "Crm-A",
         linkedin_url: "https://www.linkedin.com/in/markrachapoom",
       });
       expect(body.mode).toBeUndefined();
@@ -220,7 +220,7 @@ describe("apollo-enrichment requiredFields", () => {
       action: "people",
       firstName: "Mark",
       lastName: "Rachapoom",
-      organizationName: "Dench",
+      organizationName: "Crm-A",
       linkedinUrl: "https://www.linkedin.com/in/markrachapoom",
     });
 
@@ -313,9 +313,7 @@ describe("apollo-enrichment requiredFields", () => {
       writeOpenClawConfig(stateDir);
 
       globalThis.fetch = vi.fn(async (input, init) => {
-        expect(String(input)).toBe(
-          "https://gateway.example.com/v1/enrichment/people/search",
-        );
+        expect(String(input)).toBe("https://gateway.example.com/v1/enrichment/people/search");
         const body = JSON.parse(String(init?.body));
         expect(body.requiredFields).toBeUndefined();
         expect(body.mode).toBeUndefined();

@@ -1,12 +1,12 @@
 ---
 name: game-builder
-description: Build 2D and 3D games as DenchClaw apps using p5.js, Three.js, Matter.js, and other game libraries. Covers game architecture, sprites, physics, particles, audio, tilemaps, and complete game examples.
+description: Build 2D and 3D games as Crm-A Console apps using p5.js, Three.js, Matter.js, and other game libraries. Covers game architecture, sprites, physics, particles, audio, tilemaps, and complete game examples.
 metadata: { "openclaw": { "inject": true, "always": true, "emoji": "🎮" } }
 ---
 
 # App Game Builder
 
-This skill covers building 2D and 3D games as DenchClaw apps. For core app structure, manifest reference, and bridge API basics, see the parent **app-builder** skill (`app-builder/SKILL.md`).
+This skill covers building 2D and 3D games as Crm-A Console apps. For core app structure, manifest reference, and bridge API basics, see the parent **app-builder** skill (`app-builder/SKILL.md`).
 
 ---
 
@@ -27,14 +27,14 @@ This skill covers building 2D and 3D games as DenchClaw apps. For core app struc
 ### p5.js App Template
 
 ```
-apps/my-game.dench.app/
-  .dench.yaml
+apps/my-game.crm-a.app/
+  .crm-a.yaml
   index.html
   sketch.js
   assets/           # sprites, sounds, fonts
 ```
 
-**`.dench.yaml`:**
+**`.crm-a.yaml`:**
 
 ```yaml
 name: "My Game"
@@ -93,14 +93,15 @@ let isDark = true;
 function setup() {
   createCanvas(windowWidth, windowHeight);
 
-  // Detect theme from DenchClaw
-  if (window.dench) {
-    window.dench.app
-      .getTheme()
-      .then((theme) => {
-        isDark = theme === "dark";
-      })
-      .catch(() => {});
+  // Detect theme from Crm-A Console
+  if (window.crmA) {
+    window.crm -
+      a.app
+        .getTheme()
+        .then((theme) => {
+          isDark = theme === "dark";
+        })
+        .catch(() => {});
   }
 }
 
@@ -128,13 +129,14 @@ const sketch = (p) => {
     p.createCanvas(p.windowWidth, p.windowHeight);
     player = { x: p.width / 2, y: p.height / 2, size: 30, speed: 4 };
 
-    if (window.dench) {
-      window.dench.app
-        .getTheme()
-        .then((theme) => {
-          isDark = theme === "dark";
-        })
-        .catch(() => {});
+    if (window.crmA) {
+      window.crm -
+        a.app
+          .getTheme()
+          .then((theme) => {
+            isDark = theme === "dark";
+          })
+          .catch(() => {});
     }
   };
 
@@ -562,12 +564,12 @@ If the game has a `database` permission, persist high scores:
 ```javascript
 async function loadHighScore() {
   try {
-    await window.dench.db.execute(`
+    await window.crmA.db.execute(`
       CREATE TABLE IF NOT EXISTS game_scores (
         game TEXT, score INTEGER, played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    const result = await window.dench.db.query(
+    const result = await window.crmA.db.query(
       `SELECT MAX(score) as high_score FROM game_scores WHERE game = 'my-game'`,
     );
     return result.rows?.[0]?.high_score || 0;
@@ -578,7 +580,7 @@ async function loadHighScore() {
 
 async function saveScore(score) {
   try {
-    await window.dench.db.execute(
+    await window.crmA.db.execute(
       `INSERT INTO game_scores (game, score) VALUES ('my-game', ${score})`,
     );
   } catch {}
@@ -604,8 +606,8 @@ async function saveScore(score) {
 ### Three.js App Template
 
 ```
-apps/my-3d-app.dench.app/
-  .dench.yaml
+apps/my-3d-app.crm-a.app/
+  .crm-a.yaml
   index.html
   app.js            # Main Three.js module
   assets/
@@ -613,7 +615,7 @@ apps/my-3d-app.dench.app/
     texture.jpg     # Textures (optional)
 ```
 
-**`.dench.yaml`:**
+**`.crm-a.yaml`:**
 
 ```yaml
 name: "3D World"
@@ -747,17 +749,18 @@ cube.castShadow = true;
 scene.add(cube);
 
 // --- Theme ---
-if (window.dench) {
-  window.dench.app
-    .getTheme()
-    .then((theme) => {
-      if (theme === "light") {
-        scene.background = new THREE.Color(0xf0f0f5);
-        scene.fog = new THREE.Fog(0xf0f0f5, 50, 200);
-        groundMat.color.set(0xe8e8f0);
-      }
-    })
-    .catch(() => {});
+if (window.crmA) {
+  window.crm -
+    a.app
+      .getTheme()
+      .then((theme) => {
+        if (theme === "light") {
+          scene.background = new THREE.Color(0xf0f0f5);
+          scene.fog = new THREE.Fog(0xf0f0f5, 50, 200);
+          groundMat.color.set(0xe8e8f0);
+        }
+      })
+      .catch(() => {});
 }
 
 // --- Hide loading screen ---
@@ -1089,7 +1092,7 @@ function updateHUD(score, health) {
 
 A complete asteroid-dodge game with scoring, particles, and game states.
 
-**`.dench.yaml`:**
+**`.crm-a.yaml`:**
 
 ```yaml
 name: "Asteroid Dodge"
@@ -1155,8 +1158,8 @@ function setup() {
     b: random(100, 255),
   }));
 
-  if (window.dench) {
-    window.dench.app.getTheme().catch(() => {});
+  if (window.crmA) {
+    window.crm - a.app.getTheme().catch(() => {});
   }
 }
 
@@ -1408,7 +1411,7 @@ function windowResized() {
 
 ### Example 2: 3D Scene Viewer (Three.js)
 
-**`.dench.yaml`:**
+**`.crm-a.yaml`:**
 
 ```yaml
 name: "3D Playground"
@@ -1467,15 +1470,16 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 const scene = new THREE.Scene();
 let bgColor = 0x0f0f1a;
 
-if (window.dench) {
-  window.dench.app
-    .getTheme()
-    .then((t) => {
-      bgColor = t === "light" ? 0xf0f0f5 : 0x0f0f1a;
-      scene.background = new THREE.Color(bgColor);
-      scene.fog = new THREE.Fog(bgColor, 30, 100);
-    })
-    .catch(() => {});
+if (window.crmA) {
+  window.crm -
+    a.app
+      .getTheme()
+      .then((t) => {
+        bgColor = t === "light" ? 0xf0f0f5 : 0x0f0f1a;
+        scene.background = new THREE.Color(bgColor);
+        scene.fog = new THREE.Fog(bgColor, 30, 100);
+      })
+      .catch(() => {});
 }
 
 scene.background = new THREE.Color(bgColor);

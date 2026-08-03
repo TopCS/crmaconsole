@@ -57,9 +57,9 @@ type AttachedFile = {
 
 type ChatCloudState = {
 	status: "no_key" | "invalid_key" | "valid";
-	isDenchPrimary: boolean;
+	isCrmAPrimary: boolean;
 	elevenLabsEnabled: boolean;
-	selectedDenchModel: string | null;
+	selectedCrmAModel: string | null;
 	models: ChatModelOption[];
 };
 
@@ -148,12 +148,12 @@ function normalizeChatCloudState(value: unknown): ChatCloudState | null {
 			record.status === "no_key" || record.status === "invalid_key" || record.status === "valid"
 				? record.status
 				: "no_key",
-		isDenchPrimary: Boolean(record.isDenchPrimary),
+		isCrmAPrimary: Boolean(record.isCrmAPrimary),
 		elevenLabsEnabled: Boolean(record.elevenLabsEnabled),
-		selectedDenchModel:
-			typeof record.selectedDenchModel === "string" &&
-			record.selectedDenchModel.trim()
-				? record.selectedDenchModel.trim()
+		selectedCrmAModel:
+			typeof record.selectedCrmAModel === "string" &&
+			record.selectedCrmAModel.trim()
+				? record.selectedCrmAModel.trim()
 				: null,
 		models,
 	};
@@ -2800,11 +2800,11 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 							</div>
 							<div className="py-3 min-w-0">
 								<div
-									className="inline-flex max-w-full items-center gap-1.5 px-1 py-1.5 dench-shimmer"
+									className="inline-flex max-w-full items-center gap-1.5 px-1 py-1.5 crm-a-shimmer"
 									style={{ color: "var(--color-text-muted)" }}
 								>
 									{/* eslint-disable-next-line @next/next/no-img-element */}
-									<img src="/dench-workspace-icon.png" alt="" width={14} height={14} className="rounded-sm" />
+									<img src="/crm-a-workspace-icon.png" alt="" width={14} height={14} className="rounded-sm" />
 									<span className="text-xs truncate">Preparing response…</span>
 								</div>
 							</div>
@@ -2865,11 +2865,11 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 						{showStreamActivity && (
 							<div className="py-3 min-w-0">
 								<div
-									className="inline-flex max-w-full items-center gap-1.5 px-1 py-1.5 dench-shimmer"
+									className="inline-flex max-w-full items-center gap-1.5 px-1 py-1.5 crm-a-shimmer"
 									style={{ color: "var(--color-text-muted)" }}
 								>
 									{/* eslint-disable-next-line @next/next/no-img-element */}
-									<img src="/dench-workspace-icon.png" alt="" width={14} height={14} className="rounded-sm" />
+									<img src="/crm-a-workspace-icon.png" alt="" width={14} height={14} className="rounded-sm" />
 									<span className="text-xs truncate">
 										{streamActivityLabel}
 									</span>

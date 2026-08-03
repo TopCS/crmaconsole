@@ -11,7 +11,7 @@ const {
 vi.mock("@/lib/composio", () => ({
   fetchComposioConnections: fetchComposioConnectionsMock,
   fetchComposioToolkits: fetchComposioToolkitsMock,
-  resolveComposioApiKey: vi.fn(() => "dench_test_key"),
+  resolveComposioApiKey: vi.fn(() => "crm_a_test_key"),
   resolveComposioEligibility: vi.fn(() => ({
     eligible: true,
     lockReason: null,
@@ -73,7 +73,7 @@ describe("Composio connections API", () => {
     expect(fetchComposioToolkitsMock).toHaveBeenCalledTimes(1);
     expect(fetchComposioToolkitsMock).toHaveBeenCalledWith(
       "https://gateway.example.com",
-      "dench_test_key",
+      "crm_a_test_key",
       { limit: 100 },
     );
   });
@@ -157,7 +157,7 @@ describe("Composio connections API", () => {
     expect(fetchComposioToolkitsMock).toHaveBeenCalledTimes(1);
     expect(fetchComposioToolkitsMock).toHaveBeenCalledWith(
       "https://gateway.example.com",
-      "dench_test_key",
+      "crm_a_test_key",
       { limit: 100 },
     );
   });

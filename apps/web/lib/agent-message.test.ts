@@ -87,19 +87,19 @@ describe("buildAgentMessage", () => {
 
 	it("does NOT double-prefix already-absolute paths", () => {
 		// Some legacy chats persisted absolute paths in fileContext.path
-		// (e.g. `/Users/me/.openclaw-dench/openclaw.json`). Double-prefixing
+		// (e.g. `/Users/me/.openclaw-crm-a/openclaw.json`). Double-prefixing
 		// them would produce paths like `<wsRoot>//Users/me/...`.
 		expect(
 			buildAgentMessage({
 				userText: "what is this?",
 				workspaceContext: {
-					filePath: "/Users/me/.openclaw-dench/openclaw.json",
+					filePath: "/Users/me/.openclaw-crm-a/openclaw.json",
 					isDirectory: false,
 				},
 				workspacePrefix: "/home/user/.openclaw/work",
 			}),
 		).toBe(
-			"[Context: workspace file '/Users/me/.openclaw-dench/openclaw.json']\n\nwhat is this?",
+			"[Context: workspace file '/Users/me/.openclaw-crm-a/openclaw.json']\n\nwhat is this?",
 		);
 	});
 

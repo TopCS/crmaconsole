@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 function storePath(appName: string): string | null {
   const wsRoot = resolveFilesystemPath("");
   if (!wsRoot) return null;
-  return join(wsRoot.absolutePath, ".dench-app-data", appName, "store.json");
+  return join(wsRoot.absolutePath, ".crm-a-app-data", appName, "store.json");
 }
 
 function readStore(appName: string): Record<string, unknown> {

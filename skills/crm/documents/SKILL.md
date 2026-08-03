@@ -208,7 +208,7 @@ Subject: Partnership idea
 
 Hi Mike,
 
-I loved your AI Handyman breakdowns. DenchClaw is launching a workflow-native AI platform for builders who want serious control over execution, memory, and automation.
+I loved your AI Handyman breakdowns. Crm-A Console is launching a workflow-native AI platform for builders who want serious control over execution, memory, and automation.
 
 Would you be open to testing it and discussing a possible sponsorship?
 MD

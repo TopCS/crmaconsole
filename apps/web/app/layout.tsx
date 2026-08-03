@@ -7,12 +7,12 @@ import { PostHogProvider } from "./components/posthog-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "DenchClaw",
+  title: "Crm-A Console",
   description:
     "AI Workspace with an agent that connects to your apps and does the work for you",
   icons: {
-    icon: "/dench-workspace-icon.png",
-    apple: "/dench-workspace-icon.png",
+    icon: "/crm-a-workspace-icon.png",
+    apple: "/crm-a-workspace-icon.png",
   },
 };
 

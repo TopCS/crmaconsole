@@ -4,7 +4,7 @@ import {
 	findChatModelByStableOrCatalogId,
 	isLikelyOpenAiModelId,
 	needsOpenAiSwitchAcknowledgement,
-	normalizeDenchModelId,
+	normalizeCrmAModelId,
 	resolveActiveChatModelId,
 } from "./chat-models";
 
@@ -13,7 +13,7 @@ describe("chat-models", () => {
 		const models = [
 			{
 				stableId: "claude-sonnet-4.6",
-				catalogId: "dench-claude-sonnet",
+				catalogId: "crm-a-claude-sonnet",
 				displayName: "Claude Sonnet 4.6",
 				provider: "anthropic",
 				reasoning: true,
@@ -22,24 +22,24 @@ describe("chat-models", () => {
 		expect(findChatModelByStableOrCatalogId(models, "claude-sonnet-4.6")).toEqual(
 			models[0],
 		);
-		expect(findChatModelByStableOrCatalogId(models, "dench-claude-sonnet")).toEqual(
+		expect(findChatModelByStableOrCatalogId(models, "crm-a-claude-sonnet")).toEqual(
 			models[0],
 		);
 		expect(findChatModelByStableOrCatalogId(models, "unknown")).toBeUndefined();
 	});
 
-	it("normalizes dench-cloud model ids for picker state", () => {
-		expect(normalizeDenchModelId("dench-cloud/gpt-5.4")).toBe("gpt-5.4");
-		expect(normalizeDenchModelId("gpt-5.4")).toBe("gpt-5.4");
-		expect(normalizeDenchModelId("")).toBeNull();
+	it("normalizes crm-a-cloud model ids for picker state", () => {
+		expect(normalizeCrmAModelId("crm-a-cloud/gpt-5.4")).toBe("gpt-5.4");
+		expect(normalizeCrmAModelId("gpt-5.4")).toBe("gpt-5.4");
+		expect(normalizeCrmAModelId("")).toBeNull();
 	});
 
 	it("prefers configured primary over stale session metadata", () => {
 		expect(
 			resolveActiveChatModelId({
 				modelOverride: null,
-				sessionModel: "dench-cloud/anthropic.claude-opus-4-6-v1",
-				selectedDenchModel: "claude-sonnet-4.6",
+				sessionModel: "crm-a-cloud/anthropic.claude-opus-4-6-v1",
+				selectedCrmAModel: "claude-sonnet-4.6",
 				models: [
 					{
 						stableId: "anthropic.claude-opus-4-6-v1",
@@ -62,8 +62,8 @@ describe("chat-models", () => {
 		expect(
 			resolveActiveChatModelId({
 				modelOverride: null,
-				sessionModel: "dench-cloud/gpt-5.4",
-				selectedDenchModel: "anthropic.claude-opus-4-6-v1",
+				sessionModel: "crm-a-cloud/gpt-5.4",
+				selectedCrmAModel: "anthropic.claude-opus-4-6-v1",
 				models: [
 					{
 						stableId: "anthropic.claude-opus-4-6-v1",
@@ -86,8 +86,8 @@ describe("chat-models", () => {
 		expect(
 			resolveActiveChatModelId({
 				modelOverride: null,
-				sessionModel: "dench-cloud/gpt-5.4",
-				selectedDenchModel: null,
+				sessionModel: "crm-a-cloud/gpt-5.4",
+				selectedCrmAModel: null,
 				models: [
 					{
 						stableId: "gpt-5.4",
@@ -104,8 +104,8 @@ describe("chat-models", () => {
 		expect(
 			resolveActiveChatModelId({
 				modelOverride: "gpt-5.4",
-				sessionModel: "dench-cloud/anthropic.claude-opus-4-6-v1",
-				selectedDenchModel: "anthropic.claude-opus-4-6-v1",
+				sessionModel: "crm-a-cloud/anthropic.claude-opus-4-6-v1",
+				selectedCrmAModel: "anthropic.claude-opus-4-6-v1",
 				models: [],
 			}),
 		).toBe("gpt-5.4");
@@ -113,14 +113,14 @@ describe("chat-models", () => {
 
 	it("detects likely OpenAI model ids", () => {
 		expect(isLikelyOpenAiModelId("gpt-5.4")).toBe(true);
-		expect(isLikelyOpenAiModelId("dench-cloud/openai.gpt-5.4")).toBe(true);
+		expect(isLikelyOpenAiModelId("crm-a-cloud/openai.gpt-5.4")).toBe(true);
 		expect(isLikelyOpenAiModelId("anthropic.claude-sonnet-4-6")).toBe(false);
 	});
 
 	it("classifies cross-provider switches into OpenAI", () => {
 		expect(
 			classifyOpenAiModelSwitch({
-				sessionModel: "dench-cloud/anthropic.claude-opus-4-6-v1",
+				sessionModel: "crm-a-cloud/anthropic.claude-opus-4-6-v1",
 				sessionModelProvider: "anthropic",
 				targetModel: "gpt-5.4",
 			}),
@@ -128,7 +128,7 @@ describe("chat-models", () => {
 
 		expect(
 			classifyOpenAiModelSwitch({
-				sessionModel: "dench-cloud/gpt-5.4",
+				sessionModel: "crm-a-cloud/gpt-5.4",
 				sessionModelProvider: "openai",
 				targetModel: "gpt-5.4",
 			}),

@@ -58,7 +58,7 @@ async function resolveDefaultBranch(owner: string, repo: string): Promise<string
   const repoResponse = await fetch(repoUrl, {
     headers: {
       Accept: "application/vnd.github+json",
-      "User-Agent": "DenchClaw Skill Installer",
+      "User-Agent": "Crm-A Console Skill Installer",
     },
     signal: AbortSignal.timeout(10_000),
   });

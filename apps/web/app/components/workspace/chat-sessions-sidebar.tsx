@@ -211,7 +211,7 @@ function ChannelMark({ channel }: { channel: string }) {
 	);
 }
 
-// ── Native (DenchClaw) row ──
+// ── Native (Crm-A Console) row ──
 
 function NativeRow({
 	session, isActive, isHovered, isStreaming, sessionSubagents,

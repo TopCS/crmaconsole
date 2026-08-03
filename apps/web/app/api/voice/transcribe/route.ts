@@ -1,4 +1,4 @@
-import { getCloudVoiceState } from "@/lib/dench-cloud-settings";
+import { getCloudVoiceState } from "@/lib/crm-a-cloud-settings";
 import { transcribeElevenLabsAudio } from "@/lib/elevenlabs-voice";
 
 export const dynamic = "force-dynamic";
@@ -23,10 +23,10 @@ export async function POST(request: Request) {
 
   const voiceState = await getCloudVoiceState();
   if (voiceState.status === "no_key" || !voiceState.apiKey) {
-    return buildUnavailableResponse("A valid Dench Cloud API key is required.");
+    return buildUnavailableResponse("A valid Crm-A Cloud API key is required.");
   }
   if (voiceState.status === "invalid_key") {
-    return buildUnavailableResponse(voiceState.validationError ?? "The Dench Cloud API key is invalid.");
+    return buildUnavailableResponse(voiceState.validationError ?? "The Crm-A Cloud API key is invalid.");
   }
   if (!voiceState.elevenLabsEnabled) {
     return buildUnavailableResponse("Enable ElevenLabs in Integrations to use server-side transcription.");

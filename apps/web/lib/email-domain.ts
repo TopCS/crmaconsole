@@ -154,7 +154,7 @@ export function extractEmailHost(address: string): string | null {
  * - `not-an-address`         → `null`
  *
  * If `overrides` is omitted, the bundled list is used. Pass overrides
- * read from `.denchclaw/personal-domains.json` to honour user edits.
+ * read from `.crm-a-console/personal-domains.json` to honour user edits.
  */
 export function extractRootDomain(
   address: string,

@@ -1,9 +1,9 @@
-// extensions/shared/dench-auth.ts
+// extensions/shared/crm-a-auth.ts
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 var DEFAULT_GATEWAY_URL = "https://gateway.merseoriginals.com";
 var AUTH_PROFILES_REL = path.join("agents", "main", "agent", "auth-profiles.json");
-function readDenchAuthProfileKey() {
+function readCrmAAuthProfileKey() {
   const stateDir = process.env.OPENCLAW_STATE_DIR;
   if (stateDir) {
     const key = readKeyFromAuthProfiles(path.join(stateDir, AUTH_PROFILES_REL));
@@ -15,19 +15,19 @@ function readKeyFromAuthProfiles(authPath) {
   try {
     if (!existsSync(authPath)) return void 0;
     const raw = JSON.parse(readFileSync(authPath, "utf-8"));
-    const key = raw?.profiles?.["dench-cloud:default"]?.key;
+    const key = raw?.profiles?.["crm-a-cloud:default"]?.key;
     return typeof key === "string" && key.trim() ? key.trim() : void 0;
   } catch {
     return void 0;
   }
 }
 function envFallback() {
-  return process.env.DENCH_CLOUD_API_KEY?.trim() || process.env.DENCH_API_KEY?.trim() || void 0;
+  return process.env.CRM_A_CLOUD_API_KEY?.trim() || process.env.CRM_A_API_KEY?.trim() || void 0;
 }
-function resolveDenchGatewayUrl(pluginConfig) {
+function resolveCrmAGatewayUrl(pluginConfig) {
   const configured = pluginConfig?.gatewayUrl;
   if (typeof configured === "string" && configured.trim()) return configured.trim();
-  return process.env.DENCH_GATEWAY_URL?.trim() || DEFAULT_GATEWAY_URL;
+  return process.env.CRM_A_GATEWAY_URL?.trim() || DEFAULT_GATEWAY_URL;
 }
 
 // extensions/exa-search/index.ts
@@ -48,7 +48,7 @@ function readStringList(value) {
 function jsonResult(payload) {
   return {
     content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
-    details: payload
+    details: payload,
   };
 }
 var SEARCH_TYPES = ["auto", "neural", "fast", "deep", "deep-reasoning", "instant"];
@@ -58,7 +58,7 @@ var SEARCH_CATEGORIES = [
   "news",
   "personal site",
   "financial report",
-  "people"
+  "people",
 ];
 var ExaSearchParameters = {
   type: "object",
@@ -71,12 +71,12 @@ var ExaSearchParameters = {
     includeDomains: {
       type: "array",
       items: { type: "string" },
-      description: "Only search these domains."
+      description: "Only search these domains.",
     },
     excludeDomains: {
       type: "array",
       items: { type: "string" },
-      description: "Exclude these domains."
+      description: "Exclude these domains.",
     },
     startPublishedDate: { type: "string", description: "ISO date lower bound for published date." },
     endPublishedDate: { type: "string", description: "ISO date upper bound for published date." },
@@ -85,9 +85,9 @@ var ExaSearchParameters = {
     highlights: { type: "boolean", description: "Include highlights." },
     highlightsMaxCharacters: { type: "number", description: "Maximum characters in highlights." },
     summary: { type: "boolean", description: "Include a summary." },
-    summaryQuery: { type: "string", description: "Summary query prompt to send upstream." }
+    summaryQuery: { type: "string", description: "Summary query prompt to send upstream." },
   },
-  required: ["query"]
+  required: ["query"],
 };
 var ExaContentsParameters = {
   type: "object",
@@ -99,18 +99,18 @@ var ExaContentsParameters = {
     highlights: { type: "boolean", description: "Include highlights." },
     highlightsMaxCharacters: { type: "number", description: "Maximum characters in highlights." },
     summary: { type: "boolean", description: "Include a summary." },
-    summaryQuery: { type: "string", description: "Summary query prompt to send upstream." }
+    summaryQuery: { type: "string", description: "Summary query prompt to send upstream." },
   },
-  required: ["urls"]
+  required: ["urls"],
 };
 var ExaAnswerParameters = {
   type: "object",
   additionalProperties: false,
   properties: {
     query: { type: "string", description: "Question to answer." },
-    text: { type: "boolean", description: "Include extra answer text fields." }
+    text: { type: "boolean", description: "Include extra answer text fields." },
   },
-  required: ["query"]
+  required: ["query"],
 };
 function buildTextOption(params) {
   if (typeof params.textMaxCharacters === "number") {
@@ -142,7 +142,7 @@ function buildSummaryOption(params) {
 }
 function buildSearchBody(params) {
   const body = {
-    query: params.query
+    query: params.query,
   };
   const searchType = readTrimmedString(params.searchType);
   const category = readTrimmedString(params.category);
@@ -192,7 +192,7 @@ function buildSearchBody(params) {
 function buildContentsBody(params) {
   const urls = readStringList(params.urls);
   const body = {
-    urls: urls ?? []
+    urls: urls ?? [],
   };
   const text = buildTextOption(params);
   const highlights = buildHighlightsOption(params);
@@ -220,15 +220,15 @@ async function postJson(params) {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${params.apiKey}`
+      authorization: `Bearer ${params.apiKey}`,
     },
-    body: JSON.stringify(params.body)
+    body: JSON.stringify(params.body),
   });
   if (!response.ok) {
     const detail = await parseResponse(response).catch(() => "");
     return jsonResult({
       error: `Search request failed (HTTP ${response.status}).`,
-      detail: detail || void 0
+      detail: detail || void 0,
     });
   }
   return jsonResult(await parseResponse(response));
@@ -237,7 +237,8 @@ function createExaSearchTool(gatewayUrl, apiKey) {
   return {
     name: "exa_search",
     label: "Exa Search",
-    description: "Search the web through Exa via the Dench Cloud gateway, with optional text extraction, highlights, and summary generation.",
+    description:
+      "Search the web through Exa via the Crm-A Cloud gateway, with optional text extraction, highlights, and summary generation.",
     parameters: ExaSearchParameters,
     execute: async (_toolCallId, params) => {
       try {
@@ -245,22 +246,23 @@ function createExaSearchTool(gatewayUrl, apiKey) {
           gatewayUrl,
           apiKey,
           path: "/v1/search",
-          body: buildSearchBody(params)
+          body: buildSearchBody(params),
         });
       } catch (err) {
         return jsonResult({
           error: "Search request failed.",
-          detail: err instanceof Error ? err.message : String(err)
+          detail: err instanceof Error ? err.message : String(err),
         });
       }
-    }
+    },
   };
 }
 function createExaContentsTool(gatewayUrl, apiKey) {
   return {
     name: "exa_get_contents",
     label: "Exa Get Contents",
-    description: "Fetch page contents for one or more URLs through Exa via the Dench Cloud gateway.",
+    description:
+      "Fetch page contents for one or more URLs through Exa via the Crm-A Cloud gateway.",
     parameters: ExaContentsParameters,
     execute: async (_toolCallId, params) => {
       try {
@@ -272,22 +274,22 @@ function createExaContentsTool(gatewayUrl, apiKey) {
           gatewayUrl,
           apiKey,
           path: "/v1/search/contents",
-          body: buildContentsBody({ ...params, urls })
+          body: buildContentsBody({ ...params, urls }),
         });
       } catch (err) {
         return jsonResult({
           error: "Contents request failed.",
-          detail: err instanceof Error ? err.message : String(err)
+          detail: err instanceof Error ? err.message : String(err),
         });
       }
-    }
+    },
   };
 }
 function createExaAnswerTool(gatewayUrl, apiKey) {
   return {
     name: "exa_answer",
     label: "Exa Answer",
-    description: "Ask Exa for a citation-backed answer through the Dench Cloud gateway.",
+    description: "Ask Exa for a citation-backed answer through the Crm-A Cloud gateway.",
     parameters: ExaAnswerParameters,
     execute: async (_toolCallId, params) => {
       try {
@@ -297,16 +299,16 @@ function createExaAnswerTool(gatewayUrl, apiKey) {
           path: "/v1/search/answer",
           body: {
             query: params.query,
-            ...params.text === true ? { text: true } : {}
-          }
+            ...(params.text === true ? { text: true } : {}),
+          },
         });
       } catch (err) {
         return jsonResult({
           error: "Answer request failed.",
-          detail: err instanceof Error ? err.message : String(err)
+          detail: err instanceof Error ? err.message : String(err),
         });
       }
-    }
+    },
   };
 }
 function register(api) {
@@ -316,18 +318,15 @@ function register(api) {
   if (pluginConfig?.enabled === false) {
     return;
   }
-  const gwPluginConfig = asRecord(asRecord(pluginEntries?.["dench-ai-gateway"])?.config);
-  const gatewayUrl = resolveDenchGatewayUrl(gwPluginConfig);
-  const apiKey = readDenchAuthProfileKey();
+  const gwPluginConfig = asRecord(asRecord(pluginEntries?.["crm-a-ai-gateway"])?.config);
+  const gatewayUrl = resolveCrmAGatewayUrl(gwPluginConfig);
+  const apiKey = readCrmAAuthProfileKey();
   if (!apiKey) {
-    api.logger?.info?.("[exa-search] No Dench Cloud API key found; tools will not be registered.");
+    api.logger?.info?.("[exa-search] No Crm-A Cloud API key found; tools will not be registered.");
     return;
   }
   api.registerTool(createExaSearchTool(gatewayUrl, apiKey));
   api.registerTool(createExaContentsTool(gatewayUrl, apiKey));
   api.registerTool(createExaAnswerTool(gatewayUrl, apiKey));
 }
-export {
-  register as default,
-  id
-};
+export { register as default, id };

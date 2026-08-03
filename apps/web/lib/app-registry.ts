@@ -1,5 +1,5 @@
 /**
- * Global registry for active Dench App instances.
+ * Global registry for active Crm-A App instances.
  * Enables inter-app messaging, tool discovery, and app listing.
  */
 
@@ -21,15 +21,15 @@ type AppMessageHandler = (event: {
 }) => void;
 
 const g = (typeof globalThis !== "undefined" ? globalThis : window) as unknown as {
-  __denchAppRegistry?: Map<string, Set<AppInstance>>;
-  __denchAppMessageHandlers?: Set<AppMessageHandler>;
+  __crmAAppRegistry?: Map<string, Set<AppInstance>>;
+  __crmAAppMessageHandlers?: Set<AppMessageHandler>;
 };
 
-if (!g.__denchAppRegistry) g.__denchAppRegistry = new Map();
-if (!g.__denchAppMessageHandlers) g.__denchAppMessageHandlers = new Set();
+if (!g.__crmAAppRegistry) g.__crmAAppRegistry = new Map();
+if (!g.__crmAAppMessageHandlers) g.__crmAAppMessageHandlers = new Set();
 
-const registry = g.__denchAppRegistry;
-const messageHandlers = g.__denchAppMessageHandlers;
+const registry = g.__crmAAppRegistry;
+const messageHandlers = g.__crmAAppMessageHandlers;
 
 export function registerApp(instance: AppInstance): void {
   let instances = registry.get(instance.appName);
@@ -59,7 +59,7 @@ export function sendToApp(
   for (const inst of instances) {
     inst.iframe.contentWindow?.postMessage(
       {
-        type: "dench:event",
+        type: "crm-a:event",
         channel: "apps.message",
         data: { from: sourceApp, message },
       },

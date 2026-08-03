@@ -47,12 +47,12 @@ jobs:
         id: npm
         run: |
           VERSION="${{ steps.version.outputs.value }}"
-          if npm view "denchclaw@${VERSION}" version >/dev/null 2>&1; then
+          if npm view "crm-a-console@${VERSION}" version >/dev/null 2>&1; then
             echo "published=true" >> "$GITHUB_OUTPUT"
-            echo "denchclaw@${VERSION} is already published"
+            echo "crm-a-console@${VERSION} is already published"
           else
             echo "published=false" >> "$GITHUB_OUTPUT"
-            echo "denchclaw@${VERSION} is not published yet"
+            echo "crm-a-console@${VERSION} is not published yet"
           fi
 
       - name: Check GitHub release status
@@ -82,7 +82,7 @@ jobs:
           POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
         run: pnpm run deploy:check
 
-      - name: Publish denchclaw to npm
+      - name: Publish crm-a-console to npm
         if: steps.npm.outputs.published != 'true'
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

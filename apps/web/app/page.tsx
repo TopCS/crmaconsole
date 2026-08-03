@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { isOnboardingComplete } from "@/lib/denchclaw-state";
+import { isOnboardingComplete } from "@/lib/crm-a-console-state";
 import { WorkspaceShell } from "./workspace/workspace-content";
 
 export const dynamic = "force-dynamic";

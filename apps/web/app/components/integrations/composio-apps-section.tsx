@@ -17,9 +17,9 @@ import {
   normalizeComposioToolkitSlug,
 } from "@/lib/composio-client";
 import {
-  denchIntegrationsBrand,
-  formatDenchIntegrationsStatusError,
-} from "@/lib/dench-integrations-brand";
+  crmAIntegrationsBrand,
+  formatCrmAIntegrationsStatusError,
+} from "@/lib/crm-a-integrations-brand";
 import { readJsonByStatus } from "@/lib/http-response";
 
 const FEATURED_SLUGS = [
@@ -248,12 +248,12 @@ export function ComposioAppsSection({
       const err = await statusRes.json().catch(() => ({}));
       setStatusError(
         (err as { error?: string }).error
-          ?? formatDenchIntegrationsStatusError("load", statusRes.status),
+          ?? formatCrmAIntegrationsStatusError("load", statusRes.status),
       );
     } catch (err) {
       setMcpStatus(null);
       setStatusError(
-        err instanceof Error ? err.message : formatDenchIntegrationsStatusError("load"),
+        err instanceof Error ? err.message : formatCrmAIntegrationsStatusError("load"),
       );
     }
   }, []);
@@ -619,7 +619,7 @@ export function ComposioAppsSection({
         const payload = await response.json().catch(() => ({}));
         setStatusError(
           (payload as { error?: string }).error
-            ?? formatDenchIntegrationsStatusError("update"),
+            ?? formatCrmAIntegrationsStatusError("update"),
         );
         return;
       }
@@ -627,7 +627,7 @@ export function ComposioAppsSection({
       setMcpStatus(payload as ComposioMcpStatus);
     } catch (err) {
       setStatusError(
-        err instanceof Error ? err.message : formatDenchIntegrationsStatusError("update"),
+        err instanceof Error ? err.message : formatCrmAIntegrationsStatusError("update"),
       );
     } finally {
       setRepairingMcp(false);
@@ -678,7 +678,7 @@ export function ComposioAppsSection({
         >
           <div className="text-center">
             <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-              Available with Dench Cloud
+              Available with Crm-A Cloud
             </p>
             {lockBadge && (
               <span
@@ -714,7 +714,7 @@ export function ComposioAppsSection({
         >
           <div className="min-w-0">
             <p className="truncate">
-              {statusError ?? mcpStatus?.summary.message ?? denchIntegrationsBrand.attentionLabel}
+              {statusError ?? mcpStatus?.summary.message ?? crmAIntegrationsBrand.attentionLabel}
             </p>
             {!statusError && mcpStatus?.liveAgent.detail && mcpStatus.summary.level !== "healthy" && (
               <p className="mt-1 text-[11px] opacity-80">

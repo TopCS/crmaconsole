@@ -1,28 +1,28 @@
 {
-  "name": "denchclaw",
+  "name": "crm-a-console",
   "version": "4.0.0",
   "description": "Fully Managed OpenClaw Framework for managing your CRM, Sales Automation and Outreach agents. The only local productivity tool you need.",
   "keywords": [],
-  "homepage": "https://github.com/DenchHQ/DenchClaw#readme",
+  "homepage": "https://github.com/TopCS/crmaconsole#readme",
   "bugs": {
-    "url": "https://github.com/DenchHQ/DenchClaw/issues"
+    "url": "https://github.com/TopCS/crmaconsole/issues"
   },
   "license": "MIT",
   "author": "Kumar Abhirup <kumar@dench.com>, Dench.com <support@dench.com>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DenchHQ/DenchClaw.git"
+    "url": "git+https://github.com/TopCS/crmaconsole.git"
   },
   "bin": {
-    "dench": "denchclaw.mjs",
-    "denchclaw": "denchclaw.mjs"
+    "crm-a": "crm-a-console.mjs",
+    "crm-a-console": "crm-a-console.mjs"
   },
   "files": [
     "apps/web/.next/standalone/",
     "apps/web/.next/static/",
     "apps/web/public/",
     "LICENSE",
-    "denchclaw.mjs",
+    "crm-a-console.mjs",
     "README.md",
     "assets/",
     "dist/",
@@ -33,29 +33,29 @@
   "main": "dist/entry.js",
   "exports": {
     ".": "./dist/entry.js",
-    "./cli-entry": "./denchclaw.mjs"
+    "./cli-entry": "./crm-a-console.mjs"
   },
   "scripts": {
     "build": "tsdown",
-    "build:dench-plugins": "node scripts/build-dench-plugins.mjs",
+    "build:crm-a-plugins": "node scripts/build-crm-a-plugins.mjs",
     "build:plugin-env": "node scripts/build-plugin-env.mjs",
     "build:seed-duckdb": "node scripts/build-seed-duckdb.mjs",
     "check": "pnpm format:check && pnpm lint",
-    "denchclaw": "node denchclaw.mjs",
+    "crm-a-console": "node crm-a-console.mjs",
     "deploy": "bash scripts/with-root-env.sh bash scripts/deploy.sh",
     "deploy:check": "bash scripts/with-root-env.sh bash scripts/deploy.sh --skip-publish",
     "deploy:major": "bash scripts/with-root-env.sh bash scripts/deploy.sh --bump major",
     "deploy:minor": "bash scripts/with-root-env.sh bash scripts/deploy.sh --bump minor",
     "deploy:patch": "bash scripts/with-root-env.sh bash scripts/deploy.sh --bump patch",
-    "dev": "node denchclaw.mjs",
+    "dev": "node crm-a-console.mjs",
     "format": "oxfmt --write",
     "format:check": "oxfmt --check",
     "github:sync-secrets": "bash scripts/with-root-env.sh bash scripts/sync-github-secrets.sh",
     "lint": "oxlint --type-aware",
-    "prepack": "pnpm build:seed-duckdb && pnpm build:plugin-env && pnpm build:dench-plugins && pnpm build && pnpm web:build && pnpm web:prepack",
-    "start": "node denchclaw.mjs",
+    "prepack": "pnpm build:seed-duckdb && pnpm build:plugin-env && pnpm build:crm-a-plugins && pnpm build && pnpm web:build && pnpm web:prepack",
+    "start": "node crm-a-console.mjs",
     "test": "pnpm test:cli && pnpm --dir apps/web test",
-    "test:cli": "vitest run --config vitest.unit.config.ts src/cli/run-main.test.ts src/cli/bootstrap-external.test.ts src/cli/bootstrap-external.bootstrap-command.test.ts src/cli/dench-cloud.test.ts src/cli/workspace-seed.test.ts src/cli/web-runtime.test.ts src/cli/web-runtime-command.test.ts src/cli/flatten-standalone-deps.test.ts src/cli/sync-poll.test.ts && vitest run --config extensions/vitest.config.ts extensions/dench-identity/index.test.ts extensions/dench-identity/composio-cheat-sheet.test.ts extensions/dench-ai-gateway/index.test.ts",
+    "test:cli": "vitest run --config vitest.unit.config.ts src/cli/run-main.test.ts src/cli/bootstrap-external.test.ts src/cli/bootstrap-external.bootstrap-command.test.ts src/cli/crm-a-cloud.test.ts src/cli/workspace-seed.test.ts src/cli/web-runtime.test.ts src/cli/web-runtime-command.test.ts src/cli/flatten-standalone-deps.test.ts src/cli/sync-poll.test.ts && vitest run --config extensions/vitest.config.ts extensions/crm-a-identity/index.test.ts extensions/crm-a-identity/composio-cheat-sheet.test.ts extensions/crm-a-ai-gateway/index.test.ts",
     "test:web": "pnpm --dir apps/web test",
     "web:build": "pnpm --dir apps/web build",
     "web:dev": "pnpm --dir apps/web dev",

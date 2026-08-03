@@ -17,7 +17,7 @@ const {
 
 describe("mcp OAuth secrets", () => {
   beforeEach(() => {
-    stateDir = path.join(os.tmpdir(), `dench-mcp-secrets-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    stateDir = path.join(os.tmpdir(), `crm-a-mcp-secrets-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(stateDir, { recursive: true });
   });
 

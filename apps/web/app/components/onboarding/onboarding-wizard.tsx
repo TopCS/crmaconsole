@@ -5,7 +5,7 @@ import { useTheme } from "next-themes";
 import {
   type OnboardingState,
   type OnboardingStep,
-} from "@/lib/denchclaw-state";
+} from "@/lib/crm-a-console-state";
 import { IdentityStep } from "./identity-step";
 import { SetupStep } from "./setup-step";
 import { SkillTemplateStep } from "./skill-template-step";
@@ -34,7 +34,7 @@ const CLIENT_STEPS: Array<{ id: ClientStep; label: string }> = [
 /**
  * Maps the server's fine-grained onboarding state (6 steps) onto the client's
  * compressed step view. `welcome` and `identity` collapse to Step 1. The
- * three connection steps + dench-cloud fold into a single "Setup" screen.
+ * three connection steps + crm-a-cloud fold into a single "Setup" screen.
  * `backfill` is Sync. `skill-template` is the final choice before the full-screen landing.
  */
 function clientStepFor(server: OnboardingStep): ClientStep | "complete" {
@@ -42,7 +42,7 @@ function clientStepFor(server: OnboardingStep): ClientStep | "complete" {
     case "welcome":
     case "identity":
       return "identity";
-    case "dench-cloud":
+    case "crm-a-cloud":
     case "connect-gmail":
     case "connect-calendar":
       return "setup";
@@ -258,8 +258,8 @@ export function OnboardingWizard({
         <header className="flex h-16 items-center justify-between px-6 sm:px-10">
           <div className="flex items-center gap-2.5">
             <img
-              src="/dench-workspace-icon.png"
-              alt="DenchClaw"
+              src="/crm-a-workspace-icon.png"
+              alt="Crm-A Console"
               width={36}
               height={36}
               className="h-9 w-9 rounded-xl"
@@ -269,7 +269,7 @@ export function OnboardingWizard({
               className="font-instrument text-3xl tracking-tight leading-none"
               style={{ color: "var(--color-text)" }}
             >
-              DenchClaw
+              Crm-A Console
             </span>
           </div>
           <ThemeToggle />
@@ -305,8 +305,8 @@ export function OnboardingWizard({
                 title="Switch workspace"
               >
                 <img
-                  src="/dench-workspace-icon.png"
-                  alt="DenchClaw"
+                  src="/crm-a-workspace-icon.png"
+                  alt="Crm-A Console"
                   width={36}
                   height={36}
                   className="h-9 w-9 rounded-xl"
@@ -316,7 +316,7 @@ export function OnboardingWizard({
                   className="font-instrument text-3xl tracking-tight leading-none"
                   style={{ color: "var(--color-text)" }}
                 >
-                  DenchClaw
+                  Crm-A Console
                 </span>
                 <svg
                   width="16"
@@ -338,8 +338,8 @@ export function OnboardingWizard({
         ) : (
           <div className="flex items-center gap-2.5">
             <img
-              src="/dench-workspace-icon.png"
-              alt="DenchClaw"
+              src="/crm-a-workspace-icon.png"
+              alt="Crm-A Console"
               width={36}
               height={36}
               className="h-9 w-9 rounded-xl"
@@ -349,7 +349,7 @@ export function OnboardingWizard({
               className="font-instrument text-3xl tracking-tight leading-none"
               style={{ color: "var(--color-text)" }}
             >
-              DenchClaw
+              Crm-A Console
             </span>
           </div>
         )}

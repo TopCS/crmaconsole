@@ -15,7 +15,7 @@ const {
 
 vi.mock("@/lib/composio", () => ({
   fetchComposioMcpToolsList: fetchComposioMcpToolsListMock,
-  resolveComposioApiKey: vi.fn(() => "dench_test_key"),
+  resolveComposioApiKey: vi.fn(() => "crm_a_test_key"),
   resolveComposioEligibility: vi.fn(() => ({
     eligible: true,
     lockReason: null,
@@ -38,7 +38,7 @@ vi.mock("@/lib/agent-runner", () => ({
   spawnAgentStartForSession: vi.fn(),
 }));
 
-vi.mock("../../../src/cli/dench-cloud", () => ({
+vi.mock("../../../src/cli/crm-a-cloud", () => ({
   buildComposioMcpServerConfig: vi.fn((gatewayUrl: string, apiKey: string) => ({
     url: `${gatewayUrl}/v1/composio/mcp`,
     transport: "streamable-http",
@@ -53,14 +53,14 @@ describe("Composio MCP health", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    stateDir = mkdtempSync(join(tmpdir(), "dench-composio-health-"));
+    stateDir = mkdtempSync(join(tmpdir(), "crm-a-composio-health-"));
     resolveOpenClawStateDirMock.mockReturnValue(stateDir);
     fetchComposioMcpToolsListMock.mockResolvedValue([{ name: "GMAIL_FETCH_EMAILS" }]);
     refreshIntegrationsRuntimeMock.mockResolvedValue({
       attempted: true,
       restarted: true,
       error: null,
-      profile: "dench",
+      profile: "crm-a",
     });
   });
 
@@ -87,7 +87,7 @@ describe("Composio MCP health", () => {
     expect(config.mcp?.servers?.composio).toEqual({
       url: "https://gateway.example.com/v1/composio/mcp",
       transport: "streamable-http",
-      headers: { Authorization: "Bearer dench_test_key" },
+      headers: { Authorization: "Bearer crm_a_test_key" },
     });
     expect(health.config.status).toBe("pass");
     expect(health.summary.level).toBe("healthy");

@@ -1,22 +1,22 @@
 /**
- * DenchClaw App Bridge SDK.
+ * Crm-A Console App Bridge SDK.
  *
  * This module generates the client-side SDK script that gets injected into
- * app iframes, providing `window.dench` for app-to-DenchClaw communication.
+ * app iframes, providing `window.crmA` for app-to-Crm-A Console communication.
  *
  * Protocol:
- *   App -> Parent: { type: "dench:request", id, method, params }
- *   Parent -> App: { type: "dench:response", id, result, error }
- *   Parent -> App: { type: "dench:stream", streamId, event, data }
- *   Parent -> App: { type: "dench:stream-end", streamId, result }
- *   Parent -> App: { type: "dench:event", channel, data }
- *   Parent -> App: { type: "dench:tool-invoke", toolName, args, invokeId }
+ *   App -> Parent: { type: "crm-a:request", id, method, params }
+ *   Parent -> App: { type: "crm-a:response", id, result, error }
+ *   Parent -> App: { type: "crm-a:stream", streamId, event, data }
+ *   Parent -> App: { type: "crm-a:stream-end", streamId, result }
+ *   Parent -> App: { type: "crm-a:event", channel, data }
+ *   Parent -> App: { type: "crm-a:tool-invoke", toolName, args, invokeId }
  */
 
 export function generateBridgeScript(): string {
   return `
 (function() {
-  if (window.dench) return;
+  if (window.crmA) return;
 
   var _pendingRequests = {};
   var _requestId = 0;
@@ -32,7 +32,7 @@ export function generateBridgeScript(): string {
       var id = ++_requestId;
       _pendingRequests[id] = { resolve: resolve, reject: reject };
       window.parent.postMessage({
-        type: "dench:request",
+        type: "crm-a:request",
         id: id,
         method: method,
         params: params
@@ -63,7 +63,7 @@ export function generateBridgeScript(): string {
         }
       };
       window.parent.postMessage({
-        type: "dench:request",
+        type: "crm-a:request",
         id: id,
         method: method,
         params: Object.assign({}, params, { _streamId: sid })
@@ -83,7 +83,7 @@ export function generateBridgeScript(): string {
     if (!event.data) return;
     var d = event.data;
 
-    if (d.type === "dench:response") {
+    if (d.type === "crm-a:response") {
       var pending = _pendingRequests[d.id];
       if (!pending) return;
       delete _pendingRequests[d.id];
@@ -94,16 +94,16 @@ export function generateBridgeScript(): string {
       }
     }
 
-    else if (d.type === "dench:stream") {
+    else if (d.type === "crm-a:stream") {
       var cb = _streamCallbacks[d.streamId];
       if (cb) cb({ type: d.event, data: d.data, name: d.name, args: d.args, result: d.result });
     }
 
-    else if (d.type === "dench:stream-end") {
+    else if (d.type === "crm-a:stream-end") {
       // Stream end is handled via the normal response path
     }
 
-    else if (d.type === "dench:event") {
+    else if (d.type === "crm-a:event") {
       var channel = d.channel;
       if (channel === "apps.message" && _appMessageHandler) {
         _appMessageHandler(d.data);
@@ -121,20 +121,20 @@ export function generateBridgeScript(): string {
       }
     }
 
-    else if (d.type === "dench:tool-invoke") {
+    else if (d.type === "crm-a:tool-invoke") {
       var handler = _toolHandlers[d.toolName];
       if (handler) {
         Promise.resolve().then(function() {
           return handler(d.args);
         }).then(function(result) {
           window.parent.postMessage({
-            type: "dench:tool-response",
+            type: "crm-a:tool-response",
             invokeId: d.invokeId,
             result: result
           }, "*");
         }).catch(function(err) {
           window.parent.postMessage({
-            type: "dench:tool-response",
+            type: "crm-a:tool-response",
             invokeId: d.invokeId,
             error: err.message || "Tool handler failed"
           }, "*");
@@ -143,7 +143,7 @@ export function generateBridgeScript(): string {
     }
   });
 
-  window.dench = {
+  window.crmA = {
     db: {
       query: function(sql) { return sendRequest("db.query", { sql: sql }); },
       execute: function(sql) { return sendRequest("db.execute", { sql: sql }); }

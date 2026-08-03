@@ -1,8 +1,5 @@
 import type { AnyAgentTool, OpenClawPluginApi } from "openclaw/plugin-sdk";
-import {
-  readDenchAuthProfileKey,
-  resolveDenchGatewayUrl,
-} from "../shared/dench-auth.js";
+import { readCrmAAuthProfileKey, resolveCrmAGatewayUrl } from "../shared/crm-a-auth.js";
 
 export const id = "apollo-enrichment";
 
@@ -12,7 +9,7 @@ const APOLLO_ACTIONS = ["people", "company", "people_search"] as const;
 /**
  * Canonical `requiredFields` lists for each enrichment action.
  *
- * Why these exist: the Dench Cloud gateway's "default backfill" path —
+ * Why these exist: the Crm-A Cloud gateway's "default backfill" path —
  * the one taken when the caller sends no `requiredFields` — was wired to
  * Apollo's now-removed `mode` field. Apollo returns
  * `{ code: "deprecated_field", message: "The mode field has been removed.
@@ -136,7 +133,7 @@ const ApolloEnrichParameters = {
       type: "array",
       items: { type: "string" },
       description:
-        "Optional Dench gateway requiredFields contract. The waterfall stops as soon as every listed field is non-null on the merged record. Omit to use the canonical default for the action (people: name/email/headline/linkedin/URLs/phone/location; company: name/website/industry/linkedin/funding/founded). Never omit just to opt out — the gateway's no-list path is deprecated and Apollo rejects it.",
+        "Optional Crm-A gateway requiredFields contract. The waterfall stops as soon as every listed field is non-null on the merged record. Omit to use the canonical default for the action (people: name/email/headline/linkedin/URLs/phone/location; company: name/website/industry/linkedin/funding/founded). Never omit just to opt out — the gateway's no-list path is deprecated and Apollo rejects it.",
     },
     required_fields: {
       type: "array",
@@ -313,13 +310,13 @@ export default function register(api: OpenClawPluginApi) {
     return;
   }
 
-  const gwPluginConfig = asRecord(asRecord(pluginEntries?.["dench-ai-gateway"])?.config);
-  const gatewayUrl = resolveDenchGatewayUrl(gwPluginConfig as Record<string, unknown> | undefined);
-  const apiKey = readDenchAuthProfileKey();
+  const gwPluginConfig = asRecord(asRecord(pluginEntries?.["crm-a-ai-gateway"])?.config);
+  const gatewayUrl = resolveCrmAGatewayUrl(gwPluginConfig as Record<string, unknown> | undefined);
+  const apiKey = readCrmAAuthProfileKey();
 
   if (!apiKey) {
     api.logger?.info?.(
-      "[apollo-enrichment] No Dench Cloud API key found; tool will not be registered.",
+      "[apollo-enrichment] No Crm-A Cloud API key found; tool will not be registered.",
     );
     return;
   }
@@ -328,7 +325,7 @@ export default function register(api: OpenClawPluginApi) {
     name: "apollo_enrich",
     label: "Apollo Enrichment",
     description:
-      "Look up Apollo people, companies, or people search results through the Dench Cloud gateway. " +
+      "Look up Apollo people, companies, or people search results through the Crm-A Cloud gateway. " +
       'Use action "people" for an individual profile, "company" for company enrichment by domain, ' +
       'or "people_search" to search people with filters such as titles, locations, and company domains. ' +
       "For people and company, the tool always sends gateway requiredFields (defaults when omitted) so Apollo's removed mode field is never used. " +

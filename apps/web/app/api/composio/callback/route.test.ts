@@ -23,11 +23,11 @@ vi.mock("@/lib/integrations", () => ({
 
 vi.mock("@/lib/composio", () => ({
   fetchComposioConnections: vi.fn(),
-  resolveComposioApiKey: vi.fn(() => "dench_test_key"),
+  resolveComposioApiKey: vi.fn(() => "crm_a_test_key"),
   resolveComposioGatewayUrl: vi.fn(() => "https://gateway.example.com"),
 }));
 
-vi.mock("@/lib/denchclaw-state", () => ({
+vi.mock("@/lib/crm-a-console-state", () => ({
   readOnboardingState: readOnboardingStateMock,
   writeConnection: writeConnectionMock,
   writeOnboardingState: writeOnboardingStateMock,
@@ -39,22 +39,22 @@ const { fetchComposioConnections } = await import("@/lib/composio");
 const mockedRefreshIntegrationsRuntime = vi.mocked(refreshIntegrationsRuntime);
 const mockedFetchComposioConnections = vi.mocked(fetchComposioConnections);
 
-const ORIGINAL_PUBLIC_URL = process.env.DENCHCLAW_PUBLIC_URL;
+const ORIGINAL_PUBLIC_URL = process.env.CRM_A_CONSOLE_PUBLIC_URL;
 
 describe("Composio callback API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.DENCHCLAW_PUBLIC_URL;
+    delete process.env.CRM_A_CONSOLE_PUBLIC_URL;
     mockedRefreshIntegrationsRuntime.mockResolvedValue({
       attempted: true,
       restarted: true,
       error: null,
-      profile: "dench",
+      profile: "crm-a",
     });
     readOnboardingStateMock.mockReturnValue({
       version: 1,
       currentStep: "connect-gmail",
-      completedSteps: ["welcome", "identity", "dench-cloud"],
+      completedSteps: ["welcome", "identity", "crm-a-cloud"],
       startedAt: "2026-04-01T00:00:00.000Z",
       updatedAt: "2026-04-01T00:00:00.000Z",
     });
@@ -73,9 +73,9 @@ describe("Composio callback API", () => {
 
   afterEach(() => {
     if (ORIGINAL_PUBLIC_URL === undefined) {
-      delete process.env.DENCHCLAW_PUBLIC_URL;
+      delete process.env.CRM_A_CONSOLE_PUBLIC_URL;
     } else {
-      process.env.DENCHCLAW_PUBLIC_URL = ORIGINAL_PUBLIC_URL;
+      process.env.CRM_A_CONSOLE_PUBLIC_URL = ORIGINAL_PUBLIC_URL;
     }
   });
 
@@ -156,8 +156,8 @@ describe("Composio callback API", () => {
     expect(html).toContain('"http://localhost:3100"');
   });
 
-  it("uses DENCHCLAW_PUBLIC_URL as targetOrigin so postMessage matches the parent tab origin", async () => {
-    process.env.DENCHCLAW_PUBLIC_URL =
+  it("uses CRM_A_CONSOLE_PUBLIC_URL as targetOrigin so postMessage matches the parent tab origin", async () => {
+    process.env.CRM_A_CONSOLE_PUBLIC_URL =
       "https://acme.sandbox.merseoriginals.com";
 
     const response = await GET(
@@ -172,7 +172,7 @@ describe("Composio callback API", () => {
   });
 
   it("prefers X-Forwarded-Host so the postMessage targetOrigin reflects the actual public host", async () => {
-    process.env.DENCHCLAW_PUBLIC_URL = "https://stale.sandbox.merseoriginals.com";
+    process.env.CRM_A_CONSOLE_PUBLIC_URL = "https://stale.sandbox.merseoriginals.com";
 
     const response = await GET(
       new Request(

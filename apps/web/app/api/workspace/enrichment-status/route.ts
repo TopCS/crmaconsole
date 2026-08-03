@@ -10,17 +10,17 @@ export const runtime = "nodejs";
 export async function GET() {
 	const state = getIntegrationsState();
 
-	if (!state.denchCloud.isPrimaryProvider) {
+	if (!state.crmACloud.isPrimaryProvider) {
 		return Response.json({
 			available: false,
-			reason: "Dench Cloud is not the active provider.",
+			reason: "Crm-A Cloud is not the active provider.",
 		});
 	}
 
-	if (!state.denchCloud.hasKey) {
+	if (!state.crmACloud.hasKey) {
 		return Response.json({
 			available: false,
-			reason: "No Dench Cloud API key configured.",
+			reason: "No Crm-A Cloud API key configured.",
 		});
 	}
 

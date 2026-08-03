@@ -1,7 +1,7 @@
 /**
  * Contract for `/api/sync/status`. The endpoint fans together two
  * independent signals — in-memory `getSyncStatus()` from `sync-runner`
- * and on-disk `lastPolledAt` from `denchclaw-state` — into a single
+ * and on-disk `lastPolledAt` from `crm-a-console-state` — into a single
  * payload the workspace banner component polls every 60s.
  *
  * Cases pinned here:
@@ -11,7 +11,7 @@
  *   2. `stale: true` when no successful tick (in-memory or on-disk)
  *      has happened in > 30min — that's the "gateway daemon crashed"
  *      signal the banner uses to nag the operator to run
- *      `denchclaw start`.
+ *      `crm-a-console start`.
  *   3. The on-disk `lastPolledAt` is honoured even when the in-memory
  *      `lastSuccessAt` is null (= post-restart, before the first new
  *      tick). Without this, every Next.js HMR would falsely show a
@@ -27,13 +27,13 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 vi.mock("@/lib/sync-runner", () => ({
   getSyncStatus: vi.fn(),
 }));
-vi.mock("@/lib/denchclaw-state", () => ({
+vi.mock("@/lib/crm-a-console-state", () => ({
   readSyncCursors: vi.fn(),
 }));
 
 const { GET } = await import("./route");
 const { getSyncStatus } = await import("@/lib/sync-runner");
-const { readSyncCursors } = await import("@/lib/denchclaw-state");
+const { readSyncCursors } = await import("@/lib/crm-a-console-state");
 
 const mockedStatus = vi.mocked(getSyncStatus);
 const mockedCursors = vi.mocked(readSyncCursors);

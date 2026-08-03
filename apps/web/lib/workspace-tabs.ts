@@ -1045,7 +1045,7 @@ export function applyUrlToState(
 // Persistence
 // ---------------------------------------------------------------------------
 
-const STORAGE_PREFIX = "dench:workspace-tabs";
+const STORAGE_PREFIX = "crm-a:workspace-tabs";
 
 function storageKey(workspaceId?: string | null): string {
   return `${STORAGE_PREFIX}:${workspaceId || "default"}`;

@@ -17,7 +17,7 @@ const {
 
 describe("composio config resolution", () => {
   beforeEach(() => {
-    stateDir = path.join(os.tmpdir(), `dench-composio-state-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    stateDir = path.join(os.tmpdir(), `crm-a-composio-state-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(stateDir, { recursive: true });
   });
 
@@ -26,20 +26,20 @@ describe("composio config resolution", () => {
     vi.restoreAllMocks();
   });
 
-  it("prefers the Dench Cloud provider baseUrl when resolving the Composio gateway URL", () => {
+  it("prefers the Crm-A Cloud provider baseUrl when resolving the Composio gateway URL", () => {
     writeFileSync(
       path.join(stateDir, "openclaw.json"),
       JSON.stringify({
         models: {
           providers: {
-            "dench-cloud": {
+            "crm-a-cloud": {
               baseUrl: "https://gateway.example.com/v1",
             },
           },
         },
         plugins: {
           entries: {
-            "dench-ai-gateway": {
+            "crm-a-ai-gateway": {
               config: {
                 gatewayUrl: "https://stale-plugin.example.com",
               },
@@ -64,7 +64,7 @@ describe("composio config resolution", () => {
 
     await fetchComposioMcpToolsList(
       "https://gateway.example.com",
-      "dench_test_key",
+      "crm_a_test_key",
       {
         connectedToolkits: ["gmail", "slack"],
         preferredToolNames: ["GMAIL_FETCH_EMAILS", "SLACK_SEND_MESSAGE"],

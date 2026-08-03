@@ -15,7 +15,7 @@ import {
 import {
   markEmailBodyHydrationAttempted,
   readEmailBodyHydrationAttempted,
-} from "@/lib/denchclaw-state";
+} from "@/lib/crm-a-console-state";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

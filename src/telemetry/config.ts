@@ -11,14 +11,14 @@ type TelemetryConfig = {
   name?: string;
   email?: string;
   avatar?: string;
-  denchOrgId?: string;
+  crmAOrgId?: string;
 };
 
 export type PersonInfo = {
   name?: string;
   email?: string;
   avatar?: string;
-  denchOrgId?: string;
+  crmAOrgId?: string;
 };
 
 const TELEMETRY_FILENAME = "telemetry.json";
@@ -42,7 +42,7 @@ export function readTelemetryConfig(): TelemetryConfig {
       name: typeof raw.name === "string" && raw.name ? raw.name : undefined,
       email: typeof raw.email === "string" && raw.email ? raw.email : undefined,
       avatar: typeof raw.avatar === "string" && raw.avatar ? raw.avatar : undefined,
-      denchOrgId: typeof raw.denchOrgId === "string" && raw.denchOrgId ? raw.denchOrgId : undefined,
+      crmAOrgId: typeof raw.crmAOrgId === "string" && raw.crmAOrgId ? raw.crmAOrgId : undefined,
     };
   } catch {
     return { enabled: true };
@@ -76,14 +76,14 @@ export function isPrivacyModeEnabled(): boolean {
  */
 export function readPersonInfo(): PersonInfo | null {
   const config = readTelemetryConfig();
-  if (!config.name && !config.email && !config.avatar && !config.denchOrgId) {
+  if (!config.name && !config.email && !config.avatar && !config.crmAOrgId) {
     return null;
   }
   const info: PersonInfo = {};
   if (config.name) info.name = config.name;
   if (config.email) info.email = config.email;
   if (config.avatar) info.avatar = config.avatar;
-  if (config.denchOrgId) info.denchOrgId = config.denchOrgId;
+  if (config.crmAOrgId) info.crmAOrgId = config.crmAOrgId;
   return info;
 }
 

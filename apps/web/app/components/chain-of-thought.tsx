@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DiffCard } from "./diff-viewer";
-import { denchIntegrationsBrand } from "@/lib/dench-integrations-brand";
+import { crmAIntegrationsBrand } from "@/lib/crm-a-integrations-brand";
 
 /* ─── Diff synthesis from edit tool args ─── */
 
@@ -404,7 +404,7 @@ function classifyTool(
 	args?: Record<string, unknown>,
 	output?: Record<string, unknown>,
 ): StepKind {
-	if (name === "dench_search_integrations" || name === "dench_execute_integrations" || name === "composio_search_tools" || name === "composio_call_tool") {
+	if (name === "crm_a_search_integrations" || name === "crm_a_execute_integrations" || name === "composio_search_tools" || name === "composio_call_tool") {
 		return "composio";
 	}
 	const n = name.toLowerCase().replace(/[_-]/g, "");
@@ -508,11 +508,11 @@ function buildStepLabel(
 
 	switch (kind) {
 		case "composio":
-			return toolName === "dench_search_integrations" || toolName === "composio_search_tools"
-				? denchIntegrationsBrand.searchLabel
-				: toolName === "dench_execute_integrations" || toolName === "composio_call_tool"
-					? denchIntegrationsBrand.callLabel
-					: denchIntegrationsBrand.genericToolLabel;
+			return toolName === "crm_a_search_integrations" || toolName === "composio_search_tools"
+				? crmAIntegrationsBrand.searchLabel
+				: toolName === "crm_a_execute_integrations" || toolName === "composio_call_tool"
+					? crmAIntegrationsBrand.callLabel
+					: crmAIntegrationsBrand.genericToolLabel;
 		case "search": {
 			const q =
 				strVal("query") ??
@@ -1387,8 +1387,8 @@ function ToolStep({
 	errorText?: string;
 }) {
 	const kind = classifyTool(toolName, args, output);
-	const isComposioSearch = toolName === "dench_search_integrations" || toolName === "composio_search_tools";
-	const isComposioCall = toolName === "dench_execute_integrations" || toolName === "composio_call_tool";
+	const isComposioSearch = toolName === "crm_a_search_integrations" || toolName === "composio_search_tools";
+	const isComposioCall = toolName === "crm_a_execute_integrations" || toolName === "composio_call_tool";
 	const isComposioTool = isComposioSearch || isComposioCall;
 	// Show output by default for exec/command tools — these are the most
 	// useful to see inline.  Other tools default to collapsed.
@@ -1856,7 +1856,7 @@ function StepIcon({ kind }: { kind: StepKind }) {
 		case "composio":
 			return (
 				/* eslint-disable-next-line @next/next/no-img-element */
-				<img src="/dench-integrations-icon.png" alt="" width={size} height={size} className="rounded-sm" />
+				<img src="/crm-a-integrations-icon.png" alt="" width={size} height={size} className="rounded-sm" />
 			);
 		case "search":
 			return (

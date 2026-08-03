@@ -8,7 +8,7 @@ import { isTruthyEnvValue, normalizeEnv } from "./infra/env.js";
 import { installProcessWarningFilter } from "./infra/warning-filter.js";
 import { attachChildProcessBridge } from "./process/child-process-bridge.js";
 
-process.title = "denchclaw";
+process.title = "crm-a-console";
 installProcessWarningFilter();
 normalizeEnv();
 
@@ -37,13 +37,13 @@ function ensureExperimentalWarningSuppressed(): boolean {
     return false;
   }
   if (
-    isTruthyEnvValue(process.env.DENCHCLAW_NO_RESPAWN) ||
+    isTruthyEnvValue(process.env.CRM_A_CONSOLE_NO_RESPAWN) ||
     isTruthyEnvValue(process.env.OPENCLAW_NO_RESPAWN)
   ) {
     return false;
   }
   if (
-    isTruthyEnvValue(process.env.DENCHCLAW_NODE_OPTIONS_READY) ||
+    isTruthyEnvValue(process.env.CRM_A_CONSOLE_NODE_OPTIONS_READY) ||
     isTruthyEnvValue(process.env.OPENCLAW_NODE_OPTIONS_READY)
   ) {
     return false;
@@ -53,7 +53,7 @@ function ensureExperimentalWarningSuppressed(): boolean {
   }
 
   // Respawn guard (and keep recursion bounded if something goes wrong).
-  process.env.DENCHCLAW_NODE_OPTIONS_READY = "1";
+  process.env.CRM_A_CONSOLE_NODE_OPTIONS_READY = "1";
   process.env.OPENCLAW_NODE_OPTIONS_READY = "1";
   // Pass flag as a Node CLI option, not via NODE_OPTIONS (--disable-warning is disallowed in NODE_OPTIONS).
   const child = spawn(
@@ -77,7 +77,7 @@ function ensureExperimentalWarningSuppressed(): boolean {
 
   child.once("error", (error) => {
     console.error(
-      "[denchclaw] Failed to respawn CLI:",
+      "[crm-a-console] Failed to respawn CLI:",
       error instanceof Error ? (error.stack ?? error.message) : error,
     );
     process.exit(1);
@@ -93,13 +93,13 @@ if (!ensureExperimentalWarningSuppressed()) {
   const parsed = parseCliProfileArgs(process.argv);
   if (!parsed.ok) {
     // Keep it simple; Commander will handle rich help/errors after we strip flags.
-    console.error(`[denchclaw] ${parsed.error}`);
+    console.error(`[crm-a-console] ${parsed.error}`);
     process.exit(2);
   }
 
   const appliedProfile = applyCliProfileEnv({ profile: parsed.profile ?? undefined });
   if (appliedProfile.warning) {
-    console.warn(`[denchclaw] ${appliedProfile.warning}`);
+    console.warn(`[crm-a-console] ${appliedProfile.warning}`);
   }
   // Keep Commander and ad-hoc argv checks consistent.
   process.argv = parsed.argv;
@@ -111,7 +111,7 @@ if (!ensureExperimentalWarningSuppressed()) {
     )
     .catch((error) => {
       console.error(
-        "[denchclaw] Failed to start CLI:",
+        "[crm-a-console] Failed to start CLI:",
         error instanceof Error ? (error.stack ?? error.message) : error,
       );
       process.exitCode = 1;

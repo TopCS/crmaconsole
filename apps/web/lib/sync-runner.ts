@@ -1,10 +1,10 @@
 /**
  * Sync orchestrator — drives Gmail + Calendar backfill once. The
  * incremental poll loop is no longer in-process: it's driven by the
- * `dench-ai-gateway` plugin running inside the OpenClaw gateway daemon,
+ * `crm-a-ai-gateway` plugin running inside the OpenClaw gateway daemon,
  * which POSTs to `/api/sync/poll-tick` every ~5 minutes and we run
  * `tickPoller()` here. The plugin survives Next.js restarts, so the
- * cron stays alive across `denchclaw update`.
+ * cron stays alive across `crm-a-console update`.
  *
  * The whole module is process-singleton: exactly one backfill or poll
  * runs at a time per Next.js process, no matter how many SSE clients
@@ -31,7 +31,7 @@ import {
   readConnections,
   readSyncCursors,
   writeSyncCursors,
-} from "./denchclaw-state";
+} from "./crm-a-console-state";
 import { runGmailBackfill, runGmailIncremental, type GmailSyncProgress } from "./gmail-sync";
 import {
   runCalendarBackfill,
@@ -518,7 +518,7 @@ async function runBackfillInner(options: StartBackfillOptions): Promise<void> {
     });
 
     // No need to arm an in-process poller: the OpenClaw gateway's
-    // `dench-ai-gateway` plugin already posts to `/api/sync/poll-tick`
+    // `crm-a-ai-gateway` plugin already posts to `/api/sync/poll-tick`
     // on its own schedule. First gateway tick will catch up anything
     // that landed between the backfill commit and now.
   } finally {
@@ -532,7 +532,7 @@ async function runBackfillInner(options: StartBackfillOptions): Promise<void> {
 
 /**
  * @deprecated The incremental poll loop is now driven by the
- * `dench-ai-gateway` OpenClaw plugin (which posts to `/api/sync/poll-tick`
+ * `crm-a-ai-gateway` OpenClaw plugin (which posts to `/api/sync/poll-tick`
  * from inside the long-lived gateway daemon). This function is retained as
  * a no-op shim so older callers don't break; new callers should use
  * `tickPoller()` directly if they need a one-shot run, or rely on the
@@ -555,7 +555,7 @@ export function stopIncrementalPoller(): void {
  * concurrently — the module mutex makes overlapping invocations no-ops.
  *
  * Called from `apps/web/app/api/sync/poll-tick/route.ts`, which is
- * triggered by the gateway-side `dench-ai-gateway` plugin every ~5 min.
+ * triggered by the gateway-side `crm-a-ai-gateway` plugin every ~5 min.
  */
 export async function tickPoller(): Promise<void> {
   if (mutex.isLocked()) {return;}

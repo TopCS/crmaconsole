@@ -761,7 +761,7 @@ describe("active-runs", () => {
 				{ replay: false },
 			);
 
-			const err = new Error("missing scope: operator.write. The OpenClaw Gateway rejected this request because the web app's credentials lack the required scope. Fix: run `npx denchclaw bootstrap` to re-pair, or set OPENCLAW_GATEWAY_PASSWORD in the web app's environment.");
+			const err = new Error("missing scope: operator.write. The OpenClaw Gateway rejected this request because the web app's credentials lack the required scope. Fix: run `npx crm-a-console bootstrap` to re-pair, or set OPENCLAW_GATEWAY_PASSWORD in the web app's environment.");
 			child._emit("error", err);
 
 			expect(

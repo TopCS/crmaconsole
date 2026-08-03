@@ -332,7 +332,7 @@ describe("installManagedWebRuntime after flatten", () => {
     const result = installManagedWebRuntime({
       stateDir,
       packageRoot,
-      denchVersion: "2.0.0-test",
+      crmAVersion: "2.0.0-test",
     });
 
     expect(result.installed).toBe(true);
@@ -364,7 +364,7 @@ describe("installManagedWebRuntime after flatten", () => {
     const result = installManagedWebRuntime({
       stateDir,
       packageRoot,
-      denchVersion: "2.0.0-test",
+      crmAVersion: "2.0.0-test",
     });
 
     expect(result.installed).toBe(true);
@@ -420,7 +420,7 @@ describe("installManagedWebRuntime auto-flattens pnpm deps", () => {
     const result = installManagedWebRuntime({
       stateDir,
       packageRoot,
-      denchVersion: "2.0.0-test",
+      crmAVersion: "2.0.0-test",
     });
 
     expect(result.installed).toBe(true);
@@ -454,7 +454,7 @@ describe("installManagedWebRuntime auto-flattens pnpm deps", () => {
     const result = installManagedWebRuntime({
       stateDir,
       packageRoot,
-      denchVersion: "2.0.0-test",
+      crmAVersion: "2.0.0-test",
     });
 
     expect(result.installed).toBe(true);
@@ -487,7 +487,7 @@ describe("installManagedWebRuntime auto-flattens pnpm deps", () => {
     const result = installManagedWebRuntime({
       stateDir,
       packageRoot,
-      denchVersion: "2.0.0-test",
+      crmAVersion: "2.0.0-test",
     });
 
     expect(result.installed).toBe(true);
@@ -512,7 +512,7 @@ describe("installManagedWebRuntime auto-flattens pnpm deps", () => {
     const result = installManagedWebRuntime({
       stateDir,
       packageRoot,
-      denchVersion: "2.0.0-test",
+      crmAVersion: "2.0.0-test",
     });
 
     expect(result.installed).toBe(true);
@@ -536,7 +536,7 @@ describe("installManagedWebRuntime auto-flattens pnpm deps", () => {
     installManagedWebRuntime({
       stateDir,
       packageRoot,
-      denchVersion: "2.0.0-test",
+      crmAVersion: "2.0.0-test",
     });
 
     expect(existsSync(rootNm)).toBe(false);
@@ -562,7 +562,7 @@ describe("installManagedWebRuntime auto-flattens pnpm deps", () => {
     const result = installManagedWebRuntime({
       stateDir,
       packageRoot,
-      denchVersion: "2.0.0-test",
+      crmAVersion: "2.0.0-test",
     });
 
     expect(result.installed).toBe(true);
@@ -632,7 +632,7 @@ describe("dereferenceRuntimeNodeModules (dangling symlink resolution)", () => {
     const result = installManagedWebRuntime({
       stateDir,
       packageRoot,
-      denchVersion: "2.0.0-test",
+      crmAVersion: "2.0.0-test",
     });
 
     expect(result.installed).toBe(true);
@@ -669,7 +669,7 @@ describe("dereferenceRuntimeNodeModules (dangling symlink resolution)", () => {
     const result = installManagedWebRuntime({
       stateDir,
       packageRoot,
-      denchVersion: "2.0.0-test",
+      crmAVersion: "2.0.0-test",
     });
 
     expect(result.installed).toBe(true);
@@ -697,7 +697,7 @@ describe("dereferenceRuntimeNodeModules (dangling symlink resolution)", () => {
     const result = installManagedWebRuntime({
       stateDir,
       packageRoot,
-      denchVersion: "2.0.0-test",
+      crmAVersion: "2.0.0-test",
     });
 
     expect(result.installed).toBe(true);
@@ -733,7 +733,7 @@ describe("dereferenceRuntimeNodeModules (dangling symlink resolution)", () => {
     const result = installManagedWebRuntime({
       stateDir,
       packageRoot,
-      denchVersion: "2.0.0-test",
+      crmAVersion: "2.0.0-test",
     });
 
     expect(result.installed).toBe(true);

@@ -1,6 +1,6 @@
 ---
 name: Reports Analytics Layer
-overview: "Add a generative-UI reports feature to the Dench web app: the agent creates JSON report definitions with SQL queries and chart configs, rendered live via Recharts in both the workspace view and inline in chat as artifacts."
+overview: "Add a generative-UI reports feature to the Crm-A web app: the agent creates JSON report definitions with SQL queries and chart configs, rendered live via Recharts in both the workspace view and inline in chat as artifacts."
 todos:
   - id: recharts-dep
     content: Add recharts dependency to apps/web/package.json
@@ -33,12 +33,12 @@ todos:
     content: Add Reports section to sidebar.tsx listing .report.json files from workspace tree
     status: completed
   - id: skill-update
-    content: Add Section 13 (Report Generation) to skills/dench/SKILL.md with schema, examples, and agent instructions
+    content: Add Section 13 (Report Generation) to skills/crm-a/SKILL.md with schema, examples, and agent instructions
     status: completed
 isProject: false
 ---
 
-# Reports / Analytics Layer for Dench Workspace
+# Reports / Analytics Layer for Crm-A Workspace
 
 ## Architecture
 
@@ -53,7 +53,7 @@ Reports surface in **three places**:
 ```mermaid
 flowchart LR
   subgraph agent [Agent]
-    skill[Dench Skill]
+    skill[Crm-A Skill]
     skill -->|"write .report.json"| fs[Filesystem]
     skill -->|"emit report block in text"| chat[Chat Stream]
   end
@@ -77,7 +77,7 @@ flowchart LR
 
 ## Report Definition Format
 
-Stored as `.report.json` files in `dench/reports/` (or nested under any knowledge path). Agent generates these via the `write` tool.
+Stored as `.report.json` files in `crm-a/reports/` (or nested under any knowledge path). Agent generates these via the `write` tool.
 
 ```json
 {
@@ -216,9 +216,9 @@ The data shows most deals are in the Discovery stage.
 
 ---
 
-## Phase 5: Dench Skill Updates
+## Phase 5: Crm-A Skill Updates
 
-**Modify [skills/dench/SKILL.md](skills/dench/SKILL.md):**
+**Modify [skills/crm-a/SKILL.md](skills/crm-a/SKILL.md):**
 
 - Add Section 13: Report Generation
 - Document the `.report.json` format with full schema reference
@@ -254,5 +254,5 @@ The data shows most deals are in the Discovery stage.
 | Modify | `apps/web/app/components/sidebar.tsx` (Reports section)              |
 | Modify | `apps/web/app/components/workspace/knowledge-tree.tsx` (report node) |
 | Modify | `apps/web/app/api/workspace/tree/route.ts` (detect .report.json)     |
-| Modify | `skills/dench/SKILL.md` (report generation instructions)             |
+| Modify | `skills/crm-a/SKILL.md` (report generation instructions)             |
 `````

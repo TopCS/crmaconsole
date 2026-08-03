@@ -131,9 +131,9 @@ beforeEach(async () => {
     );
   }
 
-  tempHome = mkdtempSync(join(tmpdir(), "denchclaw-people-merge-"));
+  tempHome = mkdtempSync(join(tmpdir(), "crm-a-console-people-merge-"));
   process.env.OPENCLAW_HOME = tempHome;
-  workspaceDir = join(tempHome, ".openclaw-dench", "workspace-test");
+  workspaceDir = join(tempHome, ".openclaw-crm-a", "workspace-test");
   mkdirSync(workspaceDir, { recursive: true });
   process.env.OPENCLAW_WORKSPACE = workspaceDir;
   dbPath = join(workspaceDir, "workspace.duckdb");

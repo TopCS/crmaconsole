@@ -4,8 +4,8 @@ import {
   saveApiKey,
   saveVoiceId,
   selectModel,
-} from "@/lib/dench-cloud-settings";
-import type { DenchIntegrationId, DenchIntegrationToggleDraft } from "@/lib/integrations";
+} from "@/lib/crm-a-cloud-settings";
+import type { CrmAIntegrationId, CrmAIntegrationToggleDraft } from "@/lib/integrations";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,10 +27,10 @@ type PostBody = {
   apiKey?: string;
   stableId?: string;
   voiceId?: string | null;
-  integrations?: DenchIntegrationToggleDraft;
+  integrations?: CrmAIntegrationToggleDraft;
 };
 
-function isSupportedIntegration(id: string): id is DenchIntegrationId {
+function isSupportedIntegration(id: string): id is CrmAIntegrationId {
   return id === "exa" || id === "apollo" || id === "elevenlabs";
 }
 
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
         return Response.json({ error: "Field 'integrations' must be an object." }, { status: 400 });
       }
 
-      const integrations: DenchIntegrationToggleDraft = {};
+      const integrations: CrmAIntegrationToggleDraft = {};
       for (const [id, enabled] of Object.entries(body.integrations ?? {})) {
         if (!isSupportedIntegration(id)) {
           return Response.json({ error: `Unknown integration '${id}'.` }, { status: 400 });

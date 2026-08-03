@@ -1,6 +1,6 @@
 import {
-  buildDenchGatewayApiBaseUrl,
-} from "../../../src/cli/dench-cloud";
+  buildCrmAGatewayApiBaseUrl,
+} from "../../../src/cli/crm-a-cloud";
 import { readJsonByStatus } from "@/lib/http-response";
 
 const DEFAULT_TTS_MODEL_ID = "eleven_multilingual_v2";
@@ -94,7 +94,7 @@ export async function fetchElevenLabsVoices(params: {
   gatewayUrl: string;
   apiKey: string;
 }): Promise<ElevenLabsVoice[]> {
-  const apiBaseUrl = buildDenchGatewayApiBaseUrl(params.gatewayUrl);
+  const apiBaseUrl = buildCrmAGatewayApiBaseUrl(params.gatewayUrl);
   const response = await fetch(
     `${apiBaseUrl}/audio/voices?page_size=100&include_total_count=false`,
     {
@@ -137,7 +137,7 @@ export async function synthesizeElevenLabsSpeech(params: {
   text: string;
   voiceId: string;
 }): Promise<{ audio: ArrayBuffer; contentType: string }> {
-  const apiBaseUrl = buildDenchGatewayApiBaseUrl(params.gatewayUrl);
+  const apiBaseUrl = buildCrmAGatewayApiBaseUrl(params.gatewayUrl);
   const response = await fetch(
     `${apiBaseUrl}/text-to-speech/${encodeURIComponent(params.voiceId)}?output_format=${DEFAULT_OUTPUT_FORMAT}`,
     {
@@ -188,7 +188,7 @@ export async function transcribeElevenLabsAudio(params: {
   apiKey: string;
   file: File;
 }): Promise<{ text: string }> {
-  const apiBaseUrl = buildDenchGatewayApiBaseUrl(params.gatewayUrl);
+  const apiBaseUrl = buildCrmAGatewayApiBaseUrl(params.gatewayUrl);
   const body = new FormData();
   body.set("model_id", DEFAULT_STT_MODEL_ID);
   body.set("file", params.file);

@@ -1,6 +1,6 @@
 # If you are AI ignore this
 
-Backend Denchclaw
+Backend CrmAConsole
 [ ] Make the MCP work
 [ ] Skills.md for MCP
 [ ] Skills.md for Integrations (Apollo, Exa)
@@ -8,7 +8,7 @@ Backend Denchclaw
 
 [ ] Vercel Skills.sh API configuration
 
-Frontend Denchclaw
+Frontend CrmAConsole
 [ ] Sidebar Properties
 [ ] Better Integrations
 [ ] Better Models

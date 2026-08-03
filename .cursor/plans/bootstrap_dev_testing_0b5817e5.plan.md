@@ -1,18 +1,18 @@
 ---
 name: Bootstrap dev testing
-overview: Remove local OpenClaw paths from the web app, always use global `openclaw` binary, rename dev scripts to `denchclaw`, and verify bootstrap works standalone.
+overview: Remove local OpenClaw paths from the web app, always use global `openclaw` binary, rename dev scripts to `crm-a-console`, and verify bootstrap works standalone.
 todos:
   - id: remove-local-openclaw-agent-runner
-    content: Remove resolvePackageRoot, resolveOpenClawLaunch, DENCHCLAW_USE_LOCAL_OPENCLAW from agent-runner.ts; spawn global `openclaw` directly
+    content: Remove resolvePackageRoot, resolveOpenClawLaunch, CRM_A_CONSOLE_USE_LOCAL_OPENCLAW from agent-runner.ts; spawn global `openclaw` directly
     status: completed
   - id: remove-local-openclaw-subagent-runs
     content: Remove local script paths from subagent-runs.ts (sendGatewayAbortForSubagent, spawnSubagentMessage); use global `openclaw` instead
     status: completed
   - id: rename-pnpm-scripts
-    content: Rename `pnpm openclaw` to `pnpm denchclaw` and `openclaw:rpc` to `denchclaw:rpc` in package.json
+    content: Rename `pnpm openclaw` to `pnpm crm-a-console` and `openclaw:rpc` to `crm-a-console:rpc` in package.json
     status: completed
   - id: update-agent-runner-tests
-    content: "Update agent-runner.test.ts: remove resolvePackageRoot tests, DENCHCLAW_USE_LOCAL_OPENCLAW, update spawn assertions"
+    content: "Update agent-runner.test.ts: remove resolvePackageRoot tests, CRM_A_CONSOLE_USE_LOCAL_OPENCLAW, update spawn assertions"
     status: completed
   - id: verify-builds-pass
     content: Verify pnpm build, pnpm web:build, and workspace tests pass after changes
@@ -20,16 +20,16 @@ todos:
 isProject: false
 ---
 
-# DenchClaw Bootstrap: Clean Separation and Dev Testing
+# Crm-A Console Bootstrap: Clean Separation and Dev Testing
 
 ## Architecture
 
-DenchClaw is a frontend/UI/skills layer. OpenClaw is a separate, globally-installed runtime. DenchClaw should NEVER bundle or run a local copy of OpenClaw.
+Crm-A Console is a frontend/UI/skills layer. OpenClaw is a separate, globally-installed runtime. Crm-A Console should NEVER bundle or run a local copy of OpenClaw.
 
 ```mermaid
 flowchart TD
-    npx["npx denchclaw (or denchclaw)"] --> entry["openclaw.mjs → dist/entry.js"]
-    entry --> runMain["run-main.ts: bare denchclaw → bootstrap"]
+    npx["npx crm-a-console (or crm-a-console)"] --> entry["openclaw.mjs → dist/entry.js"]
+    entry --> runMain["run-main.ts: bare crm-a-console → bootstrap"]
     runMain --> delegate{"primary == bootstrap?"}
     delegate -->|yes, keep local| bootstrap["bootstrapCommand()"]
     delegate -->|no, delegate| globalOC["spawn openclaw ...args"]
@@ -45,7 +45,7 @@ flowchart TD
 
 The bootstrap flow is correctly wired:
 
-- Bare `denchclaw` rewrites to `denchclaw bootstrap`
+- Bare `crm-a-console` rewrites to `crm-a-console bootstrap`
 - `bootstrap` is never delegated to global `openclaw`
 - `bootstrapCommand` calls `ensureOpenClawCliAvailable` which prompts to install
 - Onboarding sets `gateway.webApp.enabled: true`
@@ -54,22 +54,22 @@ The bootstrap flow is correctly wired:
 
 ## Problem 1: Local OpenClaw paths in web app (must remove)
 
-`[apps/web/lib/agent-runner.ts](apps/web/lib/agent-runner.ts)` has `resolveOpenClawLaunch` which, when `DENCHCLAW_USE_LOCAL_OPENCLAW=1`, resolves a local `scripts/run-node.mjs` or `openclaw.mjs` and spawns it with `node`. This contradicts the architecture: DenchClaw should always spawn the global `openclaw` binary.
+`[apps/web/lib/agent-runner.ts](apps/web/lib/agent-runner.ts)` has `resolveOpenClawLaunch` which, when `CRM_A_CONSOLE_USE_LOCAL_OPENCLAW=1`, resolves a local `scripts/run-node.mjs` or `openclaw.mjs` and spawns it with `node`. This contradicts the architecture: Crm-A Console should always spawn the global `openclaw` binary.
 
 The same pattern exists in `[apps/web/lib/subagent-runs.ts](apps/web/lib/subagent-runs.ts)` where `sendGatewayAbortForSubagent` and `spawnSubagentMessage` hardcode `node <local-script>` paths.
 
 **Fix:**
 
-- Remove `DENCHCLAW_USE_LOCAL_OPENCLAW`, `resolveOpenClawLaunch`, `resolvePackageRoot`, and `OpenClawLaunch` type from `agent-runner.ts`
+- Remove `CRM_A_CONSOLE_USE_LOCAL_OPENCLAW`, `resolveOpenClawLaunch`, `resolvePackageRoot`, and `OpenClawLaunch` type from `agent-runner.ts`
 - All spawn calls become `spawn("openclaw", [...args], { env, stdio })`
 - In `subagent-runs.ts`: replace `node <scriptPath> gateway call ...` with `openclaw gateway call ...`
 - Remove `resolvePackageRoot` import from `subagent-runs.ts`
 
 ## Problem 2: `pnpm openclaw` script name is wrong
 
-`package.json` has `"openclaw": "node scripts/run-node.mjs"`. This repo IS DenchClaw, not OpenClaw.
+`package.json` has `"openclaw": "node scripts/run-node.mjs"`. This repo IS Crm-A Console, not OpenClaw.
 
-**Fix:** Rename to `"denchclaw": "node scripts/run-node.mjs"`. Also `"openclaw:rpc"` to `"denchclaw:rpc"`.
+**Fix:** Rename to `"crm-a-console": "node scripts/run-node.mjs"`. Also `"openclaw:rpc"` to `"crm-a-console:rpc"`.
 
 ## Dev workflow (after fixes)
 
@@ -77,11 +77,11 @@ The same pattern exists in `[apps/web/lib/subagent-runs.ts](apps/web/lib/subagen
 # Prerequisite: install OpenClaw globally (one-time)
 npm install -g openclaw
 
-# Run DenchClaw bootstrap (installs/configures everything, opens UI)
-pnpm denchclaw
+# Run Crm-A Console bootstrap (installs/configures everything, opens UI)
+pnpm crm-a-console
 
 # Or for web UI dev only:
-openclaw --profile denchclaw gateway --port 18789   # Terminal 1
+openclaw --profile crm-a-console gateway --port 18789   # Terminal 1
 pnpm web:dev                                        # Terminal 2
 ```
 
@@ -131,7 +131,7 @@ spawn("openclaw", ["gateway", "call", ...], { env: process.env, ... });
 
 ### 3. Update agent-runner.test.ts
 
-- Remove `process.env.DENCHCLAW_USE_LOCAL_OPENCLAW = "1"` from `beforeEach`
+- Remove `process.env.CRM_A_CONSOLE_USE_LOCAL_OPENCLAW = "1"` from `beforeEach`
 - Remove entire `resolvePackageRoot` describe block (~5 tests)
 - The "uses global openclaw by default" test becomes the only spawn behavior test
 - Update mock assertions: command is always `"openclaw"`, no `prefixArgs`
@@ -141,6 +141,6 @@ spawn("openclaw", ["gateway", "call", ...], { env: process.env, ... });
 ```diff
 -    "openclaw": "node scripts/run-node.mjs",
 -    "openclaw:rpc": "node scripts/run-node.mjs agent --mode rpc --json",
-+    "denchclaw": "node scripts/run-node.mjs",
-+    "denchclaw:rpc": "node scripts/run-node.mjs agent --mode rpc --json",
++    "crm-a-console": "node scripts/run-node.mjs",
++    "crm-a-console:rpc": "node scripts/run-node.mjs agent --mode rpc --json",
 ```

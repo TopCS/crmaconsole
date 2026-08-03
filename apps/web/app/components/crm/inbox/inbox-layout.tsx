@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
-const STORAGE_KEY = "denchclaw.crm-inbox.list-width";
+const STORAGE_KEY = "crm-a-console.crm-inbox.list-width";
 const MIN_WIDTH = 320;
 const MAX_WIDTH = 640;
 const DEFAULT_WIDTH = 420;

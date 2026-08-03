@@ -1,4 +1,4 @@
-import { readOnboardingState } from "@/lib/denchclaw-state";
+import { readOnboardingState } from "@/lib/crm-a-console-state";
 import { discoverWorkspaces, getActiveWorkspaceName } from "@/lib/workspace";
 import { OnboardingWizard } from "../components/onboarding/onboarding-wizard";
 

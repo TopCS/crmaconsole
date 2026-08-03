@@ -1,6 +1,6 @@
 /**
  * Contract for the `/api/sync/refresh` endpoint shared by the agent
- * tools (`denchclaw_refresh_sync`, `denchclaw_resync_full`) and the
+ * tools (`crm_a_console_refresh_sync`, `crm_a_console_resync_full`) and the
  * `SyncHealthBanner`'s "Refresh now" button.
  *
  * Cases pinned here:

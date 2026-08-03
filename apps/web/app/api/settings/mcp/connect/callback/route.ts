@@ -77,12 +77,12 @@ function renderResultPage(
 ): Response {
   const message = outcome.kind === "success"
     ? {
-        source: "denchclaw.mcp.connect",
+        source: "crm-a-console.mcp.connect",
         type: "mcp-connected",
         serverKey: outcome.serverKey,
       }
     : {
-        source: "denchclaw.mcp.connect",
+        source: "crm-a-console.mcp.connect",
         type: "mcp-connect-failed",
         serverKey: outcome.serverKey,
         reason: outcome.reason,

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DynamicIcon, type IconName, iconNames } from "lucide-react/dynamic";
 import { CrmObjectIcon } from "./crm-object-icon";
 
-const RECENT_KEY = "denchclaw:icon-picker:recent";
+const RECENT_KEY = "crm-a-console:icon-picker:recent";
 const RECENT_CAP = 18;
 const SEARCH_RESULT_CAP = 200;
 

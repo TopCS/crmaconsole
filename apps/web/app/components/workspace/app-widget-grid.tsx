@@ -1,11 +1,11 @@
 "use client";
 
 import { AppViewer, appServeUrl } from "./app-viewer";
-import type { DenchAppManifest } from "../../workspace/workspace-content";
+import type { CrmAAppManifest } from "../../workspace/workspace-content";
 
 type WidgetApp = {
   appPath: string;
-  manifest: DenchAppManifest & {
+  manifest: CrmAAppManifest & {
     display?: string;
     widget?: { width?: number; height?: number; refreshInterval?: number };
   };
@@ -100,7 +100,7 @@ function WidgetFrame({
   onNavigate,
 }: {
   appPath: string;
-  manifest: DenchAppManifest;
+  manifest: CrmAAppManifest;
   refreshInterval?: number;
   onToast?: (message: string, opts?: { type?: string }) => void;
   onNavigate?: (path: string) => void;

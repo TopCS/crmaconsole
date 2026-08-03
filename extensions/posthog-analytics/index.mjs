@@ -1,6 +1,6 @@
 // extensions/posthog-analytics/lib/build-env.ts
 var POSTHOG_KEY = "";
-var DENCHCLAW_VERSION = "";
+var CRM_A_CONSOLE_VERSION = "";
 var OPENCLAW_VERSION = "";
 
 // extensions/posthog-analytics/lib/privacy.ts
@@ -8,10 +8,12 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
-var SECRETS_PATTERN = /(?:sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|xoxb-[a-zA-Z0-9-]+|AKIA[A-Z0-9]{16}|eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,})/g;
+var SECRETS_PATTERN =
+  /(?:sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|xoxb-[a-zA-Z0-9-]+|AKIA[A-Z0-9]{16}|eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,})/g;
 var REDACTED = "[REDACTED]";
 function resolveConfigPath(openclawConfig) {
-  const stateDir = openclawConfig?.stateDir ?? join(process.env.HOME || homedir(), ".openclaw-dench");
+  const stateDir =
+    openclawConfig?.stateDir ?? join(process.env.HOME || homedir(), ".openclaw-crm-a");
   return join(stateDir, "telemetry.json");
 }
 function readPrivacyMode(openclawConfig) {
@@ -38,7 +40,7 @@ function readPersonInfo(openclawConfig) {
     if (typeof raw.name === "string" && raw.name) info.name = raw.name;
     if (typeof raw.email === "string" && raw.email) info.email = raw.email;
     if (typeof raw.avatar === "string" && raw.avatar) info.avatar = raw.avatar;
-    if (typeof raw.denchOrgId === "string" && raw.denchOrgId) info.denchOrgId = raw.denchOrgId;
+    if (typeof raw.crmAOrgId === "string" && raw.crmAOrgId) info.crmAOrgId = raw.crmAOrgId;
     _cachedPersonInfo = Object.keys(info).length > 0 ? info : null;
     return _cachedPersonInfo;
   } catch {
@@ -82,7 +84,13 @@ function stripSecrets(value) {
     const out = {};
     for (const [k, v] of Object.entries(value)) {
       const keyLower = k.toLowerCase();
-      if (keyLower.includes("key") || keyLower.includes("token") || keyLower.includes("secret") || keyLower.includes("password") || keyLower.includes("credential")) {
+      if (
+        keyLower.includes("key") ||
+        keyLower.includes("token") ||
+        keyLower.includes("secret") ||
+        keyLower.includes("password") ||
+        keyLower.includes("credential")
+      ) {
         out[k] = REDACTED;
       } else {
         out[k] = stripSecrets(v);
@@ -108,12 +116,12 @@ function redactToolCalls(toolCalls) {
     if (!tc || typeof tc !== "object") return tc;
     const out = {
       id: tc.id,
-      type: tc.type ?? "function"
+      type: tc.type ?? "function",
     };
     if (tc.function && typeof tc.function === "object") {
       out.function = {
         name: tc.function.name,
-        arguments: REDACTED
+        arguments: REDACTED,
       };
     }
     if (tc.name) out.name = tc.name;
@@ -131,7 +139,7 @@ function redactContentBlocks(blocks) {
         type: "toolCall",
         id: block.id ?? block.toolCallId,
         name: block.name,
-        arguments: REDACTED
+        arguments: REDACTED,
       };
     }
     if (block.type === "tool_use") {
@@ -139,7 +147,7 @@ function redactContentBlocks(blocks) {
         type: "tool_use",
         id: block.id,
         name: block.name,
-        input: REDACTED
+        input: REDACTED,
       };
     }
     if (block.type === "thinking") {
@@ -178,7 +186,7 @@ function redactOutputChoicesStructured(choices) {
     if (!choice || typeof choice !== "object") return choice;
     const out = {
       role: choice.role,
-      content: choice.content != null ? REDACTED : null
+      content: choice.content != null ? REDACTED : null,
     };
     if (Array.isArray(choice.tool_calls)) {
       out.tool_calls = redactToolCalls(choice.tool_calls);
@@ -208,7 +216,8 @@ function extractUsageFromMessages(messages) {
   }
   if (!lastAssistantUsage) return { inputTokens: 0, outputTokens: 0, totalCostUsd: 0 };
   const inputTokens = typeof lastAssistantUsage.input === "number" ? lastAssistantUsage.input : 0;
-  const outputTokens = typeof lastAssistantUsage.output === "number" ? lastAssistantUsage.output : 0;
+  const outputTokens =
+    typeof lastAssistantUsage.output === "number" ? lastAssistantUsage.output : 0;
   const cost = lastAssistantUsage.cost;
   const totalCostUsd = cost && typeof cost.total === "number" ? cost.total : 0;
   return { inputTokens, outputTokens, totalCostUsd };
@@ -264,8 +273,11 @@ function normalizeOutputForPostHog(messages) {
             type: "function",
             function: {
               name: block.name,
-              arguments: typeof block.arguments === "string" ? block.arguments : JSON.stringify(block.arguments ?? {})
-            }
+              arguments:
+                typeof block.arguments === "string"
+                  ? block.arguments
+                  : JSON.stringify(block.arguments ?? {}),
+            },
           });
         }
       }
@@ -279,7 +291,7 @@ function normalizeOutputForPostHog(messages) {
     }
     const choice = {
       role: "assistant",
-      content: textContent || null
+      content: textContent || null,
     };
     if (toolCalls.length > 0) {
       choice.tool_calls = toolCalls;
@@ -297,7 +309,10 @@ function buildTraceState(messages, privacyMode) {
     const m = msg;
     const extractText = () => {
       if (Array.isArray(m.content)) {
-        return m.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+        return m.content
+          .filter((b) => b.type === "text")
+          .map((b) => b.text)
+          .join("");
       }
       return typeof m.content === "string" ? m.content : null;
     };
@@ -308,12 +323,17 @@ function buildTraceState(messages, privacyMode) {
       if (toolNames.length > 0) {
         entry.tool_calls = toolNames.map((name) => ({
           type: "function",
-          function: { name }
+          function: { name },
         }));
       }
       chronological.push(entry);
       lastAssistantEntry = entry;
-    } else if (m.role === "user" || m.role === "tool" || m.role === "toolResult" || m.role === "system") {
+    } else if (
+      m.role === "user" ||
+      m.role === "tool" ||
+      m.role === "toolResult" ||
+      m.role === "system"
+    ) {
       const content = privacyMode ? "[REDACTED]" : extractText();
       const entry = { role: m.role, content };
       if (m.name) entry.name = m.name;
@@ -323,7 +343,7 @@ function buildTraceState(messages, privacyMode) {
   }
   return {
     inputState: chronological.length > 0 ? chronological : void 0,
-    outputState: lastAssistantEntry ? [lastAssistantEntry] : void 0
+    outputState: lastAssistantEntry ? [lastAssistantEntry] : void 0,
   };
 }
 function extractToolNamesFromSingleMessage(m) {
@@ -347,7 +367,12 @@ function emitGeneration(ph, traceCtx, sessionKey, event, privacyMode) {
   try {
     const trace = traceCtx.getTrace(sessionKey);
     if (!trace) return;
-    const latency = event.durationMs != null ? event.durationMs / 1e3 : trace.startedAt ? (Date.now() - trace.startedAt) / 1e3 : void 0;
+    const latency =
+      event.durationMs != null
+        ? event.durationMs / 1e3
+        : trace.startedAt
+          ? (Date.now() - trace.startedAt) / 1e3
+          : void 0;
     const spanToolNames = trace.toolSpans.map((s) => s.toolName);
     const messageToolNames = extractToolNamesFromMessages(event.messages);
     const allToolNames = [.../* @__PURE__ */ new Set([...spanToolNames, ...messageToolNames])];
@@ -357,10 +382,13 @@ function emitGeneration(ph, traceCtx, sessionKey, event, privacyMode) {
       $ai_model: trace.model ?? event.model ?? "unknown",
       $ai_provider: trace.provider ?? event.provider,
       $ai_latency: latency,
-      $ai_tools: allToolNames.length > 0 ? allToolNames.map((name) => ({ type: "function", function: { name } })) : void 0,
+      $ai_tools:
+        allToolNames.length > 0
+          ? allToolNames.map((name) => ({ type: "function", function: { name } }))
+          : void 0,
       $ai_stream: event.stream,
       $ai_temperature: event.temperature,
-      $ai_is_error: event.success === false || Boolean(event.error)
+      $ai_is_error: event.success === false || Boolean(event.error),
     };
     if (event.usage) {
       const inputTokens = event.usage.inputTokens ?? event.usage.input_tokens;
@@ -379,25 +407,32 @@ function emitGeneration(ph, traceCtx, sessionKey, event, privacyMode) {
     const outputChoices = normalizeOutputForPostHog(event.messages);
     properties.$ai_output_choices = sanitizeOutputChoices(
       outputChoices ?? event.output ?? event.messages,
-      privacyMode
+      privacyMode,
     );
     if (event.error) {
-      properties.$ai_error = typeof event.error === "string" ? event.error : event.error?.message ?? String(event.error);
+      properties.$ai_error =
+        typeof event.error === "string"
+          ? event.error
+          : (event.error?.message ?? String(event.error));
     }
     ph.capture({
       distinctId: readOrCreateAnonymousId(),
       event: "$ai_generation",
-      properties
+      properties,
     });
-  } catch {
-  }
+  } catch {}
 }
 function emitToolSpan(ph, traceCtx, sessionKey, event, privacyMode) {
   try {
     const trace = traceCtx.getTrace(sessionKey);
     const span = traceCtx.getLastToolSpan(sessionKey);
     if (!trace || !span) return;
-    const latency = span.startedAt && span.endedAt ? (span.endedAt - span.startedAt) / 1e3 : event.durationMs != null ? event.durationMs / 1e3 : void 0;
+    const latency =
+      span.startedAt && span.endedAt
+        ? (span.endedAt - span.startedAt) / 1e3
+        : event.durationMs != null
+          ? event.durationMs / 1e3
+          : void 0;
     const properties = {
       $ai_trace_id: trace.traceId,
       $ai_session_id: trace.sessionId,
@@ -405,7 +440,7 @@ function emitToolSpan(ph, traceCtx, sessionKey, event, privacyMode) {
       $ai_span_name: span.toolName,
       $ai_parent_id: trace.traceId,
       $ai_latency: latency,
-      $ai_is_error: span.isError ?? Boolean(event.error)
+      $ai_is_error: span.isError ?? Boolean(event.error),
     };
     if (!privacyMode) {
       properties.tool_params = stripSecrets(span.params);
@@ -414,10 +449,9 @@ function emitToolSpan(ph, traceCtx, sessionKey, event, privacyMode) {
     ph.capture({
       distinctId: readOrCreateAnonymousId(),
       event: "$ai_span",
-      properties
+      properties,
     });
-  } catch {
-  }
+  } catch {}
 }
 function emitTrace(ph, traceCtx, sessionKey, event, privacyMode) {
   try {
@@ -435,21 +469,19 @@ function emitTrace(ph, traceCtx, sessionKey, event, privacyMode) {
         $ai_span_name: "agent_run",
         $ai_input_state: inputState,
         $ai_output_state: outputState,
-        tool_count: trace.toolSpans.length
-      }
+        tool_count: trace.toolSpans.length,
+      },
     });
-  } catch {
-  }
+  } catch {}
 }
 function emitCustomEvent(ph, eventName, properties) {
   try {
     ph.capture({
       distinctId: readOrCreateAnonymousId(),
       event: eventName,
-      properties: properties ?? {}
+      properties: properties ?? {},
     });
-  } catch {
-  }
+  } catch {}
 }
 
 // extensions/posthog-analytics/lib/posthog-client.ts
@@ -476,9 +508,9 @@ var PostHogClient = class {
       properties: {
         ...this.globalProperties,
         ...event.properties,
-        $lib: "denchclaw-posthog-plugin"
+        $lib: "crm-a-console-posthog-plugin",
       },
-      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      timestamp: /* @__PURE__ */ new Date().toISOString(),
     });
     if (this.queue.length >= FLUSH_AT) {
       this.flush();
@@ -489,14 +521,13 @@ var PostHogClient = class {
     const batch = this.queue.splice(0);
     const body = JSON.stringify({
       api_key: this.apiKey,
-      batch
+      batch,
     });
     fetch(`${this.host}/batch/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body
-    }).catch(() => {
-    });
+      body,
+    }).catch(() => {});
   }
   identify(distinctId, properties) {
     this.queue.push({
@@ -505,9 +536,9 @@ var PostHogClient = class {
       properties: {
         ...this.globalProperties,
         $set: properties,
-        $lib: "denchclaw-posthog-plugin"
+        $lib: "crm-a-console-posthog-plugin",
       },
-      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      timestamp: /* @__PURE__ */ new Date().toISOString(),
     });
     if (this.queue.length >= FLUSH_AT) {
       this.flush();
@@ -527,8 +558,7 @@ function createPostHogClient(apiKey, host, globalProperties) {
 async function shutdownPostHogClient(client) {
   try {
     await client.shutdown();
-  } catch {
-  }
+  } catch {}
 }
 
 // extensions/posthog-analytics/lib/trace-context.ts
@@ -544,7 +574,7 @@ var TraceContextManager = class {
       sessionId: sessionKey,
       runId,
       startedAt: Date.now(),
-      toolSpans: []
+      toolSpans: [],
     });
   }
   setModel(sessionKey, model) {
@@ -568,7 +598,7 @@ var TraceContextManager = class {
       toolName,
       spanId: randomUUID2(),
       startedAt: Date.now(),
-      params
+      params,
     });
   }
   endToolSpan(sessionKey, toolName, result) {
@@ -606,14 +636,13 @@ var TraceContextManager = class {
 
 // extensions/posthog-analytics/index.ts
 var id = "posthog-analytics";
-var DEBUG = process.env.DENCHCLAW_POSTHOG_DEBUG === "1";
+var DEBUG = process.env.CRM_A_CONSOLE_POSTHOG_DEBUG === "1";
 function debugLog(label, data) {
   if (!DEBUG) return;
   try {
     process.stderr.write(`[posthog-analytics] ${label}: ${JSON.stringify(data, null, 2)}
 `);
-  } catch {
-  }
+  } catch {}
 }
 function register(api) {
   const config = api.config?.plugins?.entries?.["posthog-analytics"]?.config;
@@ -625,9 +654,10 @@ function register(api) {
     return;
   }
   const versionProps = {};
-  const dcv = DENCHCLAW_VERSION || process.env.npm_package_version;
-  if (dcv) versionProps.denchclaw_version = dcv;
-  const ocv = OPENCLAW_VERSION || process.env.OPENCLAW_VERSION || process.env.OPENCLAW_SERVICE_VERSION;
+  const dcv = CRM_A_CONSOLE_VERSION || process.env.npm_package_version;
+  if (dcv) versionProps.crm_a_console_version = dcv;
+  const ocv =
+    OPENCLAW_VERSION || process.env.OPENCLAW_VERSION || process.env.OPENCLAW_SERVICE_VERSION;
   if (ocv) versionProps.openclaw_version = ocv;
   const ph = createPostHogClient(apiKey, config?.host, versionProps);
   const traceCtx = new TraceContextManager();
@@ -638,7 +668,7 @@ function register(api) {
     if (person.name) props.$name = person.name;
     if (person.email) props.$email = person.email;
     if (person.avatar) props.$avatar = person.avatar;
-    if (person.denchOrgId) props.dench_org_id = person.denchOrgId;
+    if (person.crmAOrgId) props.crm_a_org_id = person.crmAOrgId;
     ph.identify(distinctId, props);
   }
   const getPrivacyMode = () => readPrivacyMode(api.config);
@@ -657,7 +687,7 @@ function register(api) {
       debugLog("before_model_resolve ctx", {
         runId: ctx.runId,
         sessionId: ctx.sessionId,
-        sessionKey: ctx.sessionKey
+        sessionKey: ctx.sessionKey,
       });
       const sk = resolveSessionKey(ctx);
       traceCtx.startTrace(sk, ctx.runId ?? sk);
@@ -666,7 +696,7 @@ function register(api) {
         traceCtx.setModel(sk, model);
       }
     },
-    { priority: -10 }
+    { priority: -10 },
   );
   api.on(
     "before_prompt_build",
@@ -674,7 +704,7 @@ function register(api) {
       debugLog("before_prompt_build ctx", {
         runId: ctx.runId,
         sessionId: ctx.sessionId,
-        hasMessages: Boolean(ctx.messages)
+        hasMessages: Boolean(ctx.messages),
       });
       const sk = resolveSessionKey(ctx);
       ensureTrace(ctx);
@@ -682,7 +712,7 @@ function register(api) {
         traceCtx.setInput(sk, ctx.messages, getPrivacyMode());
       }
     },
-    { priority: -10 }
+    { priority: -10 },
   );
   api.on(
     "before_tool_call",
@@ -690,13 +720,13 @@ function register(api) {
       debugLog("before_tool_call", {
         toolName: event.toolName,
         runId: ctx.runId,
-        sessionId: ctx.sessionId
+        sessionId: ctx.sessionId,
       });
       const sk = resolveSessionKey(ctx);
       ensureTrace(ctx);
       traceCtx.startToolSpan(sk, event.toolName, event.params);
     },
-    { priority: -10 }
+    { priority: -10 },
   );
   api.on(
     "after_tool_call",
@@ -706,14 +736,14 @@ function register(api) {
         runId: ctx.runId,
         sessionId: ctx.sessionId,
         hasError: Boolean(event.error),
-        durationMs: event.durationMs
+        durationMs: event.durationMs,
       });
       const sk = resolveSessionKey(ctx);
       ensureTrace(ctx);
       traceCtx.endToolSpan(sk, event.toolName, event.result);
       emitToolSpan(ph, traceCtx, sk, event, getPrivacyMode());
     },
-    { priority: -10 }
+    { priority: -10 },
   );
   api.on(
     "agent_end",
@@ -722,7 +752,7 @@ function register(api) {
         success: event.success,
         error: event.error,
         durationMs: event.durationMs,
-        messageCount: event.messages?.length
+        messageCount: event.messages?.length,
       });
       debugLog("agent_end ctx", { runId: ctx.runId, sessionId: ctx.sessionId });
       const sk = resolveSessionKey(ctx);
@@ -734,53 +764,50 @@ function register(api) {
       }
       emitGeneration(ph, traceCtx, sk, event, getPrivacyMode());
       emitTrace(ph, traceCtx, sk, event, getPrivacyMode());
-      emitCustomEvent(ph, "dench_turn_completed", {
+      emitCustomEvent(ph, "crm_a_turn_completed", {
         session_id: sk,
         run_id: ctx.runId,
-        model: traceCtx.getModel(sk)
+        model: traceCtx.getModel(sk),
       });
       traceCtx.endTrace(sk);
     },
-    { priority: -10 }
+    { priority: -10 },
   );
   api.on(
     "message_received",
     (event, ctx) => {
-      emitCustomEvent(ph, "dench_message_received", {
+      emitCustomEvent(ph, "crm_a_message_received", {
         channel: ctx.channel ?? ctx.channelId,
         session_id: ctx.sessionId,
-        has_attachments: Boolean(event.attachments?.length)
+        has_attachments: Boolean(event.attachments?.length),
       });
     },
-    { priority: -10 }
+    { priority: -10 },
   );
   api.on(
     "session_start",
     (_event, ctx) => {
-      emitCustomEvent(ph, "dench_session_start", {
+      emitCustomEvent(ph, "crm_a_session_start", {
         session_id: ctx.sessionId,
-        channel: ctx.channel ?? ctx.channelId
+        channel: ctx.channel ?? ctx.channelId,
       });
     },
-    { priority: -10 }
+    { priority: -10 },
   );
   api.on(
     "session_end",
     (_event, ctx) => {
-      emitCustomEvent(ph, "dench_session_end", {
+      emitCustomEvent(ph, "crm_a_session_end", {
         session_id: ctx.sessionId,
-        channel: ctx.channel ?? ctx.channelId
+        channel: ctx.channel ?? ctx.channelId,
       });
     },
-    { priority: -10 }
+    { priority: -10 },
   );
   api.registerService({
     id: "posthog-analytics",
     start: () => api.logger.info("[posthog-analytics] service started"),
-    stop: () => shutdownPostHogClient(ph)
+    stop: () => shutdownPostHogClient(ph),
   });
 }
-export {
-  register as default,
-  id
-};
+export { register as default, id };

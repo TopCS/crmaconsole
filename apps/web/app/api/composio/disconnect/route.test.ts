@@ -11,7 +11,7 @@ vi.mock("@/lib/integrations", () => ({
   refreshIntegrationsRuntime: vi.fn(),
 }));
 
-vi.mock("@/lib/denchclaw-state", () => ({
+vi.mock("@/lib/crm-a-console-state", () => ({
   readConnections: vi.fn(),
   clearConnection: vi.fn(),
 }));
@@ -24,7 +24,7 @@ const {
   resolveComposioGatewayUrl,
 } = await import("@/lib/composio");
 const { refreshIntegrationsRuntime } = await import("@/lib/integrations");
-const { readConnections, clearConnection } = await import("@/lib/denchclaw-state");
+const { readConnections, clearConnection } = await import("@/lib/crm-a-console-state");
 
 const mockedDisconnectComposioApp = vi.mocked(disconnectComposioApp);
 const mockedResolveComposioApiKey = vi.mocked(resolveComposioApiKey);
@@ -57,7 +57,7 @@ describe("Composio disconnect API", () => {
       attempted: true,
       restarted: true,
       error: null,
-      profile: "dench",
+      profile: "crm-a",
     });
     mockedReadConnections.mockReturnValue({ version: 1, updatedAt: "2026-01-01T00:00:00.000Z" });
     mockedClearConnection.mockReturnValue({ version: 1, updatedAt: "2026-01-01T00:00:00.000Z" });
@@ -77,7 +77,7 @@ describe("Composio disconnect API", () => {
     expect(body.runtime_refresh).toMatchObject({
       attempted: true,
       restarted: true,
-      profile: "dench",
+      profile: "crm-a",
     });
   });
 
@@ -181,7 +181,7 @@ describe("Composio disconnect API", () => {
     expect(mockedDisconnectComposioApp).not.toHaveBeenCalled();
   });
 
-  it("rejects ineligible Dench Cloud profile (403)", async () => {
+  it("rejects ineligible Crm-A Cloud profile (403)", async () => {
     mockedResolveComposioEligibility.mockReturnValue({
       eligible: false,
       lockReason: "primary_provider_mismatch" as never,

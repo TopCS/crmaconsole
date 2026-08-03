@@ -184,9 +184,9 @@ function normalizeModelOverride(modelOverride?: string): string | undefined {
 		return undefined;
 	}
 	const normalized = modelOverride.trim();
-	return normalized.startsWith("dench-cloud/")
+	return normalized.startsWith("crm-a-cloud/")
 		? normalized
-		: `dench-cloud/${normalized}`;
+		: `crm-a-cloud/${normalized}`;
 }
 
 type AgentSubscribeSupport = "unknown" | "supported" | "unsupported";
@@ -467,10 +467,10 @@ export function buildConnectParams(
 			version: "dev",
 			platform: process.platform,
 			mode: clientMode,
-			instanceId: "denchclaw-web-server",
+			instanceId: "crm-a-console-web-server",
 		},
 		locale: "en-US",
-		userAgent: "denchclaw-web",
+		userAgent: "crm-a-console-web",
 		role,
 		scopes,
 		caps,
@@ -546,7 +546,7 @@ const MISSING_SCOPE_RE = /missing scope:\s*(\S+)/i;
 /**
  * Detect "missing scope: ..." errors from the Gateway and return an
  * actionable message. The Gateway requires device identity for scope grants;
- * this error means the device keypair at ~/.openclaw-dench/identity/ is
+ * this error means the device keypair at ~/.openclaw-crm-a/identity/ is
  * missing or invalid.
  */
 export function enhanceScopeError(raw: string): string | null {
@@ -558,7 +558,7 @@ export function enhanceScopeError(raw: string): string | null {
 	return [
 		`missing scope: ${scope}.`,
 		"The Gateway did not grant operator scopes — device identity may be missing or invalid.",
-		"Fix: run `npx denchclaw bootstrap` to re-pair the device.",
+		"Fix: run `npx crm-a-console bootstrap` to re-pair the device.",
 	].join(" ");
 }
 

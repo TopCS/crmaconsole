@@ -1,32 +1,32 @@
 /**
- * Resolves the public origin DenchClaw is reachable at — used when
+ * Resolves the public origin Crm-A Console is reachable at — used when
  * registering OAuth callbacks (e.g. Composio) and computing the
  * `postMessage` target origin in OAuth callback popups.
  *
  * Why this helper exists:
  * - `new URL(request.url).origin` reflects the actual TCP socket
- *   DenchClaw is listening on (`http://localhost:3100`), not the public
+ *   Crm-A Console is listening on (`http://localhost:3100`), not the public
  *   URL the user's browser is using.
  * - Next.js does NOT honor `X-Forwarded-*` headers when materializing
  *   `request.url`. Without this helper the Composio gateway would
  *   register `http://localhost:3100/api/composio/callback` as the OAuth
  *   redirect URI, which fails the moment the app is hosted behind any
- *   reverse proxy (Dench Cloud, ngrok, your own k8s ingress, etc.).
+ *   reverse proxy (Crm-A Cloud, ngrok, your own k8s ingress, etc.).
  *
  * Priority:
  *   1. **Trusted forwarded headers** (`X-Forwarded-Host` +
- *      `X-Forwarded-Proto`). On Dench Cloud the in-container Nginx sets
+ *      `X-Forwarded-Proto`). On Crm-A Cloud the in-container Nginx sets
  *      both, so this naturally reflects the *current* public subdomain.
  *      That matters for warm-pool slug rebinds where the underlying
  *      container keeps running across the rebind: the env var below
  *      becomes stale, but the Host header is always live.
  *
- *      Spoofing risk is bounded by deployment topology — DenchClaw
+ *      Spoofing risk is bounded by deployment topology — Crm-A Console
  *      binds to 127.0.0.1:3100 inside the sandbox container, so these
  *      headers can only originate from the colocated Nginx instance,
  *      which sets them itself (`proxy_set_header X-Forwarded-Host
  *      $host;`).
- *   2. **`DENCHCLAW_PUBLIC_URL` env var.** Seeded by the sandbox boot
+ *   2. **`CRM_A_CONSOLE_PUBLIC_URL` env var.** Seeded by the sandbox boot
  *      script from the Secrets Manager config (`publicUrl` field). Used
  *      as a fallback when forwarded headers are absent (e.g. in-process
  *      probes, server-internal calls) and as a debugging aid.
@@ -43,12 +43,12 @@ export function resolveAppPublicOrigin(request: Request): string {
     return `${proto}://${forwardedHost}`;
   }
 
-  const envUrl = process.env.DENCHCLAW_PUBLIC_URL?.trim();
+  const envUrl = process.env.CRM_A_CONSOLE_PUBLIC_URL?.trim();
   if (envUrl) {
     try {
       return new URL(envUrl).origin;
     } catch {
-      // DENCHCLAW_PUBLIC_URL is malformed — fall through to request.url
+      // CRM_A_CONSOLE_PUBLIC_URL is malformed — fall through to request.url
       // so we still produce *some* origin instead of crashing.
     }
   }

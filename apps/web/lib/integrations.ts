@@ -19,9 +19,9 @@ function safeChildCwd(): string {
   }
 }
 
-export type DenchIntegrationId = "exa" | "apollo" | "elevenlabs";
+export type CrmAIntegrationId = "exa" | "apollo" | "elevenlabs";
 
-export type DenchIntegrationMetadata = {
+export type CrmAIntegrationMetadata = {
   schemaVersion: 1;
   exa?: {
     ownsSearch?: boolean;
@@ -41,9 +41,9 @@ export type IntegrationAuthSummary = {
   source: "config" | "env" | "missing";
 };
 
-export type DenchIntegrationLockReason =
-  | "missing_dench_key"
-  | "dench_not_primary";
+export type CrmAIntegrationLockReason =
+  | "missing_crm_a_key"
+  | "crm_a_not_primary";
 
 export type IntegrationPluginState = {
   pluginId: string;
@@ -58,8 +58,8 @@ export type IntegrationPluginState = {
 };
 
 export type ManagedPluginRepairId =
-  | "dench-ai-gateway"
-  | "dench-identity"
+  | "crm-a-ai-gateway"
+  | "crm-a-identity"
   | "apollo"
   | "exa"
   | "posthog";
@@ -77,18 +77,18 @@ export type IntegrationHealthIssue =
   | "missing_api_key"
   | "built_in_search_still_enabled";
 
-export type DenchIntegrationState = {
-  id: DenchIntegrationId;
+export type CrmAIntegrationState = {
+  id: CrmAIntegrationId;
   label: string;
   enabled: boolean;
   available: boolean;
   locked: boolean;
-  lockReason: DenchIntegrationLockReason | null;
+  lockReason: CrmAIntegrationLockReason | null;
   lockBadge: string | null;
   gatewayBaseUrl: string | null;
   auth: IntegrationAuthSummary;
   plugin: IntegrationPluginState | null;
-  managedByDench: boolean;
+  managedByCrmA: boolean;
   healthIssues: IntegrationHealthIssue[];
   health: {
     status: "healthy" | "degraded" | "disabled";
@@ -109,7 +109,7 @@ export type ManagedPluginState = {
   available: boolean;
   plugin: IntegrationPluginState;
   healthIssues: IntegrationHealthIssue[];
-  health: DenchIntegrationState["health"];
+  health: CrmAIntegrationState["health"];
 };
 
 export type BuiltInSearchState = {
@@ -119,18 +119,18 @@ export type BuiltInSearchState = {
 };
 
 export type IntegrationsState = {
-  denchCloud: {
+  crmACloud: {
     hasKey: boolean;
     isPrimaryProvider: boolean;
     primaryModel: string | null;
   };
-  metadata: DenchIntegrationMetadata;
+  metadata: CrmAIntegrationMetadata;
   search: {
     builtIn: BuiltInSearchState;
     effectiveOwner: "exa" | "web_search" | "none";
   };
   managedPlugins: ManagedPluginState[];
-  integrations: DenchIntegrationState[];
+  integrations: CrmAIntegrationState[];
 };
 
 export type IntegrationToggleResult = {
@@ -162,12 +162,12 @@ export type IntegrationsRepairResult = {
   state: IntegrationsState;
 };
 
-type DenchCloudEligibility = {
+type CrmACloudEligibility = {
   hasKey: boolean;
   isPrimaryProvider: boolean;
   primaryModel: string | null;
   locked: boolean;
-  lockReason: DenchIntegrationLockReason | null;
+  lockReason: CrmAIntegrationLockReason | null;
   lockBadge: string | null;
 };
 
@@ -180,13 +180,13 @@ type UnknownRecord = Record<string, unknown>;
  */
 export type OpenClawConfig = UnknownRecord;
 
-export type DenchIntegrationToggleDraft = Partial<Record<DenchIntegrationId, boolean>>;
+export type CrmAIntegrationToggleDraft = Partial<Record<CrmAIntegrationId, boolean>>;
 
 const DEFAULT_GATEWAY_URL = "https://gateway.merseoriginals.com";
 const DEFAULT_FALLBACK_PROVIDER = "duckduckgo";
-const METADATA_FILENAME = ".dench-integrations.json";
-const DENCH_AI_GATEWAY_PLUGIN_ID = "dench-ai-gateway";
-const DENCH_IDENTITY_PLUGIN_ID = "dench-identity";
+const METADATA_FILENAME = ".crm-a-integrations.json";
+const CRM_A_AI_GATEWAY_PLUGIN_ID = "crm-a-ai-gateway";
+const CRM_A_IDENTITY_PLUGIN_ID = "crm-a-identity";
 const EXA_PLUGIN_ID = "exa-search";
 const APOLLO_PLUGIN_ID = "apollo-enrichment";
 const POSTHOG_PLUGIN_ID = "posthog-analytics";
@@ -202,20 +202,20 @@ type ManagedBundledPluginSpec = {
   stripConfigKeys?: string[];
 };
 
-const DENCH_MANAGED_BUNDLED_PLUGINS: ManagedBundledPluginSpec[] = [
+const CRM_A_MANAGED_BUNDLED_PLUGINS: ManagedBundledPluginSpec[] = [
   {
-    id: "dench-ai-gateway",
-    pluginId: DENCH_AI_GATEWAY_PLUGIN_ID,
-    sourceDirName: DENCH_AI_GATEWAY_PLUGIN_ID,
-    label: "Dench AI Gateway",
+    id: "crm-a-ai-gateway",
+    pluginId: CRM_A_AI_GATEWAY_PLUGIN_ID,
+    sourceDirName: CRM_A_AI_GATEWAY_PLUGIN_ID,
+    label: "Crm-A AI Gateway",
     required: true,
     defaultEnabled: true,
   },
   {
-    id: "dench-identity",
-    pluginId: DENCH_IDENTITY_PLUGIN_ID,
-    sourceDirName: DENCH_IDENTITY_PLUGIN_ID,
-    label: "Dench Identity",
+    id: "crm-a-identity",
+    pluginId: CRM_A_IDENTITY_PLUGIN_ID,
+    sourceDirName: CRM_A_IDENTITY_PLUGIN_ID,
+    label: "Crm-A Identity",
     required: true,
     defaultEnabled: true,
   },
@@ -248,8 +248,8 @@ const DENCH_MANAGED_BUNDLED_PLUGINS: ManagedBundledPluginSpec[] = [
 ];
 
 const REQUIRED_MANAGED_PLUGIN_IDS: ManagedPluginRepairId[] = [
-  "dench-ai-gateway",
-  "dench-identity",
+  "crm-a-ai-gateway",
+  "crm-a-identity",
   "apollo",
   "exa",
 ];
@@ -310,8 +310,8 @@ export function writeOpenClawConfigForIntegrations(config: OpenClawConfig): void
   writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
 }
 
-export function readIntegrationsMetadata(): DenchIntegrationMetadata {
-  const parsed = readJsonFile<DenchIntegrationMetadata | UnknownRecord>(
+export function readIntegrationsMetadata(): CrmAIntegrationMetadata {
+  const parsed = readJsonFile<CrmAIntegrationMetadata | UnknownRecord>(
     integrationsMetadataPath(),
     { schemaVersion: 1 },
   );
@@ -319,16 +319,16 @@ export function readIntegrationsMetadata(): DenchIntegrationMetadata {
     asRecord(parsed) && parsed.schemaVersion === 1 ? 1 : 1;
   return {
     schemaVersion,
-    ...(asRecord(parsed)?.exa ? { exa: asRecord(parsed)?.exa as DenchIntegrationMetadata["exa"] } : {}),
+    ...(asRecord(parsed)?.exa ? { exa: asRecord(parsed)?.exa as CrmAIntegrationMetadata["exa"] } : {}),
     ...(asRecord(parsed)?.apollo
-      ? { apollo: asRecord(parsed)?.apollo as DenchIntegrationMetadata["apollo"] }
+      ? { apollo: asRecord(parsed)?.apollo as CrmAIntegrationMetadata["apollo"] }
       : {}),
     ...(asRecord(parsed)?.elevenlabs ? { elevenlabs: {} } : {}),
-    ...(asRecord(parsed)?.future ? { future: asRecord(parsed)?.future as DenchIntegrationMetadata["future"] } : {}),
+    ...(asRecord(parsed)?.future ? { future: asRecord(parsed)?.future as CrmAIntegrationMetadata["future"] } : {}),
   };
 }
 
-export function writeIntegrationsMetadata(metadata: DenchIntegrationMetadata): void {
+export function writeIntegrationsMetadata(metadata: CrmAIntegrationMetadata): void {
   const filePath = integrationsMetadataPath();
   const dirPath = resolveOpenClawStateDir();
   if (!existsSync(dirPath)) {
@@ -340,10 +340,10 @@ export function writeIntegrationsMetadata(metadata: DenchIntegrationMetadata): v
 function resolveGatewayBaseUrl(config: OpenClawConfig): string | null {
   const plugins = asRecord(config.plugins);
   const pluginEntries = asRecord(plugins?.entries);
-  const gatewayConfig = asRecord(asRecord(pluginEntries?.["dench-ai-gateway"])?.config);
+  const gatewayConfig = asRecord(asRecord(pluginEntries?.["crm-a-ai-gateway"])?.config);
   return (
     readString(gatewayConfig?.gatewayUrl) ||
-    process.env.DENCH_GATEWAY_URL?.trim() ||
+    process.env.CRM_A_GATEWAY_URL?.trim() ||
     DEFAULT_GATEWAY_URL
   );
 }
@@ -400,7 +400,7 @@ function removeValue(list: string[], value: string): boolean {
 }
 
 function resolveManagedBundledPluginSpec(id: ManagedPluginRepairId): ManagedBundledPluginSpec {
-  const spec = DENCH_MANAGED_BUNDLED_PLUGINS.find((plugin) => plugin.id === id);
+  const spec = CRM_A_MANAGED_BUNDLED_PLUGINS.find((plugin) => plugin.id === id);
   if (!spec) {
     throw new Error(`Unknown managed plugin '${id}'.`);
   }
@@ -433,7 +433,7 @@ function ensureSharedExtensionCopied(): boolean {
   return true;
 }
 
-function ensureDenchAiGatewayConfig(config: OpenClawConfig, entry: UnknownRecord): boolean {
+function ensureCrmAAiGatewayConfig(config: OpenClawConfig, entry: UnknownRecord): boolean {
   if (!entry.enabled) {
     return false;
   }
@@ -552,8 +552,8 @@ function ensureManagedBundledPlugin(
   const entry = asRecord(entries[spec.pluginId]);
   if (entry) {
     changed = stripManagedPluginConfigKeys(entry, spec.stripConfigKeys) || changed;
-    if (spec.pluginId === DENCH_AI_GATEWAY_PLUGIN_ID) {
-      changed = ensureDenchAiGatewayConfig(config, entry) || changed;
+    if (spec.pluginId === CRM_A_AI_GATEWAY_PLUGIN_ID) {
+      changed = ensureCrmAAiGatewayConfig(config, entry) || changed;
     }
   }
 
@@ -605,29 +605,29 @@ function setWebSearchPolicy(config: OpenClawConfig, params: {
   return changed;
 }
 
-function resolveDenchAuth(config: OpenClawConfig): IntegrationAuthSummary {
+function resolveCrmAAuth(config: OpenClawConfig): IntegrationAuthSummary {
   const models = asRecord(config.models);
-  const provider = asRecord(asRecord(models?.providers)?.["dench-cloud"]);
+  const provider = asRecord(asRecord(models?.providers)?.["crm-a-cloud"]);
   if (readString(provider?.apiKey)) {
     return { configured: true, source: "config" };
   }
-  if (process.env.DENCH_CLOUD_API_KEY?.trim() || process.env.DENCH_API_KEY?.trim()) {
+  if (process.env.CRM_A_CLOUD_API_KEY?.trim() || process.env.CRM_A_API_KEY?.trim()) {
     return { configured: true, source: "env" };
   }
   return { configured: false, source: "missing" };
 }
 
-function resolveDenchApiKey(config: OpenClawConfig): string | null {
+function resolveCrmAApiKey(config: OpenClawConfig): string | null {
   const models = asRecord(config.models);
-  const provider = asRecord(asRecord(models?.providers)?.["dench-cloud"]);
+  const provider = asRecord(asRecord(models?.providers)?.["crm-a-cloud"]);
   if (readString(provider?.apiKey)) {
     return readString(provider?.apiKey) ?? null;
   }
-  if (process.env.DENCH_CLOUD_API_KEY?.trim()) {
-    return process.env.DENCH_CLOUD_API_KEY.trim();
+  if (process.env.CRM_A_CLOUD_API_KEY?.trim()) {
+    return process.env.CRM_A_CLOUD_API_KEY.trim();
   }
-  if (process.env.DENCH_API_KEY?.trim()) {
-    return process.env.DENCH_API_KEY.trim();
+  if (process.env.CRM_A_API_KEY?.trim()) {
+    return process.env.CRM_A_API_KEY.trim();
   }
   return null;
 }
@@ -642,20 +642,20 @@ function resolvePrimaryModel(config: OpenClawConfig): string | null {
   return readString(asRecord(model)?.primary) ?? null;
 }
 
-function resolveDenchCloudEligibility(
+function resolveCrmACloudEligibility(
   config: OpenClawConfig,
   auth: IntegrationAuthSummary,
-): DenchCloudEligibility {
+): CrmACloudEligibility {
   const primaryModel = resolvePrimaryModel(config);
-  const isPrimaryProvider = Boolean(primaryModel?.startsWith("dench-cloud/"));
+  const isPrimaryProvider = Boolean(primaryModel?.startsWith("crm-a-cloud/"));
   if (!auth.configured) {
     return {
       hasKey: false,
       isPrimaryProvider,
       primaryModel,
       locked: true,
-      lockReason: "missing_dench_key",
-      lockBadge: "Get Dench Cloud API Key",
+      lockReason: "missing_crm_a_key",
+      lockBadge: "Get Crm-A Cloud API Key",
     };
   }
   if (!isPrimaryProvider) {
@@ -664,8 +664,8 @@ function resolveDenchCloudEligibility(
       isPrimaryProvider: false,
       primaryModel,
       locked: true,
-      lockReason: "dench_not_primary",
-      lockBadge: "Use Dench Cloud",
+      lockReason: "crm_a_not_primary",
+      lockBadge: "Use Crm-A Cloud",
     };
   }
   return {
@@ -678,12 +678,12 @@ function resolveDenchCloudEligibility(
   };
 }
 
-function getLockErrorMessage(lockReason: DenchIntegrationLockReason | null): string {
+function getLockErrorMessage(lockReason: CrmAIntegrationLockReason | null): string {
   switch (lockReason) {
-    case "missing_dench_key":
-      return "This integration requires a Dench Cloud API key.";
-    case "dench_not_primary":
-      return "This integration requires Dench Cloud to be the primary provider.";
+    case "missing_crm_a_key":
+      return "This integration requires a Crm-A Cloud API key.";
+    case "crm_a_not_primary":
+      return "This integration requires Crm-A Cloud to be the primary provider.";
     default:
       return "This integration is currently locked.";
   }
@@ -783,7 +783,7 @@ function readBuiltInSearchState(config: OpenClawConfig): BuiltInSearchState {
 function disableElevenLabsOverride(config: OpenClawConfig): boolean {
   const tts = ensureTtsConfig(config);
   const gatewayBaseUrl = resolveGatewayBaseUrl(config) ?? DEFAULT_GATEWAY_URL;
-  const denchApiKey = resolveDenchApiKey(config);
+  const crmAApiKey = resolveCrmAApiKey(config);
   let changed = false;
 
   const shape = resolveTtsElevenLabsConfigShape(tts);
@@ -792,7 +792,7 @@ function disableElevenLabsOverride(config: OpenClawConfig): boolean {
     : undefined;
   if (elevenlabs) {
     const shouldClearApiKey =
-      (denchApiKey && elevenlabs.apiKey === denchApiKey) ||
+      (crmAApiKey && elevenlabs.apiKey === crmAApiKey) ||
       elevenlabs.baseUrl === gatewayBaseUrl ||
       elevenlabs.baseUrl === DEFAULT_GATEWAY_URL;
     if (elevenlabs.baseUrl === gatewayBaseUrl || elevenlabs.baseUrl === DEFAULT_GATEWAY_URL) {
@@ -827,9 +827,9 @@ function disableElevenLabsOverride(config: OpenClawConfig): boolean {
   return changed;
 }
 
-function normalizeMetadataForDisabledDenchIntegrations(
-  metadata: DenchIntegrationMetadata,
-): DenchIntegrationMetadata {
+function normalizeMetadataForDisabledCrmAIntegrations(
+  metadata: CrmAIntegrationMetadata,
+): CrmAIntegrationMetadata {
   return {
     ...metadata,
     schemaVersion: 1,
@@ -842,9 +842,9 @@ function normalizeMetadataForDisabledDenchIntegrations(
 
 function buildNormalizedLockedState(params: {
   config: OpenClawConfig;
-  metadata: DenchIntegrationMetadata;
-  eligibility: DenchCloudEligibility;
-}): { changed: boolean; nextMetadata: DenchIntegrationMetadata } {
+  metadata: CrmAIntegrationMetadata;
+  eligibility: CrmACloudEligibility;
+}): { changed: boolean; nextMetadata: CrmAIntegrationMetadata } {
   if (!params.eligibility.locked) {
     return {
       changed: false,
@@ -860,12 +860,12 @@ function buildNormalizedLockedState(params: {
 
   return {
     changed,
-    nextMetadata: normalizeMetadataForDisabledDenchIntegrations(params.metadata),
+    nextMetadata: normalizeMetadataForDisabledCrmAIntegrations(params.metadata),
   };
 }
 
 function resolveEffectiveSearchOwner(params: {
-  exaState: DenchIntegrationState;
+  exaState: CrmAIntegrationState;
   builtInSearch: BuiltInSearchState;
 }): "exa" | "web_search" | "none" {
   if (params.exaState.enabled && params.exaState.available && (params.builtInSearch.denied || !params.builtInSearch.enabled)) {
@@ -877,7 +877,7 @@ function resolveEffectiveSearchOwner(params: {
   return "none";
 }
 
-function buildHealth(enabled: boolean, issues: IntegrationHealthIssue[]): DenchIntegrationState["health"] {
+function buildHealth(enabled: boolean, issues: IntegrationHealthIssue[]): CrmAIntegrationState["health"] {
   return {
     status: enabled ? (issues.length === 0 ? "healthy" : "degraded") : "disabled",
     pluginMissing:
@@ -929,9 +929,9 @@ function buildExaState(
   config: OpenClawConfig,
   gatewayBaseUrl: string | null,
   auth: IntegrationAuthSummary,
-  eligibility: DenchCloudEligibility,
+  eligibility: CrmACloudEligibility,
   builtInSearch: BuiltInSearchState,
-): DenchIntegrationState {
+): CrmAIntegrationState {
   const plugin = readPluginState(config, "exa-search");
   const healthIssues: IntegrationHealthIssue[] = [];
   if (!plugin.configured) healthIssues.push("missing_plugin_entry");
@@ -968,7 +968,7 @@ function buildExaState(
     gatewayBaseUrl,
     auth,
     plugin,
-    managedByDench: true,
+    managedByCrmA: true,
     healthIssues,
     health: buildHealth(enabled, healthIssues),
   };
@@ -978,8 +978,8 @@ function buildApolloState(
   config: OpenClawConfig,
   gatewayBaseUrl: string | null,
   auth: IntegrationAuthSummary,
-  eligibility: DenchCloudEligibility,
-): DenchIntegrationState {
+  eligibility: CrmACloudEligibility,
+): CrmAIntegrationState {
   const plugin = readPluginState(config, APOLLO_PLUGIN_ID);
   const healthIssues: IntegrationHealthIssue[] = [];
   if (!plugin.configured) healthIssues.push("missing_plugin_entry");
@@ -1013,7 +1013,7 @@ function buildApolloState(
     gatewayBaseUrl,
     auth,
     plugin,
-    managedByDench: true,
+    managedByCrmA: true,
     healthIssues,
     health: buildHealth(enabled, healthIssues),
   };
@@ -1023,8 +1023,8 @@ function buildElevenLabsState(
   config: OpenClawConfig,
   gatewayBaseUrl: string | null,
   auth: IntegrationAuthSummary,
-  eligibility: DenchCloudEligibility,
-): DenchIntegrationState {
+  eligibility: CrmACloudEligibility,
+): CrmAIntegrationState {
   const messages = asRecord(config.messages);
   const tts = asRecord(messages?.tts);
   const elevenlabs = readTtsElevenLabsConfig(config);
@@ -1055,7 +1055,7 @@ function buildElevenLabsState(
     gatewayBaseUrl: overrideBaseUrl ?? gatewayBaseUrl,
     auth,
     plugin: null,
-    managedByDench: true,
+    managedByCrmA: true,
     healthIssues,
     health: buildHealth(overrideActive, healthIssues),
     overrideActive,
@@ -1066,21 +1066,21 @@ export function getIntegrationsState(): IntegrationsState {
   const config = readOpenClawConfigForIntegrations();
   const metadata = readIntegrationsMetadata();
   const gatewayBaseUrl = resolveGatewayBaseUrl(config);
-  const auth = resolveDenchAuth(config);
-  const eligibility = resolveDenchCloudEligibility(config, auth);
+  const auth = resolveCrmAAuth(config);
+  const eligibility = resolveCrmACloudEligibility(config, auth);
   const builtInSearch = readBuiltInSearchState(config);
   const exa = buildExaState(config, gatewayBaseUrl, auth, eligibility, builtInSearch);
   const apollo = buildApolloState(config, gatewayBaseUrl, auth, eligibility);
   const elevenlabs = buildElevenLabsState(config, gatewayBaseUrl, auth, eligibility);
-  const managedPlugins = DENCH_MANAGED_BUNDLED_PLUGINS
+  const managedPlugins = CRM_A_MANAGED_BUNDLED_PLUGINS
     .filter((plugin) =>
-      plugin.id === "dench-ai-gateway" ||
-      plugin.id === "dench-identity"
+      plugin.id === "crm-a-ai-gateway" ||
+      plugin.id === "crm-a-identity"
     )
     .map((plugin) => buildManagedPluginState(config, plugin));
 
   return {
-    denchCloud: {
+    crmACloud: {
       hasKey: eligibility.hasKey,
       isPrimaryProvider: eligibility.isPrimaryProvider,
       primaryModel: eligibility.primaryModel,
@@ -1104,14 +1104,14 @@ export function getIntegrationsState(): IntegrationsState {
   };
 }
 
-export function normalizeLockedDenchIntegrations(): {
+export function normalizeLockedCrmAIntegrations(): {
   changed: boolean;
   state: IntegrationsState;
 } {
   const config = readOpenClawConfigForIntegrations();
   const metadata = readIntegrationsMetadata();
-  const auth = resolveDenchAuth(config);
-  const eligibility = resolveDenchCloudEligibility(config, auth);
+  const auth = resolveCrmAAuth(config);
+  const eligibility = resolveCrmACloudEligibility(config, auth);
   const normalized = buildNormalizedLockedState({
     config,
     metadata,
@@ -1133,7 +1133,7 @@ export function normalizeLockedDenchIntegrations(): {
   };
 }
 
-export function getIntegrationState(id: DenchIntegrationId): DenchIntegrationState | undefined {
+export function getIntegrationState(id: CrmAIntegrationId): CrmAIntegrationState | undefined {
   return getIntegrationsState().integrations.find((integration) => integration.id === id);
 }
 
@@ -1209,8 +1209,8 @@ function getLockedEnableError(
   if (!enabled) {
     return null;
   }
-  const auth = resolveDenchAuth(config);
-  const eligibility = resolveDenchCloudEligibility(config, auth);
+  const auth = resolveCrmAAuth(config);
+  const eligibility = resolveCrmACloudEligibility(config, auth);
   if (!eligibility.locked) {
     return null;
   }
@@ -1232,18 +1232,18 @@ function rejectLockedEnable(
   };
 }
 
-export type ApplyDenchIntegrationToggleResult = {
+export type ApplyCrmAIntegrationToggleResult = {
   changed: boolean;
   error: string | null;
-  metadata: DenchIntegrationMetadata;
+  metadata: CrmAIntegrationMetadata;
 };
 
-export function applyDenchIntegrationToggleDraft(params: {
+export function applyCrmAIntegrationToggleDraft(params: {
   config: OpenClawConfig;
-  metadata: DenchIntegrationMetadata;
-  id: DenchIntegrationId;
+  metadata: CrmAIntegrationMetadata;
+  id: CrmAIntegrationId;
   enabled: boolean;
-}): ApplyDenchIntegrationToggleResult {
+}): ApplyCrmAIntegrationToggleResult {
   const { config, id, enabled } = params;
   let metadata = params.metadata;
   const lockError = getLockedEnableError(config, enabled);
@@ -1296,7 +1296,7 @@ export function applyDenchIntegrationToggleDraft(params: {
     case "elevenlabs": {
       const tts = ensureTtsConfig(config);
       const gatewayBaseUrl = resolveGatewayBaseUrl(config) ?? DEFAULT_GATEWAY_URL;
-      const denchApiKey = resolveDenchApiKey(config);
+      const crmAApiKey = resolveCrmAApiKey(config);
 
       if (enabled) {
         if (tts.provider !== "elevenlabs") {
@@ -1313,15 +1313,15 @@ export function applyDenchIntegrationToggleDraft(params: {
           elevenlabs.baseUrl = gatewayBaseUrl;
           changed = true;
         }
-        if (elevenlabs && denchApiKey && elevenlabs.apiKey !== denchApiKey) {
-          elevenlabs.apiKey = denchApiKey;
+        if (elevenlabs && crmAApiKey && elevenlabs.apiKey !== crmAApiKey) {
+          elevenlabs.apiKey = crmAApiKey;
           changed = true;
         }
       } else {
         changed = disableElevenLabsOverride(config) || changed;
       }
 
-      const nextMetadata: DenchIntegrationMetadata = {
+      const nextMetadata: CrmAIntegrationMetadata = {
         ...metadata,
         schemaVersion: 1,
       };
@@ -1373,7 +1373,7 @@ export const repairOlderIntegrationsProfile = ensureDefaultManagedPluginsInstall
 export function setExaIntegrationEnabled(enabled: boolean): IntegrationToggleResult {
   const config = readOpenClawConfigForIntegrations();
   const metadata = readIntegrationsMetadata();
-  const result = applyDenchIntegrationToggleDraft({
+  const result = applyCrmAIntegrationToggleDraft({
     config,
     metadata,
     id: "exa",
@@ -1404,7 +1404,7 @@ export function setExaIntegrationEnabled(enabled: boolean): IntegrationToggleRes
 export function setApolloIntegrationEnabled(enabled: boolean): IntegrationToggleResult {
   const config = readOpenClawConfigForIntegrations();
   const metadata = readIntegrationsMetadata();
-  const result = applyDenchIntegrationToggleDraft({
+  const result = applyCrmAIntegrationToggleDraft({
     config,
     metadata,
     id: "apollo",
@@ -1435,7 +1435,7 @@ export function setApolloIntegrationEnabled(enabled: boolean): IntegrationToggle
 export function setElevenLabsIntegrationEnabled(enabled: boolean): IntegrationToggleResult {
   const config = readOpenClawConfigForIntegrations();
   const metadata = readIntegrationsMetadata();
-  const result = applyDenchIntegrationToggleDraft({
+  const result = applyCrmAIntegrationToggleDraft({
     config,
     metadata,
     id: "elevenlabs",
@@ -1464,15 +1464,15 @@ export function setElevenLabsIntegrationEnabled(enabled: boolean): IntegrationTo
 }
 
 /**
- * Resolve the Dench Cloud API key and gateway URL for server-side enrichment calls.
+ * Resolve the Crm-A Cloud API key and gateway URL for server-side enrichment calls.
  */
-export function resolveDenchGatewayCredentials(): {
+export function resolveCrmAGatewayCredentials(): {
   apiKey: string | null;
   gatewayUrl: string | null;
 } {
   const config = readOpenClawConfigForIntegrations();
   return {
-    apiKey: resolveDenchApiKey(config),
+    apiKey: resolveCrmAApiKey(config),
     gatewayUrl: resolveGatewayBaseUrl(config),
   };
 }

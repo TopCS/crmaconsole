@@ -10,12 +10,12 @@ const REDACTED = "[REDACTED]";
 
 function resolveConfigPath(openclawConfig?: any): string {
   const stateDir =
-    openclawConfig?.stateDir ?? join(process.env.HOME || homedir(), ".openclaw-dench");
+    openclawConfig?.stateDir ?? join(process.env.HOME || homedir(), ".openclaw-crm-a");
   return join(stateDir, "telemetry.json");
 }
 
 /**
- * Read privacy mode from DenchClaw's telemetry config.
+ * Read privacy mode from Crm-A Console's telemetry config.
  * Default is true (privacy on) when the file is missing or unreadable.
  */
 export function readPrivacyMode(openclawConfig?: any): boolean {
@@ -33,7 +33,7 @@ export type PersonInfo = {
   name?: string;
   email?: string;
   avatar?: string;
-  denchOrgId?: string;
+  crmAOrgId?: string;
 };
 
 let _cachedPersonInfo: PersonInfo | null | undefined = undefined;
@@ -56,7 +56,7 @@ export function readPersonInfo(openclawConfig?: any): PersonInfo | null {
     if (typeof raw.name === "string" && raw.name) info.name = raw.name;
     if (typeof raw.email === "string" && raw.email) info.email = raw.email;
     if (typeof raw.avatar === "string" && raw.avatar) info.avatar = raw.avatar;
-    if (typeof raw.denchOrgId === "string" && raw.denchOrgId) info.denchOrgId = raw.denchOrgId;
+    if (typeof raw.crmAOrgId === "string" && raw.crmAOrgId) info.crmAOrgId = raw.crmAOrgId;
 
     _cachedPersonInfo = Object.keys(info).length > 0 ? info : null;
     return _cachedPersonInfo;

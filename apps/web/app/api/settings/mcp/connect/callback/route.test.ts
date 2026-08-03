@@ -87,7 +87,7 @@ function writeSecrets(contents: Record<string, unknown>) {
 describe("GET /api/settings/mcp/connect/callback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    stateDir = path.join(os.tmpdir(), `dench-mcp-callback-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    stateDir = path.join(os.tmpdir(), `crm-a-mcp-callback-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(stateDir, { recursive: true });
   });
 

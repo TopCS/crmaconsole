@@ -1,0 +1,24 @@
+{
+  "name": "crm-a",
+  "version": "2.3.14",
+  "description": "Shorthand alias for crm-a-console — AI-powered CRM platform CLI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TopCS/crmaconsole.git",
+    "directory": "packages/crm-a"
+  },
+  "bin": {
+    "crm-a": "crm-a.mjs"
+  },
+  "files": [
+    "crm-a.mjs"
+  ],
+  "type": "module",
+  "dependencies": {
+    "crm-a-console": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

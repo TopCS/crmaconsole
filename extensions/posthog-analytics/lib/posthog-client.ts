@@ -34,7 +34,7 @@ export class PostHogClient {
       properties: {
         ...this.globalProperties,
         ...event.properties,
-        $lib: "denchclaw-posthog-plugin",
+        $lib: "crm-a-console-posthog-plugin",
       },
       timestamp: new Date().toISOString(),
     });
@@ -69,7 +69,7 @@ export class PostHogClient {
       properties: {
         ...this.globalProperties,
         $set: properties,
-        $lib: "denchclaw-posthog-plugin",
+        $lib: "crm-a-console-posthog-plugin",
       },
       timestamp: new Date().toISOString(),
     });

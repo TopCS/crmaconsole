@@ -24,9 +24,9 @@ function getCheck(
 function createTempStateDir(): string {
   const homeDir = path.join(
     tmpdir(),
-    `denchclaw-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    `crm-a-console-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
-  const stateDir = path.join(homeDir, ".openclaw-dench");
+  const stateDir = path.join(homeDir, ".openclaw-crm-a");
   mkdirSync(stateDir, { recursive: true });
   return stateDir;
 }
@@ -66,7 +66,7 @@ describe("bootstrap-external diagnostics", () => {
   });
 
   const baseParams = (dir: string) => ({
-    profile: "dench",
+    profile: "crm-a",
     openClawCliAvailable: true,
     openClawVersion: "2026.3.1",
     gatewayPort: 19001,
@@ -108,15 +108,15 @@ describe("bootstrap-external diagnostics", () => {
     }
   });
 
-  it("passes agent-auth for Dench Cloud when apiKey is stored on the custom provider config", () => {
+  it("passes agent-auth for Crm-A Cloud when apiKey is stored on the custom provider config", () => {
     const dir = createTempStateDir();
     writeConfig(dir, {
-      agents: { defaults: { model: { primary: "dench-cloud/anthropic.claude-opus-4-6-v1" } } },
+      agents: { defaults: { model: { primary: "crm-a-cloud/anthropic.claude-opus-4-6-v1" } } },
       models: {
         providers: {
-          "dench-cloud": {
+          "crm-a-cloud": {
             baseUrl: "https://gateway.merseoriginals.com/v1",
-            apiKey: "dench_cfg_key_123",
+            apiKey: "crm_a_cfg_key_123",
           },
         },
       },
@@ -207,7 +207,7 @@ describe("bootstrap-external diagnostics", () => {
     expect(gateway.status).toBe("fail");
     expect(String(gateway.remediation)).toContain("dangerouslyDisableDeviceAuth true");
     expect(String(gateway.remediation)).toContain("dangerouslyDisableDeviceAuth false");
-    expect(String(gateway.remediation)).toContain("--profile dench");
+    expect(String(gateway.remediation)).toContain("--profile crm-a");
   });
 
   it("marks rollout-stage as warning for beta and includes opt-in guidance", () => {
@@ -218,7 +218,7 @@ describe("bootstrap-external diagnostics", () => {
 
     const rollout = getCheck(diagnostics, "rollout-stage");
     expect(rollout.status).toBe("warn");
-    expect(String(rollout.remediation)).toContain("DENCHCLAW_BOOTSTRAP_BETA_OPT_IN");
+    expect(String(rollout.remediation)).toContain("CRM_A_CONSOLE_BOOTSTRAP_BETA_OPT_IN");
   });
 
   it("fails cutover-gates when enforcement is enabled without gate envs", () => {
@@ -227,7 +227,7 @@ describe("bootstrap-external diagnostics", () => {
       env: {
         HOME: path.dirname(stateDir),
         OPENCLAW_HOME: path.dirname(stateDir),
-        DENCHCLAW_BOOTSTRAP_ENFORCE_SAFETY_GATES: "1",
+        CRM_A_CONSOLE_BOOTSTRAP_ENFORCE_SAFETY_GATES: "1",
       },
     });
 
@@ -241,8 +241,8 @@ describe("bootstrap-external diagnostics", () => {
       env: {
         HOME: path.dirname(stateDir),
         OPENCLAW_HOME: path.dirname(stateDir),
-        DENCHCLAW_BOOTSTRAP_MIGRATION_SUITE_OK: "1",
-        DENCHCLAW_BOOTSTRAP_ONBOARDING_E2E_OK: "1",
+        CRM_A_CONSOLE_BOOTSTRAP_MIGRATION_SUITE_OK: "1",
+        CRM_A_CONSOLE_BOOTSTRAP_ONBOARDING_E2E_OK: "1",
       },
     });
 
@@ -308,14 +308,14 @@ describe("checkAgentAuth", () => {
     writeConfig(stateDir, {
       models: {
         providers: {
-          "dench-cloud": {
-            apiKey: "dench_cfg_key_123",
+          "crm-a-cloud": {
+            apiKey: "crm_a_cfg_key_123",
           },
         },
       },
     });
 
-    const result = checkAgentAuth(stateDir, "dench-cloud");
+    const result = checkAgentAuth(stateDir, "crm-a-cloud");
     expect(result.ok).toBe(true);
     expect(result.detail).toContain("Custom provider credentials");
   });
@@ -355,18 +355,18 @@ describe("checkAgentAuth", () => {
 });
 
 describe("bootstrap-external rollout env helpers", () => {
-  it("resolves rollout stage from denchclaw/openclaw env vars", () => {
-    expect(resolveBootstrapRolloutStage({ DENCHCLAW_BOOTSTRAP_ROLLOUT: "beta" })).toBe("beta");
+  it("resolves rollout stage from crm-a-console/openclaw env vars", () => {
+    expect(resolveBootstrapRolloutStage({ CRM_A_CONSOLE_BOOTSTRAP_ROLLOUT: "beta" })).toBe("beta");
     expect(resolveBootstrapRolloutStage({ OPENCLAW_BOOTSTRAP_ROLLOUT: "internal" })).toBe(
       "internal",
     );
-    expect(resolveBootstrapRolloutStage({ DENCHCLAW_BOOTSTRAP_ROLLOUT: "invalid" })).toBe(
+    expect(resolveBootstrapRolloutStage({ CRM_A_CONSOLE_BOOTSTRAP_ROLLOUT: "invalid" })).toBe(
       "default",
     );
   });
 
   it("detects legacy fallback via either env namespace", () => {
-    expect(isLegacyFallbackEnabled({ DENCHCLAW_BOOTSTRAP_LEGACY_FALLBACK: "1" })).toBe(true);
+    expect(isLegacyFallbackEnabled({ CRM_A_CONSOLE_BOOTSTRAP_LEGACY_FALLBACK: "1" })).toBe(true);
     expect(isLegacyFallbackEnabled({ OPENCLAW_BOOTSTRAP_LEGACY_FALLBACK: "true" })).toBe(true);
     expect(isLegacyFallbackEnabled({})).toBe(false);
   });
@@ -460,7 +460,7 @@ describe("isPersistedPortAcceptable", () => {
     expect(isPersistedPortAcceptable(18789)).toBe(false);
   });
 
-  it("accepts DenchClaw's own port range (normal operation)", () => {
+  it("accepts Crm-A Console's own port range (normal operation)", () => {
     expect(isPersistedPortAcceptable(19001)).toBe(true);
     expect(isPersistedPortAcceptable(19002)).toBe(true);
     expect(isPersistedPortAcceptable(19100)).toBe(true);
@@ -482,7 +482,7 @@ describe("isPersistedPortAcceptable", () => {
     expect(isPersistedPortAcceptable(port)).toBe(false);
   });
 
-  it("accepts valid 19001 from config (end-to-end: read + guard allows DenchClaw port)", () => {
+  it("accepts valid 19001 from config (end-to-end: read + guard allows Crm-A Console port)", () => {
     writeConfig(stateDir, { gateway: { port: 19001 } });
     const port = readExistingGatewayPort(stateDir);
     expect(port).toBe(19001);

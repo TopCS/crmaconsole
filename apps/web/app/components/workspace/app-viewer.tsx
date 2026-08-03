@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import type { DenchAppManifest } from "../../workspace/workspace-content";
+import type { CrmAAppManifest } from "../../workspace/workspace-content";
 import {
   registerApp,
   unregisterApp,
@@ -11,14 +11,14 @@ import {
   type ToolDef,
 } from "@/lib/app-registry";
 
-/** Build a path-based URL for serving files from a .dench.app folder. */
+/** Build a path-based URL for serving files from a .crm-a.app folder. */
 export function appServeUrl(appPath: string, filePath: string): string {
   return `/api/apps/serve/${appPath}/${filePath}`;
 }
 
 type AppViewerProps = {
   appPath: string;
-  manifest: DenchAppManifest;
+  manifest: CrmAAppManifest;
   onToast?: (message: string, opts?: { type?: string }) => void;
   onNavigate?: (path: string) => void;
 };
@@ -93,8 +93,8 @@ export function AppViewer({ appPath, manifest, onToast, onNavigate }: AppViewerP
     ) {
       iframe.contentWindow?.postMessage(
         error
-          ? { type: "dench:response", id, error }
-          : { type: "dench:response", id, result },
+          ? { type: "crm-a:response", id, error }
+          : { type: "crm-a:response", id, result },
         "*",
       );
     }
@@ -105,7 +105,7 @@ export function AppViewer({ appPath, manifest, onToast, onNavigate }: AppViewerP
       data: unknown,
     ) {
       iframe.contentWindow?.postMessage(
-        { type: "dench:event", channel, data },
+        { type: "crm-a:event", channel, data },
         "*",
       );
     }
@@ -118,7 +118,7 @@ export function AppViewer({ appPath, manifest, onToast, onNavigate }: AppViewerP
       extra?: Record<string, unknown>,
     ) {
       iframe.contentWindow?.postMessage(
-        { type: "dench:stream", streamId, event, data, ...extra },
+        { type: "crm-a:stream", streamId, event, data, ...extra },
         "*",
       );
     }
@@ -128,7 +128,7 @@ export function AppViewer({ appPath, manifest, onToast, onNavigate }: AppViewerP
       if (!iframe?.contentWindow || event.source !== iframe.contentWindow)
         return;
 
-      if (event.data?.type === "dench:tool-response") {
+      if (event.data?.type === "crm-a:tool-response") {
         const { invokeId, result, error: toolError } = event.data;
         const pending = pendingToolInvocationsRef.current.get(invokeId);
         if (pending) {
@@ -139,7 +139,7 @@ export function AppViewer({ appPath, manifest, onToast, onNavigate }: AppViewerP
         return;
       }
 
-      if (!event.data || event.data.type !== "dench:request") return;
+      if (!event.data || event.data.type !== "crm-a:request") return;
 
       const { id, method, params } = event.data;
 
@@ -506,7 +506,7 @@ export function AppViewer({ appPath, manifest, onToast, onNavigate }: AppViewerP
         ) {
           // Handled by parent via tab state - emit a custom event
           window.dispatchEvent(
-            new CustomEvent("dench:app-title-change", {
+            new CustomEvent("crm-a:app-title-change", {
               detail: { appPath, title: params?.title },
             }),
           );
@@ -786,7 +786,7 @@ export function AppViewer({ appPath, manifest, onToast, onNavigate }: AppViewerP
       // Emit locally if subscribed
       if (subscribedChannelsRef.current.has(channel)) {
         _iframe.contentWindow?.postMessage(
-          { type: "dench:event", channel, data: eventData },
+          { type: "crm-a:event", channel, data: eventData },
           "*",
         );
       }

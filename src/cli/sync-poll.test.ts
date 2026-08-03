@@ -5,14 +5,14 @@
  *
  * Key invariants under test:
  *
- * - "no key" path returns `skipped: no-api-key` quietly (Dench Cloud
+ * - "no key" path returns `skipped: no-api-key` quietly (Crm-A Cloud
  *   not yet configured is a normal state, not an error).
  * - Bearer auth is sourced from `auth-profiles.json` first, env vars
  *   second — same precedence as the gateway plugin.
  * - HTTP errors / network errors / timeouts surface as distinct outcomes
  *   so the CLI summary line can distinguish them, but never throw.
  * - `summarizeKickoffSyncPoll` produces an empty string for the
- *   "no Dench Cloud key" case so brand-new installs stay quiet.
+ *   "no Crm-A Cloud key" case so brand-new installs stay quiet.
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -29,7 +29,7 @@ function writeAuthProfiles(stateDir: string, key: string): void {
     JSON.stringify({
       version: 1,
       profiles: {
-        "dench-cloud:default": { type: "api_key", provider: "dench-cloud", key },
+        "crm-a-cloud:default": { type: "api_key", provider: "crm-a-cloud", key },
       },
     }),
   );
@@ -38,14 +38,14 @@ function writeAuthProfiles(stateDir: string, key: string): void {
 describe("kickoffSyncPoll", () => {
   const originalFetch = globalThis.fetch;
   const originalEnv = {
-    DENCH_CLOUD_API_KEY: process.env.DENCH_CLOUD_API_KEY,
-    DENCH_API_KEY: process.env.DENCH_API_KEY,
+    CRM_A_CLOUD_API_KEY: process.env.CRM_A_CLOUD_API_KEY,
+    CRM_A_API_KEY: process.env.CRM_A_API_KEY,
   };
   let stateDir: string | undefined;
 
   beforeEach(() => {
-    delete process.env.DENCH_CLOUD_API_KEY;
-    delete process.env.DENCH_API_KEY;
+    delete process.env.CRM_A_CLOUD_API_KEY;
+    delete process.env.CRM_A_API_KEY;
   });
 
   afterEach(() => {
@@ -97,9 +97,9 @@ describe("kickoffSyncPoll", () => {
     );
   });
 
-  it("falls back to DENCH_CLOUD_API_KEY env when auth-profiles is absent", async () => {
+  it("falls back to CRM_A_CLOUD_API_KEY env when auth-profiles is absent", async () => {
     stateDir = mkdtempSync(path.join(os.tmpdir(), "kickoff-sync-"));
-    process.env.DENCH_CLOUD_API_KEY = "dc-from-env";
+    process.env.CRM_A_CLOUD_API_KEY = "dc-from-env";
     const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
@@ -119,7 +119,7 @@ describe("kickoffSyncPoll", () => {
   it("auth-profiles.json key wins over env (matches plugin precedence)", async () => {
     stateDir = mkdtempSync(path.join(os.tmpdir(), "kickoff-sync-"));
     writeAuthProfiles(stateDir, "dc-from-profile");
-    process.env.DENCH_CLOUD_API_KEY = "dc-from-env";
+    process.env.CRM_A_CLOUD_API_KEY = "dc-from-env";
     const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
@@ -191,7 +191,7 @@ describe("kickoffSyncPoll", () => {
 });
 
 describe("summarizeKickoffSyncPoll", () => {
-  it("emits empty string for the no-Dench-Cloud-key case (quiet skip)", () => {
+  it("emits empty string for the no-Crm-A-Cloud-key case (quiet skip)", () => {
     expect(summarizeKickoffSyncPoll({ kind: "skipped", reason: "no-api-key" })).toBe("");
   });
 

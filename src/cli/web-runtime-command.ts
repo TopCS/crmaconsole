@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { confirm, isCancel, spinner } from "@clack/prompts";
-import { DENCHCLAW_DEFAULT_GATEWAY_PORT, isDaemonlessMode } from "../config/paths.js";
+import { CRM_A_CONSOLE_DEFAULT_GATEWAY_PORT, isDaemonlessMode } from "../config/paths.js";
 import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
 import { stylePromptMessage } from "../terminal/prompt-style.js";
 import { theme } from "../terminal/theme.js";
@@ -178,7 +178,7 @@ async function promptAndOpenWebUi(params: {
 
 async function runOpenClawUpdateWithProgress(openclawCommand: string): Promise<void> {
   const s = spinner();
-  s.start("Updating OpenClaw (required for this major Dench upgrade)...");
+  s.start("Updating OpenClaw (required for this major Crm-A upgrade)...");
   const result = await new Promise<SpawnResult>((resolve, reject) => {
     const child = spawn(openclawCommand, ["update", "--yes"], {
       stdio: ["ignore", "pipe", "pipe"],
@@ -243,7 +243,7 @@ async function runOpenClawUpdateWithProgress(openclawCommand: string): Promise<v
   throw new Error(
     detail
       ? `OpenClaw update failed.\n${detail}`
-      : "OpenClaw update failed. Fix this before running `npx denchclaw update` again.",
+      : "OpenClaw update failed. Fix this before running `npx crm-a-console update` again.",
   );
 }
 
@@ -262,7 +262,7 @@ async function ensureMajorUpgradeAcknowledged(params: {
   if (params.nonInteractive || !process.stdin.isTTY) {
     if (!params.yes) {
       throw new Error(
-        `Major Dench upgrade detected (${params.previousVersion ?? "unknown"} -> ${params.currentVersion}). Re-run with --yes to approve the required OpenClaw update.`,
+        `Major Crm-A upgrade detected (${params.previousVersion ?? "unknown"} -> ${params.currentVersion}). Re-run with --yes to approve the required OpenClaw update.`,
       );
     }
     return;
@@ -274,7 +274,7 @@ async function ensureMajorUpgradeAcknowledged(params: {
 
   const decision = await confirm({
     message: stylePromptMessage(
-      `Major Dench upgrade detected (${params.previousVersion ?? "unknown"} -> ${params.currentVersion}). Continue with mandatory OpenClaw update now?`,
+      `Major Crm-A upgrade detected (${params.previousVersion ?? "unknown"} -> ${params.currentVersion}). Continue with mandatory OpenClaw update now?`,
     ),
     initialValue: true,
   });
@@ -302,7 +302,7 @@ function resolveGatewayPort(stateDir: string): number {
       return port;
     }
   }
-  return DENCHCLAW_DEFAULT_GATEWAY_PORT;
+  return CRM_A_CONSOLE_DEFAULT_GATEWAY_PORT;
 }
 
 function readConfigGatewayPort(configPath: string): number | undefined {
@@ -377,14 +377,14 @@ export async function updateWebRuntimeCommand(
   const packageRoot = resolveCliPackageRoot();
   const previousManifest = readManagedWebRuntimeManifest(stateDir);
   const transition = evaluateMajorVersionTransition({
-    previousVersion: previousManifest?.deployedDenchVersion,
+    previousVersion: previousManifest?.deployedCrmAVersion,
     currentVersion: VERSION,
   });
 
   const nonInteractive = Boolean(opts.nonInteractive || opts.json);
   await ensureMajorUpgradeAcknowledged({
     required: transition.isMajorTransition,
-    previousVersion: previousManifest?.deployedDenchVersion,
+    previousVersion: previousManifest?.deployedCrmAVersion,
     currentVersion: VERSION,
     nonInteractive,
     yes: Boolean(opts.yes),
@@ -424,7 +424,7 @@ export async function updateWebRuntimeCommand(
   const ensureResult = await ensureManagedWebRuntime({
     stateDir,
     packageRoot,
-    denchVersion: VERSION,
+    crmAVersion: VERSION,
     port: selectedPort,
     gatewayPort,
     startFn:
@@ -439,7 +439,7 @@ export async function updateWebRuntimeCommand(
     version: VERSION,
     majorGate: {
       required: transition.isMajorTransition,
-      previousVersion: previousManifest?.deployedDenchVersion,
+      previousVersion: previousManifest?.deployedCrmAVersion,
       currentVersion: VERSION,
     },
     stoppedPids: stopResult.stoppedPids,
@@ -453,7 +453,7 @@ export async function updateWebRuntimeCommand(
 
   if (!opts.json) {
     runtime.log("");
-    runtime.log(theme.heading("Dench web update"));
+    runtime.log(theme.heading("Crm-A web update"));
     runtime.log(`Profile: ${profile}`);
     runtime.log(`Version: ${VERSION}`);
     runtime.log(`Web port: ${selectedPort}`);
@@ -469,7 +469,7 @@ export async function updateWebRuntimeCommand(
     if (summary.skippedForeignPids.length > 0) {
       runtime.log(
         theme.warn(
-          `Skipped non-Dench listeners on ${selectedPort}: ${summary.skippedForeignPids.join(", ")}`,
+          `Skipped non-Crm-A listeners on ${selectedPort}: ${summary.skippedForeignPids.join(", ")}`,
         ),
       );
     }
@@ -553,7 +553,7 @@ export async function stopWebRuntimeCommand(
   }
 
   runtime.log("");
-  runtime.log(theme.heading("Dench web stop"));
+  runtime.log(theme.heading("Crm-A web stop"));
   runtime.log(`Profile: ${profile}`);
   runtime.log(`Web port: ${selectedPort}`);
   runtime.log(
@@ -564,7 +564,7 @@ export async function stopWebRuntimeCommand(
   if (summary.skippedForeignPids.length > 0) {
     runtime.log(
       theme.warn(
-        `Left non-Dench listener(s) running on ${selectedPort}: ${summary.skippedForeignPids.join(", ")}`,
+        `Left non-Crm-A listener(s) running on ${selectedPort}: ${summary.skippedForeignPids.join(", ")}`,
       ),
     );
   }
@@ -609,7 +609,7 @@ export async function startWebRuntimeCommand(
 
   if (stopResult.skippedForeignPids.length > 0) {
     throw new Error(
-      `Cannot start on ${selectedPort}; non-Dench listener(s) still own the port: ${stopResult.skippedForeignPids.join(", ")}`,
+      `Cannot start on ${selectedPort}; non-Crm-A listener(s) still own the port: ${stopResult.skippedForeignPids.join(", ")}`,
     );
   }
 
@@ -632,7 +632,7 @@ export async function startWebRuntimeCommand(
     throw new Error(
       [
         `Managed web runtime is missing at ${runtimeServerPath}.`,
-        "Run `npx denchclaw update` (or `npx denchclaw`) to install/update the web runtime first.",
+        "Run `npx crm-a-console update` (or `npx crm-a-console`) to install/update the web runtime first.",
       ].join(" "),
     );
   }
@@ -664,7 +664,7 @@ export async function startWebRuntimeCommand(
   }
 
   runtime.log("");
-  runtime.log(theme.heading(`Dench web ${label}`));
+  runtime.log(theme.heading(`Crm-A web ${label}`));
   runtime.log(`Profile: ${profile}`);
   runtime.log(`Web port: ${selectedPort}`);
   if (daemonless) {

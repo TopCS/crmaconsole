@@ -1,5 +1,5 @@
 import { startBackfill } from "@/lib/sync-runner";
-import { writeSyncCursors } from "@/lib/denchclaw-state";
+import { writeSyncCursors } from "@/lib/crm-a-console-state";
 import { runEmailCleanup } from "@/lib/email-classifier-cleanup";
 import { trackServer } from "@/lib/telemetry";
 

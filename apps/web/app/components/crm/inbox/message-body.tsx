@@ -109,7 +109,7 @@ function SandboxedHtmlBody({ html }: { html: string }) {
       if (
         !data ||
         typeof data !== "object" ||
-        data.type !== "denchclaw_email_height" ||
+        data.type !== "crm_a_console_email_height" ||
         data.token !== token
       ) {
         return;
@@ -209,7 +209,7 @@ function measure(){
     // — using them here creates a feedback loop where every measurement
     // reports the iframe's own grown size and the iframe keeps growing.
     var height = Math.max(b.scrollHeight, b.offsetHeight);
-    parent.postMessage({ type: 'denchclaw_email_height', token: TOKEN, height: height }, '*');
+    parent.postMessage({ type: 'crm_a_console_email_height', token: TOKEN, height: height }, '*');
   } catch (e) {}
 }
 function attach(){

@@ -4,19 +4,19 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { OnboardingState } from "@/lib/denchclaw-state";
+import type { OnboardingState } from "@/lib/crm-a-console-state";
 import { SetupStep } from "./setup-step";
 
 const baseState: OnboardingState = {
   version: 1,
   currentStep: "connect-gmail",
-  completedSteps: ["welcome", "identity", "dench-cloud"],
+  completedSteps: ["welcome", "identity", "crm-a-cloud"],
   identity: {
     name: "Vedant",
     email: "vedant@example.com",
     capturedAt: "2026-04-29T18:45:14.895Z",
   },
-  denchCloud: {
+  crmACloud: {
     source: "cli",
     skipped: false,
     configuredAt: "2026-04-29T18:45:15.517Z",
@@ -58,7 +58,7 @@ describe("SetupStep", () => {
     const nextState: OnboardingState = {
       ...baseState,
       currentStep: "connect-calendar",
-      completedSteps: ["welcome", "identity", "dench-cloud", "connect-gmail"],
+      completedSteps: ["welcome", "identity", "crm-a-cloud", "connect-gmail"],
       connections: {
         gmail: {
           connectionId: "ca_existing_gmail",
@@ -71,11 +71,11 @@ describe("SetupStep", () => {
     const bodies: unknown[] = [];
     global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url === "/api/onboarding/dench-cloud") {
+      if (url === "/api/onboarding/crm-a-cloud") {
         return new Response(JSON.stringify({
           configured: true,
           source: "cli",
-          primaryModel: "dench-cloud/gpt-5.5",
+          primaryModel: "crm-a-cloud/gpt-5.5",
         }));
       }
       if (url === "/api/composio/connections?include_toolkits=1&fresh=1") {
@@ -125,7 +125,7 @@ describe("SetupStep", () => {
     const gmailState: OnboardingState = {
       ...baseState,
       currentStep: "connect-calendar",
-      completedSteps: ["welcome", "identity", "dench-cloud", "connect-gmail"],
+      completedSteps: ["welcome", "identity", "crm-a-cloud", "connect-gmail"],
       connections: {
         gmail: {
           connectionId: "ca_existing_gmail",
@@ -141,7 +141,7 @@ describe("SetupStep", () => {
       completedSteps: [
         "welcome",
         "identity",
-        "dench-cloud",
+        "crm-a-cloud",
         "connect-gmail",
         "connect-calendar",
       ],
@@ -158,11 +158,11 @@ describe("SetupStep", () => {
     const bodies: unknown[] = [];
     global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url === "/api/onboarding/dench-cloud") {
+      if (url === "/api/onboarding/crm-a-cloud") {
         return new Response(JSON.stringify({
           configured: true,
           source: "cli",
-          primaryModel: "dench-cloud/gpt-5.5",
+          primaryModel: "crm-a-cloud/gpt-5.5",
         }));
       }
       if (url === "/api/composio/connections?include_toolkits=1&fresh=1") {
@@ -224,16 +224,16 @@ describe("SetupStep", () => {
     const nextState: OnboardingState = {
       ...baseState,
       currentStep: "skill-template",
-      completedSteps: ["welcome", "identity", "dench-cloud", "connect-gmail"],
+      completedSteps: ["welcome", "identity", "crm-a-cloud", "connect-gmail"],
     };
     const bodies: unknown[] = [];
     global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
-      if (url === "/api/onboarding/dench-cloud") {
+      if (url === "/api/onboarding/crm-a-cloud") {
         return new Response(JSON.stringify({
           configured: true,
           source: "cli",
-          primaryModel: "dench-cloud/gpt-5.5",
+          primaryModel: "crm-a-cloud/gpt-5.5",
         }));
       }
       if (url === "/api/composio/connections?include_toolkits=1&fresh=1") {

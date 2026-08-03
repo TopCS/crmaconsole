@@ -659,7 +659,7 @@ function flattenVisible(tree: TreeNode[], expanded: Set<string>): TreeNode[] {
 
 // --- Main Exported Component ---
 
-const STORAGE_KEY = "denchclaw-tree-expanded";
+const STORAGE_KEY = "crm-a-console-tree-expanded";
 
 function loadExpandedPaths(): Set<string> {
   try {

@@ -29,7 +29,7 @@ function readConfig(): Record<string, unknown> {
 
 describe("mcp server config helpers", () => {
   beforeEach(() => {
-    stateDir = path.join(os.tmpdir(), `dench-mcp-servers-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    stateDir = path.join(os.tmpdir(), `crm-a-mcp-servers-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(stateDir, { recursive: true });
   });
 

@@ -1,6 +1,6 @@
 # Releasing
 
-`package.json` is the release source of truth for `denchclaw`.
+`package.json` is the release source of truth for `crm-a-console`.
 
 ## Main flow
 
@@ -8,7 +8,7 @@
 2. Push or merge that commit to `main`.
 3. GitHub Actions runs `.github/workflows/release.yml`.
 4. If that version is not already on npm, the workflow runs the same `deploy.sh` test and build checks in validation mode.
-5. Only after those checks pass does the workflow publish `denchclaw` to npm.
+5. Only after those checks pass does the workflow publish `crm-a-console` to npm.
 6. The workflow creates a matching GitHub release named `v<version>`.
 
 If the npm package already exists, the workflow skips publishing. If the GitHub release already exists, the workflow skips creating it. This makes reruns safe.

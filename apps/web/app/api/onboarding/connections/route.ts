@@ -7,7 +7,7 @@ import {
   writeOnboardingState,
   type ConnectionRecord,
   type OnboardingStep,
-} from "@/lib/denchclaw-state";
+} from "@/lib/crm-a-console-state";
 import {
   fetchComposioConnections,
   resolveComposioApiKey,

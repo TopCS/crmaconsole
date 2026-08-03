@@ -6,8 +6,8 @@ import { stopWebRuntimeCommand } from "../web-runtime-command.js";
 export function registerStopCommand(program: Command) {
   program
     .command("stop")
-    .description("Stop Dench managed web runtime on the configured port")
-    .option("--profile <name>", "Compatibility flag; non-dench values are ignored with a warning")
+    .description("Stop Crm-A managed web runtime on the configured port")
+    .option("--profile <name>", "Compatibility flag; non-crm-a values are ignored with a warning")
     .option("--web-port <port>", "Web runtime port override")
     .option(
       "--skip-daemon-install",

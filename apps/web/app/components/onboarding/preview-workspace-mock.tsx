@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from "react";
  */
 export type WorkspaceMockStage =
   | "empty"
-  | "dench-cloud"
+  | "crm-a-cloud"
   | "gmail"
   | "calendar"
   | "live";
@@ -59,7 +59,7 @@ function rowsVisibleFor(stage: WorkspaceMockStage): number {
   switch (stage) {
     case "empty":
       return 0;
-    case "dench-cloud":
+    case "crm-a-cloud":
       return 2;
     case "gmail":
     case "calendar":
@@ -111,7 +111,7 @@ export function PreviewWorkspaceMock({
               color: "var(--color-text-muted)",
             }}
           >
-            <span>denchclaw</span>
+            <span>crm-a-console</span>
             <span style={{ opacity: 0.5 }}>·</span>
             <span>People</span>
           </div>

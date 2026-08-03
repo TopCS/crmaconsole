@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const STATE_DIR = "/home/testuser/.openclaw-dench";
+const STATE_DIR = "/home/testuser/.openclaw-crm-a";
 
 vi.mock("node:fs", () => ({
   existsSync: vi.fn(() => false),
@@ -17,9 +17,9 @@ vi.mock("@/lib/workspace", () => ({
   discoverWorkspaces: vi.fn(() => []),
   setUIActiveWorkspace: vi.fn(),
   getActiveWorkspaceName: vi.fn(() => "work"),
-  resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw-dench"),
+  resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw-crm-a"),
   resolveWorkspaceDirForName: vi.fn((name: string) =>
-    join("/home/testuser/.openclaw-dench", `workspace-${name}`),
+    join("/home/testuser/.openclaw-crm-a", `workspace-${name}`),
   ),
   isValidWorkspaceName: vi.fn(() => true),
   resolveWorkspaceRoot: vi.fn(() => null),
@@ -96,7 +96,7 @@ describe("POST /api/workspace/init", () => {
     expect(response.status).toBe(409);
   });
 
-  it("creates workspace directory at ~/.openclaw-dench/workspace-<name> (enforces fixed layout)", async () => {
+  it("creates workspace directory at ~/.openclaw-crm-a/workspace-<name> (enforces fixed layout)", async () => {
     const { mkdirSync, writeFileSync } = await import("node:fs");
     const workspace = await import("@/lib/workspace");
     vi.mocked(workspace.discoverWorkspaces).mockReturnValue([]);
@@ -149,7 +149,7 @@ describe("POST /api/workspace/init", () => {
     expect(skillsMkdir).toBeTruthy();
   });
 
-  it("seeds IDENTITY.md as bootstrap placeholder (full identity is injected at runtime by dench-identity plugin)", async () => {
+  it("seeds IDENTITY.md as bootstrap placeholder (full identity is injected at runtime by crm-a-identity plugin)", async () => {
     const { existsSync, writeFileSync } = await import("node:fs");
     const workspace = await import("@/lib/workspace");
     vi.mocked(workspace.discoverWorkspaces).mockReturnValue([]);

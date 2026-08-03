@@ -72,7 +72,7 @@ describe("ChatMessage", () => {
         message={{
           id: "assistant-1",
           role: "assistant",
-          parts: [{ type: "text", text: "Hello from Dench." }],
+          parts: [{ type: "text", text: "Hello from Crm-A." }],
         }}
         voicePlaybackEnabled
       />,
@@ -90,7 +90,7 @@ describe("ChatMessage", () => {
         message={{
           id: "assistant-copy",
           role: "assistant",
-          parts: [{ type: "text", text: "Hello from Dench." }],
+          parts: [{ type: "text", text: "Hello from Crm-A." }],
         }}
         copyable
       />,
@@ -98,7 +98,7 @@ describe("ChatMessage", () => {
 
     await user.click(screen.getByRole("button", { name: "Copy message" }));
 
-    expect(writeTextSpy).toHaveBeenCalledWith("Hello from Dench.");
+    expect(writeTextSpy).toHaveBeenCalledWith("Hello from Crm-A.");
   });
 
   it("copies user turns with attachment metadata", async () => {
@@ -192,7 +192,7 @@ describe("ChatMessage", () => {
     expect(button.querySelector('img[src="/integrations/stripe-logomark.svg"]')).toBeNull();
   });
 
-  it("renders dench-question blocks as single-choice cards", async () => {
+  it("renders crm-a-question blocks as single-choice cards", async () => {
     const user = userEvent.setup();
     const onQuestionAnswer = vi.fn();
 
@@ -205,12 +205,12 @@ describe("ChatMessage", () => {
             type: "text",
             text: `Pick a system of record.
 
-\`\`\`dench-question
+\`\`\`crm-a-question
 {
   "id": "system-of-record",
   "prompt": "Where should I save new leads?",
   "options": [
-    { "id": "dench", "label": "Dench CRM" },
+    { "id": "crm-a", "label": "Crm-A CRM" },
     { "id": "hubspot", "label": "HubSpot" }
   ]
 }
@@ -223,15 +223,15 @@ describe("ChatMessage", () => {
 
     expect(screen.getByText("Pick a system of record.")).toBeInTheDocument();
     expect(screen.getByText("Where should I save new leads?")).toBeInTheDocument();
-    expect(screen.queryByText(/dench-question/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/crm-a-question/)).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Dench CRM/ }));
+    await user.click(screen.getByRole("button", { name: /Crm-A CRM/ }));
     await user.click(screen.getByRole("button", { name: "Continue" }));
 
-    expect(onQuestionAnswer).toHaveBeenCalledWith(expect.stringContaining("Dench CRM (dench)"));
+    expect(onQuestionAnswer).toHaveBeenCalledWith(expect.stringContaining("Crm-A CRM (crm-a)"));
   });
 
-  it("supports multi-choice dench-question cards", async () => {
+  it("supports multi-choice crm-a-question cards", async () => {
     const user = userEvent.setup();
     const onQuestionAnswer = vi.fn();
 
@@ -242,7 +242,7 @@ describe("ChatMessage", () => {
           role: "assistant",
           parts: [{
             type: "text",
-            text: `\`\`\`dench-question
+            text: `\`\`\`crm-a-question
 {
   "id": "signals",
   "prompt": "Which buying signals should matter?",
@@ -273,7 +273,7 @@ describe("ChatMessage", () => {
     expect(answer).toContain("Raised funding (funding)");
   });
 
-  it("lets optional dench-question cards be skipped with context", async () => {
+  it("lets optional crm-a-question cards be skipped with context", async () => {
     const user = userEvent.setup();
     const onQuestionAnswer = vi.fn();
 
@@ -284,7 +284,7 @@ describe("ChatMessage", () => {
           role: "assistant",
           parts: [{
             type: "text",
-            text: `\`\`\`dench-question
+            text: `\`\`\`crm-a-question
 {
   "id": "crm-write-policy",
   "prompt": "Should the skill update CRM fields automatically?",
@@ -318,7 +318,7 @@ describe("ChatMessage", () => {
     );
   });
 
-  it("renders persisted Dench Integration failures with their error details", async () => {
+  it("renders persisted Crm-A Integration failures with their error details", async () => {
     const user = userEvent.setup();
 
     render(
@@ -359,7 +359,7 @@ describe("ChatMessage", () => {
     expect(screen.getByText(/"project_id": "proj_123"/)).toBeInTheDocument();
   });
 
-  it("renders live Dench Integration failures with streamed output errors", async () => {
+  it("renders live Crm-A Integration failures with streamed output errors", async () => {
     const user = userEvent.setup();
 
     render(

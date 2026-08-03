@@ -1,15 +1,15 @@
 /**
- * Dench Action SDK Runtime.
+ * Crm-A Action SDK Runtime.
  *
  * Lightweight CommonJS module injected into inline action scripts.
- * Provides dench.* methods that wrap workspace API calls via HTTP.
- * Any language can use the DENCH_* env vars directly; this module
+ * Provides crm-a.* methods that wrap workspace API calls via HTTP.
+ * Any language can use the CRM_A_* env vars directly; this module
  * is a convenience for inline JS actions.
  */
 "use strict";
 
-module.exports = function createDenchSDK(env) {
-  const API = env.DENCH_API_URL || "http://localhost:3000/api";
+module.exports = function createCrmASDK(env) {
+  const API = env.CRM_A_API_URL || "http://localhost:3000/api";
 
   async function apiFetch(path, opts) {
     const url = API + path;
@@ -86,7 +86,7 @@ module.exports = function createDenchSDK(env) {
     },
 
     exec: function(cmd) {
-      return require("child_process").execSync(cmd, { encoding: "utf-8", cwd: env.DENCH_WORKSPACE_PATH });
+      return require("child_process").execSync(cmd, { encoding: "utf-8", cwd: env.CRM_A_WORKSPACE_PATH });
     },
 
     progress: function(percent, message) {
@@ -107,15 +107,15 @@ module.exports = function createDenchSDK(env) {
     },
 
     env: {
-      entryId: env.DENCH_ENTRY_ID,
-      entryData: (function() { try { return JSON.parse(env.DENCH_ENTRY_DATA || "{}"); } catch(e) { return {}; } })(),
-      objectName: env.DENCH_OBJECT_NAME,
-      objectId: env.DENCH_OBJECT_ID,
-      actionId: env.DENCH_ACTION_ID,
-      fieldId: env.DENCH_FIELD_ID,
-      workspacePath: env.DENCH_WORKSPACE_PATH,
-      dbPath: env.DENCH_DB_PATH,
-      apiUrl: env.DENCH_API_URL,
+      entryId: env.CRM_A_ENTRY_ID,
+      entryData: (function() { try { return JSON.parse(env.CRM_A_ENTRY_DATA || "{}"); } catch(e) { return {}; } })(),
+      objectName: env.CRM_A_OBJECT_NAME,
+      objectId: env.CRM_A_OBJECT_ID,
+      actionId: env.CRM_A_ACTION_ID,
+      fieldId: env.CRM_A_FIELD_ID,
+      workspacePath: env.CRM_A_WORKSPACE_PATH,
+      dbPath: env.CRM_A_DB_PATH,
+      apiUrl: env.CRM_A_API_URL,
     },
   };
 };

@@ -2,7 +2,7 @@
  * Server-side action script runner.
  *
  * Spawns child processes for action scripts in any language (JS, Python, bash, etc.).
- * Scripts receive entry context via DENCH_* environment variables and communicate
+ * Scripts receive entry context via CRM_A_* environment variables and communicate
  * results via NDJSON on stdout.
  */
 import { spawn, type ChildProcess } from "node:child_process";
@@ -78,30 +78,30 @@ export function resolveRuntime(
 export function buildEnv(ctx: ActionContext): NodeJS.ProcessEnv {
 	return {
 		...process.env,
-		DENCH_ENTRY_ID: ctx.entryId,
-		DENCH_ENTRY_DATA: JSON.stringify(ctx.entryData),
-		DENCH_OBJECT_NAME: ctx.objectName,
-		DENCH_OBJECT_ID: ctx.objectId,
-		DENCH_ACTION_ID: ctx.actionId,
-		DENCH_FIELD_ID: ctx.fieldId,
-		DENCH_WORKSPACE_PATH: ctx.workspacePath,
-		DENCH_DB_PATH: ctx.dbPath,
-		DENCH_API_URL: ctx.apiUrl,
+		CRM_A_ENTRY_ID: ctx.entryId,
+		CRM_A_ENTRY_DATA: JSON.stringify(ctx.entryData),
+		CRM_A_OBJECT_NAME: ctx.objectName,
+		CRM_A_OBJECT_ID: ctx.objectId,
+		CRM_A_ACTION_ID: ctx.actionId,
+		CRM_A_FIELD_ID: ctx.fieldId,
+		CRM_A_WORKSPACE_PATH: ctx.workspacePath,
+		CRM_A_DB_PATH: ctx.dbPath,
+		CRM_A_API_URL: ctx.apiUrl,
 	};
 }
 
 function generateInlineWrapper(script: string, sdkRuntimePath: string): string {
-	return `const dench = require(${JSON.stringify(sdkRuntimePath)})(process.env);
+	return `const crm-a = require(${JSON.stringify(sdkRuntimePath)})(process.env);
 const context = {
-  entryId: process.env.DENCH_ENTRY_ID,
-  entryData: JSON.parse(process.env.DENCH_ENTRY_DATA || '{}'),
-  objectName: process.env.DENCH_OBJECT_NAME,
-  objectId: process.env.DENCH_OBJECT_ID,
-  actionId: process.env.DENCH_ACTION_ID,
-  fieldId: process.env.DENCH_FIELD_ID,
-  workspacePath: process.env.DENCH_WORKSPACE_PATH,
-  dbPath: process.env.DENCH_DB_PATH,
-  apiUrl: process.env.DENCH_API_URL,
+  entryId: process.env.CRM_A_ENTRY_ID,
+  entryData: JSON.parse(process.env.CRM_A_ENTRY_DATA || '{}'),
+  objectName: process.env.CRM_A_OBJECT_NAME,
+  objectId: process.env.CRM_A_OBJECT_ID,
+  actionId: process.env.CRM_A_ACTION_ID,
+  fieldId: process.env.CRM_A_FIELD_ID,
+  workspacePath: process.env.CRM_A_WORKSPACE_PATH,
+  dbPath: process.env.CRM_A_DB_PATH,
+  apiUrl: process.env.CRM_A_API_URL,
 };
 (async () => {
 ${script}

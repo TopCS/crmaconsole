@@ -17,7 +17,7 @@ const MAX_DRAWER_HEIGHT_RATIO = 0.75;
 const DEFAULT_DRAWER_HEIGHT = 280;
 const MOBILE_MAX_DRAWER_HEIGHT_RATIO = 0.6;
 const MOBILE_DEFAULT_DRAWER_HEIGHT_RATIO = 0.5;
-const STORAGE_KEY = "dench-terminal-height";
+const STORAGE_KEY = "crm-a-terminal-height";
 const DEFAULT_WS_PORT = 3101;
 const MAX_TERMINALS = 8;
 

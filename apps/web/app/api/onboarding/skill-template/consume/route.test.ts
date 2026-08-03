@@ -7,7 +7,7 @@ import {
   readOnboardingState,
   writeOnboardingState,
   type OnboardingState,
-} from "@/lib/denchclaw-state";
+} from "@/lib/crm-a-console-state";
 import { buildSkillTemplatePrompt } from "@/lib/skill-templates";
 
 const { POST } = await import("./route");

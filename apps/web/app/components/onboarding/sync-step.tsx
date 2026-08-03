@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { OnboardingState } from "@/lib/denchclaw-state";
+import type { OnboardingState } from "@/lib/crm-a-console-state";
 import type { LiveStats } from "./preview-workspace-mock";
 import {
   assertOnboardingResponseOk,

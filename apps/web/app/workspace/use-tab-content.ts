@@ -33,7 +33,7 @@ import {
 import type { CronJob } from "../types/cron";
 import type {
   ContentState,
-  DenchAppManifest,
+  CrmAAppManifest,
   FileData,
   ObjectData,
 } from "./content-state";
@@ -495,10 +495,10 @@ async function fetchAppContent(
   signal: AbortSignal,
 ): Promise<ContentState> {
   const manifestRes = await fetch(
-    `/api/apps?app=${encodeURIComponent(tab.path)}&file=.dench.yaml&meta=1`,
+    `/api/apps?app=${encodeURIComponent(tab.path)}&file=.crm-a.yaml&meta=1`,
     { signal },
   );
-  let manifest: DenchAppManifest = { name: tab.title };
+  let manifest: CrmAAppManifest = { name: tab.title };
   if (manifestRes.ok) {
     try {
       manifest = await manifestRes.json();

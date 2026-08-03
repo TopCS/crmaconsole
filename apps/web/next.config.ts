@@ -15,11 +15,11 @@ try {
   openclawVersion = oclPkg.version ?? "";
 } catch { /* openclaw not resolvable at build time */ }
 
-const denchVersion = rootPkg.version ?? "";
+const crmAVersion = rootPkg.version ?? "";
 
 const nextConfig: NextConfig = {
   env: {
-    NEXT_PUBLIC_DENCHCLAW_VERSION: denchVersion,
+    NEXT_PUBLIC_CRM_A_CONSOLE_VERSION: crmAVersion,
     NEXT_PUBLIC_OPENCLAW_VERSION: openclawVersion,
   },
 
@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/((?!_next/static|_next/image|favicon\\.ico).*)",
-        headers: [{ key: "X-Denchclaw-Version", value: denchVersion }],
+        headers: [{ key: "X-CrmAConsole-Version", value: crmAVersion }],
       },
     ];
   },

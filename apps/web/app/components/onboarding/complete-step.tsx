@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { Button } from "../ui/button";
-import type { OnboardingState } from "@/lib/denchclaw-state";
+import type { OnboardingState } from "@/lib/crm-a-console-state";
 
 /**
  * Full-screen landing moment shown after the user explicitly clicks "I'm

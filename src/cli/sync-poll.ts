@@ -2,11 +2,11 @@
  * One-shot Gmail/Calendar sync kickoff used by the bootstrap/start/update
  * CLI commands.
  *
- * Why this exists: the gateway-side `dench-ai-gateway` plugin's
+ * Why this exists: the gateway-side `crm-a-ai-gateway` plugin's
  * `armSyncTrigger` deliberately does NOT fire an immediate tick on plugin
- * load (see `extensions/dench-ai-gateway/sync-trigger.ts` for the
+ * load (see `extensions/crm-a-ai-gateway/sync-trigger.ts` for the
  * rationale — gateway boots typically race a half-up web app during
- * `denchclaw update`, producing 404/ECONNREFUSED noise that looks like
+ * `crm-a-console update`, producing 404/ECONNREFUSED noise that looks like
  * a failure). Instead, the CLI commands call `kickoffSyncPoll` AFTER
  * `ensureManagedWebRuntime` has confirmed web is healthy, which is a
  * much more reliable signal than "the plugin loaded".
@@ -39,7 +39,7 @@ function readKeyFromAuthProfiles(stateDir: string): string | undefined {
   try {
     const raw = JSON.parse(readFileSync(authPath, "utf-8")) as UnknownRecord;
     const profiles = raw?.profiles as UnknownRecord | undefined;
-    const profile = profiles?.["dench-cloud:default"] as UnknownRecord | undefined;
+    const profile = profiles?.["crm-a-cloud:default"] as UnknownRecord | undefined;
     const key = profile?.key;
     return typeof key === "string" && key.trim() ? key.trim() : undefined;
   } catch {
@@ -48,7 +48,7 @@ function readKeyFromAuthProfiles(stateDir: string): string | undefined {
 }
 
 function envFallbackKey(): string | undefined {
-  return process.env.DENCH_CLOUD_API_KEY?.trim() || process.env.DENCH_API_KEY?.trim() || undefined;
+  return process.env.CRM_A_CLOUD_API_KEY?.trim() || process.env.CRM_A_API_KEY?.trim() || undefined;
 }
 
 /**
@@ -57,12 +57,12 @@ function envFallbackKey(): string | undefined {
  * `web-runtime-command.ts#startWebRuntimeCommand`, and
  * `web-runtime-command.ts#updateWebRuntimeCommand` after the web runtime
  * is verified healthy. Mirrors the auth contract the gateway plugin uses
- * (Bearer + Dench Cloud API key).
+ * (Bearer + Crm-A Cloud API key).
  *
  * Caller is expected to log the outcome at most a single line — this
  * is a UX nicety, not a critical path. Returning `{ kind: "skipped" }`
- * is normal when the user is on a brand-new install with no Dench Cloud
- * key yet (skip-Dench-Cloud onboarding path).
+ * is normal when the user is on a brand-new install with no Crm-A Cloud
+ * key yet (skip-Crm-A-Cloud onboarding path).
  */
 export async function kickoffSyncPoll(params: {
   stateDir: string;
@@ -109,7 +109,7 @@ export async function kickoffSyncPoll(params: {
 /**
  * Convert a `KickoffSyncPollResult` into a one-line human-readable
  * summary suitable for stdout/log emission. Empty string for the
- * "no Dench Cloud key" case so quiet installs stay quiet.
+ * "no Crm-A Cloud key" case so quiet installs stay quiet.
  */
 export function summarizeKickoffSyncPoll(result: KickoffSyncPollResult): string {
   switch (result.kind) {
@@ -117,7 +117,7 @@ export function summarizeKickoffSyncPoll(result: KickoffSyncPollResult): string 
       return "Kicked off initial Gmail/Calendar sync.";
     case "skipped":
       return result.reason === "no-api-key"
-        ? "" // Quiet skip — Dench Cloud isn't configured yet.
+        ? "" // Quiet skip — Crm-A Cloud isn't configured yet.
         : "Sync kickoff skipped (fetch unavailable).";
     case "error":
       if (result.reason === "http") {

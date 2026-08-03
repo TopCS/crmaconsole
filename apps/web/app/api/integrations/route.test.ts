@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/integrations", () => ({
-  normalizeLockedDenchIntegrations: vi.fn(() => ({
+  normalizeLockedCrmAIntegrations: vi.fn(() => ({
     changed: false,
     state: {
-      denchCloud: {
+      crmACloud: {
         hasKey: true,
         isPrimaryProvider: true,
-        primaryModel: "dench-cloud/claude-sonnet-4.6",
+        primaryModel: "crm-a-cloud/claude-sonnet-4.6",
       },
       metadata: { schemaVersion: 1, exa: { ownsSearch: true, fallbackProvider: "duckduckgo" } },
       search: {
@@ -31,7 +31,7 @@ vi.mock("@/lib/integrations", () => ({
           gatewayBaseUrl: "https://gateway.merseoriginals.com",
           auth: { configured: true, source: "config" },
           plugin: null,
-          managedByDench: true,
+          managedByCrmA: true,
           healthIssues: [],
         },
       ],

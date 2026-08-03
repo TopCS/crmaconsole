@@ -26,20 +26,20 @@ import { track } from "../telemetry/telemetry.js";
 import { stylePromptMessage } from "../terminal/prompt-style.js";
 import { theme } from "../terminal/theme.js";
 import { VERSION } from "../version.js";
-import { renderDenchCloudRecommendationBanner } from "./dench-cloud-banner.js";
+import { renderCrmACloudRecommendationBanner } from "./crm-a-cloud-banner.js";
 import {
-  buildDenchCloudConfigPatch,
-  DEFAULT_DENCH_CLOUD_GATEWAY_URL,
-  fetchDenchCloudCatalog,
-  formatDenchCloudModelHint,
-  normalizeDenchGatewayUrl,
-  readConfiguredDenchCloudSettings,
-  RECOMMENDED_DENCH_CLOUD_MODEL_ID,
-  resolveDenchCloudModel,
-  validateDenchCloudApiKey,
-  type DenchCloudCatalogLoadResult,
-  type DenchCloudCatalogModel,
-} from "./dench-cloud.js";
+  buildCrmACloudConfigPatch,
+  DEFAULT_CRM_A_CLOUD_GATEWAY_URL,
+  fetchCrmACloudCatalog,
+  formatCrmACloudModelHint,
+  normalizeCrmAGatewayUrl,
+  readConfiguredCrmACloudSettings,
+  RECOMMENDED_CRM_A_CLOUD_MODEL_ID,
+  resolveCrmACloudModel,
+  validateCrmACloudApiKey,
+  type CrmACloudCatalogLoadResult,
+  type CrmACloudCatalogModel,
+} from "./crm-a-cloud.js";
 import { applyCliProfileEnv } from "./profile.js";
 import { kickoffSyncPoll, summarizeKickoffSyncPoll } from "./sync-poll.js";
 import {
@@ -51,8 +51,8 @@ import {
 } from "./web-runtime.js";
 import { seedWorkspaceFromAssets, type WorkspaceSeedResult } from "./workspace-seed.js";
 
-const DEFAULT_DENCHCLAW_PROFILE = "dench";
-const DENCHCLAW_GATEWAY_PORT_START = 19001;
+const DEFAULT_CRM_A_CONSOLE_PROFILE = "crm-a";
+const CRM_A_CONSOLE_GATEWAY_PORT_START = 19001;
 const MAX_PORT_SCAN_ATTEMPTS = 100;
 const DEFAULT_BOOTSTRAP_ROLLOUT_STAGE = "default";
 const DEFAULT_GATEWAY_LAUNCH_AGENT_LABEL = "ai.openclaw.gateway";
@@ -110,10 +110,10 @@ export type BootstrapOptions = {
   json?: boolean;
   gatewayPort?: string | number;
   webPort?: string | number;
-  denchCloud?: boolean;
-  denchCloudApiKey?: string;
-  denchCloudModel?: string;
-  denchGatewayUrl?: string;
+  crmACloud?: boolean;
+  crmACloudApiKey?: string;
+  crmACloudModel?: string;
+  crmAGatewayUrl?: string;
   skipDaemonInstall?: boolean;
 };
 
@@ -224,15 +224,15 @@ type BundledPluginSpec = {
 
 type BundledPluginSyncResult = {
   installedPluginIds: string[];
-  migratedLegacyDenchPlugin: boolean;
+  migratedLegacyCrmAPlugin: boolean;
 };
 
-type DenchCloudBootstrapSelection = {
+type CrmACloudBootstrapSelection = {
   enabled: boolean;
   apiKey?: string;
   gatewayUrl?: string;
   selectedModel?: string;
-  catalog?: DenchCloudCatalogLoadResult;
+  catalog?: CrmACloudCatalogLoadResult;
 };
 
 const IS_WINDOWS = process.platform === "win32";
@@ -420,13 +420,13 @@ export function resolveBootstrapRolloutStage(
   env: NodeJS.ProcessEnv = process.env,
 ): BootstrapRolloutStage {
   return normalizeBootstrapRolloutStage(
-    env.DENCHCLAW_BOOTSTRAP_ROLLOUT ?? env.OPENCLAW_BOOTSTRAP_ROLLOUT,
+    env.CRM_A_CONSOLE_BOOTSTRAP_ROLLOUT ?? env.OPENCLAW_BOOTSTRAP_ROLLOUT,
   );
 }
 
 export function isLegacyFallbackEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return (
-    isTruthyEnvValue(env.DENCHCLAW_BOOTSTRAP_LEGACY_FALLBACK) ||
+    isTruthyEnvValue(env.CRM_A_CONSOLE_BOOTSTRAP_LEGACY_FALLBACK) ||
     isTruthyEnvValue(env.OPENCLAW_BOOTSTRAP_LEGACY_FALLBACK)
   );
 }
@@ -622,8 +622,8 @@ function readConfiguredPluginLoadPaths(stateDir: string): string[] {
     : [];
 }
 
-function isLegacyDenchCloudPluginPath(value: string): boolean {
-  return value.replaceAll("\\", "/").includes("/dench-cloud-provider");
+function isLegacyCrmACloudPluginPath(value: string): boolean {
+  return value.replaceAll("\\", "/").includes("/crm-a-cloud-provider");
 }
 
 async function setOpenClawConfigJson(params: {
@@ -641,8 +641,8 @@ async function setOpenClawConfigJson(params: {
   });
 }
 
-function readDenchIntegrationsMetadata(stateDir: string): Record<string, unknown> | undefined {
-  const metadataPath = path.join(stateDir, ".dench-integrations.json");
+function readCrmAIntegrationsMetadata(stateDir: string): Record<string, unknown> | undefined {
+  const metadataPath = path.join(stateDir, ".crm-a-integrations.json");
   if (!existsSync(metadataPath)) {
     return undefined;
   }
@@ -717,7 +717,7 @@ function removeTtsElevenLabsConfig(
   delete tts.elevenlabs;
 }
 
-function disableDenchElevenLabsOverride(
+function disableCrmAElevenLabsOverride(
   tts: Record<string, unknown>,
   shape: ElevenLabsTtsConfigShape,
   gatewayUrl?: string,
@@ -745,9 +745,9 @@ function disableDenchElevenLabsOverride(
   }
 }
 
-function applyDenchManagedIntegrationDefaults(params: {
+function applyCrmAManagedIntegrationDefaults(params: {
   stateDir: string;
-  denchEnabled: boolean;
+  crmAEnabled: boolean;
   gatewayUrl?: string;
   apiKey?: string;
   ttsConfigShape: ElevenLabsTtsConfigShape;
@@ -759,11 +759,11 @@ function applyDenchManagedIntegrationDefaults(params: {
   const entries = { ...(asRecord(plugins.entries) ?? {}) };
   entries["exa-search"] = {
     ...(asRecord(entries["exa-search"]) ?? {}),
-    enabled: params.denchEnabled,
+    enabled: params.crmAEnabled,
   };
   entries["apollo-enrichment"] = {
     ...(asRecord(entries["apollo-enrichment"]) ?? {}),
-    enabled: params.denchEnabled,
+    enabled: params.crmAEnabled,
   };
   plugins.entries = entries;
   nextConfig.plugins = plugins;
@@ -774,23 +774,23 @@ function applyDenchManagedIntegrationDefaults(params: {
     : [];
   const web = { ...(asRecord(tools.web) ?? {}) };
   const search = { ...(asRecord(web.search) ?? {}) };
-  search.enabled = !params.denchEnabled;
+  search.enabled = !params.crmAEnabled;
   web.search = search;
   tools.web = web;
-  tools.deny = params.denchEnabled
+  tools.deny = params.crmAEnabled
     ? uniqueStrings([...deny, "web_search"])
     : deny.filter((value) => value !== "web_search");
   nextConfig.tools = tools;
 
   const messages = { ...(asRecord(nextConfig.messages) ?? {}) };
   const tts = { ...(asRecord(messages.tts) ?? {}) };
-  if (params.denchEnabled && params.gatewayUrl && params.apiKey) {
+  if (params.crmAEnabled && params.gatewayUrl && params.apiKey) {
     const elevenlabs = ensureTtsElevenLabsConfig(tts, params.ttsConfigShape);
     tts.provider = "elevenlabs";
     elevenlabs.baseUrl = params.gatewayUrl;
     elevenlabs.apiKey = params.apiKey;
   } else {
-    disableDenchElevenLabsOverride(tts, params.ttsConfigShape, params.gatewayUrl, params.apiKey);
+    disableCrmAElevenLabsOverride(tts, params.ttsConfigShape, params.gatewayUrl, params.apiKey);
   }
   messages.tts = tts;
   nextConfig.messages = messages;
@@ -800,13 +800,13 @@ function applyDenchManagedIntegrationDefaults(params: {
     `${JSON.stringify(nextConfig, null, 2)}\n`,
   );
 
-  const currentMetadata = readDenchIntegrationsMetadata(params.stateDir) ?? {};
+  const currentMetadata = readCrmAIntegrationsMetadata(params.stateDir) ?? {};
   const nextMetadata = {
     ...currentMetadata,
     schemaVersion: 1,
     exa: {
       ...(asRecord(currentMetadata.exa) ?? {}),
-      ownsSearch: params.denchEnabled,
+      ownsSearch: params.crmAEnabled,
       fallbackProvider:
         typeof asRecord(currentMetadata.exa)?.fallbackProvider === "string"
           ? asRecord(currentMetadata.exa)?.fallbackProvider
@@ -814,7 +814,7 @@ function applyDenchManagedIntegrationDefaults(params: {
     },
   };
   writeFileSync(
-    path.join(params.stateDir, ".dench-integrations.json"),
+    path.join(params.stateDir, ".crm-a-integrations.json"),
     `${JSON.stringify(nextMetadata, null, 2)}\n`,
   );
 }
@@ -855,14 +855,14 @@ async function syncBundledPlugins(params: {
     };
     const currentAllow = readConfiguredPluginAllowlist(params.stateDir);
     const currentLoadPaths = readConfiguredPluginLoadPaths(params.stateDir);
-    const nextAllow = currentAllow.filter((value) => value !== "dench-cloud-provider");
-    const nextLoadPaths = currentLoadPaths.filter((value) => !isLegacyDenchCloudPluginPath(value));
-    const legacyPluginDir = path.join(params.stateDir, "extensions", "dench-cloud-provider");
-    const hadLegacyEntry = entries["dench-cloud-provider"] !== undefined;
-    const hadLegacyInstall = installs["dench-cloud-provider"] !== undefined;
-    delete entries["dench-cloud-provider"];
-    delete installs["dench-cloud-provider"];
-    const migratedLegacyDenchPlugin =
+    const nextAllow = currentAllow.filter((value) => value !== "crm-a-cloud-provider");
+    const nextLoadPaths = currentLoadPaths.filter((value) => !isLegacyCrmACloudPluginPath(value));
+    const legacyPluginDir = path.join(params.stateDir, "extensions", "crm-a-cloud-provider");
+    const hadLegacyEntry = entries["crm-a-cloud-provider"] !== undefined;
+    const hadLegacyInstall = installs["crm-a-cloud-provider"] !== undefined;
+    delete entries["crm-a-cloud-provider"];
+    delete installs["crm-a-cloud-provider"];
+    const migratedLegacyCrmAPlugin =
       nextAllow.length !== currentAllow.length ||
       nextLoadPaths.length !== currentLoadPaths.length ||
       hadLegacyEntry ||
@@ -938,18 +938,18 @@ async function syncBundledPlugins(params: {
       `${JSON.stringify(nextConfig, null, 2)}\n`,
     );
 
-    if (migratedLegacyDenchPlugin) {
+    if (migratedLegacyCrmAPlugin) {
       rmSync(legacyPluginDir, { recursive: true, force: true });
     }
 
     return {
       installedPluginIds,
-      migratedLegacyDenchPlugin,
+      migratedLegacyCrmAPlugin,
     };
   } catch {
     return {
       installedPluginIds: [],
-      migratedLegacyDenchPlugin: false,
+      migratedLegacyCrmAPlugin: false,
     };
   }
 }
@@ -1000,7 +1000,7 @@ async function ensureDefaultWorkspacePath(
 
 /**
  * Stage all required pre-onboard config directly into `stateDir/openclaw.json`
- * without going through the OpenClaw CLI.  On a fresh install the "dench"
+ * without going through the OpenClaw CLI.  On a fresh install the "crm-a"
  * profile doesn't exist yet (it's created by `openclaw onboard`), so any
  * `openclaw config set` call fails.  Writing the file directly sidesteps
  * this while still ensuring the config is in place before onboard starts
@@ -1075,7 +1075,7 @@ async function ensureAgentDefaults(openclawCommand: string, profile: string): Pr
     ["commands.bash", "true"],
     ["commands.config", "true"],
     // Heartbeat: once a day instead of OpenClaw's stock 30m. Heartbeats wake
-    // the agent for autonomous follow-ups; 30m is too chatty for Dench's
+    // the agent for autonomous follow-ups; 30m is too chatty for Crm-A's
     // always-on workspace UX. See agents.defaults.heartbeat in openclaw.json.
     ["agents.defaults.heartbeat.every", "24h"],
   ];
@@ -1807,7 +1807,7 @@ function createOpenClawSetupProgress(params: {
 
 /**
  * Returns a copy of `process.env` with `npm_config_*`, `npm_package_*`, and
- * npm lifecycle variables stripped. When denchclaw is launched via `npx`, npm
+ * npm lifecycle variables stripped. When crm-a-console is launched via `npx`, npm
  * injects environment variables (most critically `npm_config_prefix`) that
  * redirect `npm install -g` and `npm ls -g` to a temporary npx-managed
  * prefix instead of the user's real global npm directory. Stripping these
@@ -2305,14 +2305,14 @@ function remediationForGatewayFailure(
   if (normalized.includes("address already in use") || normalized.includes("eaddrinuse")) {
     return `Port ${port} is busy. The bootstrap will auto-assign an available port, or you can explicitly specify one with \`--gateway-port <port>\`.`;
   }
-  return `Run \`openclaw --profile ${profile} doctor --fix\` and retry \`npx denchclaw bootstrap\`.`;
+  return `Run \`openclaw --profile ${profile} doctor --fix\` and retry \`npx crm-a-console bootstrap\`.`;
 }
 
 function remediationForWebUiFailure(port: number): string {
   return [
     `Web UI did not respond on ${port}.`,
-    `Run \`npx denchclaw update --web-port ${port}\` to refresh the managed web runtime.`,
-    `If the port is stuck, run \`npx denchclaw stop --web-port ${port}\` first.`,
+    `Run \`npx crm-a-console update --web-port ${port}\` to refresh the managed web runtime.`,
+    `If the port is stuck, run \`npx crm-a-console stop --web-port ${port}\` first.`,
   ].join(" ");
 }
 
@@ -2395,7 +2395,7 @@ function readAuthProfileKey(stateDir: string): string | undefined {
   try {
     if (!existsSync(authPath)) return undefined;
     const raw = json5.parse(readFileSync(authPath, "utf-8"));
-    const key = raw?.profiles?.["dench-cloud:default"]?.key;
+    const key = raw?.profiles?.["crm-a-cloud:default"]?.key;
     return typeof key === "string" && key.trim() ? key.trim() : undefined;
   } catch {
     return undefined;
@@ -2414,9 +2414,9 @@ function writeAuthProfileKey(stateDir: string, apiKey: string): void {
   }
 
   const profiles = (raw.profiles ?? {}) as Record<string, unknown>;
-  profiles["dench-cloud:default"] = {
+  profiles["crm-a-cloud:default"] = {
     type: "api_key",
-    provider: "dench-cloud",
+    provider: "crm-a-cloud",
     key: apiKey,
   };
   raw.profiles = profiles;
@@ -2498,7 +2498,7 @@ export function buildBootstrapDiagnostics(params: {
   gatewayPort: number;
   gatewayUrl: string;
   gatewayProbe: { ok: boolean; detail?: string };
-  denchCloudEnabled: boolean;
+  crmACloudEnabled: boolean;
   composioConfigured: boolean;
   webPort: number;
   webReachable: boolean;
@@ -2530,15 +2530,15 @@ export function buildBootstrapDiagnostics(params: {
     );
   }
 
-  if (params.profile === DEFAULT_DENCHCLAW_PROFILE) {
+  if (params.profile === DEFAULT_CRM_A_CONSOLE_PROFILE) {
     checks.push(createCheck("profile", "pass", `Profile pinned: ${params.profile}.`));
   } else {
     checks.push(
       createCheck(
         "profile",
         "fail",
-        `DenchClaw profile drift detected (${params.profile}).`,
-        `DenchClaw requires \`--profile ${DEFAULT_DENCHCLAW_PROFILE}\`. Re-run bootstrap to repair environment defaults.`,
+        `Crm-A Console profile drift detected (${params.profile}).`,
+        `Crm-A Console requires \`--profile ${DEFAULT_CRM_A_CONSOLE_PROFILE}\`. Re-run bootstrap to repair environment defaults.`,
       ),
     );
   }
@@ -2560,17 +2560,17 @@ export function buildBootstrapDiagnostics(params: {
     );
   }
 
-  if (params.denchCloudEnabled) {
+  if (params.crmACloudEnabled) {
     checks.push(
       createCheck(
         "composio",
         params.composioConfigured ? "pass" : "warn",
         params.composioConfigured
-          ? "Dench Integrations configured via Dench Cloud gateway."
-          : "Dench Integrations not configured. Check Dench Cloud gateway connectivity.",
+          ? "Crm-A Integrations configured via Crm-A Cloud gateway."
+          : "Crm-A Integrations not configured. Check Crm-A Cloud gateway connectivity.",
         params.composioConfigured
           ? undefined
-          : `Open Settings > Integrations or run \`openclaw --profile ${DEFAULT_DENCHCLAW_PROFILE} gateway restart\` to repair the Dench Cloud config.`,
+          : `Open Settings > Integrations or run \`openclaw --profile ${DEFAULT_CRM_A_CONSOLE_PROFILE} gateway restart\` to repair the Crm-A Cloud config.`,
       ),
     );
   }
@@ -2586,7 +2586,7 @@ export function buildBootstrapDiagnostics(params: {
         "agent-auth",
         "fail",
         authCheck.detail,
-        `Run \`openclaw --profile ${DEFAULT_DENCHCLAW_PROFILE} onboard --install-daemon\` to configure API keys.`,
+        `Run \`openclaw --profile ${DEFAULT_CRM_A_CONSOLE_PROFILE} onboard --install-daemon\` to configure API keys.`,
       ),
     );
   }
@@ -2604,7 +2604,7 @@ export function buildBootstrapDiagnostics(params: {
     );
   }
 
-  const expectedStateDir = resolveProfileStateDir(DEFAULT_DENCHCLAW_PROFILE, env);
+  const expectedStateDir = resolveProfileStateDir(DEFAULT_CRM_A_CONSOLE_PROFILE, env);
   const usesPinnedStateDir = path.resolve(stateDir) === path.resolve(expectedStateDir);
   if (usesPinnedStateDir) {
     checks.push(createCheck("state-isolation", "pass", `State dir pinned: ${stateDir}.`));
@@ -2614,13 +2614,13 @@ export function buildBootstrapDiagnostics(params: {
         "state-isolation",
         "fail",
         `Unexpected state dir: ${stateDir}.`,
-        `DenchClaw requires \`${expectedStateDir}\`. Re-run bootstrap to restore pinned defaults.`,
+        `Crm-A Console requires \`${expectedStateDir}\`. Re-run bootstrap to restore pinned defaults.`,
       ),
     );
   }
 
   const launchAgentLabel = resolveGatewayLaunchAgentLabel(params.profile);
-  const expectedLaunchAgentLabel = resolveGatewayLaunchAgentLabel(DEFAULT_DENCHCLAW_PROFILE);
+  const expectedLaunchAgentLabel = resolveGatewayLaunchAgentLabel(DEFAULT_CRM_A_CONSOLE_PROFILE);
   if (launchAgentLabel === expectedLaunchAgentLabel) {
     checks.push(createCheck("daemon-label", "pass", `Gateway service label: ${launchAgentLabel}.`));
   } else {
@@ -2629,7 +2629,7 @@ export function buildBootstrapDiagnostics(params: {
         "daemon-label",
         "fail",
         `Gateway service label mismatch (${launchAgentLabel}).`,
-        `DenchClaw requires launch agent label ${expectedLaunchAgentLabel}.`,
+        `Crm-A Console requires launch agent label ${expectedLaunchAgentLabel}.`,
       ),
     );
   }
@@ -2640,14 +2640,14 @@ export function buildBootstrapDiagnostics(params: {
       params.rolloutStage === "default" ? "pass" : "warn",
       `Bootstrap rollout stage: ${params.rolloutStage}${params.legacyFallbackEnabled ? " (legacy fallback enabled)" : ""}.`,
       params.rolloutStage === "beta"
-        ? "Enable beta cutover by setting DENCHCLAW_BOOTSTRAP_BETA_OPT_IN=1."
+        ? "Enable beta cutover by setting CRM_A_CONSOLE_BOOTSTRAP_BETA_OPT_IN=1."
         : undefined,
     ),
   );
 
-  const migrationSuiteOk = isTruthyEnvValue(env.DENCHCLAW_BOOTSTRAP_MIGRATION_SUITE_OK);
-  const onboardingE2EOk = isTruthyEnvValue(env.DENCHCLAW_BOOTSTRAP_ONBOARDING_E2E_OK);
-  const enforceCutoverGates = isTruthyEnvValue(env.DENCHCLAW_BOOTSTRAP_ENFORCE_SAFETY_GATES);
+  const migrationSuiteOk = isTruthyEnvValue(env.CRM_A_CONSOLE_BOOTSTRAP_MIGRATION_SUITE_OK);
+  const onboardingE2EOk = isTruthyEnvValue(env.CRM_A_CONSOLE_BOOTSTRAP_ONBOARDING_E2E_OK);
+  const enforceCutoverGates = isTruthyEnvValue(env.CRM_A_CONSOLE_BOOTSTRAP_ENFORCE_SAFETY_GATES);
   const cutoverGatePassed = migrationSuiteOk && onboardingE2EOk;
   checks.push(
     createCheck(
@@ -2656,7 +2656,7 @@ export function buildBootstrapDiagnostics(params: {
       `Cutover gate: migrationSuite=${migrationSuiteOk ? "pass" : "missing"}, onboardingE2E=${onboardingE2EOk ? "pass" : "missing"}.`,
       cutoverGatePassed
         ? undefined
-        : "Run migration contracts + onboarding E2E and set DENCHCLAW_BOOTSTRAP_MIGRATION_SUITE_OK=1 and DENCHCLAW_BOOTSTRAP_ONBOARDING_E2E_OK=1 before full cutover.",
+        : "Run migration contracts + onboarding E2E and set CRM_A_CONSOLE_BOOTSTRAP_MIGRATION_SUITE_OK=1 and CRM_A_CONSOLE_BOOTSTRAP_ONBOARDING_E2E_OK=1 before full cutover.",
     ),
   );
 
@@ -2701,33 +2701,33 @@ function logBootstrapChecklist(diagnostics: BootstrapDiagnostics, runtime: Runti
   }
 }
 
-function isExplicitDenchCloudRequest(opts: BootstrapOptions): boolean {
+function isExplicitCrmACloudRequest(opts: BootstrapOptions): boolean {
   return Boolean(
-    opts.denchCloud ||
-    opts.denchCloudApiKey?.trim() ||
-    opts.denchCloudModel?.trim() ||
-    opts.denchGatewayUrl?.trim(),
+    opts.crmACloud ||
+    opts.crmACloudApiKey?.trim() ||
+    opts.crmACloudModel?.trim() ||
+    opts.crmAGatewayUrl?.trim(),
   );
 }
 
-function resolveDenchCloudApiKeyCandidate(params: {
+function resolveCrmACloudApiKeyCandidate(params: {
   opts: BootstrapOptions;
   stateDir: string;
   existingApiKey?: string;
 }): string | undefined {
   return (
-    params.opts.denchCloudApiKey?.trim() ||
-    process.env.DENCH_CLOUD_API_KEY?.trim() ||
-    process.env.DENCH_API_KEY?.trim() ||
+    params.opts.crmACloudApiKey?.trim() ||
+    process.env.CRM_A_CLOUD_API_KEY?.trim() ||
+    process.env.CRM_A_API_KEY?.trim() ||
     readAuthProfileKey(params.stateDir) ||
     params.existingApiKey?.trim()
   );
 }
 
-async function promptForDenchCloudApiKey(initialValue?: string): Promise<string | undefined> {
+async function promptForCrmACloudApiKey(initialValue?: string): Promise<string | undefined> {
   const value = await text({
-    message: stylePromptMessage("Paste your Dench Cloud API key"),
-    placeholder: "dench_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    message: stylePromptMessage("Paste your Crm-A Cloud API key"),
+    placeholder: "crm_a_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
     ...(initialValue ? { initialValue } : {}),
     validate: (input) => (input?.trim().length ? undefined : "API key is required."),
   });
@@ -2737,21 +2737,21 @@ async function promptForDenchCloudApiKey(initialValue?: string): Promise<string 
   return String(value).trim();
 }
 
-async function promptForDenchCloudModel(params: {
-  models: DenchCloudCatalogModel[];
+async function promptForCrmACloudModel(params: {
+  models: CrmACloudCatalogModel[];
   initialStableId?: string;
 }): Promise<string | undefined> {
   const sorted = [...params.models].sort((a, b) => {
-    const aRec = a.id === RECOMMENDED_DENCH_CLOUD_MODEL_ID ? 0 : 1;
-    const bRec = b.id === RECOMMENDED_DENCH_CLOUD_MODEL_ID ? 0 : 1;
+    const aRec = a.id === RECOMMENDED_CRM_A_CLOUD_MODEL_ID ? 0 : 1;
+    const bRec = b.id === RECOMMENDED_CRM_A_CLOUD_MODEL_ID ? 0 : 1;
     return aRec - bRec;
   });
   const selection = await select({
-    message: stylePromptMessage("Choose your default Dench Cloud model"),
+    message: stylePromptMessage("Choose your default Crm-A Cloud model"),
     options: sorted.map((model) => ({
       value: model.stableId,
       label: model.displayName,
-      hint: formatDenchCloudModelHint(model),
+      hint: formatCrmACloudModelHint(model),
     })),
     ...(params.initialStableId ? { initialValue: params.initialStableId } : {}),
   });
@@ -2761,11 +2761,11 @@ async function promptForDenchCloudModel(params: {
   return String(selection);
 }
 
-function preStageDenchCloudConfig(params: {
+function preStageCrmACloudConfig(params: {
   stateDir: string;
   gatewayUrl: string;
   apiKey: string;
-  catalog?: DenchCloudCatalogLoadResult;
+  catalog?: CrmACloudCatalogLoadResult;
   selectedModel?: string;
 }): void {
   try {
@@ -2776,12 +2776,12 @@ function preStageDenchCloudConfig(params: {
     models.mode = models.mode ?? "merge";
     const providers = { ...asRecord(models.providers) };
 
-    const configPatch = buildDenchCloudConfigPatch({
+    const configPatch = buildCrmACloudConfigPatch({
       gatewayUrl: params.gatewayUrl,
       apiKey: params.apiKey,
       models: params.catalog?.models ?? [],
     });
-    providers["dench-cloud"] = configPatch.models.providers["dench-cloud"];
+    providers["crm-a-cloud"] = configPatch.models.providers["crm-a-cloud"];
     models.providers = providers;
     nextConfig.models = models;
 
@@ -2802,7 +2802,7 @@ function preStageDenchCloudConfig(params: {
       const defaults = { ...asRecord(agents.defaults) };
       defaults.model = {
         ...asRecord(defaults.model),
-        primary: `dench-cloud/${params.selectedModel}`,
+        primary: `crm-a-cloud/${params.selectedModel}`,
       };
       agents.defaults = defaults;
       nextConfig.agents = agents;
@@ -2814,11 +2814,11 @@ function preStageDenchCloudConfig(params: {
     );
     writeAuthProfileKey(params.stateDir, params.apiKey);
   } catch {
-    // Best-effort; applyDenchCloudBootstrapConfig will write the canonical version post-onboard.
+    // Best-effort; applyCrmACloudBootstrapConfig will write the canonical version post-onboard.
   }
 }
 
-function buildDenchCloudElevenLabsTtsConfig(params: {
+function buildCrmACloudElevenLabsTtsConfig(params: {
   gatewayUrl: string;
   apiKey: string;
   shape: ElevenLabsTtsConfigShape;
@@ -2843,7 +2843,7 @@ function buildDenchCloudElevenLabsTtsConfig(params: {
   };
 }
 
-function rewriteDenchCloudTtsConfigFile(params: {
+function rewriteCrmACloudTtsConfigFile(params: {
   stateDir: string;
   gatewayUrl: string;
   apiKey: string;
@@ -2876,7 +2876,7 @@ function isExpectedTtsShapeValidationError(
   return /messages\.tts.*unrecognized key:\s*"providers"/iu.test(message);
 }
 
-async function applyDenchCloudTtsConfig(params: {
+async function applyCrmACloudTtsConfig(params: {
   openclawCommand: string;
   profile: string;
   stateDir: string;
@@ -2885,12 +2885,12 @@ async function applyDenchCloudTtsConfig(params: {
   preferredShape: ElevenLabsTtsConfigShape;
 }): Promise<ElevenLabsTtsConfigShape> {
   const attempt = async (shape: ElevenLabsTtsConfigShape): Promise<void> => {
-    const ttsConfig = buildDenchCloudElevenLabsTtsConfig({
+    const ttsConfig = buildCrmACloudElevenLabsTtsConfig({
       gatewayUrl: params.gatewayUrl,
       apiKey: params.apiKey,
       shape,
     });
-    rewriteDenchCloudTtsConfigFile({
+    rewriteCrmACloudTtsConfigFile({
       stateDir: params.stateDir,
       gatewayUrl: params.gatewayUrl,
       apiKey: params.apiKey,
@@ -2911,7 +2911,7 @@ async function applyDenchCloudTtsConfig(params: {
         shape === "providers"
           ? asRecord(asRecord(ttsConfig.providers)?.elevenlabs)
           : asRecord(ttsConfig.elevenlabs),
-      errorMessage: "Failed to configure ElevenLabs TTS via Dench Cloud gateway.",
+      errorMessage: "Failed to configure ElevenLabs TTS via Crm-A Cloud gateway.",
     });
   };
 
@@ -2928,13 +2928,13 @@ async function applyDenchCloudTtsConfig(params: {
   }
 }
 
-async function applyDenchCloudBootstrapConfig(params: {
+async function applyCrmACloudBootstrapConfig(params: {
   openclawCommand: string;
   profile: string;
   stateDir: string;
   gatewayUrl: string;
   apiKey: string;
-  catalog: DenchCloudCatalogLoadResult;
+  catalog: CrmACloudCatalogLoadResult;
   selectedModel: string;
   openClawVersion?: string;
 }): Promise<ElevenLabsTtsConfigShape> {
@@ -2951,7 +2951,7 @@ async function applyDenchCloudBootstrapConfig(params: {
     raw?.agents?.defaults?.models && typeof raw.agents.defaults.models === "object"
       ? (raw.agents.defaults.models as Record<string, unknown>)
       : {};
-  const configPatch = buildDenchCloudConfigPatch({
+  const configPatch = buildCrmACloudConfigPatch({
     gatewayUrl: params.gatewayUrl,
     apiKey: params.apiKey,
     models: params.catalog.models,
@@ -2966,15 +2966,15 @@ async function applyDenchCloudBootstrapConfig(params: {
     openclawCommand: params.openclawCommand,
     args: ["--profile", params.profile, "config", "set", "models.mode", "merge"],
     timeoutMs: 30_000,
-    errorMessage: "Failed to set models.mode=merge for Dench Cloud.",
+    errorMessage: "Failed to set models.mode=merge for Crm-A Cloud.",
   });
 
   await setOpenClawConfigJson({
     openclawCommand: params.openclawCommand,
     profile: params.profile,
-    key: "models.providers.dench-cloud",
-    value: configPatch.models.providers["dench-cloud"],
-    errorMessage: "Failed to configure models.providers.dench-cloud.",
+    key: "models.providers.crm-a-cloud",
+    value: configPatch.models.providers["crm-a-cloud"],
+    errorMessage: "Failed to configure models.providers.crm-a-cloud.",
   });
 
   await runOpenClawOrThrow({
@@ -2985,10 +2985,10 @@ async function applyDenchCloudBootstrapConfig(params: {
       "config",
       "set",
       "agents.defaults.model.primary",
-      `dench-cloud/${params.selectedModel}`,
+      `crm-a-cloud/${params.selectedModel}`,
     ],
     timeoutMs: 30_000,
-    errorMessage: "Failed to set the default Dench Cloud model.",
+    errorMessage: "Failed to set the default Crm-A Cloud model.",
   });
 
   await setOpenClawConfigJson({
@@ -2996,10 +2996,10 @@ async function applyDenchCloudBootstrapConfig(params: {
     profile: params.profile,
     key: "agents.defaults.models",
     value: nextAgentModels,
-    errorMessage: "Failed to update agents.defaults.models for Dench Cloud.",
+    errorMessage: "Failed to update agents.defaults.models for Crm-A Cloud.",
   });
 
-  const appliedTtsShape = await applyDenchCloudTtsConfig({
+  const appliedTtsShape = await applyCrmACloudTtsConfig({
     openclawCommand: params.openclawCommand,
     profile: params.profile,
     stateDir: params.stateDir,
@@ -3018,7 +3018,7 @@ async function applyDenchCloudBootstrapConfig(params: {
       profile: params.profile,
       key: "tools.alsoAllow",
       value: nextAlsoAllow,
-      errorMessage: "Failed to enable Dench Integrations wrapper tools.",
+      errorMessage: "Failed to enable Crm-A Integrations wrapper tools.",
     });
   }
 
@@ -3031,57 +3031,57 @@ async function applyDenchCloudBootstrapConfig(params: {
     profile: params.profile,
     key: "tools.byProvider",
     value: nextByProvider,
-    errorMessage: "Failed to scope Dench Cloud tool policy.",
+    errorMessage: "Failed to scope Crm-A Cloud tool policy.",
   });
 
   writeAuthProfileKey(params.stateDir, params.apiKey);
   return appliedTtsShape;
 }
 
-async function resolveDenchCloudBootstrapSelection(params: {
+async function resolveCrmACloudBootstrapSelection(params: {
   opts: BootstrapOptions;
   nonInteractive: boolean;
   stateDir: string;
   runtime: RuntimeEnv;
-}): Promise<DenchCloudBootstrapSelection> {
+}): Promise<CrmACloudBootstrapSelection> {
   const rawConfig = readBootstrapConfig(params.stateDir);
-  const existing = readConfiguredDenchCloudSettings(rawConfig);
-  const explicitRequest = isExplicitDenchCloudRequest(params.opts);
+  const existing = readConfiguredCrmACloudSettings(rawConfig);
+  const explicitRequest = isExplicitCrmACloudRequest(params.opts);
   const currentProvider = resolveModelProvider(params.stateDir);
-  const existingDenchConfigured = currentProvider === "dench-cloud" && Boolean(existing.apiKey);
-  const gatewayUrl = normalizeDenchGatewayUrl(
-    params.opts.denchGatewayUrl?.trim() ||
-      process.env.DENCH_GATEWAY_URL?.trim() ||
+  const existingCrmAConfigured = currentProvider === "crm-a-cloud" && Boolean(existing.apiKey);
+  const gatewayUrl = normalizeCrmAGatewayUrl(
+    params.opts.crmAGatewayUrl?.trim() ||
+      process.env.CRM_A_GATEWAY_URL?.trim() ||
       existing.gatewayUrl ||
-      DEFAULT_DENCH_CLOUD_GATEWAY_URL,
+      DEFAULT_CRM_A_CLOUD_GATEWAY_URL,
   );
 
   if (params.nonInteractive) {
-    if (!explicitRequest && !existingDenchConfigured) {
+    if (!explicitRequest && !existingCrmAConfigured) {
       return { enabled: false };
     }
 
-    const apiKey = resolveDenchCloudApiKeyCandidate({
+    const apiKey = resolveCrmACloudApiKeyCandidate({
       opts: params.opts,
       stateDir: params.stateDir,
       existingApiKey: existing.apiKey,
     });
     if (!apiKey) {
       throw new Error(
-        "Dench Cloud bootstrap requires --dench-cloud-api-key or DENCH_CLOUD_API_KEY in non-interactive mode.",
+        "Crm-A Cloud bootstrap requires --crm-a-cloud-api-key or CRM_A_CLOUD_API_KEY in non-interactive mode.",
       );
     }
 
-    await validateDenchCloudApiKey(gatewayUrl, apiKey);
-    const catalog = await fetchDenchCloudCatalog(gatewayUrl);
-    const selected = resolveDenchCloudModel(
+    await validateCrmACloudApiKey(gatewayUrl, apiKey);
+    const catalog = await fetchCrmACloudCatalog(gatewayUrl);
+    const selected = resolveCrmACloudModel(
       catalog.models,
-      params.opts.denchCloudModel?.trim() ||
-        process.env.DENCH_CLOUD_MODEL?.trim() ||
+      params.opts.crmACloudModel?.trim() ||
+        process.env.CRM_A_CLOUD_MODEL?.trim() ||
         existing.selectedModel,
     );
     if (!selected) {
-      throw new Error("Configured Dench Cloud model is not available.");
+      throw new Error("Configured Crm-A Cloud model is not available.");
     }
 
     return {
@@ -3094,17 +3094,17 @@ async function resolveDenchCloudBootstrapSelection(params: {
   }
 
   if (!explicitRequest) {
-    params.runtime.log(renderDenchCloudRecommendationBanner());
+    params.runtime.log(renderCrmACloudRecommendationBanner());
   }
-  const wantsDenchCloud = explicitRequest
+  const wantsCrmACloud = explicitRequest
     ? true
     : await confirm({
         message: stylePromptMessage(
-          "Continue with Dench Cloud? Recommended. API key: dench.com/api",
+          "Continue with Crm-A Cloud? Recommended. API key: dench.com/api",
         ),
-        initialValue: existingDenchConfigured || !currentProvider,
+        initialValue: existingCrmAConfigured || !currentProvider,
       });
-  if (isCancel(wantsDenchCloud) || !wantsDenchCloud) {
+  if (isCancel(wantsCrmACloud) || !wantsCrmACloud) {
     return { enabled: false };
   }
 
@@ -3112,7 +3112,7 @@ async function resolveDenchCloudBootstrapSelection(params: {
     await openUrl("https://dench.com/api").catch(() => {});
   }
 
-  let apiKey = resolveDenchCloudApiKeyCandidate({
+  let apiKey = resolveCrmACloudApiKeyCandidate({
     opts: params.opts,
     stateDir: params.stateDir,
     existingApiKey: existing.apiKey,
@@ -3120,21 +3120,21 @@ async function resolveDenchCloudBootstrapSelection(params: {
   const showSpinners = !params.opts.json;
 
   while (true) {
-    apiKey = await promptForDenchCloudApiKey(apiKey);
+    apiKey = await promptForCrmACloudApiKey(apiKey);
     if (!apiKey) {
-      throw new Error("Dench Cloud setup cancelled before an API key was provided.");
+      throw new Error("Crm-A Cloud setup cancelled before an API key was provided.");
     }
 
     const keySpinner = showSpinners ? spinner() : null;
     keySpinner?.start("Validating API key…");
     try {
-      await validateDenchCloudApiKey(gatewayUrl, apiKey);
+      await validateCrmACloudApiKey(gatewayUrl, apiKey);
       keySpinner?.stop("API key is valid.");
     } catch (error) {
       keySpinner?.stop("API key validation failed.");
       params.runtime.log(theme.warn(error instanceof Error ? error.message : String(error)));
       const retry = await confirm({
-        message: stylePromptMessage("Try another Dench Cloud API key?"),
+        message: stylePromptMessage("Try another Crm-A Cloud API key?"),
         initialValue: true,
       });
       if (isCancel(retry) || !retry) {
@@ -3145,7 +3145,7 @@ async function resolveDenchCloudBootstrapSelection(params: {
 
     const catalogSpinner = showSpinners ? spinner() : null;
     catalogSpinner?.start("Fetching available models…");
-    const catalog = await fetchDenchCloudCatalog(gatewayUrl);
+    const catalog = await fetchCrmACloudCatalog(gatewayUrl);
     if (catalog.source === "fallback") {
       catalogSpinner?.stop(
         `Model catalog fallback active (${catalog.detail ?? "public catalog unavailable"}).`,
@@ -3155,38 +3155,38 @@ async function resolveDenchCloudBootstrapSelection(params: {
     }
 
     const explicitModel =
-      params.opts.denchCloudModel?.trim() || process.env.DENCH_CLOUD_MODEL?.trim();
-    const preselected = resolveDenchCloudModel(
+      params.opts.crmACloudModel?.trim() || process.env.CRM_A_CLOUD_MODEL?.trim();
+    const preselected = resolveCrmACloudModel(
       catalog.models,
       explicitModel || existing.selectedModel,
     );
     if (!preselected && explicitModel) {
       params.runtime.log(
-        theme.warn(`Configured Dench Cloud model "${explicitModel}" is unavailable.`),
+        theme.warn(`Configured Crm-A Cloud model "${explicitModel}" is unavailable.`),
       );
     }
-    const selection = await promptForDenchCloudModel({
+    const selection = await promptForCrmACloudModel({
       models: catalog.models,
       initialStableId: preselected?.stableId || existing.selectedModel,
     });
     if (!selection) {
-      throw new Error("Dench Cloud setup cancelled during model selection.");
+      throw new Error("Crm-A Cloud setup cancelled during model selection.");
     }
-    const selected = resolveDenchCloudModel(catalog.models, selection);
+    const selected = resolveCrmACloudModel(catalog.models, selection);
     if (!selected) {
-      throw new Error("No Dench Cloud model could be selected.");
+      throw new Error("No Crm-A Cloud model could be selected.");
     }
 
     const verifySpinner = showSpinners ? spinner() : null;
-    verifySpinner?.start("Verifying Dench Cloud configuration…");
+    verifySpinner?.start("Verifying Crm-A Cloud configuration…");
     try {
-      await validateDenchCloudApiKey(gatewayUrl, apiKey);
-      verifySpinner?.stop("Dench Cloud ready.");
+      await validateCrmACloudApiKey(gatewayUrl, apiKey);
+      verifySpinner?.stop("Crm-A Cloud ready.");
     } catch (error) {
       verifySpinner?.stop("Verification failed.");
       params.runtime.log(theme.warn(error instanceof Error ? error.message : String(error)));
       const retry = await confirm({
-        message: stylePromptMessage("Re-enter your Dench Cloud API key?"),
+        message: stylePromptMessage("Re-enter your Crm-A Cloud API key?"),
         initialValue: true,
       });
       if (isCancel(retry) || !retry) {
@@ -3266,12 +3266,12 @@ export async function bootstrapCommand(
     if (!telemetryCfg.noticeShown) {
       runtime.log(
         theme.muted(
-          "Dench collects anonymous telemetry to improve the product.\n" +
+          "Crm-A collects anonymous telemetry to improve the product.\n" +
             "No personal data is ever collected. Disable anytime:\n" +
-            "  npx denchclaw telemetry disable\n" +
-            "  DENCHCLAW_TELEMETRY_DISABLED=1\n" +
+            "  npx crm-a-console telemetry disable\n" +
+            "  CRM_A_CONSOLE_TELEMETRY_DISABLED=1\n" +
             "  DO_NOT_TRACK=1\n" +
-            "Learn more: https://github.com/DenchHQ/DenchClaw/blob/main/TELEMETRY.md\n",
+            "Learn more: https://github.com/TopCS/crmaconsole/blob/main/TELEMETRY.md\n",
         ),
       );
       markNoticeShown();
@@ -3316,7 +3316,7 @@ export async function bootstrapCommand(
   }
 
   // Determine gateway port: use explicit override, honour previously persisted
-  // port, or find an available one in the DenchClaw range (19001+).
+  // port, or find an available one in the Crm-A Console range (19001+).
   // NEVER claim OpenClaw's default port (18789) — that belongs to the host
   // OpenClaw installation and sharing it causes port-hijack on restart.
   //
@@ -3338,18 +3338,18 @@ export async function bootstrapCommand(
     const existingPort = readExistingGatewayPort(stateDir);
     if (isPersistedPortAcceptable(existingPort)) {
       gatewayPort = existingPort;
-    } else if (await isPortAvailable(DENCHCLAW_GATEWAY_PORT_START)) {
-      gatewayPort = DENCHCLAW_GATEWAY_PORT_START;
+    } else if (await isPortAvailable(CRM_A_CONSOLE_GATEWAY_PORT_START)) {
+      gatewayPort = CRM_A_CONSOLE_GATEWAY_PORT_START;
     } else {
       preCloudSpinner?.message("Scanning for available port…");
       const availablePort = await findAvailablePort(
-        DENCHCLAW_GATEWAY_PORT_START + 1,
+        CRM_A_CONSOLE_GATEWAY_PORT_START + 1,
         MAX_PORT_SCAN_ATTEMPTS,
       );
       if (!availablePort) {
         preCloudSpinner?.stop("Port scan failed.");
         throw new Error(
-          `Could not find an available gateway port between ${DENCHCLAW_GATEWAY_PORT_START} and ${DENCHCLAW_GATEWAY_PORT_START + MAX_PORT_SCAN_ATTEMPTS}. ` +
+          `Could not find an available gateway port between ${CRM_A_CONSOLE_GATEWAY_PORT_START} and ${CRM_A_CONSOLE_GATEWAY_PORT_START + MAX_PORT_SCAN_ATTEMPTS}. ` +
             `Please specify a port explicitly with --gateway-port.`,
         );
       }
@@ -3361,13 +3361,13 @@ export async function bootstrapCommand(
   if (portAutoAssigned && !opts.json) {
     runtime.log(
       theme.muted(
-        `Default gateway port ${DENCHCLAW_GATEWAY_PORT_START} is in use. Using auto-assigned port ${gatewayPort}.`,
+        `Default gateway port ${CRM_A_CONSOLE_GATEWAY_PORT_START} is in use. Using auto-assigned port ${gatewayPort}.`,
       ),
     );
   }
 
   // Stage workspace, gateway mode, and gateway port directly into the raw JSON
-  // config file.  On a fresh install the "dench" profile doesn't exist yet
+  // config file.  On a fresh install the "crm-a" profile doesn't exist yet
   // (it's created by `openclaw onboard`), so any `openclaw config set` call
   // would fail.  Writing directly sidesteps this; the CLI-based re-application
   // happens post-onboard once the profile is live.
@@ -3381,7 +3381,7 @@ export async function bootstrapCommand(
 
   preCloudSpinner?.stop("Gateway ready.");
 
-  const denchCloudSelection = await resolveDenchCloudBootstrapSelection({
+  const crmACloudSelection = await resolveCrmACloudBootstrapSelection({
     opts,
     nonInteractive,
     stateDir,
@@ -3403,38 +3403,38 @@ export async function bootstrapCommand(
         : {}),
     },
     {
-      pluginId: "dench-ai-gateway",
-      sourceDirName: "dench-ai-gateway",
+      pluginId: "crm-a-ai-gateway",
+      sourceDirName: "crm-a-ai-gateway",
       enabled: true,
       config: {
         gatewayUrl:
-          denchCloudSelection.gatewayUrl ||
-          opts.denchGatewayUrl?.trim() ||
-          process.env.DENCH_GATEWAY_URL?.trim() ||
-          DEFAULT_DENCH_CLOUD_GATEWAY_URL,
+          crmACloudSelection.gatewayUrl ||
+          opts.crmAGatewayUrl?.trim() ||
+          process.env.CRM_A_GATEWAY_URL?.trim() ||
+          DEFAULT_CRM_A_CLOUD_GATEWAY_URL,
       },
     },
     {
-      pluginId: "dench-identity",
-      sourceDirName: "dench-identity",
+      pluginId: "crm-a-identity",
+      sourceDirName: "crm-a-identity",
       enabled: true,
     },
     {
       pluginId: "apollo-enrichment",
       sourceDirName: "apollo-enrichment",
-      enabled: denchCloudSelection.enabled,
-      ...(denchCloudSelection.enabled ? { config: { enabled: true } } : {}),
+      enabled: crmACloudSelection.enabled,
+      ...(crmACloudSelection.enabled ? { config: { enabled: true } } : {}),
     },
     {
       pluginId: "exa-search",
       sourceDirName: "exa-search",
-      enabled: denchCloudSelection.enabled,
-      ...(denchCloudSelection.enabled ? { config: { enabled: true } } : {}),
+      enabled: crmACloudSelection.enabled,
+      ...(crmACloudSelection.enabled ? { config: { enabled: true } } : {}),
     },
   ];
 
   // Trust managed bundled plugins BEFORE onboard so the gateway daemon never
-  // starts with transient "untracked local plugin" warnings for DenchClaw-owned
+  // starts with transient "untracked local plugin" warnings for Crm-A Console-owned
   // extensions.
   const preOnboardSpinner = !opts.json ? spinner() : null;
   preOnboardSpinner?.start("Syncing bundled plugins…");
@@ -3446,13 +3446,13 @@ export async function bootstrapCommand(
   });
   const posthogPluginInstalled = preOnboardPlugins.installedPluginIds.includes("posthog-analytics");
 
-  if (denchCloudSelection.enabled && denchCloudSelection.apiKey) {
-    preStageDenchCloudConfig({
+  if (crmACloudSelection.enabled && crmACloudSelection.apiKey) {
+    preStageCrmACloudConfig({
       stateDir,
-      gatewayUrl: denchCloudSelection.gatewayUrl ?? DEFAULT_DENCH_CLOUD_GATEWAY_URL,
-      apiKey: denchCloudSelection.apiKey,
-      catalog: denchCloudSelection.catalog,
-      selectedModel: denchCloudSelection.selectedModel,
+      gatewayUrl: crmACloudSelection.gatewayUrl ?? DEFAULT_CRM_A_CLOUD_GATEWAY_URL,
+      apiKey: crmACloudSelection.apiKey,
+      catalog: crmACloudSelection.catalog,
+      selectedModel: crmACloudSelection.selectedModel,
     });
   }
 
@@ -3494,14 +3494,14 @@ export async function bootstrapCommand(
   if (nonInteractive) {
     onboardArgv.push("--non-interactive");
   }
-  if (denchCloudSelection.enabled) {
+  if (crmACloudSelection.enabled) {
     onboardArgv.push("--auth-choice", "skip");
   }
   // `--skip-search` and `--skip-skills` skip two interactive wizard prompts
   // that would otherwise hang non-interactive bootstrap (the prompts have no
-  // safe default that matches Dench's intent). They're also a known onboard-
-  // time sink in the dench-cloud path. Always pass them in non-interactive
-  // mode regardless of `denchCloudSelection.enabled` so warm-pool / sandbox
+  // safe default that matches Crm-A's intent). They're also a known onboard-
+  // time sink in the crm-a-cloud path. Always pass them in non-interactive
+  // mode regardless of `crmACloudSelection.enabled` so warm-pool / sandbox
   // bootstraps don't stall waiting for impossible prompt input.
   if (nonInteractive) {
     onboardArgv.push("--skip-search");
@@ -3514,7 +3514,7 @@ export async function bootstrapCommand(
   // Gateway, etc.). On slow networks (or when a provider endpoint times out)
   // that probe can stall onboard for many minutes — long enough to exceed our
   // 12-minute outer timeout and fail bootstrap entirely. We don't need it:
-  // the dench bootstrap does its own retry-aware gateway probe right after
+  // the crm-a bootstrap does its own retry-aware gateway probe right after
   // onboard returns (`probeGateway` at the top of the post-onboard block,
   // followed by `attemptGatewayAutoFix` if needed). Skip it always.
   onboardArgv.push("--skip-health");
@@ -3537,7 +3537,7 @@ export async function bootstrapCommand(
       // post-prompt work, we know the user is done with the wizard. If
       // onboard then hangs on its own slow post-wizard verification
       // (the recurring 5-10min stall), we send SIGTERM after a grace
-      // period and let denchclaw's own gateway probe + autofix continue.
+      // period and let crm-a-console's own gateway probe + autofix continue.
       gatewayLogPath: daemonless ? undefined : path.join(stateDir, "logs", "gateway.log"),
     });
   }
@@ -3546,7 +3546,7 @@ export async function bootstrapCommand(
   postOnboardSpinner?.start("Finalizing configuration…");
 
   // ── Post-onboard config reconciliation ──
-  // Apply all Dench-owned settings via the CLI now that onboard has created the
+  // Apply all Crm-A-owned settings via the CLI now that onboard has created the
   // profile.  Pre-onboard config was staged via raw JSON writes (the profile
   // didn't exist for CLI calls); this pass enforces the values through
   // OpenClaw's own config resolution and guards against onboard wizard drift.
@@ -3560,21 +3560,21 @@ export async function bootstrapCommand(
   let appliedTtsConfigShape = preferredTtsConfigShapeForOpenClaw(installResult.version);
 
   if (
-    denchCloudSelection.enabled &&
-    denchCloudSelection.apiKey &&
-    denchCloudSelection.gatewayUrl &&
-    denchCloudSelection.selectedModel &&
-    denchCloudSelection.catalog
+    crmACloudSelection.enabled &&
+    crmACloudSelection.apiKey &&
+    crmACloudSelection.gatewayUrl &&
+    crmACloudSelection.selectedModel &&
+    crmACloudSelection.catalog
   ) {
-    postOnboardSpinner?.message("Applying Dench Cloud model config…");
-    appliedTtsConfigShape = await applyDenchCloudBootstrapConfig({
+    postOnboardSpinner?.message("Applying Crm-A Cloud model config…");
+    appliedTtsConfigShape = await applyCrmACloudBootstrapConfig({
       openclawCommand,
       profile,
       stateDir,
-      gatewayUrl: denchCloudSelection.gatewayUrl,
-      apiKey: denchCloudSelection.apiKey,
-      catalog: denchCloudSelection.catalog,
-      selectedModel: denchCloudSelection.selectedModel,
+      gatewayUrl: crmACloudSelection.gatewayUrl,
+      apiKey: crmACloudSelection.apiKey,
+      catalog: crmACloudSelection.catalog,
+      selectedModel: crmACloudSelection.selectedModel,
       openClawVersion: installResult.version,
     });
   }
@@ -3590,12 +3590,12 @@ export async function bootstrapCommand(
   postOnboardSpinner?.message("Configuring agent defaults…");
   await ensureAgentDefaults(openclawCommand, profile);
 
-  postOnboardSpinner?.message("Applying Dench integration defaults…");
-  applyDenchManagedIntegrationDefaults({
+  postOnboardSpinner?.message("Applying Crm-A integration defaults…");
+  applyCrmAManagedIntegrationDefaults({
     stateDir,
-    denchEnabled: denchCloudSelection.enabled,
-    gatewayUrl: denchCloudSelection.gatewayUrl,
-    apiKey: denchCloudSelection.apiKey,
+    crmAEnabled: crmACloudSelection.enabled,
+    gatewayUrl: crmACloudSelection.gatewayUrl,
+    apiKey: crmACloudSelection.apiKey,
     ttsConfigShape: appliedTtsConfigShape,
   });
 
@@ -3608,7 +3608,7 @@ export async function bootstrapCommand(
   if (daemonless) {
     gatewayProbe = { ok: true, detail: "skipped (daemonless)" };
   } else {
-    // All Dench-owned config has been applied.  Restart the gateway once so the
+    // All Crm-A-owned config has been applied.  Restart the gateway once so the
     // daemon picks up plugin, model, and subagent changes that were written after
     // onboard started it.  No helper above triggers its own restart.
     postOnboardSpinner?.message("Restarting gateway…");
@@ -3663,7 +3663,7 @@ export async function bootstrapCommand(
   let webRuntimeStatus = await ensureManagedWebRuntime({
     stateDir,
     packageRoot,
-    denchVersion: VERSION,
+    crmAVersion: VERSION,
     port: preferredWebPort,
     gatewayPort,
   });
@@ -3696,8 +3696,8 @@ export async function bootstrapCommand(
   // Web runtime is verified healthy at this point — fire one explicit
   // Gmail/Calendar sync kickoff so the user doesn't have to wait for the
   // gateway plugin's first 5-min interval. Best-effort: a failure here
-  // (no Dench Cloud key, transient network) just falls back to that
-  // gateway-driven interval. See `extensions/dench-ai-gateway/sync-trigger.ts`
+  // (no Crm-A Cloud key, transient network) just falls back to that
+  // gateway-driven interval. See `extensions/crm-a-ai-gateway/sync-trigger.ts`
   // for why the plugin no longer fires its own immediate-on-arm tick.
   if (webRuntimeStatus.ready && !opts.json) {
     const kickoff = await kickoffSyncPoll({
@@ -3712,7 +3712,7 @@ export async function bootstrapCommand(
 
   const webReachable = webRuntimeStatus.ready;
   const webUrl = `http://localhost:${preferredWebPort}`;
-  const composioConfigured = denchCloudSelection.enabled
+  const composioConfigured = crmACloudSelection.enabled
     ? hasConfiguredComposioServer(stateDir)
     : false;
   const diagnostics = buildBootstrapDiagnostics({
@@ -3722,7 +3722,7 @@ export async function bootstrapCommand(
     gatewayPort,
     gatewayUrl,
     gatewayProbe,
-    denchCloudEnabled: denchCloudSelection.enabled,
+    crmACloudEnabled: crmACloudSelection.enabled,
     composioConfigured,
     webPort: preferredWebPort,
     webReachable,
@@ -3824,7 +3824,7 @@ export async function bootstrapCommand(
     }
     logBootstrapChecklist(diagnostics, runtime);
     runtime.log("");
-    runtime.log(theme.heading("DenchClaw ready"));
+    runtime.log(theme.heading("Crm-A Console ready"));
     runtime.log(`Profile: ${profile}`);
     runtime.log(`OpenClaw CLI: ${installResult.version ?? "detected"}`);
     runtime.log(`Gateway: ${gatewayProbe.ok ? "reachable" : "check failed"}`);

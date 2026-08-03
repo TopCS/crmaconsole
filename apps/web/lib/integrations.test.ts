@@ -17,7 +17,7 @@ function resolveBundledExtensionSourcePath(pluginId: string): string {
 }
 
 vi.mock("@/lib/workspace", () => ({
-  resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw-dench"),
+  resolveOpenClawStateDir: vi.fn(() => "/home/testuser/.openclaw-crm-a"),
 }));
 
 vi.mock("node:fs", () => ({
@@ -44,7 +44,7 @@ describe("integrations state", () => {
     vi.restoreAllMocks();
   });
 
-  it("normalizes Dench integration and search ownership state", async () => {
+  it("normalizes Crm-A integration and search ownership state", async () => {
     const { existsSync, readFileSync } = await import("node:fs");
     const mockExists = vi.mocked(existsSync);
     const mockRead = vi.mocked(readFileSync);
@@ -53,9 +53,9 @@ describe("integrations state", () => {
       const value = String(path);
       return (
         value.endsWith("openclaw.json") ||
-        value.endsWith(".dench-integrations.json") ||
-        value === "/home/testuser/.openclaw-dench/extensions/exa-search" ||
-        value === "/home/testuser/.openclaw-dench/extensions/apollo-enrichment"
+        value.endsWith(".crm-a-integrations.json") ||
+        value === "/home/testuser/.openclaw-crm-a/extensions/exa-search" ||
+        value === "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment"
       );
     });
 
@@ -66,14 +66,14 @@ describe("integrations state", () => {
           agents: {
             defaults: {
               model: {
-                primary: "dench-cloud/claude-sonnet-4.6",
+                primary: "crm-a-cloud/claude-sonnet-4.6",
               },
             },
           },
           models: {
             providers: {
-              "dench-cloud": {
-                apiKey: "dench-key",
+              "crm-a-cloud": {
+                apiKey: "crm-a-key",
               },
             },
           },
@@ -83,7 +83,7 @@ describe("integrations state", () => {
               providers: {
                 elevenlabs: {
                   baseUrl: "https://gateway.merseoriginals.com",
-                  apiKey: "dench-key",
+                  apiKey: "crm-a-key",
                 },
               },
             },
@@ -92,12 +92,12 @@ describe("integrations state", () => {
             allow: ["exa-search", "apollo-enrichment"],
             load: {
               paths: [
-                "/home/testuser/.openclaw-dench/extensions/exa-search",
-                "/home/testuser/.openclaw-dench/extensions/apollo-enrichment",
+                "/home/testuser/.openclaw-crm-a/extensions/exa-search",
+                "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment",
               ],
             },
             entries: {
-              "dench-ai-gateway": {
+              "crm-a-ai-gateway": {
                 enabled: true,
                 config: {
                   gatewayUrl: "https://gateway.merseoriginals.com",
@@ -112,11 +112,11 @@ describe("integrations state", () => {
             },
             installs: {
               "exa-search": {
-                installPath: "/home/testuser/.openclaw-dench/extensions/exa-search",
+                installPath: "/home/testuser/.openclaw-crm-a/extensions/exa-search",
                 sourcePath: "/repo/extensions/exa-search",
               },
               "apollo-enrichment": {
-                installPath: "/home/testuser/.openclaw-dench/extensions/apollo-enrichment",
+                installPath: "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment",
                 sourcePath: "/repo/extensions/apollo-enrichment",
               },
             },
@@ -133,7 +133,7 @@ describe("integrations state", () => {
         }) as never;
       }
 
-      if (value.endsWith(".dench-integrations.json")) {
+      if (value.endsWith(".crm-a-integrations.json")) {
         return JSON.stringify({
           schemaVersion: 1,
           exa: {
@@ -251,7 +251,7 @@ describe("integrations state", () => {
     });
   });
 
-  it("locks Dench integrations without a Dench key", async () => {
+  it("locks Crm-A integrations without a Crm-A key", async () => {
     const { existsSync, readFileSync } = await import("node:fs");
     const mockExists = vi.mocked(existsSync);
     const mockRead = vi.mocked(readFileSync);
@@ -291,20 +291,20 @@ describe("integrations state", () => {
 
     const { getIntegrationsState } = await import("./integrations.js");
     const state = getIntegrationsState();
-    expect(state.denchCloud).toEqual({
+    expect(state.crmACloud).toEqual({
       hasKey: false,
       isPrimaryProvider: false,
       primaryModel: "anthropic/claude-4",
     });
     for (const integration of state.integrations) {
       expect(integration.locked).toBe(true);
-      expect(integration.lockReason).toBe("missing_dench_key");
-      expect(integration.lockBadge).toBe("Get Dench Cloud API Key");
+      expect(integration.lockReason).toBe("missing_crm_a_key");
+      expect(integration.lockBadge).toBe("Get Crm-A Cloud API Key");
       expect(integration.enabled).toBe(false);
     }
   });
 
-  it("locks Dench integrations when Dench Cloud is not primary", async () => {
+  it("locks Crm-A integrations when Crm-A Cloud is not primary", async () => {
     const { existsSync, readFileSync } = await import("node:fs");
     const mockExists = vi.mocked(existsSync);
     const mockRead = vi.mocked(readFileSync);
@@ -322,8 +322,8 @@ describe("integrations state", () => {
           },
           models: {
             providers: {
-              "dench-cloud": {
-                apiKey: "dench-key",
+              "crm-a-cloud": {
+                apiKey: "crm-a-key",
               },
             },
           },
@@ -340,7 +340,7 @@ describe("integrations state", () => {
 
     const { getIntegrationsState } = await import("./integrations.js");
     const state = getIntegrationsState();
-    expect(state.denchCloud).toEqual({
+    expect(state.crmACloud).toEqual({
       hasKey: true,
       isPrimaryProvider: false,
       primaryModel: "anthropic/claude-4",
@@ -348,13 +348,13 @@ describe("integrations state", () => {
     const exa = state.integrations.find((integration) => integration.id === "exa");
     expect(exa).toMatchObject({
       locked: true,
-      lockReason: "dench_not_primary",
-      lockBadge: "Use Dench Cloud",
+      lockReason: "crm_a_not_primary",
+      lockBadge: "Use Crm-A Cloud",
       enabled: false,
     });
   });
 
-  it("rejects enabling Exa when Dench Cloud is locked", async () => {
+  it("rejects enabling Exa when Crm-A Cloud is locked", async () => {
     const { existsSync, readFileSync } = await import("node:fs");
     const mockExists = vi.mocked(existsSync);
     const mockRead = vi.mocked(readFileSync);
@@ -372,8 +372,8 @@ describe("integrations state", () => {
           },
           models: {
             providers: {
-              "dench-cloud": {
-                apiKey: "dench-key",
+              "crm-a-cloud": {
+                apiKey: "crm-a-key",
               },
             },
           },
@@ -385,7 +385,7 @@ describe("integrations state", () => {
     const { setExaIntegrationEnabled } = await import("./integrations.js");
     const result = setExaIntegrationEnabled(true);
     expect(result.changed).toBe(false);
-    expect(result.error).toBe("This integration requires Dench Cloud to be the primary provider.");
+    expect(result.error).toBe("This integration requires Crm-A Cloud to be the primary provider.");
   });
 
   it("enables Exa and suppresses built-in web search", async () => {
@@ -397,14 +397,14 @@ describe("integrations state", () => {
       agents: {
         defaults: {
           model: {
-            primary: "dench-cloud/claude-sonnet-4.6",
+            primary: "crm-a-cloud/claude-sonnet-4.6",
           },
         },
       },
       models: {
         providers: {
-          "dench-cloud": {
-            apiKey: "dench-key",
+          "crm-a-cloud": {
+            apiKey: "crm-a-key",
           },
         },
       },
@@ -418,15 +418,15 @@ describe("integrations state", () => {
       const value = String(path);
       return (
         value.endsWith("openclaw.json") ||
-        (value.endsWith(".dench-integrations.json") && metadataJson.length > 0) ||
-        value === "/home/testuser/.openclaw-dench/extensions/exa-search"
+        (value.endsWith(".crm-a-integrations.json") && metadataJson.length > 0) ||
+        value === "/home/testuser/.openclaw-crm-a/extensions/exa-search"
       );
     });
     mockRead.mockImplementation((path) => {
       if (String(path).endsWith("openclaw.json")) {
         return openClawJson as never;
       }
-      if (String(path).endsWith(".dench-integrations.json")) {
+      if (String(path).endsWith(".crm-a-integrations.json")) {
         return metadataJson as never;
       }
       return "" as never;
@@ -435,7 +435,7 @@ describe("integrations state", () => {
       if (String(path).endsWith("openclaw.json")) {
         openClawJson = String(data);
       }
-      if (String(path).endsWith(".dench-integrations.json")) {
+      if (String(path).endsWith(".crm-a-integrations.json")) {
         metadataJson = String(data);
       }
     });
@@ -458,11 +458,11 @@ describe("integrations state", () => {
     expect(writtenConfig.plugins.allow).toEqual(["exa-search"]);
     expect(writtenConfig.plugins.entries["exa-search"]).toEqual({ enabled: true });
     expect(writtenConfig.plugins.load.paths).toEqual([
-      "/home/testuser/.openclaw-dench/extensions/exa-search",
+      "/home/testuser/.openclaw-crm-a/extensions/exa-search",
     ]);
     expect(writtenConfig.plugins.installs["exa-search"]).toEqual({
       source: "path",
-      installPath: "/home/testuser/.openclaw-dench/extensions/exa-search",
+      installPath: "/home/testuser/.openclaw-crm-a/extensions/exa-search",
       sourcePath: expect.any(String),
       installedAt: expect.any(String),
     });
@@ -479,14 +479,14 @@ describe("integrations state", () => {
       agents: {
         defaults: {
           model: {
-            primary: "dench-cloud/claude-sonnet-4.6",
+            primary: "crm-a-cloud/claude-sonnet-4.6",
           },
         },
       },
       models: {
         providers: {
-          "dench-cloud": {
-            apiKey: "dench-key",
+          "crm-a-cloud": {
+            apiKey: "crm-a-key",
           },
         },
       },
@@ -518,14 +518,14 @@ describe("integrations state", () => {
 
     mockExists.mockImplementation((path) => {
       const value = String(path);
-      return value.endsWith("openclaw.json") || value.endsWith(".dench-integrations.json");
+      return value.endsWith("openclaw.json") || value.endsWith(".crm-a-integrations.json");
     });
     mockRead.mockImplementation((path) => {
       const value = String(path);
       if (value.endsWith("openclaw.json")) {
         return openClawJson as never;
       }
-      if (value.endsWith(".dench-integrations.json")) {
+      if (value.endsWith(".crm-a-integrations.json")) {
         return metadataJson as never;
       }
       return "" as never;
@@ -534,7 +534,7 @@ describe("integrations state", () => {
       if (String(path).endsWith("openclaw.json")) {
         openClawJson = String(data);
       }
-      if (String(path).endsWith(".dench-integrations.json")) {
+      if (String(path).endsWith(".crm-a-integrations.json")) {
         metadataJson = String(data);
       }
     });
@@ -564,14 +564,14 @@ describe("integrations state", () => {
       agents: {
         defaults: {
           model: {
-            primary: "dench-cloud/claude-sonnet-4.6",
+            primary: "crm-a-cloud/claude-sonnet-4.6",
           },
         },
       },
       models: {
         providers: {
-          "dench-cloud": {
-            apiKey: "dench-key",
+          "crm-a-cloud": {
+            apiKey: "crm-a-key",
           },
         },
       },
@@ -590,7 +590,7 @@ describe("integrations state", () => {
 
     mockExists.mockImplementation((path) => {
       const value = String(path);
-      return value.endsWith("openclaw.json") || value === "/home/testuser/.openclaw-dench/extensions/apollo-enrichment";
+      return value.endsWith("openclaw.json") || value === "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment";
     });
     mockRead.mockImplementation((path) => {
       if (String(path).endsWith("openclaw.json")) {
@@ -617,17 +617,17 @@ describe("integrations state", () => {
       },
     });
     expect(writtenConfig.plugins.load.paths).toEqual([
-      "/home/testuser/.openclaw-dench/extensions/apollo-enrichment",
+      "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment",
     ]);
     expect(writtenConfig.plugins.installs["apollo-enrichment"]).toEqual({
       source: "path",
-      installPath: "/home/testuser/.openclaw-dench/extensions/apollo-enrichment",
+      installPath: "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment",
       sourcePath: expect.any(String),
       installedAt: expect.any(String),
     });
   });
 
-  it("removes and restores the Dench ElevenLabs override", async () => {
+  it("removes and restores the Crm-A ElevenLabs override", async () => {
     const { existsSync, readFileSync, writeFileSync } = await import("node:fs");
     const mockExists = vi.mocked(existsSync);
     const mockRead = vi.mocked(readFileSync);
@@ -636,14 +636,14 @@ describe("integrations state", () => {
       agents: {
         defaults: {
           model: {
-            primary: "dench-cloud/claude-sonnet-4.6",
+            primary: "crm-a-cloud/claude-sonnet-4.6",
           },
         },
       },
       models: {
         providers: {
-          "dench-cloud": {
-            apiKey: "dench-key",
+          "crm-a-cloud": {
+            apiKey: "crm-a-key",
           },
         },
       },
@@ -653,7 +653,7 @@ describe("integrations state", () => {
           providers: {
             elevenlabs: {
               baseUrl: "https://gateway.merseoriginals.com",
-              apiKey: "dench-key",
+              apiKey: "crm-a-key",
               voiceId: "voice_123",
             },
           },
@@ -661,7 +661,7 @@ describe("integrations state", () => {
       },
       plugins: {
         entries: {
-          "dench-ai-gateway": {
+          "crm-a-ai-gateway": {
             enabled: true,
             config: {
               gatewayUrl: "https://gateway.merseoriginals.com",
@@ -701,7 +701,7 @@ describe("integrations state", () => {
     expect(writtenConfig.messages.tts.providers.elevenlabs).toEqual({
       voiceId: "voice_123",
       baseUrl: "https://gateway.merseoriginals.com",
-      apiKey: "dench-key",
+      apiKey: "crm-a-key",
     });
     expect(writtenConfig.messages.tts.elevenlabs).toBeUndefined();
   });
@@ -732,11 +732,11 @@ describe("integrations state", () => {
       attempted: true,
       restarted: true,
       error: null,
-      profile: "dench",
+      profile: "crm-a",
     });
     expect(mockExecFile).toHaveBeenCalledWith(
       "openclaw",
-      ["--profile", "dench", "gateway", "restart"],
+      ["--profile", "crm-a", "gateway", "restart"],
       expect.objectContaining({ timeout: 30000 }),
       expect.any(Function),
     );
@@ -750,10 +750,10 @@ describe("integrations state", () => {
     const originalConfig = {
       meta: { lastTouchedVersion: "2026.3.28" },
       wizard: { lastRunAt: "2026-03-30" },
-      auth: { profiles: { "dench-cloud:default": { provider: "dench-cloud" } } },
-      agents: { defaults: { model: { primary: "dench-cloud/claude-sonnet-4.6" } } },
+      auth: { profiles: { "crm-a-cloud:default": { provider: "crm-a-cloud" } } },
+      agents: { defaults: { model: { primary: "crm-a-cloud/claude-sonnet-4.6" } } },
       gateway: { port: 19002 },
-      models: { providers: { "dench-cloud": { apiKey: "dench-key" } } },
+      models: { providers: { "crm-a-cloud": { apiKey: "crm-a-key" } } },
       plugins: { entries: { "apollo-enrichment": { enabled: true } } },
     };
     let openClawJson = JSON.stringify(originalConfig);
@@ -762,7 +762,7 @@ describe("integrations state", () => {
       const value = String(path);
       return (
         value.endsWith("openclaw.json") ||
-        value === "/home/testuser/.openclaw-dench/extensions/apollo-enrichment"
+        value === "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment"
       );
     });
     mockRead.mockImplementation((path) => {
@@ -800,17 +800,17 @@ describe("integrations state", () => {
         return JSON.stringify({
           agents: {
             defaults: {
-              model: { primary: "dench-cloud/claude-sonnet-4.6" },
+              model: { primary: "crm-a-cloud/claude-sonnet-4.6" },
             },
           },
           models: {
             providers: {
-              "dench-cloud": { apiKey: "dench-key" },
+              "crm-a-cloud": { apiKey: "crm-a-key" },
             },
           },
           plugins: {
             entries: {
-              "dench-ai-gateway": {
+              "crm-a-ai-gateway": {
                 enabled: true,
                 config: { gatewayUrl: "https://gateway.merseoriginals.com" },
               },
@@ -851,17 +851,17 @@ describe("integrations state", () => {
         return JSON.stringify({
           agents: {
             defaults: {
-              model: { primary: "dench-cloud/claude-sonnet-4.6" },
+              model: { primary: "crm-a-cloud/claude-sonnet-4.6" },
             },
           },
           models: {
             providers: {
-              "dench-cloud": { apiKey: "dench-key" },
+              "crm-a-cloud": { apiKey: "crm-a-key" },
             },
           },
           plugins: {
             entries: {
-              "dench-ai-gateway": {
+              "crm-a-ai-gateway": {
                 enabled: true,
                 config: { gatewayUrl: "https://gateway.merseoriginals.com" },
               },
@@ -873,7 +873,7 @@ describe("integrations state", () => {
               providers: {
                 elevenlabs: {
                   baseUrl: "https://gateway.merseoriginals.com",
-                  apiKey: "dench-key",
+                  apiKey: "crm-a-key",
                 },
               },
             },
@@ -898,13 +898,13 @@ describe("integrations state", () => {
     const mockExists = vi.mocked(existsSync);
     const mockRead = vi.mocked(readFileSync);
     const mockWrite = vi.mocked(writeFileSync);
-    const bundledGatewaySource = resolveBundledExtensionSourcePath("dench-ai-gateway");
-    const bundledIdentitySource = resolveBundledExtensionSourcePath("dench-identity");
+    const bundledGatewaySource = resolveBundledExtensionSourcePath("crm-a-ai-gateway");
+    const bundledIdentitySource = resolveBundledExtensionSourcePath("crm-a-identity");
     const bundledExaSource = resolveBundledExtensionSourcePath("exa-search");
     const bundledApolloSource = resolveBundledExtensionSourcePath("apollo-enrichment");
     const bundledSharedSource = resolveBundledExtensionSourcePath("shared");
     const existingPaths = new Set<string>([
-      "/home/testuser/.openclaw-dench/openclaw.json",
+      "/home/testuser/.openclaw-crm-a/openclaw.json",
       bundledGatewaySource,
       bundledIdentitySource,
       bundledExaSource,
@@ -938,17 +938,17 @@ describe("integrations state", () => {
     const result = repairManagedPluginsProfile();
 
     expect(result.changed).toBe(true);
-    expect(result.repairedIds).toEqual(["dench-ai-gateway", "dench-identity", "apollo", "exa"]);
+    expect(result.repairedIds).toEqual(["crm-a-ai-gateway", "crm-a-identity", "apollo", "exa"]);
     expect(result.repairs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: "dench-ai-gateway",
+          id: "crm-a-ai-gateway",
           assetAvailable: true,
           assetCopied: true,
           repaired: true,
         }),
         expect.objectContaining({
-          id: "dench-identity",
+          id: "crm-a-identity",
           assetAvailable: true,
           assetCopied: true,
           repaired: true,
@@ -970,53 +970,53 @@ describe("integrations state", () => {
     expect(mockCopy).toHaveBeenCalledTimes(5);
     expect(mockCopy).toHaveBeenCalledWith(
       bundledSharedSource,
-      "/home/testuser/.openclaw-dench/extensions/shared",
+      "/home/testuser/.openclaw-crm-a/extensions/shared",
       { recursive: true, force: true },
     );
 
     const writtenConfig = JSON.parse(openClawJson);
     expect(writtenConfig.plugins.allow).toEqual([
-      "dench-ai-gateway",
-      "dench-identity",
+      "crm-a-ai-gateway",
+      "crm-a-identity",
       "apollo-enrichment",
       "exa-search",
     ]);
     expect(writtenConfig.plugins.load.paths).toEqual([
-      "/home/testuser/.openclaw-dench/extensions/dench-ai-gateway",
-      "/home/testuser/.openclaw-dench/extensions/dench-identity",
-      "/home/testuser/.openclaw-dench/extensions/apollo-enrichment",
-      "/home/testuser/.openclaw-dench/extensions/exa-search",
+      "/home/testuser/.openclaw-crm-a/extensions/crm-a-ai-gateway",
+      "/home/testuser/.openclaw-crm-a/extensions/crm-a-identity",
+      "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment",
+      "/home/testuser/.openclaw-crm-a/extensions/exa-search",
     ]);
-    expect(writtenConfig.plugins.entries["dench-ai-gateway"]).toEqual({
+    expect(writtenConfig.plugins.entries["crm-a-ai-gateway"]).toEqual({
       enabled: true,
       config: {
         gatewayUrl: "https://gateway.merseoriginals.com",
       },
     });
-    expect(writtenConfig.plugins.entries["dench-identity"]).toEqual({ enabled: true });
+    expect(writtenConfig.plugins.entries["crm-a-identity"]).toEqual({ enabled: true });
     expect(writtenConfig.plugins.entries["apollo-enrichment"]).toEqual({ enabled: true });
     expect(writtenConfig.plugins.entries["exa-search"]).toEqual({ enabled: true });
-    expect(writtenConfig.plugins.installs["dench-ai-gateway"]).toEqual({
+    expect(writtenConfig.plugins.installs["crm-a-ai-gateway"]).toEqual({
       source: "path",
-      installPath: "/home/testuser/.openclaw-dench/extensions/dench-ai-gateway",
+      installPath: "/home/testuser/.openclaw-crm-a/extensions/crm-a-ai-gateway",
       sourcePath: bundledGatewaySource,
       installedAt: expect.any(String),
     });
-    expect(writtenConfig.plugins.installs["dench-identity"]).toEqual({
+    expect(writtenConfig.plugins.installs["crm-a-identity"]).toEqual({
       source: "path",
-      installPath: "/home/testuser/.openclaw-dench/extensions/dench-identity",
+      installPath: "/home/testuser/.openclaw-crm-a/extensions/crm-a-identity",
       sourcePath: bundledIdentitySource,
       installedAt: expect.any(String),
     });
     expect(writtenConfig.plugins.installs["exa-search"]).toEqual({
       source: "path",
-      installPath: "/home/testuser/.openclaw-dench/extensions/exa-search",
+      installPath: "/home/testuser/.openclaw-crm-a/extensions/exa-search",
       sourcePath: bundledExaSource,
       installedAt: expect.any(String),
     });
     expect(writtenConfig.plugins.installs["apollo-enrichment"]).toEqual({
       source: "path",
-      installPath: "/home/testuser/.openclaw-dench/extensions/apollo-enrichment",
+      installPath: "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment",
       sourcePath: bundledApolloSource,
       installedAt: expect.any(String),
     });
@@ -1030,66 +1030,66 @@ describe("integrations state", () => {
     const mockWrite = vi.mocked(writeFileSync);
     const openClawJson = JSON.stringify({
       plugins: {
-        allow: ["dench-ai-gateway", "dench-identity", "apollo-enrichment", "exa-search"],
+        allow: ["crm-a-ai-gateway", "crm-a-identity", "apollo-enrichment", "exa-search"],
         load: {
           paths: [
-            "/home/testuser/.openclaw-dench/extensions/dench-ai-gateway",
-            "/home/testuser/.openclaw-dench/extensions/dench-identity",
-            "/home/testuser/.openclaw-dench/extensions/apollo-enrichment",
-            "/home/testuser/.openclaw-dench/extensions/exa-search",
+            "/home/testuser/.openclaw-crm-a/extensions/crm-a-ai-gateway",
+            "/home/testuser/.openclaw-crm-a/extensions/crm-a-identity",
+            "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment",
+            "/home/testuser/.openclaw-crm-a/extensions/exa-search",
           ],
         },
         entries: {
-          "dench-ai-gateway": {
+          "crm-a-ai-gateway": {
             enabled: true,
             config: {
               gatewayUrl: "https://gateway.merseoriginals.com",
             },
           },
-          "dench-identity": { enabled: true },
+          "crm-a-identity": { enabled: true },
           "apollo-enrichment": { enabled: true },
           "exa-search": { enabled: true },
         },
         installs: {
-          "dench-ai-gateway": {
+          "crm-a-ai-gateway": {
             source: "path",
-            sourcePath: resolveBundledExtensionSourcePath("dench-ai-gateway"),
-            installPath: "/home/testuser/.openclaw-dench/extensions/dench-ai-gateway",
+            sourcePath: resolveBundledExtensionSourcePath("crm-a-ai-gateway"),
+            installPath: "/home/testuser/.openclaw-crm-a/extensions/crm-a-ai-gateway",
             installedAt: "2026-01-01T00:00:00.000Z",
           },
-          "dench-identity": {
+          "crm-a-identity": {
             source: "path",
-            sourcePath: resolveBundledExtensionSourcePath("dench-identity"),
-            installPath: "/home/testuser/.openclaw-dench/extensions/dench-identity",
+            sourcePath: resolveBundledExtensionSourcePath("crm-a-identity"),
+            installPath: "/home/testuser/.openclaw-crm-a/extensions/crm-a-identity",
             installedAt: "2026-01-01T00:00:00.000Z",
           },
           "apollo-enrichment": {
             source: "path",
             sourcePath: resolveBundledExtensionSourcePath("apollo-enrichment"),
-            installPath: "/home/testuser/.openclaw-dench/extensions/apollo-enrichment",
+            installPath: "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment",
             installedAt: "2026-01-01T00:00:00.000Z",
           },
           "exa-search": {
             source: "path",
             sourcePath: resolveBundledExtensionSourcePath("exa-search"),
-            installPath: "/home/testuser/.openclaw-dench/extensions/exa-search",
+            installPath: "/home/testuser/.openclaw-crm-a/extensions/exa-search",
             installedAt: "2026-01-01T00:00:00.000Z",
           },
         },
       },
     });
     const existingPaths = new Set([
-      "/home/testuser/.openclaw-dench/openclaw.json",
-      resolveBundledExtensionSourcePath("dench-ai-gateway"),
-      resolveBundledExtensionSourcePath("dench-identity"),
+      "/home/testuser/.openclaw-crm-a/openclaw.json",
+      resolveBundledExtensionSourcePath("crm-a-ai-gateway"),
+      resolveBundledExtensionSourcePath("crm-a-identity"),
       resolveBundledExtensionSourcePath("apollo-enrichment"),
       resolveBundledExtensionSourcePath("exa-search"),
-      "/home/testuser/.openclaw-dench/extensions/dench-ai-gateway",
-      "/home/testuser/.openclaw-dench/extensions/dench-identity",
-      "/home/testuser/.openclaw-dench/extensions/apollo-enrichment",
-      "/home/testuser/.openclaw-dench/extensions/exa-search",
+      "/home/testuser/.openclaw-crm-a/extensions/crm-a-ai-gateway",
+      "/home/testuser/.openclaw-crm-a/extensions/crm-a-identity",
+      "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment",
+      "/home/testuser/.openclaw-crm-a/extensions/exa-search",
       resolveBundledExtensionSourcePath("shared"),
-      "/home/testuser/.openclaw-dench/extensions/shared",
+      "/home/testuser/.openclaw-crm-a/extensions/shared",
     ]);
 
     mockExists.mockImplementation((path) => existingPaths.has(String(path)));

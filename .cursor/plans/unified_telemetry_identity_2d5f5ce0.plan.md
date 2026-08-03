@@ -1,6 +1,6 @@
 ---
 name: Unified telemetry identity
-overview: Persist a single anonymous install ID in `~/.openclaw-dench/telemetry.json` and reuse it across CLI telemetry, web server telemetry, browser PostHog init, and the OpenClaw PostHog plugin so all product telemetry and AI traces share one stable distinct ID.
+overview: Persist a single anonymous install ID in `~/.openclaw-crm-a/telemetry.json` and reuse it across CLI telemetry, web server telemetry, browser PostHog init, and the OpenClaw PostHog plugin so all product telemetry and AI traces share one stable distinct ID.
 todos:
   - id: persist-install-id
     content: Add anonymousId to telemetry.json and implement getOrCreateAnonymousId() in src/telemetry/config.ts
@@ -18,7 +18,7 @@ todos:
     content: Switch extensions/posthog-analytics/lib/event-mappers.ts to use the persisted install ID instead of machine hashing
     status: completed
   - id: status-surface
-    content: Show anonymous install ID in denchclaw telemetry status for debugging
+    content: Show anonymous install ID in crm-a-console telemetry status for debugging
     status: completed
   - id: identity-tests
     content: Add behavior-focused tests for persisted install ID generation, reuse, and adoption across CLI/server/browser/plugin layers
@@ -49,13 +49,13 @@ That means a single user can show up as 3 separate “people” in PostHog:
 
 ## Target architecture
 
-The correct source of truth is the DenchClaw state dir, not the browser.
+The correct source of truth is the Crm-A Console state dir, not the browser.
 
 Store one install-scoped anonymous ID in `[src/telemetry/config.ts](src/telemetry/config.ts)`’s `telemetry.json`, and use it everywhere.
 
 ```mermaid
 flowchart TD
-  TelemetryJson["~/.openclaw-dench/telemetry.json"]
+  TelemetryJson["~/.openclaw-crm-a/telemetry.json"]
 
   subgraph cli [CLI]
     CliConfig[readTelemetryConfig]
@@ -248,7 +248,7 @@ Protect:
 
 After this change:
 
-- one DenchClaw install maps to one PostHog distinct ID
+- one Crm-A Console install maps to one PostHog distinct ID
 - CLI events, web server events, browser events, feedback events, and OpenClaw plugin `$ai_*` events all roll up under the same person
 - users no longer appear fragmented across browser/server/plugin telemetry
-- the identity works for first-run `npx denchclaw` because it is created by the CLI/bootstrap path before the browser exists
+- the identity works for first-run `npx crm-a-console` because it is created by the CLI/bootstrap path before the browser exists

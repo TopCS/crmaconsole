@@ -1,4 +1,4 @@
-import { getCloudVoiceState } from "@/lib/dench-cloud-settings";
+import { getCloudVoiceState } from "@/lib/crm-a-cloud-settings";
 import { fetchElevenLabsVoices } from "@/lib/elevenlabs-voice";
 
 export const dynamic = "force-dynamic";
@@ -11,10 +11,10 @@ function buildUnavailableResponse(reason: string, status = 409) {
 export async function GET() {
   const voiceState = await getCloudVoiceState();
   if (voiceState.status === "no_key" || !voiceState.apiKey) {
-    return buildUnavailableResponse("A valid Dench Cloud API key is required.");
+    return buildUnavailableResponse("A valid Crm-A Cloud API key is required.");
   }
   if (voiceState.status === "invalid_key") {
-    return buildUnavailableResponse(voiceState.validationError ?? "The Dench Cloud API key is invalid.");
+    return buildUnavailableResponse(voiceState.validationError ?? "The Crm-A Cloud API key is invalid.");
   }
 
   try {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 
-vi.mock("@/lib/dench-cloud-settings", () => ({
+vi.mock("@/lib/crm-a-cloud-settings", () => ({
   getCloudVoiceState: vi.fn(),
 }));
 
@@ -10,7 +10,7 @@ vi.mock("@/lib/elevenlabs-voice", () => ({
   synthesizeElevenLabsSpeech: vi.fn(),
 }));
 
-const { getCloudVoiceState } = await import("@/lib/dench-cloud-settings");
+const { getCloudVoiceState } = await import("@/lib/crm-a-cloud-settings");
 const { resolveElevenLabsVoiceId, synthesizeElevenLabsSpeech } = await import("@/lib/elevenlabs-voice");
 
 const mockedVoiceState = vi.mocked(getCloudVoiceState);
@@ -27,7 +27,7 @@ describe("voice speech API", () => {
       status: "valid",
       apiKeySource: "config",
       gatewayUrl: "https://gateway.merseoriginals.com",
-      apiKey: "dench-key",
+      apiKey: "crm-a-key",
       selectedVoiceId: null,
       elevenLabsEnabled: false,
     });
@@ -46,7 +46,7 @@ describe("voice speech API", () => {
       status: "valid",
       apiKeySource: "config",
       gatewayUrl: "https://gateway.merseoriginals.com",
-      apiKey: "dench-key",
+      apiKey: "crm-a-key",
       selectedVoiceId: "voice_123",
       elevenLabsEnabled: true,
     });
@@ -67,7 +67,7 @@ describe("voice speech API", () => {
     expect(mockedResolveVoiceId).toHaveBeenCalled();
     expect(mockedSynthesizeSpeech).toHaveBeenCalledWith({
       gatewayUrl: "https://gateway.merseoriginals.com",
-      apiKey: "dench-key",
+      apiKey: "crm-a-key",
       text: "Hello world",
       voiceId: "voice_123",
     });

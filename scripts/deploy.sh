@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deploy.sh — build and publish denchclaw to npm
+# deploy.sh — build and publish crm-a-console to npm
 #
 # Versioning convention (standard semver):
 #   --bump <kind>     Increment current package version.
@@ -25,7 +25,7 @@
 
 set -euo pipefail
 
-PACKAGE_NAME="denchclaw"
+PACKAGE_NAME="crm-a-console"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
@@ -198,13 +198,13 @@ run_npx_smoke_checks() {
   local version="$1"
 
   echo "verifying npx binaries..."
-  verify_npx_command "$version" "npx denchclaw" \
+  verify_npx_command "$version" "npx crm-a-console" \
     npx --yes "${PACKAGE_NAME}@${version}" --version
-  verify_npx_invocation "npx denchclaw update --help" \
+  verify_npx_invocation "npx crm-a-console update --help" \
     npx --yes "${PACKAGE_NAME}@${version}" update --help
-  verify_npx_invocation "npx denchclaw start --help" \
+  verify_npx_invocation "npx crm-a-console start --help" \
     npx --yes "${PACKAGE_NAME}@${version}" start --help
-  verify_npx_invocation "npx denchclaw stop --help" \
+  verify_npx_invocation "npx crm-a-console stop --help" \
     npx --yes "${PACKAGE_NAME}@${version}" stop --help
 }
 
@@ -443,9 +443,9 @@ fi
 # ── publish ──────────────────────────────────────────────────────────────────
 
 # Always tag as "latest" — npm skips the latest tag for prerelease versions
-# by default, but we want `npm i -g denchclaw` to always resolve to
+# by default, but we want `npm i -g crm-a-console` to always resolve to
 # the most recently published version. The root package already exposes both
-# `denchclaw` and `dench` binaries, so there is no separate alias package.
+# `crm-a-console` and `crm-a` binaries, so there is no separate alias package.
 echo "publishing ${PACKAGE_NAME}@${VERSION}..."
 run_npm publish --access public --tag latest
 
@@ -464,4 +464,4 @@ fi
 echo ""
 echo "published ${PACKAGE_NAME}@${VERSION}"
 echo "install:  npm i -g ${PACKAGE_NAME}"
-echo "commands: ${PACKAGE_NAME}, dench"
+echo "commands: ${PACKAGE_NAME}, crm-a"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { OnboardingState } from "@/lib/denchclaw-state";
+import type { OnboardingState } from "@/lib/crm-a-console-state";
 import {
   assertOnboardingResponseOk,
   readOnboardingResponse,

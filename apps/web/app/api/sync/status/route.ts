@@ -23,7 +23,7 @@
  */
 
 import { getSyncStatus, type SyncSourceStatus } from "@/lib/sync-runner";
-import { readSyncCursors } from "@/lib/denchclaw-state";
+import { readSyncCursors } from "@/lib/crm-a-console-state";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

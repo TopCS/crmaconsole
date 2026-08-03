@@ -338,7 +338,7 @@ describe("SyncHealthBanner", () => {
 
   // ---------------------------------------------------------------------
   // "Refresh now" button — same `/api/sync/refresh` route as the agent's
-  // `denchclaw_refresh_sync` tool. The button must:
+  // `crm_a_console_refresh_sync` tool. The button must:
   //   1. POST to /api/sync/refresh with mode=incremental
   //   2. Show "Refreshing…" while the request is in flight
   //   3. After success, immediately re-poll /api/sync/status so the

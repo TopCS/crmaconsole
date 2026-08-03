@@ -1,11 +1,11 @@
 ---
 name: composio-apps
-description: Connected app tool recipes for Dench Integrations (Gmail, Slack, GitHub, Notion, Google Calendar, Linear, Stripe)
+description: Connected app tool recipes for Crm-A Integrations (Gmail, Slack, GitHub, Notion, Google Calendar, Linear, Stripe)
 ---
 
-# Dench Integrations connected apps
+# Crm-A Integrations connected apps
 
-Use the **Dench Integrations tools** only. In DenchClaw, always search first with `composio_search_tools`, inspect the returned full schemas plus plan/pitfall guidance, then execute the chosen tool via `composio_call_tool`. `composio_resolve_tool` still exists as a compatibility wrapper when you want a single best-match result, but ranked search is the default path. Some sessions may still expose direct tool names like `GMAIL_FETCH_EMAILS`, but do not rely on that as the default path.
+Use the **Crm-A Integrations tools** only. In Crm-A Console, always search first with `composio_search_tools`, inspect the returned full schemas plus plan/pitfall guidance, then execute the chosen tool via `composio_call_tool`. `composio_resolve_tool` still exists as a compatibility wrapper when you want a single best-match result, but ranked search is the default path. Some sessions may still expose direct tool names like `GMAIL_FETCH_EMAILS`, but do not rely on that as the default path.
 
 Do **not** use:
 
@@ -15,7 +15,7 @@ Do **not** use:
 - raw gateway HTTP calls
 - direct provider REST calls
 
-If the user mentions Dench Integrations, the connected-app layer, rube, map, MCP, or says an app is already connected, this is the only allowed integration path. If the integration wrapper tools are unavailable in the current session, stop and report repair guidance instead of bypassing them.
+If the user mentions Crm-A Integrations, the connected-app layer, rube, map, MCP, or says an app is already connected, this is the only allowed integration path. If the integration wrapper tools are unavailable in the current session, stop and report repair guidance instead of bypassing them.
 
 Do not rely on workspace cache files like `composio-tool-index.json`, `composio-tool-catalog.json`, or `composio-mcp-status.json` as runtime truth. `composio_search_tools` is the source of truth because it returns official integration search results, full `input_schema`, connection/account status, `recommended_plan_steps`, `known_pitfalls`, and a reusable `search_session_id` when available.
 

@@ -1,7 +1,7 @@
 /**
  * Bucket the raw `Strength Score` into a human-readable label + color.
  *
- * Mirrors dench-2025's `getConnectionStrengthLabel`. The numeric ranges
+ * Mirrors crm-a-2025's `getConnectionStrengthLabel`. The numeric ranges
  * roughly map to:
  *
  *   ≥ 500   "Inner circle"   co-founders, family, daily collaborators

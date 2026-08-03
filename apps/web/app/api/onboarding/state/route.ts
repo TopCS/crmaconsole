@@ -4,7 +4,7 @@ import {
   readOnboardingState,
   type OnboardingStep,
   type OnboardingState,
-} from "@/lib/denchclaw-state";
+} from "@/lib/crm-a-console-state";
 import { isSkillTemplateId } from "@/lib/skill-templates";
 import { trackServer } from "@/lib/telemetry";
 

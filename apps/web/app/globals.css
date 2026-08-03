@@ -86,7 +86,7 @@
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
   --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.1);
 
-  /* Dench UI tokens (used by @denchhq/ui-react primitives) */
+  /* Crm-A UI tokens (used by @crm-ahq/ui-react primitives) */
   --background: 0 0% 90%;
   --foreground: 0 0% 3.9%;
   --card: 0 0% 100%;
@@ -187,7 +187,7 @@
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.4);
   --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.5);
 
-  /* Dench UI tokens (used by @denchhq/ui-react primitives) */
+  /* Crm-A UI tokens (used by @crm-ahq/ui-react primitives) */
   --background: 0 0% 3.9%;
   --foreground: 0 0% 98%;
   --card: 0 0% 3.9%;
@@ -2031,7 +2031,7 @@ label {
   background: rgba(255, 255, 255, 0.15);
 }
 
-@keyframes dench-shimmer {
+@keyframes crm-a-shimmer {
   0% {
     mask-position: 200% center;
   }
@@ -2040,7 +2040,7 @@ label {
   }
 }
 
-.dench-shimmer {
+.crm-a-shimmer {
   mask-image: linear-gradient(
     to right,
     rgba(0, 0, 0, 0.35) 0%,
@@ -2049,7 +2049,7 @@ label {
     rgba(0, 0, 0, 0.35) 100%
   );
   mask-size: 300% 100%;
-  animation: dench-shimmer 3s linear infinite;
+  animation: crm-a-shimmer 3s linear infinite;
 }
 
 @keyframes drawer-fade-in {
@@ -2188,78 +2188,78 @@ body {
 }
 
 /* ── @sinm/react-chrome-tabs theme overrides ── */
-.dench-chrome-tabs-wrapper {
+.crm-a-chrome-tabs-wrapper {
   background: var(--color-bg);
   min-height: 36px;
 }
-.dench-chrome-tabs-wrapper .chrome-tabs {
+.crm-a-chrome-tabs-wrapper .chrome-tabs {
   background: var(--color-bg);
   height: 36px;
   padding: 2px 3px 0 3px;
   border-radius: 0;
   font-family: inherit;
 }
-.dench-chrome-tabs-wrapper .chrome-tabs .chrome-tab {
+.crm-a-chrome-tabs-wrapper .chrome-tabs .chrome-tab {
   height: 34px;
   cursor: default;
 }
-.dench-chrome-tabs-wrapper .chrome-tabs .chrome-tab .chrome-tab-background > svg .chrome-tab-geometry {
+.crm-a-chrome-tabs-wrapper .chrome-tabs .chrome-tab .chrome-tab-background > svg .chrome-tab-geometry {
   fill: var(--color-bg);
   transition: fill 0.15s ease;
 }
-.dench-chrome-tabs-wrapper .chrome-tabs .chrome-tab:hover .chrome-tab-background > svg .chrome-tab-geometry,
-.dench-chrome-tabs-wrapper .chrome-tabs .chrome-tab[data-context] .chrome-tab-background > svg .chrome-tab-geometry {
+.crm-a-chrome-tabs-wrapper .chrome-tabs .chrome-tab:hover .chrome-tab-background > svg .chrome-tab-geometry,
+.crm-a-chrome-tabs-wrapper .chrome-tabs .chrome-tab[data-context] .chrome-tab-background > svg .chrome-tab-geometry {
   fill: var(--color-surface-hover);
 }
-.dench-chrome-tabs-wrapper .chrome-tabs .chrome-tab[active] .chrome-tab-background > svg .chrome-tab-geometry {
+.crm-a-chrome-tabs-wrapper .chrome-tabs .chrome-tab[active] .chrome-tab-background > svg .chrome-tab-geometry {
   fill: var(--color-surface);
 }
-.dench-chrome-tabs-wrapper .chrome-tabs .chrome-tab .chrome-tab-title {
+.crm-a-chrome-tabs-wrapper .chrome-tabs .chrome-tab .chrome-tab-title {
   color: var(--color-text-muted);
   font-size: 12.5px;
 }
-.dench-chrome-tabs-wrapper .chrome-tabs .chrome-tab[active] .chrome-tab-title {
+.crm-a-chrome-tabs-wrapper .chrome-tabs .chrome-tab[active] .chrome-tab-title {
   color: var(--color-text);
 }
-.dench-chrome-tabs-wrapper .chrome-tabs .chrome-tab[data-preview="true"] .chrome-tab-title {
+.crm-a-chrome-tabs-wrapper .chrome-tabs .chrome-tab[data-preview="true"] .chrome-tab-title {
   font-style: italic;
 }
-.dench-chrome-tabs-wrapper .chrome-tabs .chrome-tab .chrome-tab-dividers::before,
-.dench-chrome-tabs-wrapper .chrome-tabs .chrome-tab .chrome-tab-dividers::after {
+.crm-a-chrome-tabs-wrapper .chrome-tabs .chrome-tab .chrome-tab-dividers::before,
+.crm-a-chrome-tabs-wrapper .chrome-tabs .chrome-tab .chrome-tab-dividers::after {
   background: var(--color-border);
 }
-.dench-chrome-tabs-wrapper .chrome-tabs .chrome-tabs-bottom-bar {
+.crm-a-chrome-tabs-wrapper .chrome-tabs .chrome-tabs-bottom-bar {
   background: var(--color-surface);
   height: 1px;
 }
-.dench-chrome-tabs-wrapper .chrome-tabs-optional-shadow-below-bottom-bar {
+.crm-a-chrome-tabs-wrapper .chrome-tabs-optional-shadow-below-bottom-bar {
   display: none;
 }
 
 /* Favicon icon classes (SVG data-uri with currentColor replaced by hex) */
-.dench-favicon-home,
-.dench-favicon-chat,
-.dench-favicon-chat-live,
-.dench-favicon-file,
-.dench-favicon-app,
-.dench-favicon-cron,
-.dench-favicon-object {
+.crm-a-favicon-home,
+.crm-a-favicon-chat,
+.crm-a-favicon-chat-live,
+.crm-a-favicon-file,
+.crm-a-favicon-app,
+.crm-a-favicon-cron,
+.crm-a-favicon-object {
   background-size: 14px 14px !important;
   background-position: center !important;
   background-repeat: no-repeat !important;
   opacity: 0.55;
 }
-.dench-favicon-home {
+.crm-a-favicon-home {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/%3E%3Cpolyline points='9 22 9 12 15 12 15 22'/%3E%3C/svg%3E") !important;
 }
-.dench-favicon-chat {
+.crm-a-favicon-chat {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/%3E%3C/svg%3E") !important;
 }
-.dench-favicon-chat-live {
+.crm-a-favicon-chat-live {
   opacity: 0.9;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/%3E%3Ccircle cx='18' cy='18' r='3' fill='%2310b981' stroke='none'/%3E%3C/svg%3E") !important;
 }
-.dench-favicon-file {
+.crm-a-favicon-file {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/%3E%3Cpath d='M14 2v4a2 2 0 0 0 2 2h4'/%3E%3C/svg%3E") !important;
 }
 body.resizing .sidebar-animate {
@@ -2315,13 +2315,13 @@ td:has(> div > :empty) {
   border-right: none !important;
 }
 
-.dench-favicon-app {
+.crm-a-favicon-app {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='7' height='7' x='3' y='3' rx='1'/%3E%3Crect width='7' height='7' x='14' y='3' rx='1'/%3E%3Crect width='7' height='7' x='3' y='14' rx='1'/%3E%3Crect width='7' height='7' x='14' y='14' rx='1'/%3E%3C/svg%3E") !important;
 }
-.dench-favicon-cron {
+.crm-a-favicon-cron {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolyline points='12 6 12 12 16 14'/%3E%3C/svg%3E") !important;
 }
-.dench-favicon-object {
+.crm-a-favicon-object {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3Cpath d='M3 9h18'/%3E%3Cpath d='M9 21V9'/%3E%3C/svg%3E") !important;
 }
 

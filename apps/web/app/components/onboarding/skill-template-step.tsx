@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { SkillTemplateGallery } from "@/app/components/templates/skill-template-gallery";
-import type { OnboardingState } from "@/lib/denchclaw-state";
+import type { OnboardingState } from "@/lib/crm-a-console-state";
 import type { SkillTemplateId } from "@/lib/skill-templates";
 import { readOnboardingResponse } from "./response";
 

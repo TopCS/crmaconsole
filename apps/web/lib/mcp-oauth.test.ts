@@ -149,7 +149,7 @@ describe("MCP OAuth utilities", () => {
     const client = await registerOAuthClient({
       asMetadata: authServerMetadata,
       redirectUri: "http://localhost:3100/callback",
-      clientName: "DenchClaw (acme)",
+      clientName: "Crm-A Console (acme)",
       scope: "mcp:read",
       fetcher,
     });

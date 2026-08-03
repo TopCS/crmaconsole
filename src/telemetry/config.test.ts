@@ -207,7 +207,7 @@ describe("readPersonInfo", () => {
         name: "Alice",
         email: "alice@example.com",
         avatar: "https://example.com/avatar.png",
-        denchOrgId: "org-123",
+        crmAOrgId: "org-123",
       }),
     );
 
@@ -217,19 +217,19 @@ describe("readPersonInfo", () => {
       name: "Alice",
       email: "alice@example.com",
       avatar: "https://example.com/avatar.png",
-      denchOrgId: "org-123",
+      crmAOrgId: "org-123",
     });
   });
 
   it("ignores empty string identity fields", async () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue(
-      JSON.stringify({ enabled: true, name: "", email: "", denchOrgId: "org-1" }),
+      JSON.stringify({ enabled: true, name: "", email: "", crmAOrgId: "org-1" }),
     );
 
     const { readPersonInfo } = await import("./config.js");
     const info = readPersonInfo();
-    expect(info).toEqual({ denchOrgId: "org-1" });
+    expect(info).toEqual({ crmAOrgId: "org-1" });
   });
 
   it("ignores non-string identity fields", async () => {
@@ -248,7 +248,7 @@ describe("readTelemetryConfig includes identity fields", () => {
     mockReadFileSync.mockReset();
   });
 
-  it("parses name, email, avatar, and denchOrgId from config", async () => {
+  it("parses name, email, avatar, and crmAOrgId from config", async () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue(
       JSON.stringify({
@@ -256,7 +256,7 @@ describe("readTelemetryConfig includes identity fields", () => {
         name: "Bob",
         email: "bob@test.com",
         avatar: "https://img.test/bob.jpg",
-        denchOrgId: "org-abc",
+        crmAOrgId: "org-abc",
       }),
     );
 
@@ -266,7 +266,7 @@ describe("readTelemetryConfig includes identity fields", () => {
     expect(config.name).toBe("Bob");
     expect(config.email).toBe("bob@test.com");
     expect(config.avatar).toBe("https://img.test/bob.jpg");
-    expect(config.denchOrgId).toBe("org-abc");
+    expect(config.crmAOrgId).toBe("org-abc");
   });
 
   it("returns undefined for missing identity fields", async () => {
@@ -279,7 +279,7 @@ describe("readTelemetryConfig includes identity fields", () => {
     expect(config.name).toBeUndefined();
     expect(config.email).toBeUndefined();
     expect(config.avatar).toBeUndefined();
-    expect(config.denchOrgId).toBeUndefined();
+    expect(config.crmAOrgId).toBeUndefined();
   });
 });
 
@@ -300,7 +300,7 @@ describe("writeTelemetryConfig preserves identity fields", () => {
         anonymousId: "id-1",
         name: "Alice",
         email: "alice@test.com",
-        denchOrgId: "org-x",
+        crmAOrgId: "org-x",
       }),
     );
 
@@ -310,7 +310,7 @@ describe("writeTelemetryConfig preserves identity fields", () => {
     const written = JSON.parse(mockWriteFileSync.mock.calls[0][1]);
     expect(written.name).toBe("Alice");
     expect(written.email).toBe("alice@test.com");
-    expect(written.denchOrgId).toBe("org-x");
+    expect(written.crmAOrgId).toBe("org-x");
     expect(written.privacyMode).toBe(false);
   });
 });

@@ -50,12 +50,12 @@ export function buildSkillTemplatePromptText(template: SkillTemplateDefinition):
   const personas = template.personas.join(", ");
   const suggestedApps = template.suggestedApps.length
     ? template.suggestedApps.map((app) => app.name).join(", ")
-    : "no external apps; use Dench-native CRM, enrichment, web search, local files, and workspace context";
+    : "no external apps; use Crm-A-native CRM, enrichment, web search, local files, and workspace context";
   const suggestedAppConnections = formatSuggestedAppConnections(template);
 
-  return `I want to create a reusable DenchClaw skill called "${template.title}".
+  return `I want to create a reusable Crm-A Console skill called "${template.title}".
 
-This should become a durable DenchClaw skill, not a one-off chat. DenchClaw is my AI workspace with built-in CRM, enrichment, Apollo-style data, web search, local files, and optional connected apps. Treat Dench-native capabilities as available by default, and use connected apps only when they are required or helpful.
+This should become a durable Crm-A Console skill, not a one-off chat. Crm-A Console is my AI workspace with built-in CRM, enrichment, Apollo-style data, web search, local files, and optional connected apps. Treat Crm-A-native capabilities as available by default, and use connected apps only when they are required or helpful.
 
 This template is mainly for these personas: ${personas}.
 
@@ -74,8 +74,8 @@ Available trigger modes for this product are only manual trigger and cron/schedu
 
 Start by interviewing me one question at a time. Do not echo this setup back to me. Ask only 3-5 focused questions before creating the skill unless a safety-critical automation rule is still missing. Ask the smallest next question needed, keep each interview turn under 120 words unless options are essential, wait for my answer, then ask the next question. Do not create or edit any files until you have enough context to tailor the workflow.
 
-When the next question has clear choices, ask it with a Dench question card instead of plain text bullets. Use this exact fenced JSON shape, then stop and wait for my selection:
-\`\`\`dench-question
+When the next question has clear choices, ask it with a Crm-A question card instead of plain text bullets. Use this exact fenced JSON shape, then stop and wait for my selection:
+\`\`\`crm-a-question
 {
   "id": "short-stable-question-id",
   "prompt": "The one question you need answered",
@@ -92,7 +92,7 @@ Set "allowMultiple": true only when more than one option can be selected. Add "o
 Before writing the final SKILL.md, gather these specifics:
 ${template.interviewQuestions.map(formatQuestion).join("\n")}
 
-Ask the questions in that order unless my answer makes a later question unnecessary. If a question lists choices, prefer a dench-question card with the provided IDs and labels so I can answer quickly. Still accept custom freeform detail when my situation does not fit the choices.
+Ask the questions in that order unless my answer makes a later question unnecessary. If a question lists choices, prefer a crm-a-question card with the provided IDs and labels so I can answer quickly. Still accept custom freeform detail when my situation does not fit the choices.
 
 When you have enough context, create a complete SKILL.md for this reusable skill. Do not assume a skill-creator helper exists; if no helper is available, create the skill directly at skills/<kebab-case-skill-name>/SKILL.md and add references under that folder when useful. The skill should include:
 ${bulletList(template.skillInstructions)}

@@ -4,7 +4,7 @@
  * Domains in this list are *not* auto-promoted to Companies during the
  * Gmail backfill — every contact from these domains is just a personal
  * contact, not a corporate counterparty. Users can extend or override
- * via `.denchclaw/personal-domains.json` (see `denchclaw-state.ts`).
+ * via `.crm-a-console/personal-domains.json` (see `crm-a-console-state.ts`).
  *
  * The list intentionally errs on the side of including more providers,
  * not fewer: false positives ("we missed that 'foo' is actually a
@@ -228,7 +228,7 @@ const BUNDLED_SET = new Set<string>(BUNDLED_PERSONAL_DOMAINS.map((d) => d.toLowe
  * Resolve the effective personal-domain set: the bundled list, minus any
  * domains the user explicitly removed, plus any they explicitly added.
  *
- * Pass the overrides loaded from `.denchclaw/personal-domains.json` via
+ * Pass the overrides loaded from `.crm-a-console/personal-domains.json` via
  * `readPersonalDomainsOverrides`. Return value is a `Set<string>` for O(1)
  * lookup during ingestion.
  */

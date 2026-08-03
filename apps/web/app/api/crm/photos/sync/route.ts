@@ -10,7 +10,7 @@
  * periodically.
  */
 
-import { readConnections } from "@/lib/denchclaw-state";
+import { readConnections } from "@/lib/crm-a-console-state";
 import { syncGooglePhotos } from "@/lib/gmail-photo-sync";
 
 export const runtime = "nodejs";

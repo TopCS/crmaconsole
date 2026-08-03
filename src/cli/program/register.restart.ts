@@ -6,8 +6,8 @@ import { restartWebRuntimeCommand } from "../web-runtime-command.js";
 export function registerRestartCommand(program: Command) {
   program
     .command("restart")
-    .description("Restart Dench managed web runtime (stop then start)")
-    .option("--profile <name>", "Compatibility flag; non-dench values are ignored with a warning")
+    .description("Restart Crm-A managed web runtime (stop then start)")
+    .option("--profile <name>", "Compatibility flag; non-crm-a values are ignored with a warning")
     .option("--web-port <port>", "Web runtime port override")
     .option("--no-open", "Do not open the browser automatically")
     .option(

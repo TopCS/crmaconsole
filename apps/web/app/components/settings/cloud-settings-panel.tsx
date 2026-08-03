@@ -5,9 +5,9 @@ import { ChevronDown, Loader2 } from "lucide-react";
 import { ChatModelSelector, type ChatModelSelectorOption } from "../chat-model-selector";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
-import { DenchIntegrationsSection } from "../integrations/dench-integrations-section";
+import { CrmAIntegrationsSection } from "../integrations/crm-a-integrations-section";
 import { McpServersSection } from "./mcp-servers-section";
-import type { DenchIntegrationId, DenchIntegrationState, IntegrationsState } from "@/lib/integrations";
+import type { CrmAIntegrationId, CrmAIntegrationState, IntegrationsState } from "@/lib/integrations";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,8 +40,8 @@ type CloudState = {
   apiKeySource: "config" | "env" | "missing";
   gatewayUrl: string;
   primaryModel: string | null;
-  isDenchPrimary: boolean;
-  selectedDenchModel: string | null;
+  isCrmAPrimary: boolean;
+  selectedCrmAModel: string | null;
   selectedVoiceId: string | null;
   elevenLabsEnabled: boolean;
   models: CatalogModel[];
@@ -62,23 +62,23 @@ type ActionNotice = {
 };
 
 function isNetworkValidationError(message: string): boolean {
-  return message.startsWith("Could not reach Dench Cloud gateway");
+  return message.startsWith("Could not reach Crm-A Cloud gateway");
 }
 
 function apiKeySubtitle(validationError?: string): string {
   if (!validationError) {
-    return "Connect to Dench Cloud for AI model access.";
+    return "Connect to Crm-A Cloud for AI model access.";
   }
   if (isNetworkValidationError(validationError)) {
-    return "Could not reach Dench Cloud. Check your connection and try again.";
+    return "Could not reach Crm-A Cloud. Check your connection and try again.";
   }
   return "Your API key is invalid. Enter a new one below.";
 }
 
-type IntegrationDraftState = Record<DenchIntegrationId, boolean>;
+type IntegrationDraftState = Record<CrmAIntegrationId, boolean>;
 
 const ENRICHMENT_WATERFALL_PROVIDERS = [
-  { id: "dench", name: "Dench", src: "/dench-workspace-icon.png", rounded: true },
+  { id: "crm-a", name: "Crm-A", src: "/crm-a-workspace-icon.png", rounded: true },
   { id: "aviato", name: "Aviato", src: "/integrations/aviato.ico", rounded: true },
   { id: "apollo", name: "Apollo", src: "/integrations/apollo.ico", rounded: true },
   { id: "pdl", name: "People Data Labs", src: "/integrations/people-data-labs.ico", rounded: true },
@@ -90,15 +90,15 @@ const ENRICHMENT_WATERFALL_PROVIDERS = [
   { id: "explorium", name: "Explorium", src: "/integrations/explorium.png", rounded: true },
 ] as const;
 
-const DENCH_API_KEY_URL = "https://dench.com/api";
+const CRM_A_API_KEY_URL = "https://dench.com/api";
 
 /** Sentinel for “default voice” in radio group (empty string is avoided for Radix value). */
-const DEFAULT_VOICE_RADIO_VALUE = "__dench_default_voice__";
+const DEFAULT_VOICE_RADIO_VALUE = "__crm_a_default_voice__";
 const SUBTLE_PICKER_TRIGGER_CLASS =
   "w-full max-w-full rounded-xl border border-[color-mix(in_srgb,var(--color-border)_78%,transparent)] bg-[var(--color-surface)] px-3 py-2.5 hover:opacity-100";
 
 function buildIntegrationDraft(state: IntegrationsState | null): IntegrationDraftState {
-  const enabled = new Map<DenchIntegrationId, boolean>();
+  const enabled = new Map<CrmAIntegrationId, boolean>();
   for (const integration of state?.integrations ?? []) {
     enabled.set(integration.id, integration.enabled);
   }
@@ -112,24 +112,24 @@ function buildIntegrationDraft(state: IntegrationsState | null): IntegrationDraf
 function applyIntegrationDraft(
   state: IntegrationsState,
   draft: IntegrationDraftState,
-  draftIsDenchPrimary: boolean,
+  draftIsCrmAPrimary: boolean,
 ): IntegrationsState {
   return {
     ...state,
-    denchCloud: {
-      ...state.denchCloud,
-      isPrimaryProvider: draftIsDenchPrimary,
-      primaryModel: state.denchCloud.primaryModel,
+    crmACloud: {
+      ...state.crmACloud,
+      isPrimaryProvider: draftIsCrmAPrimary,
+      primaryModel: state.crmACloud.primaryModel,
     },
     integrations: state.integrations.map((integration) => {
-      if (integration.lockReason !== "dench_not_primary") {
+      if (integration.lockReason !== "crm_a_not_primary") {
         return {
           ...integration,
           enabled: draft[integration.id],
         };
       }
 
-      if (draftIsDenchPrimary) {
+      if (draftIsCrmAPrimary) {
         return {
           ...integration,
           enabled: draft[integration.id],
@@ -144,8 +144,8 @@ function applyIntegrationDraft(
         ...integration,
         enabled: draft[integration.id],
         locked: true,
-        lockReason: "dench_not_primary",
-        lockBadge: "Use Dench Cloud",
+        lockReason: "crm_a_not_primary",
+        lockBadge: "Use Crm-A Cloud",
         available: false,
       };
     }),
@@ -171,10 +171,10 @@ function EnrichmentWaterfallCard({
   enrichmentIntegration,
   onToggleEnrichment,
 }: {
-  enrichmentIntegration: DenchIntegrationState | null;
-  onToggleEnrichment: (integration: DenchIntegrationState, enabled: boolean) => void;
+  enrichmentIntegration: CrmAIntegrationState | null;
+  onToggleEnrichment: (integration: CrmAIntegrationState, enabled: boolean) => void;
 }) {
-  const enrichmentLabel = "Dench Enrichments";
+  const enrichmentLabel = "Crm-A Enrichments";
 
   return (
     <div
@@ -184,7 +184,7 @@ function EnrichmentWaterfallCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <div className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
-            Dench Enrichment
+            Crm-A Enrichment
           </div>
           <div className="max-w-[42rem] text-xs leading-5" style={{ color: "var(--color-text-muted)" }}>
             Enrich people and company data with multiple providers.
@@ -297,14 +297,14 @@ function ApiKeyEntry({
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
-            Dench Cloud
+            Crm-A Cloud
           </div>
           <div className="text-[11px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
             {apiKeySubtitle(validationError)}
           </div>
         </div>
         <a
-          href={DENCH_API_KEY_URL}
+          href={CRM_A_API_KEY_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-stone-200 dark:hover:bg-stone-700"
@@ -337,7 +337,7 @@ function ApiKeyEntry({
                 onSave(keyInput.trim());
               }
             }}
-            placeholder="Paste your Dench API key..."
+            placeholder="Paste your Crm-A API key..."
             className="w-full pl-9 pr-3 py-2.5 rounded-xl text-sm outline-none transition-colors"
             style={{
               background: "var(--color-surface)",
@@ -366,7 +366,7 @@ function ModelSelector({
   selectedModel,
   selectedVoiceId,
   elevenLabsEnabled,
-  isDenchPrimary,
+  isCrmAPrimary,
   recommendedModelId,
   onSelect,
   onSelectVoice,
@@ -379,7 +379,7 @@ function ModelSelector({
   selectedModel: string | null;
   selectedVoiceId: string | null;
   elevenLabsEnabled: boolean;
-  isDenchPrimary: boolean;
+  isCrmAPrimary: boolean;
   recommendedModelId: string;
   onSelect: (stableId: string) => void;
   onSelectVoice: (voiceId: string | null) => void;
@@ -407,7 +407,7 @@ function ModelSelector({
         style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
       >
         <img
-          src="/dench-workspace-icon.png"
+          src="/crm-a-workspace-icon.png"
           alt=""
           width={36}
           height={36}
@@ -417,22 +417,22 @@ function ModelSelector({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
-              Dench Cloud
+              Crm-A Cloud
             </span>
             <span
               className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
               style={{
-                background: isDenchPrimary ? "rgba(16,185,129,0.15)" : "var(--color-surface-hover)",
-                color: isDenchPrimary ? "rgb(16,185,129)" : "var(--color-text-muted)",
+                background: isCrmAPrimary ? "rgba(16,185,129,0.15)" : "var(--color-surface-hover)",
+                color: isCrmAPrimary ? "rgb(16,185,129)" : "var(--color-text-muted)",
               }}
             >
-              {isDenchPrimary ? "Active" : "Available"}
+              {isCrmAPrimary ? "Active" : "Available"}
             </span>
           </div>
           <div className="text-[11px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
-            {isDenchPrimary
+            {isCrmAPrimary
               ? "Connected and active as your primary provider."
-              : "Connected. Select a model to use Dench Cloud as your primary provider."}
+              : "Connected. Select a model to use Crm-A Cloud as your primary provider."}
           </div>
         </div>
         <a
@@ -456,11 +456,11 @@ function ModelSelector({
         <div className="max-w-[420px]">
           <ChatModelSelector
             models={pickerModels}
-            selectedModel={isDenchPrimary ? selectedModel : null}
+            selectedModel={isCrmAPrimary ? selectedModel : null}
             onSelect={onSelect}
             disabled={selecting}
             loading={selecting}
-            fallbackToFirst={isDenchPrimary}
+            fallbackToFirst={isCrmAPrimary}
             placeholder="Choose a model..."
             ariaLabel="Select primary model"
             triggerClassName={SUBTLE_PICKER_TRIGGER_CLASS}
@@ -671,13 +671,13 @@ export function CloudSettingsPanel() {
     if (data?.status !== "valid" || !integrationsDataRef.current) {
       return;
     }
-    setDraftModel(data.isDenchPrimary ? data.selectedDenchModel : null);
+    setDraftModel(data.isCrmAPrimary ? data.selectedCrmAModel : null);
     setDraftVoiceId(data.selectedVoiceId);
     setDraftIntegrations(buildIntegrationDraft(integrationsDataRef.current));
   }, [
     data?.status,
-    data?.isDenchPrimary,
-    data?.selectedDenchModel,
+    data?.isCrmAPrimary,
+    data?.selectedCrmAModel,
     data?.selectedVoiceId,
     draftResetKey,
   ]);
@@ -737,7 +737,7 @@ export function CloudSettingsPanel() {
     setDraftVoiceId(voiceId);
   }, []);
 
-  const handleDraftIntegrationToggle = useCallback((integration: DenchIntegrationState, enabled: boolean) => {
+  const handleDraftIntegrationToggle = useCallback((integration: CrmAIntegrationState, enabled: boolean) => {
     setNotice(null);
     setDraftIntegrations((current) => ({
       ...current,
@@ -750,12 +750,12 @@ export function CloudSettingsPanel() {
       return;
     }
     setNotice(null);
-    setDraftModel(data.isDenchPrimary ? data.selectedDenchModel : null);
+    setDraftModel(data.isCrmAPrimary ? data.selectedCrmAModel : null);
     setDraftVoiceId(data.selectedVoiceId);
     setDraftIntegrations(buildIntegrationDraft(integrationsData));
   }, [data, integrationsData]);
 
-  const baselineModel = data?.status === "valid" && data.isDenchPrimary ? data.selectedDenchModel : null;
+  const baselineModel = data?.status === "valid" && data.isCrmAPrimary ? data.selectedCrmAModel : null;
   const baselineVoiceId = data?.status === "valid" ? data.selectedVoiceId : null;
   const baselineIntegrations = useMemo(
     () => buildIntegrationDraft(integrationsData),
@@ -768,13 +768,13 @@ export function CloudSettingsPanel() {
     || draftIntegrations.apollo !== baselineIntegrations.apollo
     || draftIntegrations.elevenlabs !== baselineIntegrations.elevenlabs
   ));
-  const draftIsDenchPrimary = Boolean(draftModel);
+  const draftIsCrmAPrimary = Boolean(draftModel);
   const draftIntegrationsState = useMemo(() => {
     if (!integrationsData) {
       return null;
     }
-    return applyIntegrationDraft(integrationsData, draftIntegrations, draftIsDenchPrimary);
-  }, [draftIntegrations, draftIsDenchPrimary, integrationsData]);
+    return applyIntegrationDraft(integrationsData, draftIntegrations, draftIsCrmAPrimary);
+  }, [draftIntegrations, draftIsCrmAPrimary, integrationsData]);
 
   const handleSaveActiveSettings = useCallback(async () => {
     setSavingActive(true);
@@ -919,7 +919,7 @@ export function CloudSettingsPanel() {
         />
         <div>
           <h2 className="text-sm font-medium mb-3" style={{ color: "var(--color-text)" }}>Integrations</h2>
-          <DenchIntegrationsSection />
+          <CrmAIntegrationsSection />
         </div>
       </div>
     );
@@ -932,7 +932,7 @@ export function CloudSettingsPanel() {
         selectedModel={draftModel}
         selectedVoiceId={draftVoiceId}
         elevenLabsEnabled={draftIntegrations.elevenlabs}
-        isDenchPrimary={draftIsDenchPrimary}
+        isCrmAPrimary={draftIsCrmAPrimary}
         recommendedModelId={data.recommendedModelId}
         onSelect={handleDraftModelChange}
         onSelectVoice={handleDraftVoiceChange}
@@ -943,7 +943,7 @@ export function CloudSettingsPanel() {
       />
       <div>
         <h2 className="text-sm font-medium mb-3" style={{ color: "var(--color-text)" }}>Integrations</h2>
-        <DenchIntegrationsSection
+        <CrmAIntegrationsSection
           data={draftIntegrationsState}
           loading={integrationsLoading}
           error={integrationsError}

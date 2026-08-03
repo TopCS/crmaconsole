@@ -9,7 +9,7 @@ vi.mock("@/lib/active-runs", () => ({
 }));
 
 vi.mock("@/lib/workspace", () => ({
-	resolveWorkspaceRoot: vi.fn(() => "/home/testuser/.openclaw-dench/workspace"),
+	resolveWorkspaceRoot: vi.fn(() => "/home/testuser/.openclaw-crm-a/workspace"),
 }));
 
 vi.mock("node:fs", () => ({

@@ -31,7 +31,7 @@ export async function GET(req: Request) {
 		const res = await fetch(targetUrl, {
 			signal: controller.signal,
 			headers: {
-				"User-Agent": "Mozilla/5.0 (compatible; DenchClawBot/1.0; +https://dench.com)",
+				"User-Agent": "Mozilla/5.0 (compatible; CrmAConsoleBot/1.0; +https://dench.com)",
 				Accept: "text/html,application/xhtml+xml",
 			},
 			redirect: "follow",

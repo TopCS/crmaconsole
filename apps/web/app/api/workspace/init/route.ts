@@ -22,7 +22,7 @@ import {
 import {
   seedWorkspaceFromAssets,
 } from "@/lib/workspace-seed";
-import { resolveDenchPackageRoot } from "@/lib/project-root";
+import { resolveCrmAPackageRoot } from "@/lib/project-root";
 import { trackServer } from "@/lib/telemetry";
 import { ensureLatestSchema } from "@/lib/workspace-schema-migrations";
 
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
   }
   if (body.path?.trim()) {
     return Response.json(
-      { error: "Custom workspace paths are currently disabled. Workspaces are created in ~/.openclaw-dench." },
+      { error: "Custom workspace paths are currently disabled. Workspaces are created in ~/.openclaw-crm-a." },
       { status: 400 },
     );
   }
@@ -119,7 +119,7 @@ export async function POST(req: Request) {
   const seeded: string[] = [];
   const copiedFiles: string[] = [];
 
-  const projectRoot = resolveDenchPackageRoot();
+  const projectRoot = resolveCrmAPackageRoot();
 
   try {
     mkdirSync(stateDir, { recursive: true });
@@ -147,7 +147,7 @@ export async function POST(req: Request) {
   }
 
   // Seed managed skills, DuckDB, and CRM object projections.
-  // DenchClaw identity is injected at runtime via the dench-identity plugin.
+  // Crm-A Console identity is injected at runtime via the crm-a-identity plugin.
   if (projectRoot) {
     const seedResult = seedWorkspaceFromAssets({ workspaceDir, packageRoot: projectRoot });
     seeded.push(...seedResult.projectionFiles);

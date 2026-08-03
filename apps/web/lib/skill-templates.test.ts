@@ -49,13 +49,13 @@ describe("skill templates", () => {
     expect(prompt).toContain("Do not create or edit any files until");
     expect(prompt).toContain("manual trigger and cron/scheduled agent messages");
     expect(prompt).toContain("explicit send rules");
-    expect(prompt).toContain("Which buyer personas should DenchClaw");
+    expect(prompt).toContain("Which buyer personas should Crm-A Console");
     expect(prompt).toContain("Who this skill is for");
     expect(prompt).toContain("idempotency checks");
     expect(prompt).toContain("Suggested app connections");
-    expect(prompt).toContain("[Connect Gmail](dench://composio/connect?toolkit=gmail&name=Gmail)");
-    expect(prompt).toContain("[Connect HubSpot](dench://composio/connect?toolkit=hubspot&name=HubSpot)");
-    expect(prompt).toContain("[Connect LinkedIn](dench://composio/connect?toolkit=linkedin&name=LinkedIn)");
+    expect(prompt).toContain("[Connect Gmail](crm-a://composio/connect?toolkit=gmail&name=Gmail)");
+    expect(prompt).toContain("[Connect HubSpot](crm-a://composio/connect?toolkit=hubspot&name=HubSpot)");
+    expect(prompt).toContain("[Connect LinkedIn](crm-a://composio/connect?toolkit=linkedin&name=LinkedIn)");
     expect(prompt).toContain("not required to start the interview");
     expect(prompt).toContain("concrete activity logger policy");
     expect(prompt).toContain("Use this tailored logger contract");

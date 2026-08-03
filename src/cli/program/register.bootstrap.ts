@@ -8,8 +8,8 @@ import { runCommandWithRuntime } from "../cli-utils.js";
 export function registerBootstrapCommand(program: Command) {
   program
     .command("bootstrap")
-    .description("Bootstrap DenchClaw on top of OpenClaw and open the web UI")
-    .option("--profile <name>", "Compatibility flag; non-dench values are ignored with a warning")
+    .description("Bootstrap Crm-A Console on top of OpenClaw and open the web UI")
+    .option("--profile <name>", "Compatibility flag; non-crm-a values are ignored with a warning")
     .option("--force-onboard", "Run onboarding even if config already exists", false)
     .option("--non-interactive", "Skip prompts where possible", false)
     .option("--yes", "Auto-approve install prompts", false)
@@ -17,10 +17,10 @@ export function registerBootstrapCommand(program: Command) {
     .option("--update-now", "Run OpenClaw update before onboarding", false)
     .option("--gateway-port <port>", "Gateway port override for first-run onboarding")
     .option("--web-port <port>", "Preferred web UI port (default: 3100)")
-    .option("--dench-cloud", "Configure Dench Cloud and skip OpenClaw provider onboarding", false)
-    .option("--dench-cloud-api-key <key>", "Dench Cloud API key for bootstrap-driven setup")
-    .option("--dench-cloud-model <id>", "Stable or public Dench Cloud model id to use as default")
-    .option("--dench-gateway-url <url>", "Override the Dench Cloud gateway base URL")
+    .option("--crm-a-cloud", "Configure Crm-A Cloud and skip OpenClaw provider onboarding", false)
+    .option("--crm-a-cloud-api-key <key>", "Crm-A Cloud API key for bootstrap-driven setup")
+    .option("--crm-a-cloud-model <id>", "Stable or public Crm-A Cloud model id to use as default")
+    .option("--crm-a-gateway-url <url>", "Override the Crm-A Cloud gateway base URL")
     .option(
       "--skip-daemon-install",
       "Skip gateway daemon/service installation (for containers or environments without systemd/launchd)",
@@ -44,10 +44,10 @@ export function registerBootstrapCommand(program: Command) {
           updateNow: Boolean(opts.updateNow),
           gatewayPort: opts.gatewayPort as string | undefined,
           webPort: opts.webPort as string | undefined,
-          denchCloud: opts.denchCloud ? true : undefined,
-          denchCloudApiKey: opts.denchCloudApiKey as string | undefined,
-          denchCloudModel: opts.denchCloudModel as string | undefined,
-          denchGatewayUrl: opts.denchGatewayUrl as string | undefined,
+          crmACloud: opts.crmACloud ? true : undefined,
+          crmACloudApiKey: opts.crmACloudApiKey as string | undefined,
+          crmACloudModel: opts.crmACloudModel as string | undefined,
+          crmAGatewayUrl: opts.crmAGatewayUrl as string | undefined,
           skipDaemonInstall: Boolean(opts.skipDaemonInstall),
           noOpen: Boolean(opts.open === false),
           json: Boolean(opts.json),

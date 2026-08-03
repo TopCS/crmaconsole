@@ -67,26 +67,26 @@ describe("buildEnv", () => {
 		actionId: "send-email",
 		fieldId: "field-789",
 		workspacePath: "/workspace",
-		dbPath: "/workspace/.dench/data.duckdb",
+		dbPath: "/workspace/.crm-a/data.duckdb",
 		apiUrl: "http://localhost:3100",
 	};
 
-	it("sets all DENCH_* environment variables from context", () => {
+	it("sets all CRM_A_* environment variables from context", () => {
 		const env = buildEnv(ctx);
-		expect(env.DENCH_ENTRY_ID).toBe("entry-123");
-		expect(env.DENCH_OBJECT_NAME).toBe("contacts");
-		expect(env.DENCH_OBJECT_ID).toBe("obj-456");
-		expect(env.DENCH_ACTION_ID).toBe("send-email");
-		expect(env.DENCH_FIELD_ID).toBe("field-789");
-		expect(env.DENCH_WORKSPACE_PATH).toBe("/workspace");
-		expect(env.DENCH_DB_PATH).toBe("/workspace/.dench/data.duckdb");
-		expect(env.DENCH_API_URL).toBe("http://localhost:3100");
+		expect(env.CRM_A_ENTRY_ID).toBe("entry-123");
+		expect(env.CRM_A_OBJECT_NAME).toBe("contacts");
+		expect(env.CRM_A_OBJECT_ID).toBe("obj-456");
+		expect(env.CRM_A_ACTION_ID).toBe("send-email");
+		expect(env.CRM_A_FIELD_ID).toBe("field-789");
+		expect(env.CRM_A_WORKSPACE_PATH).toBe("/workspace");
+		expect(env.CRM_A_DB_PATH).toBe("/workspace/.crm-a/data.duckdb");
+		expect(env.CRM_A_API_URL).toBe("http://localhost:3100");
 	});
 
 	it("serializes entryData as JSON (scripts parse env vars)", () => {
 		const env = buildEnv(ctx);
-		expect(env.DENCH_ENTRY_DATA).toBe(JSON.stringify({ Name: "Test", Status: "Active" }));
-		expect(JSON.parse(env.DENCH_ENTRY_DATA!)).toEqual({ Name: "Test", Status: "Active" });
+		expect(env.CRM_A_ENTRY_DATA).toBe(JSON.stringify({ Name: "Test", Status: "Active" }));
+		expect(JSON.parse(env.CRM_A_ENTRY_DATA!)).toEqual({ Name: "Test", Status: "Active" });
 	});
 
 	it("preserves existing process.env variables (inherits parent environment)", () => {
@@ -96,6 +96,6 @@ describe("buildEnv", () => {
 
 	it("handles empty entryData without crashing", () => {
 		const env = buildEnv({ ...ctx, entryData: {} });
-		expect(env.DENCH_ENTRY_DATA).toBe("{}");
+		expect(env.CRM_A_ENTRY_DATA).toBe("{}");
 	});
 });

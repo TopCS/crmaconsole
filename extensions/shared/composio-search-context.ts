@@ -83,7 +83,7 @@ export function createComposioSearchContextSecret(params: {
     params.gatewayUrl?.trim() ?? "",
     params.apiKey?.trim() ?? "",
   ].join("|");
-  return seed || "denchclaw-composio-search";
+  return seed || "crm-a-console-composio-search";
 }
 
 export function signComposioSearchContext(context: ComposioSearchContext, secret: string): string {

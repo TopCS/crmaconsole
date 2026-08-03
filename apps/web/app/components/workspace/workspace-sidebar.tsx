@@ -441,7 +441,7 @@ export function WorkspaceSidebar({
 						>
 							{/* eslint-disable-next-line @next/next/no-img-element */}
 							<img
-								src="/dench-workspace-icon.png"
+								src="/crm-a-workspace-icon.png"
 								alt=""
 								className="w-7 h-7 object-cover"
 								draggable={false}
@@ -793,7 +793,7 @@ export function WorkspaceSidebar({
 				className="flex items-center gap-2 px-2 py-1 rounded-lg text-[11px]"
 				style={{ color: "var(--color-text-muted)" }}
 			>
-				dench.com{process.env.NEXT_PUBLIC_DENCHCLAW_VERSION ? ` v${process.env.NEXT_PUBLIC_DENCHCLAW_VERSION}` : ""}
+				dench.com{process.env.NEXT_PUBLIC_CRM_A_CONSOLE_VERSION ? ` v${process.env.NEXT_PUBLIC_CRM_A_CONSOLE_VERSION}` : ""}
 			</a>
 			<div className="flex items-center gap-0.5">
 				{onToggleHidden && (

@@ -4,16 +4,16 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CloudSettingsPanel } from "./cloud-settings-panel";
-import type { DenchIntegrationState, IntegrationsState } from "@/lib/integrations";
+import type { CrmAIntegrationState, IntegrationsState } from "@/lib/integrations";
 
-vi.mock("../integrations/dench-integrations-section", () => ({
-  DenchIntegrationsSection: ({
+vi.mock("../integrations/crm-a-integrations-section", () => ({
+  CrmAIntegrationsSection: ({
     data,
     onToggle,
     excludeIntegrationIds,
   }: {
     data?: IntegrationsState | null;
-    onToggle?: (integration: DenchIntegrationState, enabled: boolean) => void;
+    onToggle?: (integration: CrmAIntegrationState, enabled: boolean) => void;
     excludeIntegrationIds?: readonly string[];
   }) => {
     const excluded = new Set(excludeIntegrationIds ?? []);
@@ -40,8 +40,8 @@ const baseState = {
   apiKeySource: "config" as const,
   gatewayUrl: "https://gateway.merseoriginals.com",
   primaryModel: null,
-  isDenchPrimary: false,
-  selectedDenchModel: null,
+  isCrmAPrimary: false,
+  selectedCrmAModel: null,
   selectedVoiceId: null,
   elevenLabsEnabled: true,
   models: [
@@ -77,7 +77,7 @@ const voicesPayload = {
 };
 
 const integrationsState: IntegrationsState = {
-  denchCloud: {
+  crmACloud: {
     hasKey: true,
     isPrimaryProvider: false,
     primaryModel: null,
@@ -100,12 +100,12 @@ const integrationsState: IntegrationsState = {
       enabled: false,
       available: false,
       locked: true,
-      lockReason: "dench_not_primary",
-      lockBadge: "Use Dench Cloud",
+      lockReason: "crm_a_not_primary",
+      lockBadge: "Use Crm-A Cloud",
       gatewayBaseUrl: "https://gateway.merseoriginals.com",
       auth: { configured: true, source: "config" },
       plugin: null,
-      managedByDench: true,
+      managedByCrmA: true,
       healthIssues: [],
       health: {
         status: "disabled",
@@ -122,12 +122,12 @@ const integrationsState: IntegrationsState = {
       enabled: false,
       available: false,
       locked: true,
-      lockReason: "dench_not_primary",
-      lockBadge: "Use Dench Cloud",
+      lockReason: "crm_a_not_primary",
+      lockBadge: "Use Crm-A Cloud",
       gatewayBaseUrl: "https://gateway.merseoriginals.com",
       auth: { configured: true, source: "config" },
       plugin: null,
-      managedByDench: true,
+      managedByCrmA: true,
       healthIssues: [],
       health: {
         status: "disabled",
@@ -144,12 +144,12 @@ const integrationsState: IntegrationsState = {
       enabled: false,
       available: false,
       locked: true,
-      lockReason: "dench_not_primary",
-      lockBadge: "Use Dench Cloud",
+      lockReason: "crm_a_not_primary",
+      lockBadge: "Use Crm-A Cloud",
       gatewayBaseUrl: "https://gateway.merseoriginals.com",
       auth: { configured: true, source: "config" },
       plugin: null,
-      managedByDench: true,
+      managedByCrmA: true,
       healthIssues: [],
       health: {
         status: "disabled",
@@ -168,7 +168,7 @@ describe("CloudSettingsPanel", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows the rich picker placeholder when Dench Cloud is not primary", async () => {
+  it("shows the rich picker placeholder when Crm-A Cloud is not primary", async () => {
     global.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString();
       if (url === "/api/settings/cloud") {
@@ -234,16 +234,16 @@ describe("CloudSettingsPanel", () => {
         return new Response(JSON.stringify({
           state: {
             ...baseState,
-            isDenchPrimary: true,
-            selectedDenchModel: "anthropic.claude-opus-4-6-v1",
+            isCrmAPrimary: true,
+            selectedCrmAModel: "anthropic.claude-opus-4-6-v1",
             selectedVoiceId: "voice_123",
           },
           integrationsState: {
             ...integrationsState,
-            denchCloud: {
-              ...integrationsState.denchCloud,
+            crmACloud: {
+              ...integrationsState.crmACloud,
               isPrimaryProvider: true,
-              primaryModel: "dench-cloud/anthropic.claude-opus-4-6-v1",
+              primaryModel: "crm-a-cloud/anthropic.claude-opus-4-6-v1",
             },
             integrations: integrationsState.integrations.map((integration) =>
               integration.id === "exa"
@@ -256,7 +256,7 @@ describe("CloudSettingsPanel", () => {
             attempted: true,
             restarted: true,
             error: null,
-            profile: "dench",
+            profile: "crm-a",
           },
         }));
       }
@@ -313,12 +313,12 @@ describe("CloudSettingsPanel", () => {
     render(<CloudSettingsPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText("Dench Enrichment")).toBeInTheDocument();
+      expect(screen.getByText("Crm-A Enrichment")).toBeInTheDocument();
     });
     expect(screen.getByText("Enrich people and company data with multiple providers.")).toBeInTheDocument();
-    expect(screen.getByRole("switch", { name: "Toggle Dench Enrichments" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Toggle Crm-A Enrichments" })).toBeInTheDocument();
 
-    expect(screen.getByTitle("Dench")).toBeInTheDocument();
+    expect(screen.getByTitle("Crm-A")).toBeInTheDocument();
     expect(screen.getByTitle("Aviato")).toBeInTheDocument();
     expect(screen.getByTitle("Apollo")).toBeInTheDocument();
     expect(screen.getByTitle("People Data Labs")).toBeInTheDocument();

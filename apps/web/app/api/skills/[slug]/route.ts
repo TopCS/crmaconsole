@@ -6,7 +6,7 @@ import { resolveWorkspaceRoot } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
-const PROTECTED_SKILLS = ["crm", "browser", "app-builder", "gstack", "dench-integrations"];
+const PROTECTED_SKILLS = ["crm", "browser", "app-builder", "gstack", "crm-a-integrations"];
 
 export async function DELETE(
   _req: Request,
@@ -19,10 +19,10 @@ export async function DELETE(
     return Response.json({ ok: false, error: "Invalid skill slug" }, { status: 400 });
   }
 
-  // Managed DenchClaw skills are required for core behavior and must stay installed.
+  // Managed Crm-A Console skills are required for core behavior and must stay installed.
   if (PROTECTED_SKILLS.includes(slug)) {
     return Response.json(
-      { ok: false, error: "This skill is required by DenchClaw and cannot be removed" },
+      { ok: false, error: "This skill is required by Crm-A Console and cannot be removed" },
       { status: 403 },
     );
   }

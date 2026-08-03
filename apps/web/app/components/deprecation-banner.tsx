@@ -1,4 +1,4 @@
-const DENCH_URL = "https://dench.com";
+const CRM_A_URL = "https://dench.com";
 
 export function DeprecationBanner() {
   return (
@@ -18,7 +18,7 @@ export function DeprecationBanner() {
       >
         For the latest features, go to{" "}
         <a
-          href={DENCH_URL}
+          href={CRM_A_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="font-semibold underline decoration-[var(--color-deprecation-border)] underline-offset-2 transition-opacity hover:opacity-80"

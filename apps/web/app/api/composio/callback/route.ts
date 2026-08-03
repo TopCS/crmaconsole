@@ -13,7 +13,7 @@ import {
   writeConnection,
   writeOnboardingState,
   type ConnectionRecord,
-} from "@/lib/denchclaw-state";
+} from "@/lib/crm-a-console-state";
 import { refreshIntegrationsRuntime } from "@/lib/integrations";
 import { resolveAppPublicOrigin } from "@/lib/public-origin";
 import type { NormalizedComposioConnection } from "@/lib/composio";
@@ -98,7 +98,7 @@ export async function GET(request: Request) {
   const status = searchParams.get("status") ?? "unknown";
   const connectedAccountId = searchParams.get("connected_account_id") ?? "";
   // Use the public origin (not `url.origin`) so the postMessage target
-  // matches `window.location.origin` in the parent tab when DenchClaw
+  // matches `window.location.origin` in the parent tab when Crm-A Console
   // is hosted behind a reverse proxy. The parent's strict
   // `event.origin === window.location.origin` check would otherwise
   // discard the message and the modal would hang on "Authorizing…".
@@ -135,7 +135,7 @@ export async function GET(request: Request) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${success ? "Connected" : "Connection Failed"} — DenchClaw</title>
+  <title>${success ? "Connected" : "Connection Failed"} — Crm-A Console</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -158,7 +158,7 @@ export async function GET(request: Request) {
   <div class="card">
     <div class="icon">${success ? "&#10003;" : "&#10007;"}</div>
     <h1>${success ? "Connected successfully" : "Connection failed"}</h1>
-    <p>${success ? "You can close this tab and return to DenchClaw." : "Something went wrong. Please close this tab and try again."}</p>
+    <p>${success ? "You can close this tab and return to Crm-A Console." : "Something went wrong. Please close this tab and try again."}</p>
   </div>
   <script>
     try {

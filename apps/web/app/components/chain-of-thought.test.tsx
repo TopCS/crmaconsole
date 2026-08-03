@@ -3,7 +3,7 @@ import React from "react";
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { ChainOfThought, type ChainPart } from "./chain-of-thought";
-import { denchIntegrationsBrand } from "@/lib/dench-integrations-brand";
+import { crmAIntegrationsBrand } from "@/lib/crm-a-integrations-brand";
 
 describe("ChainOfThought image steps", () => {
 	it("treats image-file tools as reads instead of image generation", () => {
@@ -44,7 +44,7 @@ describe("ChainOfThought image steps", () => {
 });
 
 describe("ChainOfThought integration steps", () => {
-	it("renders a Dench Integrations search label with schema details", () => {
+	it("renders a Crm-A Integrations search label with schema details", () => {
 		const parts: ChainPart[] = [
 			{
 				kind: "tool",
@@ -88,7 +88,7 @@ describe("ChainOfThought integration steps", () => {
 		render(<ChainOfThought parts={parts} isStreaming={false} />);
 		fireEvent.click(screen.getByRole("button", { name: /thought/i }));
 
-		expect(screen.getByText(denchIntegrationsBrand.searchLabel)).toBeTruthy();
+		expect(screen.getByText(crmAIntegrationsBrand.searchLabel)).toBeTruthy();
 		expect(screen.queryByText("Searching Composio tools")).toBeNull();
 		expect(screen.getByText(/Top matches:/i)).toBeTruthy();
 		expect(screen.getByText(/STRIPE_LIST_SUBSCRIPTIONS/)).toBeTruthy();
@@ -99,7 +99,7 @@ describe("ChainOfThought integration steps", () => {
 		expect(screen.getByText("Schema details")).toBeTruthy();
 	});
 
-	it("renders a Dench Integration execution label with pagination summary", () => {
+	it("renders a Crm-A Integration execution label with pagination summary", () => {
 		const parts: ChainPart[] = [
 			{
 				kind: "tool",
@@ -128,7 +128,7 @@ describe("ChainOfThought integration steps", () => {
 		render(<ChainOfThought parts={parts} isStreaming={false} />);
 		fireEvent.click(screen.getByRole("button", { name: /thought/i }));
 
-		expect(screen.getByText(denchIntegrationsBrand.callLabel)).toBeTruthy();
+		expect(screen.getByText(crmAIntegrationsBrand.callLabel)).toBeTruthy();
 		expect(screen.queryByText("Calling Composio tool")).toBeNull();
 		expect(screen.getByText(/Tool:/i)).toBeTruthy();
 		expect(screen.getByText(/stripe \/ STRIPE_LIST_SUBSCRIPTIONS/)).toBeTruthy();
@@ -142,7 +142,7 @@ describe("ChainOfThought integration steps", () => {
 		expect(screen.getByText("1 result")).toBeTruthy();
 	});
 
-	it("shows recovery details for an auto-healed Dench Integration call", () => {
+	it("shows recovery details for an auto-healed Crm-A Integration call", () => {
 		const parts: ChainPart[] = [
 			{
 				kind: "tool",
@@ -183,7 +183,7 @@ describe("ChainOfThought integration steps", () => {
 		).toBeTruthy();
 	});
 
-	it("keeps Dench Integration call details visible when the tool fails", () => {
+	it("keeps Crm-A Integration call details visible when the tool fails", () => {
 		const parts: ChainPart[] = [
 			{
 				kind: "tool",
@@ -202,7 +202,7 @@ describe("ChainOfThought integration steps", () => {
 					toolkit: "posthog",
 					account: "ca_obBGycWy7ChR",
 					tool_router_session_id: "trs_posthog_123",
-					error: "Dench Integration execution failed (HTTP 400).",
+					error: "Crm-A Integration execution failed (HTTP 400).",
 				},
 			},
 		];
@@ -210,9 +210,9 @@ describe("ChainOfThought integration steps", () => {
 		render(<ChainOfThought parts={parts} isStreaming={false} />);
 		fireEvent.click(screen.getByRole("button", { name: /thought/i }));
 
-		expect(screen.getByText(denchIntegrationsBrand.callLabel)).toBeTruthy();
+		expect(screen.getByText(crmAIntegrationsBrand.callLabel)).toBeTruthy();
 		expect(
-			screen.getByText(/Dench Integration execution failed \(HTTP 400\)/i),
+			screen.getByText(/Crm-A Integration execution failed \(HTTP 400\)/i),
 		).toBeTruthy();
 		expect(screen.getByText(/Tool:/i)).toBeTruthy();
 		expect(
@@ -225,7 +225,7 @@ describe("ChainOfThought integration steps", () => {
 		expect(screen.getByText(/execution_ref: exec_posthog_1/)).toBeTruthy();
 	});
 
-	it("keeps Dench Integrations search details visible when the tool fails", () => {
+	it("keeps Crm-A Integrations search details visible when the tool fails", () => {
 		const parts: ChainPart[] = [
 			{
 				kind: "tool",
@@ -262,7 +262,7 @@ describe("ChainOfThought integration steps", () => {
 		render(<ChainOfThought parts={parts} isStreaming={false} />);
 		fireEvent.click(screen.getByRole("button", { name: /thought/i }));
 
-		expect(screen.getByText(denchIntegrationsBrand.searchLabel)).toBeTruthy();
+		expect(screen.getByText(crmAIntegrationsBrand.searchLabel)).toBeTruthy();
 		expect(
 			screen.getByText(/Gateway search succeeded but execution context was rejected./),
 		).toBeTruthy();

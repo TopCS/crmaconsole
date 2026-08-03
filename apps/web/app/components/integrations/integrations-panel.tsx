@@ -46,7 +46,7 @@ export function IntegrationsPanel({ embedded }: { embedded?: boolean } = {}) {
               className="mt-1 text-sm"
               style={{ color: "var(--color-text-muted)" }}
             >
-              Connect third-party apps to your Dench Cloud workspace.
+              Connect third-party apps to your Crm-A Cloud workspace.
             </p>
           </div>
           <a
@@ -90,12 +90,12 @@ export function IntegrationsPanel({ embedded }: { embedded?: boolean } = {}) {
 
       {!loading && !error && data && (
         <ComposioAppsSection
-          eligible={Boolean(data.denchCloud.hasKey && data.denchCloud.isPrimaryProvider)}
+          eligible={Boolean(data.crmACloud.hasKey && data.crmACloud.isPrimaryProvider)}
           lockBadge={
-            !data.denchCloud.hasKey
-              ? "Get Dench Cloud API Key"
-              : !data.denchCloud.isPrimaryProvider
-                ? "Use Dench Cloud"
+            !data.crmACloud.hasKey
+              ? "Get Crm-A Cloud API Key"
+              : !data.crmACloud.isPrimaryProvider
+                ? "Use Crm-A Cloud"
                 : null
           }
         />

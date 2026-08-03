@@ -8,10 +8,10 @@ vi.mock("@/lib/workspace", () => ({
 
 vi.mock("@/lib/integrations", () => ({
   getIntegrationsState: vi.fn(() => ({
-    denchCloud: {
+    crmACloud: {
       hasKey: true,
       isPrimaryProvider: true,
-      primaryModel: "dench-cloud/gpt-5.4",
+      primaryModel: "crm-a-cloud/gpt-5.4",
     },
     metadata: { schemaVersion: 1 },
     search: {
@@ -21,7 +21,7 @@ vi.mock("@/lib/integrations", () => ({
     managedPlugins: [],
     integrations: [{ id: "apollo", enabled: true }],
   })),
-  resolveDenchGatewayCredentials: vi.fn(() => ({
+  resolveCrmAGatewayCredentials: vi.fn(() => ({
     apiKey: "dc-key",
     gatewayUrl: "https://gateway.example.com",
   })),

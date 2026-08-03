@@ -116,7 +116,7 @@ async function waitForOAuthOutcome(serverKey: string, popup: Window): Promise<vo
         return;
       }
       const data = event.data as OAuthCallbackMessage | null;
-      if (!data || data.source !== "denchclaw.mcp.connect") {
+      if (!data || data.source !== "crm-a-console.mcp.connect") {
         return;
       }
       if (typeof data.serverKey !== "string" || data.serverKey !== serverKey) {
@@ -468,7 +468,7 @@ export function McpServersSection() {
             MCP Servers
           </h2>
           <p className="mt-1 text-xs leading-5" style={{ color: "var(--color-text-muted)" }}>
-            Connect remote MCP servers to expose additional tools in DenchClaw.
+            Connect remote MCP servers to expose additional tools in Crm-A Console.
           </p>
         </div>
       </div>

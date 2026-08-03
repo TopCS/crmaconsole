@@ -1,13 +1,13 @@
 /**
  * Path-based app file server.
  *
- * Serves files from .dench.app folders via path-based URLs so that relative
+ * Serves files from .crm-a.app folders via path-based URLs so that relative
  * references (CSS, JS, images) in HTML files resolve correctly.
  *
  * URL format: /api/apps/serve/<appPath>/<filePath>
- * Example:    /api/apps/serve/apps/pacman.dench.app/style.css
+ * Example:    /api/apps/serve/apps/pacman.crm-a.app/style.css
  *
- * The app path is everything up to and including ".dench.app".
+ * The app path is everything up to and including ".crm-a.app".
  * The file path is everything after that.
  */
 import { access, readFile, stat } from "node:fs/promises";
@@ -61,12 +61,12 @@ async function pathExists(p: string): Promise<boolean> {
 
 /**
  * Split a URL path into app path and file path.
- * The app path is everything up to and including ".dench.app".
- * e.g. "apps/pacman.dench.app/style.css" -> ["apps/pacman.dench.app", "style.css"]
+ * The app path is everything up to and including ".crm-a.app".
+ * e.g. "apps/pacman.crm-a.app/style.css" -> ["apps/pacman.crm-a.app", "style.css"]
  */
 function splitAppPath(segments: string[]): { appPath: string; filePath: string } | null {
   const joined = segments.join("/");
-  const marker = ".dench.app";
+  const marker = ".crm-a.app";
   const idx = joined.indexOf(marker);
   if (idx === -1) return null;
 
@@ -84,7 +84,7 @@ export async function GET(
 
   const split = splitAppPath(segments);
   if (!split) {
-    return Response.json({ error: "Invalid app path — must contain .dench.app" }, { status: 400 });
+    return Response.json({ error: "Invalid app path — must contain .crm-a.app" }, { status: 400 });
   }
 
   const { appPath, filePath } = split;

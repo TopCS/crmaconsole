@@ -1,9 +1,9 @@
 ---
 name: Daemonless environment support
-overview: Add daemonless mode support across all CLI commands via a `DENCHCLAW_DAEMONLESS=1` environment variable (plus per-command `--skip-daemon-install` flags), and document it in the README.
+overview: Add daemonless mode support across all CLI commands via a `CRM_A_CONSOLE_DAEMONLESS=1` environment variable (plus per-command `--skip-daemon-install` flags), and document it in the README.
 todos:
   - id: helper
-    content: Create isDaemonlessMode() helper that checks opts.skipDaemonInstall || DENCHCLAW_DAEMONLESS env var
+    content: Create isDaemonlessMode() helper that checks opts.skipDaemonInstall || CRM_A_CONSOLE_DAEMONLESS env var
     status: pending
   - id: bootstrap
     content: "Update bootstrap-external.ts: env var fallback, skip post-onboard gateway restart entirely, skip attemptGatewayAutoFix entirely, skip gateway health probe"
@@ -37,9 +37,9 @@ isProject: false
 
 ### Env var + CLI flag
 
-- `**DENCHCLAW_DAEMONLESS=1**` env var — set once in Dockerfile, all commands respect it
+- `**CRM_A_CONSOLE_DAEMONLESS=1**` env var — set once in Dockerfile, all commands respect it
 - `**--skip-daemon-install**` CLI flag — per-command override, already exists on `bootstrap`
-- Resolution: `opts.skipDaemonInstall || process.env.DENCHCLAW_DAEMONLESS === '1'`
+- Resolution: `opts.skipDaemonInstall || process.env.CRM_A_CONSOLE_DAEMONLESS === '1'`
 
 A shared helper `isDaemonlessMode(opts?: { skipDaemonInstall?: boolean })` in a small utility avoids repeating this logic.
 
@@ -51,7 +51,7 @@ A shared helper `isDaemonlessMode(opts?: { skipDaemonInstall?: boolean })` in a 
 - **Skip** post-onboard `gateway restart` entirely (line 2421-2432) — no service to restart
 - **Skip** `attemptGatewayAutoFix()` entirely (line 2450-2467) — stop/install/start all operate on a registered service
 - **Skip** the gateway health probe loop (line 2440-2444) — no daemon to probe
-- Read `DENCHCLAW_DAEMONLESS` env var as fallback for `opts.skipDaemonInstall`
+- Read `CRM_A_CONSOLE_DAEMONLESS` env var as fallback for `opts.skipDaemonInstall`
 
 `**update`\*\* ([src/cli/web-runtime-command.ts](src/cli/web-runtime-command.ts) `updateWebRuntimeCommand`):
 
@@ -79,7 +79,7 @@ This runs the gateway as a regular process (no service manager needed). In daemo
 
 - **Skip ALL gateway daemon management** — `gateway install`, `gateway start`, `gateway stop`, `gateway restart` all operate on a registered launchd/systemd service
 - The gateway must be started separately by the user as a foreground process (e.g., in Docker `CMD` or a process supervisor like `supervisord`)
-- DenchClaw commands only manage the **web runtime** (spawned as a child process via `startManagedWebRuntime`)
+- Crm-A Console commands only manage the **web runtime** (spawned as a child process via `startManagedWebRuntime`)
 
 ### Files to modify
 
@@ -99,21 +99,21 @@ This runs the gateway as a regular process (no service manager needed). In daemo
 For containers or environments without systemd/launchd, set:
 
 ```bash
-export DENCHCLAW_DAEMONLESS=1
+export CRM_A_CONSOLE_DAEMONLESS=1
 ```
 ````
 
 This skips all gateway daemon management (install/start/stop/restart) and launchd LaunchAgent installation across all commands. You must start the gateway yourself as a foreground process:
 
 ```bash
-openclaw --profile dench gateway --port 19001
+openclaw --profile crm-a gateway --port 19001
 ```
 
 Alternatively, pass `--skip-daemon-install` to individual commands:
 
 ```bash
-npx denchclaw --skip-daemon-install
-npx denchclaw update --skip-daemon-install
+npx crm-a-console --skip-daemon-install
+npx crm-a-console update --skip-daemon-install
 ```
 
 ```

@@ -1,6 +1,6 @@
 import {
-  type DenchIntegrationId,
-  normalizeLockedDenchIntegrations,
+  type CrmAIntegrationId,
+  normalizeLockedCrmAIntegrations,
   refreshIntegrationsRuntime,
   setApolloIntegrationEnabled,
   setElevenLabsIntegrationEnabled,
@@ -14,7 +14,7 @@ type ToggleRequestBody = {
   enabled?: unknown;
 };
 
-function isSupportedIntegration(id: string): id is DenchIntegrationId {
+function isSupportedIntegration(id: string): id is CrmAIntegrationId {
   return id === "exa" || id === "apollo" || id === "elevenlabs";
 }
 
@@ -38,7 +38,7 @@ export async function POST(
     return Response.json({ error: "Field 'enabled' must be a boolean." }, { status: 400 });
   }
 
-  const normalized = normalizeLockedDenchIntegrations();
+  const normalized = normalizeLockedCrmAIntegrations();
   const target = normalized.state.integrations.find((integration) => integration.id === id);
   if (body.enabled && target?.locked) {
     const refresh = normalized.changed
@@ -50,9 +50,9 @@ export async function POST(
         profile: "default",
       };
     return Response.json({
-      error: target.lockReason === "missing_dench_key"
-        ? "This integration requires a Dench Cloud API key."
-        : "This integration requires Dench Cloud to be the primary provider.",
+      error: target.lockReason === "missing_crm_a_key"
+        ? "This integration requires a Crm-A Cloud API key."
+        : "This integration requires Crm-A Cloud to be the primary provider.",
       integration: id,
       changed: normalized.changed,
       refresh,

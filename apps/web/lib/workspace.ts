@@ -23,13 +23,13 @@ async function pathExistsAsync(path: string): Promise<boolean> {
   }
 }
 
-const UI_STATE_FILENAME = ".dench-ui-state.json";
-const FIXED_STATE_DIRNAME = ".openclaw-dench";
+const UI_STATE_FILENAME = ".crm-a-ui-state.json";
+const FIXED_STATE_DIRNAME = ".openclaw-crm-a";
 const WORKSPACE_PREFIX = "workspace-";
 const ROOT_WORKSPACE_DIRNAME = "workspace";
 const WORKSPACE_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 const DEFAULT_WORKSPACE_NAME = "default";
-const DENCHCLAW_PROFILE = "dench";
+const CRM_A_CONSOLE_PROFILE = "crm-a";
 const GATEWAY_MAIN_AGENT_ID = "main";
 const CHAT_SLOT_PREFIX = "chat-slot-";
 const DEFAULT_CHAT_POOL_SIZE = 5;
@@ -250,7 +250,7 @@ export function discoverProfiles(): DiscoveredProfile[] {
   return discoverWorkspaces();
 }
 export function getEffectiveProfile(): string {
-  return DENCHCLAW_PROFILE;
+  return CRM_A_CONSOLE_PROFILE;
 }
 export function setUIActiveProfile(profile: string | null): void {
   setUIActiveWorkspace(normalizeWorkspaceName(profile));
@@ -266,7 +266,7 @@ export function getRegisteredWorkspacePath(_profile: string | null): string | nu
 }
 export function registerWorkspacePath(_profile: string, _absolutePath: string): void {
   // No-op: workspace paths are discovered from managed dirs:
-  // ~/.openclaw-dench/workspace (default) and ~/.openclaw-dench/workspace-<name>.
+  // ~/.openclaw-crm-a/workspace (default) and ~/.openclaw-crm-a/workspace-<name>.
 }
 
 function isReservedWorkspaceName(name: string): boolean {
@@ -606,34 +606,34 @@ export function resolveWebChatDir(): string {
 }
 
 /**
- * Resolve the per-workspace `.denchclaw/` directory used as the source of
+ * Resolve the per-workspace `.crm-a-console/` directory used as the source of
  * truth for onboarding state, Composio connection metadata, sync cursors,
  * and the user-extended personal-email blocklist. Mirrors `resolveWebChatDir`
  * for fallbacks so first-run flows still produce a valid path.
  */
-export function resolveDenchClawDir(workspaceName?: string | null): string {
+export function resolveCrmAConsoleDir(workspaceName?: string | null): string {
   if (workspaceName) {
     const normalized = normalizeWorkspaceName(workspaceName);
     if (normalized) {
-      return join(resolveWorkspaceDir(normalized), ".denchclaw");
+      return join(resolveWorkspaceDir(normalized), ".crm-a-console");
     }
   }
 
   const workspaceRoot = resolveWorkspaceRoot();
   if (workspaceRoot) {
-    return join(workspaceRoot, ".denchclaw");
+    return join(workspaceRoot, ".crm-a-console");
   }
 
   const activeWorkspace = getActiveWorkspaceName();
   if (activeWorkspace) {
-    return join(resolveWorkspaceDir(activeWorkspace), ".denchclaw");
+    return join(resolveWorkspaceDir(activeWorkspace), ".crm-a-console");
   }
 
-  return join(resolveWorkspaceDir(DEFAULT_WORKSPACE_NAME), ".denchclaw");
+  return join(resolveWorkspaceDir(DEFAULT_WORKSPACE_NAME), ".crm-a-console");
 }
 
 /** @deprecated Use `resolveWorkspaceRoot` instead. */
-export const resolveDenchRoot = resolveWorkspaceRoot;
+export const resolveCrmARoot = resolveWorkspaceRoot;
 
 /**
  * Return the workspace path prefix for the agent.

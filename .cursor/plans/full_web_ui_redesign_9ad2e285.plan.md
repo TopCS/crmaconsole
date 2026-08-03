@@ -1,21 +1,21 @@
 ---
 name: Full Web UI Redesign
-overview: "Complete redesign of the OpenClaw web app (apps/web/) to match the Dench design system: switch from dark theme to light, adopt Instrument Serif + Inter fonts, port the Dench color palette and layout patterns, and rewrite every component and page from the ground up."
+overview: "Complete redesign of the OpenClaw web app (apps/web/) to match the Crm-A design system: switch from dark theme to light, adopt Instrument Serif + Inter fonts, port the Crm-A color palette and layout patterns, and rewrite every component and page from the ground up."
 todos:
   - id: foundation
     content: "Phase 1: Rewrite globals.css (light theme, HSL tokens, font imports) and layout.tsx (next/font, remove dark mode)"
     status: pending
   - id: landing
-    content: "Phase 2: Rewrite app/page.tsx as Dench-style landing page (navbar, hero, demo sections, footer)"
+    content: "Phase 2: Rewrite app/page.tsx as Crm-A-style landing page (navbar, hero, demo sections, footer)"
     status: pending
   - id: layout-shell
     content: "Phase 3: Create app-navbar.tsx, rewrite workspace/page.tsx layout with top navbar + sidebar grid"
     status: pending
   - id: sidebar
-    content: "Phase 4: Redesign workspace-sidebar.tsx and file-manager-tree.tsx to match Dench sidebar"
+    content: "Phase 4: Redesign workspace-sidebar.tsx and file-manager-tree.tsx to match Crm-A sidebar"
     status: pending
   - id: data-table
-    content: "Phase 5: Redesign object-table.tsx with Dench-style toolbar, sticky headers, pagination, enum badges"
+    content: "Phase 5: Redesign object-table.tsx with Crm-A-style toolbar, sticky headers, pagination, enum badges"
     status: pending
   - id: kanban
     content: "Phase 6: Redesign object-kanban.tsx with light cards, columns, board header"
@@ -38,7 +38,7 @@ todos:
 isProject: false
 ---
 
-# Full Web UI Redesign — Dench Design System
+# Full Web UI Redesign — Crm-A Design System
 
 ## Current State
 
@@ -51,9 +51,9 @@ The OpenClaw web app is a **dark-themed** Next.js 15 app with:
 - Custom table/kanban/viewer components, all dark-styled
 - Tailwind v4 (CSS-based config), no shadcn/ui
 
-## Target State (Dench Design)
+## Target State (Crm-A Design)
 
-Per the screenshots and Dench source:
+Per the screenshots and Crm-A source:
 
 - **Light theme** — `bg-neutral-50` layout, white cards, `bg-neutral-100` sidebar/navbar
 - **Instrument Serif** for headings/titles, **Inter** for body text, **Lora** for branding
@@ -68,13 +68,13 @@ Per the screenshots and Dench source:
 
 ## Architecture Decision: Tailwind v4
 
-The OpenClaw app uses **Tailwind v4** (CSS-based config via `@import "tailwindcss"`), while Dench uses Tailwind v3 (JS config). We will keep Tailwind v4 but port all design tokens into `globals.css` using `@theme` blocks and CSS custom properties. No downgrade needed.
+The OpenClaw app uses **Tailwind v4** (CSS-based config via `@import "tailwindcss"`), while Crm-A uses Tailwind v3 (JS config). We will keep Tailwind v4 but port all design tokens into `globals.css` using `@theme` blocks and CSS custom properties. No downgrade needed.
 
 ## Architecture Decision: Light + Dark Theme
 
-Dench is light-only. We will use Dench's light palette as the `:root` default AND create a custom dark palette under `.dark` (class-based toggle via `<html class="dark">`). All components will use CSS variable references (e.g. `bg-background`, `text-foreground`, `border-border`) so they automatically adapt. No hardcoded hex/rgb in components.
+Crm-A is light-only. We will use Crm-A's light palette as the `:root` default AND create a custom dark palette under `.dark` (class-based toggle via `<html class="dark">`). All components will use CSS variable references (e.g. `bg-background`, `text-foreground`, `border-border`) so they automatically adapt. No hardcoded hex/rgb in components.
 
-**Light palette** (from Dench):
+**Light palette** (from Crm-A):
 
 - `--background: 0 0% 96%` (neutral-50 feel)
 - `--foreground: 0 0% 3.9%`
@@ -85,7 +85,7 @@ Dench is light-only. We will use Dench's light palette as the `:root` default AN
 - `--accent: 0 0% 96.1%` / `--accent-foreground: 0 0% 9%`
 - `--destructive: 0 84.2% 60.2%`
 
-**Dark palette** (custom, designed to complement Dench's light theme):
+**Dark palette** (custom, designed to complement Crm-A's light theme):
 
 - `--background: 0 0% 7%` (#121212 — rich near-black, not pure black)
 - `--foreground: 0 0% 93%` (#ededed)
@@ -110,7 +110,7 @@ Sidebar/navbar in dark mode use a slightly elevated surface (`#171717`) rather t
 
 **[app/globals.css](apps/web/app/globals.css)** — Complete rewrite:
 
-- `:root` block: Dench's light-theme HSL palette (background, foreground, card, primary, secondary, muted, accent, destructive, border, ring, sidebar, chart-1 through chart-5)
+- `:root` block: Crm-A's light-theme HSL palette (background, foreground, card, primary, secondary, muted, accent, destructive, border, ring, sidebar, chart-1 through chart-5)
 - `.dark` block: custom dark palette (see "Architecture Decision: Light + Dark Theme" above) — all same variable names, dark values
 - Add `@theme` block for Tailwind v4 mapping CSS vars to utility classes (`bg-background`, `text-foreground`, `border-border`, `bg-card`, `text-muted-foreground`, etc.)
 - Import Instrument Serif from Google Fonts
@@ -126,7 +126,7 @@ Sidebar/navbar in dark mode use a slightly elevated surface (`#171717`) rather t
 - Apply `font-corporate` to `<body>`
 - Add `suppressHydrationWarning` on `<html>` for theme flash prevention
 - Add inline script or `next-themes` `ThemeProvider` for class-based dark mode toggle with `localStorage` persistence
-- Update metadata title/description to "Dench" branding
+- Update metadata title/description to "Crm-A" branding
 
 **New: `app/hooks/use-theme.ts**` — Simple theme hook:
 
@@ -136,9 +136,9 @@ Sidebar/navbar in dark mode use a slightly elevated surface (`#171717`) rather t
 
 ### Phase 2 — Landing Page
 
-**[app/page.tsx](apps/web/app/page.tsx)** — Full rewrite to match Dench landing:
+**[app/page.tsx](apps/web/app/page.tsx)** — Full rewrite to match Crm-A landing:
 
-- Sticky navigation bar (logo "Dench" in `font-lora`, Login button in rounded-full blue pill)
+- Sticky navigation bar (logo "Crm-A" in `font-lora`, Login button in rounded-full blue pill)
 - Hero section: "AI CRM" headline in `font-instrument font-bold`, subtext, "Get Started Free" CTA
 - Full-width CRM demo area (window chrome with traffic-light dots, scaled mock table)
 - Additional demo sections (workflow, kanban) — simplified versions
@@ -149,7 +149,7 @@ Sidebar/navbar in dark mode use a slightly elevated surface (`#171717`) rather t
 **[app/workspace/page.tsx](apps/web/app/workspace/page.tsx)** — Rewrite layout structure:
 
 - Add top `AppNavbar` component: `bg-neutral-100 border-b border-border shadow-[0_0_40px_rgba(0,0,0,0.05)]`
-  - Left: org logo + "Powered by Dench" + org name in `font-instrument`
+  - Left: org logo + "Powered by Crm-A" + org name in `font-instrument`
   - Center: tab navigation (Dashboard, Workflows, Integrations) with active state
   - Right: credit display, notification bell, sun/moon theme toggle, user avatar dropdown
 - Main area: `grid lg:grid-cols-[260px_1fr]` under navbar
@@ -181,12 +181,12 @@ Sidebar/navbar in dark mode use a slightly elevated surface (`#171717`) rather t
 
 ### Phase 5 — Data Table Redesign
 
-**[app/components/workspace/object-table.tsx](apps/web/app/components/workspace/object-table.tsx)** — Complete rewrite to match Dench data-table:
+**[app/components/workspace/object-table.tsx](apps/web/app/components/workspace/object-table.tsx)** — Complete rewrite to match Crm-A data-table:
 
 - Toolbar: object name in `font-instrument`, search input (`rounded-full shadow-[0_0_21px_0_rgba(0,0,0,0.07)]`), "Ask AI" button, Table/Board view toggle, refresh/import/filter/columns/+ Add buttons
 - Table header: `sticky top-0 z-30 bg-card border-b-2 border-border/80`, sortable columns with sort arrows
 - Table cells: `px-4 border-r border-border/30`, proper text truncation
-- Enum badges: colored pill style matching Dench (translucent background + border)
+- Enum badges: colored pill style matching Crm-A (translucent background + border)
 - Relation chips: link icon + blue text
 - Row hover: `hover:bg-muted/50`
 - Pagination bar: "Showing 1 to N of N results", rows-per-page selector, page navigation
@@ -220,7 +220,7 @@ Sidebar/navbar in dark mode use a slightly elevated surface (`#171717`) rather t
 
 This is the hero interaction on the workspace "Dashboard" tab — a centered greeting with a chat input that transitions into the bottom-docked composer after the first message.
 
-**How Dench implements it:**
+**How Crm-A implements it:**
 
 - `DashboardHeader`: time-based greeting ("Good morning/afternoon/evening, Name?") with staggered word-by-word Framer Motion entrance (`y:20 → 0`, `blur(8px) → blur(0)`)
 - `DashboardChatbox`: centered TipTap input with placeholder "Build a workflow to automate your tasks", attach/voice/submit buttons, suggestion chips below (shuffled from a pool of ~27 templates, showing 7 in two rows)
@@ -252,7 +252,7 @@ This is the hero interaction on the workspace "Dashboard" tab — a centered gre
 
 **Prompt templates** (simplified set for OpenClaw):
 
-- Follow-up Emails, Calendly Prep, Zoom Recap, Facebook Leads, Calendar Sync, Salesforce Sync, Intercom Chat (matching the Dench screenshot chips)
+- Follow-up Emails, Calendly Prep, Zoom Recap, Facebook Leads, Calendar Sync, Salesforce Sync, Intercom Chat (matching the Crm-A screenshot chips)
 
 ### Phase 8b — Chat & Message Restyling
 
@@ -321,4 +321,4 @@ All components MUST use semantic CSS variable-backed utilities — never hardcod
 - `border-border` — not `border-neutral-200`, `border-[#2e2e2e]`
 - `bg-sidebar` for sidebar/navbar backgrounds
 - For shadows that differ between themes: use a CSS variable `--shadow-subtle` / `--shadow-elevated` or conditional `dark:shadow-*` utilities
-- Exceptions: Dench-specific decorative elements (landing page traffic-light dots, brand colors) can use fixed values
+- Exceptions: Crm-A-specific decorative elements (landing page traffic-light dots, brand colors) can use fixed values

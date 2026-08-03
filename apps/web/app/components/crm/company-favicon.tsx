@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 /**
- * Square-rounded "logo" tile for a Company. Mirrors dench-2025's pattern:
+ * Square-rounded "logo" tile for a Company. Mirrors crm-a-2025's pattern:
  * fetch the favicon from Google's s2 service (0 setup, works for nearly
  * every public-facing company domain) and gracefully fall back to a
  * letter monogram if the image errors.

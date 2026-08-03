@@ -1,3 +1,3 @@
 export const POSTHOG_KEY = "";
-export const DENCHCLAW_VERSION = "";
+export const CRM_A_CONSOLE_VERSION = "";
 export const OPENCLAW_VERSION = "";

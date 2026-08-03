@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { GET, POST } from "./route";
 
-vi.mock("@/lib/dench-cloud-settings", () => ({
+vi.mock("@/lib/crm-a-cloud-settings", () => ({
   getCloudSettingsState: vi.fn(),
   saveActiveCloudSettings: vi.fn(),
   saveApiKey: vi.fn(),
@@ -15,7 +15,7 @@ const {
   saveApiKey,
   saveVoiceId,
   selectModel,
-} = await import("@/lib/dench-cloud-settings");
+} = await import("@/lib/crm-a-cloud-settings");
 
 const mockedGet = vi.mocked(getCloudSettingsState);
 const mockedSaveActive = vi.mocked(saveActiveCloudSettings);
@@ -27,9 +27,9 @@ const validState = {
   status: "valid" as const,
   apiKeySource: "config" as const,
   gatewayUrl: "https://gateway.merseoriginals.com",
-  primaryModel: "dench-cloud/anthropic.claude-opus-4-6-v1",
-  isDenchPrimary: true,
-  selectedDenchModel: "anthropic.claude-opus-4-6-v1",
+  primaryModel: "crm-a-cloud/anthropic.claude-opus-4-6-v1",
+  isCrmAPrimary: true,
+  selectedCrmAModel: "anthropic.claude-opus-4-6-v1",
   selectedVoiceId: "voice_123",
   elevenLabsEnabled: true,
   models: [
@@ -58,12 +58,12 @@ const noKeyState = {
   ...validState,
   status: "no_key" as const,
   apiKeySource: "missing" as const,
-  isDenchPrimary: false,
-  selectedDenchModel: null,
+  isCrmAPrimary: false,
+  selectedCrmAModel: null,
   models: [],
 };
 
-const refreshOk = { attempted: true, restarted: true, error: null, profile: "dench" };
+const refreshOk = { attempted: true, restarted: true, error: null, profile: "crm-a" };
 
 describe("cloud settings API", () => {
   beforeEach(() => {
@@ -75,7 +75,7 @@ describe("cloud settings API", () => {
     const res = await GET();
     const body = await res.json();
     expect(body.status).toBe("valid");
-    expect(body.isDenchPrimary).toBe(true);
+    expect(body.isCrmAPrimary).toBe(true);
   });
 
   it("GET returns 500 on error", async () => {
@@ -89,14 +89,14 @@ describe("cloud settings API", () => {
     const req = new Request("http://localhost/api/settings/cloud", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "save_key", apiKey: "dench_test_key" }),
+      body: JSON.stringify({ action: "save_key", apiKey: "crm_a_test_key" }),
     });
     const res = await POST(req);
     const body = await res.json();
     expect(res.status).toBe(200);
     expect(body.changed).toBe(true);
     expect(body.refresh.restarted).toBe(true);
-    expect(mockedSaveKey).toHaveBeenCalledWith("dench_test_key");
+    expect(mockedSaveKey).toHaveBeenCalledWith("crm_a_test_key");
   });
 
   it("POST save_key rejects empty key", async () => {
@@ -114,7 +114,7 @@ describe("cloud settings API", () => {
       state: noKeyState,
       changed: false,
       refresh: { attempted: false, restarted: false, error: null, profile: "default" },
-      error: "Invalid Dench Cloud API key.",
+      error: "Invalid Crm-A Cloud API key.",
     });
     const req = new Request("http://localhost/api/settings/cloud", {
       method: "POST",
@@ -177,7 +177,7 @@ describe("cloud settings API", () => {
     mockedSaveActive.mockResolvedValue({
       state: validState,
       integrationsState: {
-        denchCloud: {
+        crmACloud: {
           hasKey: true,
           isPrimaryProvider: true,
           primaryModel: validState.primaryModel,

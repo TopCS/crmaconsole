@@ -1,6 +1,6 @@
 ---
 name: Workspace profile support
-overview: Add full workspace profile and custom path support to the DenchClaw web app and the dench SKILL.md, so they respect OPENCLAW_PROFILE, OPENCLAW_HOME, OPENCLAW_STATE_DIR, and per-agent workspace config — matching the CLI's existing resolution logic.
+overview: Add full workspace profile and custom path support to the Crm-A Console web app and the crm-a SKILL.md, so they respect OPENCLAW_PROFILE, OPENCLAW_HOME, OPENCLAW_STATE_DIR, and per-agent workspace config — matching the CLI's existing resolution logic.
 todos:
   - id: centralize-helpers
     content: Add resolveOpenClawStateDir() to apps/web/lib/workspace.ts and update resolveWorkspaceRoot() with OPENCLAW_PROFILE + OPENCLAW_HOME + OPENCLAW_STATE_DIR support
@@ -27,7 +27,7 @@ isProject: false
 
 ## Problem
 
-The CLI core (`src/agents/workspace.ts`, `src/config/paths.ts`) already resolves workspace paths dynamically via `OPENCLAW_PROFILE`, `OPENCLAW_HOME`, `OPENCLAW_STATE_DIR`, and per-agent config — but the web app (`apps/web/`) and the injected dench skill (`skills/dench/SKILL.md`) hardcode `~/.openclaw` and `~/.openclaw/workspace` everywhere, ignoring profiles entirely.
+The CLI core (`src/agents/workspace.ts`, `src/config/paths.ts`) already resolves workspace paths dynamically via `OPENCLAW_PROFILE`, `OPENCLAW_HOME`, `OPENCLAW_STATE_DIR`, and per-agent config — but the web app (`apps/web/`) and the injected crm-a skill (`skills/crm-a/SKILL.md`) hardcode `~/.openclaw` and `~/.openclaw/workspace` everywhere, ignoring profiles entirely.
 
 **35 hardcoded `~/.openclaw` references** in `SKILL.md`, and **~15 hardcoded paths** across the web app API routes and UI.
 
@@ -102,7 +102,7 @@ In [src/agents/system-prompt.ts](src/agents/system-prompt.ts) line 173: the hard
 
 ### 5. Add workspace variable substitution for injected SKILL.md content
 
-The dench `SKILL.md` has **35 instances** of `~/.openclaw/workspace`. Since this content is injected verbatim into the system prompt via `readSkillContent()`, we need a substitution mechanism.
+The crm-a `SKILL.md` has **35 instances** of `~/.openclaw/workspace`. Since this content is injected verbatim into the system prompt via `readSkillContent()`, we need a substitution mechanism.
 
 In [src/agents/skills/workspace.ts](src/agents/skills/workspace.ts) around line 271 where `readSkillContent()` is called for injected skills:
 
@@ -117,7 +117,7 @@ if (content) {
 
 This requires threading `workspaceDir` into `buildWorkspaceSkillSnapshot()` — which it already receives as its first argument.
 
-Then update `skills/dench/SKILL.md` to use `~/.openclaw/workspace` as a canonical placeholder (it already does), and the substitution will replace it with the actual resolved path at injection time. No changes needed to the SKILL.md content itself.
+Then update `skills/crm-a/SKILL.md` to use `~/.openclaw/workspace` as a canonical placeholder (it already does), and the substitution will replace it with the actual resolved path at injection time. No changes needed to the SKILL.md content itself.
 
 ### 6. Expose workspace info in the tree API response
 

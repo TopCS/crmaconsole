@@ -1,14 +1,14 @@
 /**
- * Loopback-only endpoint hit by the OpenClaw gateway's `dench-ai-gateway`
- * plugin every ~5 minutes (see `extensions/dench-ai-gateway/sync-trigger.ts`).
+ * Loopback-only endpoint hit by the OpenClaw gateway's `crm-a-ai-gateway`
+ * plugin every ~5 minutes (see `extensions/crm-a-ai-gateway/sync-trigger.ts`).
  *
  * The gateway is the long-lived process that owns the timing now — the
  * web app just runs one Gmail/Calendar incremental cycle per call. This
- * lets the cron survive `denchclaw update` and Next.js restarts.
+ * lets the cron survive `crm-a-console update` and Next.js restarts.
  *
- * Auth: validates a Bearer token against the same Dench Cloud API key the
- * plugin reads (`<stateDir>/agents/main/agent/auth-profiles.json#profiles["dench-cloud:default"].key`).
- * No new secret to provision — if Dench Cloud isn't connected, the
+ * Auth: validates a Bearer token against the same Crm-A Cloud API key the
+ * plugin reads (`<stateDir>/agents/main/agent/auth-profiles.json#profiles["crm-a-cloud:default"].key`).
+ * No new secret to provision — if Crm-A Cloud isn't connected, the
  * plugin doesn't fire requests AND the endpoint rejects them.
  *
  * Hardening:
@@ -18,7 +18,7 @@
  */
 
 import { timingSafeEqual } from "node:crypto";
-import { readDenchAuthProfileKey } from "@/lib/dench-auth";
+import { readCrmAAuthProfileKey } from "@/lib/crm-a-auth";
 import {
   getLastProgressEvent,
   isBackfillRunning,
@@ -101,10 +101,10 @@ export async function POST(req: Request) {
     );
   }
 
-  const expected = readDenchAuthProfileKey();
+  const expected = readCrmAAuthProfileKey();
   if (!expected) {
     return Response.json(
-      { error: "Dench Cloud API key not configured" },
+      { error: "Crm-A Cloud API key not configured" },
       { status: 503 },
     );
   }

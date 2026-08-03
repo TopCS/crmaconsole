@@ -5,7 +5,7 @@ import {
   resolveComposioGatewayUrl,
 } from "@/lib/composio";
 import { refreshIntegrationsRuntime } from "@/lib/integrations";
-import { clearConnection, readConnections } from "@/lib/denchclaw-state";
+import { clearConnection, readConnections } from "@/lib/crm-a-console-state";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -15,7 +15,7 @@ type DisconnectRequestBody = {
 };
 
 /**
- * Wipe any local `~/.openclaw-dench/.../connections.json` record that
+ * Wipe any local `~/.openclaw-crm-a/.../connections.json` record that
  * points at the just-disconnected Composio connection. Without this,
  * the sync runner keeps re-trying the dead connection every 5 minutes
  * (because `connections.json` still has the stale id), so the
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   const apiKey = resolveComposioApiKey();
   if (!apiKey) {
     return Response.json(
-      { error: "Dench Cloud API key is required." },
+      { error: "Crm-A Cloud API key is required." },
       { status: 403 },
     );
   }
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
   if (!eligibility.eligible) {
     return Response.json(
       {
-        error: "Dench Cloud must be the primary provider.",
+        error: "Crm-A Cloud must be the primary provider.",
         lockReason: eligibility.lockReason,
         lockBadge: eligibility.lockBadge,
       },

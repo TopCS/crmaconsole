@@ -2,7 +2,7 @@
 
 /**
  * Right-side preview for Step 2 (Setup). A concentric-orbit diagram with
- * the DenchClaw mark in the center and the integrations DenchClaw can
+ * the Crm-A Console mark in the center and the integrations Crm-A Console can
  * connect to scattered along dotted rings. Pure decoration — the actual
  * connection state lives on the left.
  *
@@ -19,7 +19,7 @@
 // Uniform visual size for all integration logos so Slack doesn't feel
 // bigger than Calendar just because of how each brand packs its viewBox.
 const NODE_SIZE = 40;
-const DENCH_SIZE = 68;
+const CRM_A_SIZE = 68;
 
 export function PreviewOrbit() {
   return (
@@ -46,23 +46,23 @@ export function PreviewOrbit() {
         </g>
       </svg>
 
-      {/* Dench — naked in the center, no chip or shadow. */}
+      {/* Crm-A — naked in the center, no chip or shadow. */}
       <div
         className="absolute flex items-center justify-center"
         style={{
           left: "50%",
           top: "50%",
-          width: DENCH_SIZE,
-          height: DENCH_SIZE,
+          width: CRM_A_SIZE,
+          height: CRM_A_SIZE,
           transform: "translate(-50%, -50%)",
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/dench-workspace-icon.png"
+          src="/crm-a-workspace-icon.png"
           alt=""
-          width={DENCH_SIZE}
-          height={DENCH_SIZE}
+          width={CRM_A_SIZE}
+          height={CRM_A_SIZE}
           draggable={false}
           style={{ width: "100%", height: "100%", objectFit: "contain" }}
         />

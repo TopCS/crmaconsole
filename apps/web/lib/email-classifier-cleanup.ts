@@ -17,7 +17,7 @@
  *   5. Re-runs `recomputeAllScores()` so Strength Score / Last
  *      Interaction At reflect the cleaned graph.
  *   6. Backs up everything we delete to
- *      `~/.openclaw-dench/workspace/.denchclaw/cleanup-backups/<ts>.jsonl`
+ *      `~/.openclaw-crm-a/workspace/.crm-a-console/cleanup-backups/<ts>.jsonl`
  *      so a misclassification can be restored offline.
  *
  * Triggered via `POST /api/onboarding/sync/start` with `{ cleanup: true }`.
@@ -36,7 +36,7 @@ import {
   ONBOARDING_OBJECT_IDS,
   fetchFieldIdMap,
 } from "./workspace-schema-migrations";
-import { resolveDenchClawDir } from "./workspace";
+import { resolveCrmAConsoleDir } from "./workspace";
 import { classifySender, type SenderKind } from "./email-classifier";
 import { recomputeAllScores } from "./strength-score";
 
@@ -267,7 +267,7 @@ export async function runEmailCleanup(opts: {
   };
 
   // Backup first — we want a recoverable trail before we touch anything.
-  const backupDir = join(resolveDenchClawDir(), "cleanup-backups");
+  const backupDir = join(resolveCrmAConsoleDir(), "cleanup-backups");
   mkdirSync(backupDir, { recursive: true });
   const backupPath = join(backupDir, `${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`);
   const backupLines: string[] = [];

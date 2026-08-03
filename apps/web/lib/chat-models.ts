@@ -22,22 +22,22 @@ export function findChatModelByStableOrCatalogId(
 	);
 }
 
-export function normalizeDenchModelId(
+export function normalizeCrmAModelId(
 	model: string | null | undefined,
 ): string | null {
 	if (typeof model !== "string" || !model.trim()) {
 		return null;
 	}
 	const normalized = model.trim();
-	return normalized.startsWith("dench-cloud/")
-		? normalized.slice("dench-cloud/".length)
+	return normalized.startsWith("crm-a-cloud/")
+		? normalized.slice("crm-a-cloud/".length)
 		: normalized;
 }
 
 export function isLikelyOpenAiModelId(
 	model: string | null | undefined,
 ): boolean {
-	const normalized = normalizeDenchModelId(model)?.toLowerCase() ?? "";
+	const normalized = normalizeCrmAModelId(model)?.toLowerCase() ?? "";
 	return (
 		normalized.startsWith("gpt-") ||
 		normalized.startsWith("chatgpt") ||
@@ -51,18 +51,18 @@ export function isLikelyOpenAiModelId(
 export function resolveActiveChatModelId({
 	modelOverride,
 	sessionModel,
-	selectedDenchModel,
+	selectedCrmAModel,
 	models,
 }: {
 	modelOverride: string | null;
 	sessionModel: string | null;
-	selectedDenchModel: string | null;
+	selectedCrmAModel: string | null;
 	models: ChatModelOption[];
 }): string | null {
 	return (
 		modelOverride ??
-		selectedDenchModel ??
-		normalizeDenchModelId(sessionModel) ??
+		selectedCrmAModel ??
+		normalizeCrmAModelId(sessionModel) ??
 		models[0]?.stableId ??
 		null
 	);
@@ -89,7 +89,7 @@ export function classifyOpenAiModelSwitch({
 		return provider === "openai" ? "safe" : "unsafe";
 	}
 
-	const currentModel = normalizeDenchModelId(sessionModel);
+	const currentModel = normalizeCrmAModelId(sessionModel);
 	if (!currentModel) {
 		return "unknown";
 	}

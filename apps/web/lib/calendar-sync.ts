@@ -36,7 +36,7 @@ import { normalizeEmailKey, parseEmailAddress, rootDomainFromEmail } from "./ema
 import {
   readPersonalDomainsOverrides,
   writeSyncCursors,
-} from "./denchclaw-state";
+} from "./crm-a-console-state";
 import {
   meetingDirectness,
   meetingTypeWeight,

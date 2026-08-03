@@ -1,5 +1,5 @@
 import type { AnyAgentTool, OpenClawPluginApi } from "openclaw/plugin-sdk";
-import { readDenchAuthProfileKey, resolveDenchGatewayUrl } from "../shared/dench-auth.js";
+import { readCrmAAuthProfileKey, resolveCrmAGatewayUrl } from "../shared/crm-a-auth.js";
 
 export const id = "exa-search";
 
@@ -239,7 +239,7 @@ function createExaSearchTool(gatewayUrl: string, apiKey: string): AnyAgentTool {
     name: "exa_search",
     label: "Exa Search",
     description:
-      "Search the web through Exa via the Dench Cloud gateway, with optional text extraction, highlights, and summary generation.",
+      "Search the web through Exa via the Crm-A Cloud gateway, with optional text extraction, highlights, and summary generation.",
     parameters: ExaSearchParameters,
     execute: async (_toolCallId: string, params: Record<string, unknown>) => {
       try {
@@ -264,7 +264,7 @@ function createExaContentsTool(gatewayUrl: string, apiKey: string): AnyAgentTool
     name: "exa_get_contents",
     label: "Exa Get Contents",
     description:
-      "Fetch page contents for one or more URLs through Exa via the Dench Cloud gateway.",
+      "Fetch page contents for one or more URLs through Exa via the Crm-A Cloud gateway.",
     parameters: ExaContentsParameters,
     execute: async (_toolCallId: string, params: Record<string, unknown>) => {
       try {
@@ -292,7 +292,7 @@ function createExaAnswerTool(gatewayUrl: string, apiKey: string): AnyAgentTool {
   return {
     name: "exa_answer",
     label: "Exa Answer",
-    description: "Ask Exa for a citation-backed answer through the Dench Cloud gateway.",
+    description: "Ask Exa for a citation-backed answer through the Crm-A Cloud gateway.",
     parameters: ExaAnswerParameters,
     execute: async (_toolCallId: string, params: Record<string, unknown>) => {
       try {
@@ -323,12 +323,12 @@ export default function register(api: OpenClawPluginApi) {
     return;
   }
 
-  const gwPluginConfig = asRecord(asRecord(pluginEntries?.["dench-ai-gateway"])?.config);
-  const gatewayUrl = resolveDenchGatewayUrl(gwPluginConfig as Record<string, unknown> | undefined);
-  const apiKey = readDenchAuthProfileKey();
+  const gwPluginConfig = asRecord(asRecord(pluginEntries?.["crm-a-ai-gateway"])?.config);
+  const gatewayUrl = resolveCrmAGatewayUrl(gwPluginConfig as Record<string, unknown> | undefined);
+  const apiKey = readCrmAAuthProfileKey();
 
   if (!apiKey) {
-    api.logger?.info?.("[exa-search] No Dench Cloud API key found; tools will not be registered.");
+    api.logger?.info?.("[exa-search] No Crm-A Cloud API key found; tools will not be registered.");
     return;
   }
 

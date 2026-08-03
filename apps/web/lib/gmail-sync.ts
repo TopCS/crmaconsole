@@ -43,7 +43,7 @@ import {
   normalizeEmailKey,
   rootDomainFromEmail,
 } from "./email-domain";
-import { readPersonalDomainsOverrides, readSyncCursors, writeSyncCursors } from "./denchclaw-state";
+import { readPersonalDomainsOverrides, readSyncCursors, writeSyncCursors } from "./crm-a-console-state";
 import { roundScore, scoreEmailInteraction, type EmailRole } from "./strength-score";
 import { classifySender, type SenderKind } from "./email-classifier";
 

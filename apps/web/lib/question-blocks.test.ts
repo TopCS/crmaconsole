@@ -8,7 +8,7 @@ describe("question blocks", () => {
       id: "crm-source",
       prompt: "Where should I save leads?",
       options: [
-        { id: "dench", label: "Dench CRM" },
+        { id: "crm-a", label: "Crm-A CRM" },
         { id: "hubspot", label: "HubSpot", description: "Sync after review" },
       ],
     }))).toEqual({
@@ -17,7 +17,7 @@ describe("question blocks", () => {
       allowMultiple: false,
       optional: false,
       options: [
-        { id: "dench", label: "Dench CRM" },
+        { id: "crm-a", label: "Crm-A CRM" },
         { id: "hubspot", label: "HubSpot", description: "Sync after review" },
       ],
     });
@@ -60,10 +60,10 @@ describe("question blocks", () => {
     }))).toBeNull();
   });
 
-  it("splits text and valid dench-question fences", () => {
+  it("splits text and valid crm-a-question fences", () => {
     const segments = splitQuestionBlocks(`Before.
 
-\`\`\`dench-question
+\`\`\`crm-a-question
 {
   "id": "trigger",
   "prompt": "How should this run?",
@@ -88,12 +88,12 @@ After.`);
     expect(segments[2]).toEqual({ type: "text", text: "\n\nAfter." });
   });
 
-  it("keeps invalid dench-question fences as text", () => {
-    const text = "Pick:\n\n```dench-question\nnot json\n```";
+  it("keeps invalid crm-a-question fences as text", () => {
+    const text = "Pick:\n\n```crm-a-question\nnot json\n```";
     expect(splitQuestionBlocks(text)).toEqual([{ type: "text", text }]);
   });
 
-  it("parses the canonical dench-question shape embedded in template prompts", () => {
+  it("parses the canonical crm-a-question shape embedded in template prompts", () => {
     const prompt = buildSkillTemplatePrompt("icp-outreach-builder");
     const segments = splitQuestionBlocks(prompt);
     const questionSegments = segments.filter(

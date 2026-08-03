@@ -12,7 +12,7 @@ import {
 function createTempDir(): string {
   const dir = path.join(
     os.tmpdir(),
-    `denchclaw-seed-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    `crm-a-console-seed-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
   mkdirSync(dir, { recursive: true });
   return dir;
@@ -58,7 +58,7 @@ describe("seedWorkspaceFromAssets", () => {
     expect(existsSync(stateSkillPath)).toBe(false);
   });
 
-  it("does not write IDENTITY.md (identity is injected via dench-identity plugin)", () => {
+  it("does not write IDENTITY.md (identity is injected via crm-a-identity plugin)", () => {
     const packageRoot = createPackageRoot(tempDir);
     const workspaceDir = path.join(tempDir, "workspace-test");
 

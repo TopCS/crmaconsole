@@ -5,7 +5,7 @@ import {
 } from "@/lib/workspace";
 import {
 	getIntegrationsState,
-	resolveDenchGatewayCredentials,
+	resolveCrmAGatewayCredentials,
 } from "@/lib/integrations";
 import {
 	extractDomain,
@@ -49,7 +49,7 @@ const ENTRY_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 /**
  * POST /api/workspace/objects/[name]/enrich
- * Enriches entries via Apollo through the Dench Cloud gateway.
+ * Enriches entries via Apollo through the Crm-A Cloud gateway.
  * Streams progress as SSE so the frontend can show a waterfall effect.
  */
 export async function POST(
@@ -64,18 +64,18 @@ export async function POST(
 
 	// --- Gating checks ---
 	const state = getIntegrationsState();
-	if (!state.denchCloud.isPrimaryProvider) {
-		return Response.json({ error: "Dench Cloud is not the active provider." }, { status: 403 });
+	if (!state.crmACloud.isPrimaryProvider) {
+		return Response.json({ error: "Crm-A Cloud is not the active provider." }, { status: 403 });
 	}
-	if (!state.denchCloud.hasKey) {
-		return Response.json({ error: "No Dench Cloud API key configured." }, { status: 403 });
+	if (!state.crmACloud.hasKey) {
+		return Response.json({ error: "No Crm-A Cloud API key configured." }, { status: 403 });
 	}
 	const apollo = state.integrations.find((i) => i.id === "apollo");
 	if (!apollo?.enabled) {
 		return Response.json({ error: "Apollo integration is not enabled." }, { status: 403 });
 	}
 
-	const { apiKey, gatewayUrl } = resolveDenchGatewayCredentials();
+	const { apiKey, gatewayUrl } = resolveCrmAGatewayCredentials();
 	if (!apiKey || !gatewayUrl) {
 		return Response.json({ error: "Gateway credentials unavailable." }, { status: 500 });
 	}

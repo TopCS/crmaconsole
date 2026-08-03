@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Scope = "starred" | "read" | "selected";
 
-const KEY_PREFIX = "denchclaw.crm-inbox";
+const KEY_PREFIX = "crm-a-console.crm-inbox";
 
 function storageKey(scope: Scope, workspaceId: string): string {
   return `${KEY_PREFIX}:${workspaceId}:${scope}`;
