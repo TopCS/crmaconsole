@@ -894,7 +894,12 @@ export function startManagedWebRuntime(params: {
       ...params.env,
       ...gatewayAuthEnv,
       PORT: String(params.port),
-      HOSTNAME: "127.0.0.1",
+      // Bind loopback by default (local-only Web UI). Set CRM_A_CONSOLE_WEB_HOST
+      // (e.g. 0.0.0.0 inside a container) to expose it beyond loopback.
+      HOSTNAME:
+        params.env?.CRM_A_CONSOLE_WEB_HOST?.trim() ||
+        process.env.CRM_A_CONSOLE_WEB_HOST?.trim() ||
+        "127.0.0.1",
       OPENCLAW_GATEWAY_PORT: String(params.gatewayPort),
     },
   });

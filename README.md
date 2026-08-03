@@ -67,7 +67,20 @@ openclaw --profile crm-a uninstall
 
 ### Daemonless / Docker
 
-For containers or environments without systemd/launchd, set the environment variable once:
+Run the whole stack in a container (gateway + Web UI, state in a volume):
+
+```bash
+docker build -t crm-a-console .
+docker run -d --name crm-a -p 3100:3100 -v crm-a-data:/root/.openclaw-crm-a crm-a-console
+
+# First run only: configure a model provider API key, then restart
+docker exec -it crm-a openclaw --profile crm-a onboard
+docker restart crm-a
+```
+
+Web UI: `http://localhost:3100`. `docker-compose.yml` is included as a shortcut (`docker compose up -d`).
+
+For other containers or environments without systemd/launchd, set the environment variable once:
 
 ```bash
 export CRM_A_CONSOLE_DAEMONLESS=1
@@ -86,6 +99,35 @@ npx crm-a-console bootstrap --skip-daemon-install
 npx crm-a-console update --skip-daemon-install
 npx crm-a-console start --skip-daemon-install
 ```
+
+---
+
+## Chat channels (Telegram, Mattermost, …)
+
+Channel setup is skipped during bootstrap (`--skip-channels`), so channels are added afterwards via the OpenClaw CLI. Fresh installs seed the common first-party channels (WhatsApp, Telegram, Discord, Slack, Signal, Mattermost, Matrix, …) into `plugins.allow`, so this works out of the box:
+
+```bash
+openclaw --profile crm-a channels add --channel telegram --token <bot-token>
+openclaw --profile crm-a channels add --channel mattermost --url <server-url> --token <token>
+# or the guided wizard
+openclaw --profile crm-a channels add
+```
+
+The seed only happens on the first bootstrap — later runs merge and never overwrite your edits. On installs created before this behavior (or for a channel outside the seeded set), extend the allowlist manually or `channels add` fails with `blocked by allowlist`:
+
+```bash
+openclaw --profile crm-a config set plugins.allow \
+  '["posthog-analytics","crm-a-ai-gateway","crm-a-identity","apollo-enrichment","exa-search","telegram","mattermost"]'
+```
+
+In the Docker sandbox, prefix the commands with `docker exec` (interactive flows need `-it`):
+
+```bash
+docker exec crm-a openclaw --profile crm-a channels add --channel telegram --token <bot-token>
+docker exec -it crm-a openclaw --profile crm-a channels add
+```
+
+The gateway binds loopback, so channels that poll outbound (Telegram polling, Mattermost websocket) work as-is; inbound webhook-style channels need the gateway port exposed.
 
 ---
 
@@ -124,7 +166,7 @@ npx crm-a-console restart
 
 ```bash
 git clone https://github.com/TopCS/crmaconsole.git
-cd crm-a-console
+cd crmaconsole
 
 pnpm install
 pnpm build
@@ -146,7 +188,7 @@ pnpm web:dev
 MIT Licensed. Fork it, extend it, make it yours.
 
 <p align="center">
-  <a href="https://star-history.com/?repos=TopCS%2FCrm-A Console&type=date&legend=top-left">
+  <a href="https://star-history.com/?repos=TopCS%2Fcrmaconsole&type=date&legend=top-left">
     <img src="https://api.star-history.com/image?repos=TopCS/crmaconsole&type=date&legend=top-left" alt="Star History" width="620" />
   </a>
 </p>

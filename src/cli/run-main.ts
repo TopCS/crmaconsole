@@ -174,16 +174,11 @@ export async function runCli(argv: string[] = process.argv) {
     await emitCliBanner(VERSION, { argv: normalizedArgv });
   }
 
-  // Bare `crm-a-console` gets a minimal welcome flow: the Crm-A Cloud banner plus
-  // a single "Continue with Dench.com" action. The full local setup pipeline
-  // is reachable explicitly via `crm-a-console bootstrap`.
-  if (isBareCrmAConsoleInvocation(normalizedArgv)) {
-    const { runCrmACloudWelcome } = await import("./crm-a-cloud-welcome.js");
-    await runCrmACloudWelcome();
-    return;
-  }
-
-  const parseArgv = rewriteUpdateFlagArgv(normalizedArgv);
+  // Bare `crm-a-console` runs the local setup pipeline (bootstrap) directly.
+  // Crm-A Cloud is not part of setup — the product always runs locally.
+  const parseArgv = rewriteUpdateFlagArgv(
+    isBareCrmAConsoleInvocation(normalizedArgv) ? [...normalizedArgv, "bootstrap"] : normalizedArgv,
+  );
   if (shouldDelegateToGlobalOpenClaw(parseArgv)) {
     const exitCode = await delegateToGlobalOpenClaw(parseArgv);
     process.exitCode = exitCode;

@@ -1,0 +1,15 @@
+services:
+  crm-a-console:
+    build: .
+    image: crm-a-console
+    container_name: crm-a-console
+    ports:
+      - "3100:3100"
+    volumes:
+      - crm-a-data:/root/.openclaw-crm-a
+    restart: unless-stopped
+    environment:
+      - OPENROUTER_API_KEY=***REMOVED***
+
+volumes:
+  crm-a-data:

@@ -789,10 +789,9 @@ export function SetupStep({
       </div>
 
       <div className="divide-y divide-[var(--color-border)]">
-        {/* Crm-A Cloud */}
+        {/* Crm-A Cloud (optional — only needed for Gmail/Calendar sync) */}
         <ConnectionCard
           id="dc-card"
-          required
           icon={<CrmACloudIcon />}
           title="Crm-A Cloud"
           description="Runs the models that power Gmail and Calendar sync."
@@ -818,9 +817,17 @@ export function SetupStep({
                 Cancel
               </GhostAction>
             ) : (
-              <PrimaryAction onClick={() => setShowKeyForm(true)}>
-                Connect
-              </PrimaryAction>
+              <div className="flex items-center gap-3">
+                <GhostAction
+                  onClick={() => void handleCrmACloudSkip()}
+                  disabled={crmACloudSubmitting}
+                >
+                  Skip for now
+                </GhostAction>
+                <PrimaryAction onClick={() => setShowKeyForm(true)}>
+                  Connect
+                </PrimaryAction>
+              </div>
             )
           }
         />
@@ -995,7 +1002,7 @@ export function SetupStep({
             ? null
             : crmACloudConnected
               ? "Connect Gmail for the full experience, or skip ahead."
-              : "Crm-A Cloud unlocks the other two."}
+              : "Crm-A Cloud unlocks Gmail and Calendar sync — or skip to keep everything local."}
         </p>
         <button
           type="button"

@@ -26,7 +26,6 @@ import { track } from "../telemetry/telemetry.js";
 import { stylePromptMessage } from "../terminal/prompt-style.js";
 import { theme } from "../terminal/theme.js";
 import { VERSION } from "../version.js";
-import { renderCrmACloudRecommendationBanner } from "./crm-a-cloud-banner.js";
 import {
   buildCrmACloudConfigPatch,
   DEFAULT_CRM_A_CLOUD_GATEWAY_URL,
@@ -828,6 +827,27 @@ function stripTypeScriptPluginEntry(pluginDest: string): void {
   }
 }
 
+// First-party OpenClaw chat channels seeded into plugins.allow on fresh
+// installs, so `openclaw channels add telegram` etc. work out of the box
+// instead of failing with "blocked by allowlist".
+const DEFAULT_ALLOWED_CHANNEL_PLUGINS = [
+  "whatsapp",
+  "telegram",
+  "discord",
+  "slack",
+  "signal",
+  "googlechat",
+  "imessage",
+  "nostr",
+  "msteams",
+  "mattermost",
+  "nextcloud-talk",
+  "matrix",
+  "irc",
+  "line",
+  "twitch",
+] as const;
+
 async function syncBundledPlugins(params: {
   openclawCommand: string;
   profile: string;
@@ -857,6 +877,12 @@ async function syncBundledPlugins(params: {
     const currentLoadPaths = readConfiguredPluginLoadPaths(params.stateDir);
     const nextAllow = currentAllow.filter((value) => value !== "crm-a-cloud-provider");
     const nextLoadPaths = currentLoadPaths.filter((value) => !isLegacyCrmACloudPluginPath(value));
+    // Seed first-party chat channels only when the config has no allowlist
+    // yet (fresh install). Later bootstrap/update runs respect user edits —
+    // both additions and deliberate removals.
+    if (!Array.isArray(asRecord(rawConfig.plugins)?.allow)) {
+      nextAllow.push(...DEFAULT_ALLOWED_CHANNEL_PLUGINS);
+    }
     const legacyPluginDir = path.join(params.stateDir, "extensions", "crm-a-cloud-provider");
     const hadLegacyEntry = entries["crm-a-cloud-provider"] !== undefined;
     const hadLegacyInstall = installs["crm-a-cloud-provider"] !== undefined;
@@ -3093,18 +3119,9 @@ async function resolveCrmACloudBootstrapSelection(params: {
     };
   }
 
+  // Crm-A Cloud is not part of setup — the product always runs locally. It can
+  // still be enabled explicitly via --crm-a-cloud / --crm-a-cloud-api-key etc.
   if (!explicitRequest) {
-    params.runtime.log(renderCrmACloudRecommendationBanner());
-  }
-  const wantsCrmACloud = explicitRequest
-    ? true
-    : await confirm({
-        message: stylePromptMessage(
-          "Continue with Crm-A Cloud? Recommended. API key: dench.com/api",
-        ),
-        initialValue: existingCrmAConfigured || !currentProvider,
-      });
-  if (isCancel(wantsCrmACloud) || !wantsCrmACloud) {
     return { enabled: false };
   }
 
@@ -3753,6 +3770,13 @@ export async function bootstrapCommand(
   if (!opts.json) {
     if (!webRuntimeStatus.ready) {
       runtime.log(theme.warn(`Managed web runtime check failed: ${webRuntimeStatus.reason}`));
+      if (webRuntimeStatus.reason === "standalone web build is missing from package") {
+        runtime.log(
+          theme.muted(
+            "Running from a source checkout? Build the web bundle with `pnpm web:build`, then re-run `crm-a-console update`.",
+          ),
+        );
+      }
     }
     if (devicePairing.status === "approved") {
       runtime.log(theme.muted("Approved the pending local OpenClaw device pairing request."));

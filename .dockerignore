@@ -1,0 +1,10 @@
+.git
+.codegraph
+.cursor
+node_modules
+apps/web/node_modules
+apps/web/.next
+dist
+*.log
+Dockerfile
+docker-compose.yml

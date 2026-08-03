@@ -851,6 +851,60 @@ describe("bootstrapCommand always-onboard behavior", () => {
     expect(existsSync(path.join(stateDir, "extensions", "shared", "crm-a-auth.ts"))).toBe(true);
   });
 
+  it("seeds first-party chat channels into plugins.allow on fresh installs", async () => {
+    const runtime: RuntimeEnv = {
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: vi.fn(),
+    };
+
+    await bootstrapCommand(
+      {
+        nonInteractive: true,
+        noOpen: true,
+        skipUpdate: true,
+      },
+      runtime,
+    );
+
+    const updatedConfig = JSON.parse(readFileSync(path.join(stateDir, "openclaw.json"), "utf-8"));
+    expect(updatedConfig.plugins.allow).toContain("telegram");
+    expect(updatedConfig.plugins.allow).toContain("mattermost");
+    expect(updatedConfig.plugins.allow).toContain("whatsapp");
+    expect(updatedConfig.plugins.allow).toContain("crm-a-identity");
+    expect(updatedConfig.plugins.allow).toContain("crm-a-ai-gateway");
+  });
+
+  it("does not re-seed channel plugins when an allowlist already exists", async () => {
+    writeFileSync(
+      path.join(stateDir, "openclaw.json"),
+      JSON.stringify({
+        plugins: { allow: ["custom-plugin"] },
+        gateway: { mode: "local" },
+      }),
+    );
+    const runtime: RuntimeEnv = {
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: vi.fn(),
+    };
+
+    await bootstrapCommand(
+      {
+        nonInteractive: true,
+        noOpen: true,
+        skipUpdate: true,
+      },
+      runtime,
+    );
+
+    const updatedConfig = JSON.parse(readFileSync(path.join(stateDir, "openclaw.json"), "utf-8"));
+    expect(updatedConfig.plugins.allow).toContain("custom-plugin");
+    expect(updatedConfig.plugins.allow).toContain("crm-a-identity");
+    expect(updatedConfig.plugins.allow).not.toContain("telegram");
+    expect(updatedConfig.plugins.allow).not.toContain("mattermost");
+  });
+
   it("uses providers-wrapped ElevenLabs config for modern OpenClaw versions", async () => {
     openClawVersionOutput = "2026.4.5\n";
     fetchBehavior = async (url: string) => {
@@ -970,8 +1024,7 @@ describe("bootstrapCommand always-onboard behavior", () => {
     );
   });
 
-  it("keeps Crm-A-only integrations off when Crm-A Cloud is declined", async () => {
-    promptMocks.confirmDecision = false;
+  it("keeps Crm-A-only integrations off when Crm-A Cloud is not configured", async () => {
     const runtime: RuntimeEnv = {
       log: vi.fn(),
       error: vi.fn(),
@@ -988,15 +1041,8 @@ describe("bootstrapCommand always-onboard behavior", () => {
       );
     });
 
-    expect(runtime.log).toHaveBeenCalledWith(expect.stringContaining("D E N C H   C L O U D"));
-    expect(runtime.log).toHaveBeenCalledWith(expect.stringContaining("App Integrations"));
-    expect(promptMocks.confirm).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining(
-          "Continue with Crm-A Cloud? Recommended. API key: dench.com/api",
-        ),
-      }),
-    );
+    expect(runtime.log).not.toHaveBeenCalledWith(expect.stringContaining("D E N C H   C L O U D"));
+    expect(promptMocks.confirm).not.toHaveBeenCalled();
 
     const updatedConfig = JSON.parse(readFileSync(path.join(stateDir, "openclaw.json"), "utf-8"));
     expect(updatedConfig.plugins.entries["exa-search"]).toEqual(
@@ -1018,7 +1064,7 @@ describe("bootstrapCommand always-onboard behavior", () => {
     });
   });
 
-  it("re-prompts for Crm-A Cloud every bootstrap and pre-fills the saved key and model", async () => {
+  it("pre-fills the saved Crm-A Cloud key and model when explicitly requested", async () => {
     writeFileSync(
       path.join(stateDir, "openclaw.json"),
       JSON.stringify({
@@ -1099,7 +1145,6 @@ describe("bootstrapCommand always-onboard behavior", () => {
       }
       return createJsonResponse({ status: 404, payload: {} });
     };
-    promptMocks.confirmDecision = true;
     promptMocks.textValue = "crm_a_saved_key";
     promptMocks.selectValue = "anthropic.claude-opus-4-6-v1";
     const runtime: RuntimeEnv = {
@@ -1111,6 +1156,7 @@ describe("bootstrapCommand always-onboard behavior", () => {
     await withForcedStdinTty(true, async () => {
       await bootstrapCommand(
         {
+          crmACloud: true,
           noOpen: true,
           skipUpdate: true,
         },
@@ -1118,7 +1164,7 @@ describe("bootstrapCommand always-onboard behavior", () => {
       );
     });
 
-    expect(promptMocks.confirm).toHaveBeenCalledTimes(1);
+    expect(promptMocks.confirm).not.toHaveBeenCalled();
     expect(promptMocks.text).toHaveBeenCalledWith(
       expect.objectContaining({
         initialValue: "crm_a_saved_key",
@@ -1168,7 +1214,7 @@ describe("bootstrapCommand always-onboard behavior", () => {
   });
 
   it("runs update before onboarding when interactive prompt is accepted", async () => {
-    promptMocks.confirmDecisions = [true, false];
+    promptMocks.confirmDecisions = [true];
     const runtime: RuntimeEnv = {
       log: vi.fn(),
       error: vi.fn(),
@@ -1184,7 +1230,7 @@ describe("bootstrapCommand always-onboard behavior", () => {
       );
     });
 
-    expect(promptMocks.confirm).toHaveBeenCalledTimes(2);
+    expect(promptMocks.confirm).toHaveBeenCalledTimes(1);
     const updateIndex = spawnCalls.findIndex(
       (call) =>
         call.command === "openclaw" && call.args.includes("update") && call.args.includes("--yes"),
@@ -1229,12 +1275,12 @@ describe("bootstrapCommand always-onboard behavior", () => {
     );
 
     expect(installedGlobalOpenClaw).toBe(true);
-    expect(promptMocks.confirm).toHaveBeenCalledTimes(1);
+    expect(promptMocks.confirm).not.toHaveBeenCalled();
     expect(updateCalled).toBe(false);
   });
 
   it("skips update when interactive prompt is declined", async () => {
-    promptMocks.confirmDecisions = [false, false];
+    promptMocks.confirmDecisions = [false];
     const runtime: RuntimeEnv = {
       log: vi.fn(),
       error: vi.fn(),
@@ -1250,7 +1296,7 @@ describe("bootstrapCommand always-onboard behavior", () => {
       );
     });
 
-    expect(promptMocks.confirm).toHaveBeenCalledTimes(2);
+    expect(promptMocks.confirm).toHaveBeenCalledTimes(1);
     const updateCalled = spawnCalls.some(
       (call) =>
         call.command === "openclaw" && call.args.includes("update") && call.args.includes("--yes"),

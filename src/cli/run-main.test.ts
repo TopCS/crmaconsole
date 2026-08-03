@@ -6,7 +6,7 @@ import {
   shouldDelegateToGlobalOpenClaw,
 } from "./run-main.js";
 
-describe("run-main bare invocation welcome flow", () => {
+describe("run-main bare invocation routing", () => {
   it("detects bare crm-a-console invocations", () => {
     expect(isBareCrmAConsoleInvocation(["node", "crm-a-console"])).toBe(true);
   });
