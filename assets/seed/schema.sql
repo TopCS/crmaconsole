@@ -536,3 +536,37 @@ PIVOT (
 ) ON field_name IN (
   'Name', 'Description', 'Filter', 'Member Count', 'Computed At'
 ) USING first(value);
+
+-- ── New object: campaign (CDP email campaigns) ──
+INSERT INTO objects (id, name, description, default_view, immutable, sort_order)
+VALUES ('seed_obj_campaign_0000000000000', 'campaign', 'Email marketing campaign to a people segment (CDP)', 'table', true, 15);
+
+INSERT INTO fields (id, object_id, name, type, required, sort_order) VALUES
+  ('seed_fld_campaign_name_0000000', 'seed_obj_campaign_0000000000000', 'Name', 'text', true, 0),
+  ('seed_fld_campaign_subject_00000', 'seed_obj_campaign_0000000000000', 'Subject', 'text', false, 1),
+  ('seed_fld_campaign_body_00000000', 'seed_obj_campaign_0000000000000', 'Body', 'richtext', false, 2),
+  ('seed_fld_campaign_scheduled_0000', 'seed_obj_campaign_0000000000000', 'Scheduled At', 'date', false, 5),
+  ('seed_fld_campaign_sent_at_00000', 'seed_obj_campaign_0000000000000', 'Sent At', 'date', false, 6),
+  ('seed_fld_campaign_recipients_000', 'seed_obj_campaign_0000000000000', 'Recipients Count', 'number', false, 7),
+  ('seed_fld_campaign_opens_0000000', 'seed_obj_campaign_0000000000000', 'Opens', 'number', false, 8),
+  ('seed_fld_campaign_clicks_000000', 'seed_obj_campaign_0000000000000', 'Clicks', 'number', false, 9);
+
+INSERT INTO fields (id, object_id, name, type, required, related_object_id, relationship_type, sort_order) VALUES
+  ('seed_fld_campaign_segment_00000', 'seed_obj_campaign_0000000000000', 'Segment', 'relation', false, 'seed_obj_segment_00000000000000', 'many_to_one', 3);
+
+INSERT INTO fields (id, object_id, name, type, required, enum_values, enum_colors, sort_order) VALUES
+  ('seed_fld_campaign_status_00000', 'seed_obj_campaign_0000000000000', 'Status', 'enum', false,
+   '["Draft","Ready","Sent"]'::JSON, '["#94a3b8","#3b82f6","#22c55e"]'::JSON, 4);
+
+CREATE OR REPLACE VIEW v_campaign AS
+PIVOT (
+  SELECT e.id as entry_id, e.created_at, e.updated_at,
+         f.name as field_name, ef.value
+  FROM entries e
+  JOIN entry_fields ef ON ef.entry_id = e.id
+  JOIN fields f ON f.id = ef.field_id
+  WHERE e.object_id = 'seed_obj_campaign_0000000000000'
+) ON field_name IN (
+  'Name', 'Subject', 'Body', 'Segment', 'Status', 'Scheduled At', 'Sent At',
+  'Recipients Count', 'Opens', 'Clicks'
+) USING first(value);

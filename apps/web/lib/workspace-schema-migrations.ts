@@ -35,6 +35,7 @@ const EMAIL_MESSAGE_OBJECT_ID = SEED_OBJECT_IDS.email_message;
 const CALENDAR_EVENT_OBJECT_ID = SEED_OBJECT_IDS.calendar_event;
 const INTERACTION_OBJECT_ID = SEED_OBJECT_IDS.interaction;
 const SEGMENT_OBJECT_ID = SEED_OBJECT_IDS.segment;
+const CAMPAIGN_OBJECT_ID = SEED_OBJECT_IDS.campaign;
 
 const SOURCE_ENUM_VALUES = '["Manual","Gmail","Calendar"]';
 const SOURCE_ENUM_COLORS = '["#94a3b8","#ef4444","#3b82f6"]';
@@ -511,6 +512,82 @@ const NEW_OBJECTS: ObjectDef[] = [
       },
     ],
   },
+  {
+    id: CAMPAIGN_OBJECT_ID,
+    name: "campaign",
+    description: "Email marketing campaign to a people segment (CDP)",
+    icon: "mail",
+    defaultView: "table",
+    immutable: true,
+    sortOrder: 15,
+    fields: [
+      {
+        id: "seed_fld_campaign_name_0000000",
+        name: "Name",
+        type: "text",
+        required: true,
+        sortOrder: 0,
+      },
+      {
+        id: "seed_fld_campaign_subject_00000",
+        name: "Subject",
+        type: "text",
+        sortOrder: 1,
+      },
+      {
+        id: "seed_fld_campaign_body_00000000",
+        name: "Body",
+        type: "richtext",
+        sortOrder: 2,
+      },
+      {
+        id: "seed_fld_campaign_segment_00000",
+        name: "Segment",
+        type: "relation",
+        relatedObjectId: SEGMENT_OBJECT_ID,
+        relationshipType: "many_to_one",
+        sortOrder: 3,
+      },
+      {
+        id: "seed_fld_campaign_status_00000",
+        name: "Status",
+        type: "enum",
+        enumValues: '["Draft","Ready","Sent"]',
+        enumColors: '["#94a3b8","#3b82f6","#22c55e"]',
+        sortOrder: 4,
+      },
+      {
+        id: "seed_fld_campaign_scheduled_0000",
+        name: "Scheduled At",
+        type: "date",
+        sortOrder: 5,
+      },
+      {
+        id: "seed_fld_campaign_sent_at_00000",
+        name: "Sent At",
+        type: "date",
+        sortOrder: 6,
+      },
+      {
+        id: "seed_fld_campaign_recipients_000",
+        name: "Recipients Count",
+        type: "number",
+        sortOrder: 7,
+      },
+      {
+        id: "seed_fld_campaign_opens_0000000",
+        name: "Opens",
+        type: "number",
+        sortOrder: 8,
+      },
+      {
+        id: "seed_fld_campaign_clicks_000000",
+        name: "Clicks",
+        type: "number",
+        sortOrder: 9,
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -654,6 +731,7 @@ const VIEW_NAMES: Array<{ object: string; objectId: string; viewName: string }> 
   { object: "calendar_event", objectId: CALENDAR_EVENT_OBJECT_ID, viewName: "v_calendar_event" },
   { object: "interaction", objectId: INTERACTION_OBJECT_ID, viewName: "v_interaction" },
   { object: "segment", objectId: SEGMENT_OBJECT_ID, viewName: "v_segment" },
+  { object: "campaign", objectId: CAMPAIGN_OBJECT_ID, viewName: "v_campaign" },
 ];
 
 /**
@@ -1009,6 +1087,7 @@ export const ONBOARDING_OBJECT_IDS = {
   calendar_event: CALENDAR_EVENT_OBJECT_ID,
   interaction: INTERACTION_OBJECT_ID,
   segment: SEGMENT_OBJECT_ID,
+  campaign: CAMPAIGN_OBJECT_ID,
 } as const;
 
 /**

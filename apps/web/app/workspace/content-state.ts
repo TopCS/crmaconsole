@@ -107,5 +107,6 @@ export type ContentState =
   | { kind: "crm-inbox" }
   | { kind: "crm-calendar" }
   | { kind: "crm-segmentation" }
+  | { kind: "crm-campaigns" }
   | { kind: "crm-person"; entryId: string; profileTab?: string }
   | { kind: "crm-company"; entryId: string; profileTab?: string };

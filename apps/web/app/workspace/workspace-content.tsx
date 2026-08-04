@@ -35,6 +35,7 @@ import { ReportViewer } from "../components/charts/report-viewer";
 import { InboxView } from "../components/crm/inbox-view";
 import { CalendarView } from "../components/crm/calendar-view";
 import { SegmentsView } from "../components/crm/segments/segments-view";
+import { CampaignsView } from "../components/crm/campaigns/campaigns-view";
 import { PersonProfile } from "../components/crm/person-profile";
 import { CompanyProfile } from "../components/crm/company-profile";
 import { ChatPanel, type ChatPanelHandle, type SubagentSpawnInfo } from "../components/chat-panel";
@@ -324,6 +325,8 @@ const CRM_NAV_EXCLUDED_OBJECT_NAMES: ReadonlySet<string> = new Set([
   "company",
   "companies",
   "interaction",
+  "segment",
+  "campaign",
 ]);
 
 /**
@@ -1316,7 +1319,8 @@ function WorkspacePageInner() {
         | "crm-inbox"
         | "crm-calendar"
         | "crm-events"
-        | "crm-segmentation",
+        | "crm-segmentation"
+        | "crm-campaigns",
     ) => {
       // Make sure the right panel is open and wide enough to actually use
       // when the user clicks one of the data tabs (People, Companies, etc.).
@@ -1356,6 +1360,7 @@ function WorkspacePageInner() {
         "crm-inbox": { path: "~crm/inbox", name: "Inbox" },
         "crm-calendar": { path: "~crm/calendar", name: "Calendar" },
         "crm-segmentation": { path: "~crm/segmentation", name: "Segmentation" },
+        "crm-campaigns": { path: "~crm/campaigns", name: "Campagne" },
       }[target];
       openTabForNode({ path: config.path, name: config.name, type: "folder" }, { preview: false });
       closeEntryModalIfOpen();
@@ -2343,7 +2348,9 @@ function WorkspacePageInner() {
                 ? "events" as const
                 : activeContentTab?.kind === "crm-segmentation"
                   ? "segmentation" as const
-                  : null
+                  : activeContentTab?.kind === "crm-campaigns"
+                    ? "campaigns" as const
+                    : null
     ),
     customCrmObjects,
     activeCrmObjectName: activeContentTab?.kind === "object" ? activeContentTab.path : null,
@@ -3112,6 +3119,9 @@ function ContentRenderer({
 
     case "crm-segmentation":
       return <SegmentsView onOpenPerson={(id) => onOpenEntry("people", id)} />;
+
+    case "crm-campaigns":
+      return <CampaignsView />;
 
     case "crm-person":
       return (
