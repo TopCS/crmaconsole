@@ -93,10 +93,11 @@ type WorkspaceSidebarProps = {
       | "crm-companies"
       | "crm-inbox"
       | "crm-calendar"
-      | "crm-events",
+      | "crm-events"
+      | "crm-segmentation",
   ) => void;
   /** Currently-active CRM nav item, used to highlight the row. */
-  activeCrmTarget?: "people" | "companies" | "inbox" | "calendar" | "events" | null;
+  activeCrmTarget?: "people" | "companies" | "inbox" | "calendar" | "events" | "segmentation" | null;
   /** Custom CRM tables (workspace.duckdb objects) to list under the default CRM nav. */
   customCrmObjects?: CustomCrmObject[];
   /** Currently-active custom CRM object name, used to highlight the row. */
@@ -366,6 +367,16 @@ export function WorkspaceSidebar({
 			icon: (
 				<svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
 					<polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+				</svg>
+			),
+		},
+		{
+			id: "crm-segmentation" as const,
+			label: "Segmentation",
+			target: "segmentation" as const,
+			icon: (
+				<svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+					<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
 				</svg>
 			),
 		},

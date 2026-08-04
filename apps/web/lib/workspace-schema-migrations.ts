@@ -34,6 +34,7 @@ const EMAIL_THREAD_OBJECT_ID = SEED_OBJECT_IDS.email_thread;
 const EMAIL_MESSAGE_OBJECT_ID = SEED_OBJECT_IDS.email_message;
 const CALENDAR_EVENT_OBJECT_ID = SEED_OBJECT_IDS.calendar_event;
 const INTERACTION_OBJECT_ID = SEED_OBJECT_IDS.interaction;
+const SEGMENT_OBJECT_ID = SEED_OBJECT_IDS.segment;
 
 const SOURCE_ENUM_VALUES = '["Manual","Gmail","Calendar"]';
 const SOURCE_ENUM_COLORS = '["#94a3b8","#ef4444","#3b82f6"]';
@@ -468,6 +469,48 @@ const NEW_OBJECTS: ObjectDef[] = [
       },
     ],
   },
+  {
+    id: SEGMENT_OBJECT_ID,
+    name: "segment",
+    description: "Saved people segment (demographic + event filters) for the CDP",
+    icon: "filter",
+    defaultView: "table",
+    immutable: true,
+    sortOrder: 14,
+    fields: [
+      {
+        id: "seed_fld_segment_name_00000000",
+        name: "Name",
+        type: "text",
+        required: true,
+        sortOrder: 0,
+      },
+      {
+        id: "seed_fld_segment_description_00",
+        name: "Description",
+        type: "text",
+        sortOrder: 1,
+      },
+      {
+        id: "seed_fld_segment_filter_000000",
+        name: "Filter",
+        type: "json",
+        sortOrder: 2,
+      },
+      {
+        id: "seed_fld_segment_membercount_00",
+        name: "Member Count",
+        type: "number",
+        sortOrder: 3,
+      },
+      {
+        id: "seed_fld_segment_computed_at_000",
+        name: "Computed At",
+        type: "date",
+        sortOrder: 4,
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -610,6 +653,7 @@ const VIEW_NAMES: Array<{ object: string; objectId: string; viewName: string }> 
   { object: "email_message", objectId: EMAIL_MESSAGE_OBJECT_ID, viewName: "v_email_message" },
   { object: "calendar_event", objectId: CALENDAR_EVENT_OBJECT_ID, viewName: "v_calendar_event" },
   { object: "interaction", objectId: INTERACTION_OBJECT_ID, viewName: "v_interaction" },
+  { object: "segment", objectId: SEGMENT_OBJECT_ID, viewName: "v_segment" },
 ];
 
 /**
@@ -964,6 +1008,7 @@ export const ONBOARDING_OBJECT_IDS = {
   email_message: EMAIL_MESSAGE_OBJECT_ID,
   calendar_event: CALENDAR_EVENT_OBJECT_ID,
   interaction: INTERACTION_OBJECT_ID,
+  segment: SEGMENT_OBJECT_ID,
 } as const;
 
 /**

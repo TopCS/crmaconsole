@@ -34,6 +34,7 @@ import { EmptyState } from "../components/workspace/empty-state";
 import { ReportViewer } from "../components/charts/report-viewer";
 import { InboxView } from "../components/crm/inbox-view";
 import { CalendarView } from "../components/crm/calendar-view";
+import { SegmentsView } from "../components/crm/segments/segments-view";
 import { PersonProfile } from "../components/crm/person-profile";
 import { CompanyProfile } from "../components/crm/company-profile";
 import { ChatPanel, type ChatPanelHandle, type SubagentSpawnInfo } from "../components/chat-panel";
@@ -1314,7 +1315,8 @@ function WorkspacePageInner() {
         | "crm-companies"
         | "crm-inbox"
         | "crm-calendar"
-        | "crm-events",
+        | "crm-events"
+        | "crm-segmentation",
     ) => {
       // Make sure the right panel is open and wide enough to actually use
       // when the user clicks one of the data tabs (People, Companies, etc.).
@@ -1353,6 +1355,7 @@ function WorkspacePageInner() {
         cron: { path: "~cron", name: "Cron" },
         "crm-inbox": { path: "~crm/inbox", name: "Inbox" },
         "crm-calendar": { path: "~crm/calendar", name: "Calendar" },
+        "crm-segmentation": { path: "~crm/segmentation", name: "Segmentation" },
       }[target];
       openTabForNode({ path: config.path, name: config.name, type: "folder" }, { preview: false });
       closeEntryModalIfOpen();
@@ -2338,7 +2341,9 @@ function WorkspacePageInner() {
               ? "calendar" as const
               : activeContentTab?.kind === "object" && activeContentTab.path === "interaction"
                 ? "events" as const
-                : null
+                : activeContentTab?.kind === "crm-segmentation"
+                  ? "segmentation" as const
+                  : null
     ),
     customCrmObjects,
     activeCrmObjectName: activeContentTab?.kind === "object" ? activeContentTab.path : null,
@@ -3104,6 +3109,9 @@ function ContentRenderer({
           onOpenCompany={(id) => onOpenEntry("company", id)}
         />
       );
+
+    case "crm-segmentation":
+      return <SegmentsView onOpenPerson={(id) => onOpenEntry("people", id)} />;
 
     case "crm-person":
       return (

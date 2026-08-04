@@ -106,5 +106,6 @@ export type ContentState =
   | { kind: "app"; appPath: string; manifest: CrmAAppManifest; filename: string }
   | { kind: "crm-inbox" }
   | { kind: "crm-calendar" }
+  | { kind: "crm-segmentation" }
   | { kind: "crm-person"; entryId: string; profileTab?: string }
   | { kind: "crm-company"; entryId: string; profileTab?: string };

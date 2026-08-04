@@ -513,3 +513,26 @@ PIVOT (
 -- and shouldn't clutter the file-system sidebar.
 UPDATE objects SET hidden_in_sidebar = true
 WHERE name IN ('email_thread', 'email_message', 'calendar_event', 'interaction');
+
+-- ── New object: segment (CDP saved segments) ──
+INSERT INTO objects (id, name, description, default_view, immutable, sort_order)
+VALUES ('seed_obj_segment_00000000000000', 'segment', 'Saved people segment (demographic + event filters) for the CDP', 'table', true, 14);
+
+INSERT INTO fields (id, object_id, name, type, required, sort_order) VALUES
+  ('seed_fld_segment_name_00000000', 'seed_obj_segment_00000000000000', 'Name', 'text', true, 0),
+  ('seed_fld_segment_description_00', 'seed_obj_segment_00000000000000', 'Description', 'text', false, 1),
+  ('seed_fld_segment_filter_000000', 'seed_obj_segment_00000000000000', 'Filter', 'json', false, 2),
+  ('seed_fld_segment_membercount_00', 'seed_obj_segment_00000000000000', 'Member Count', 'number', false, 3),
+  ('seed_fld_segment_computed_at_000', 'seed_obj_segment_00000000000000', 'Computed At', 'date', false, 4);
+
+CREATE OR REPLACE VIEW v_segment AS
+PIVOT (
+  SELECT e.id as entry_id, e.created_at, e.updated_at,
+         f.name as field_name, ef.value
+  FROM entries e
+  JOIN entry_fields ef ON ef.entry_id = e.id
+  JOIN fields f ON f.id = ef.field_id
+  WHERE e.object_id = 'seed_obj_segment_00000000000000'
+) ON field_name IN (
+  'Name', 'Description', 'Filter', 'Member Count', 'Computed At'
+) USING first(value);
