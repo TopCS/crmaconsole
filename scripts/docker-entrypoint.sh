@@ -30,8 +30,11 @@ fi
 openclaw --profile "$PROFILE" gateway --port "$GATEWAY_PORT" &
 gateway_pid=$!
 
-# Start the managed web runtime (Next.js standalone server on WEB_PORT).
-node /app/crm-a-console.mjs start \
+# Start (and refresh) the managed web runtime (Next.js on WEB_PORT). `update`
+# replaces the runtime assets with the ones baked into this image — `start`
+# would keep whatever stale copy sits in the state volume.
+node /app/crm-a-console.mjs update \
+  --non-interactive \
   --skip-daemon-install \
   --no-open \
   --web-port "$WEB_PORT" || true

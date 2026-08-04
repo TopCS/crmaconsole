@@ -40,11 +40,18 @@ ENV NODE_ENV=production \
     CRM_A_CONSOLE_DAEMONLESS=1 \
     CRM_A_CONSOLE_WEB_HOST=0.0.0.0
 
-# The CLI drives a global OpenClaw install (peer dependency) and shells out to
-# lsof/ps/which for port and process management (absent from the slim base).
+# The CLI drives a global OpenClaw install (peer dependency), the web app
+# shells out to the DuckDB CLI for every workspace query, and the CLI shells
+# out to lsof/ps/which for port and process management (absent from slim).
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends lsof procps debianutils \
+  && apt-get install -y --no-install-recommends lsof procps debianutils ca-certificates curl unzip \
   && rm -rf /var/lib/apt/lists/* \
+  && arch="$(dpkg --print-architecture)" \
+  && case "$arch" in amd64) duckarch=amd64 ;; arm64) duckarch=aarch64 ;; *) echo "unsupported arch: $arch" >&2; exit 1 ;; esac \
+  && curl -fsSL "https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-${duckarch}.zip" -o /tmp/duckdb.zip \
+  && unzip -o /tmp/duckdb.zip -d /usr/local/bin \
+  && rm /tmp/duckdb.zip \
+  && duckdb --version \
   && npm install -g openclaw@latest
 
 COPY --from=build /app /app
