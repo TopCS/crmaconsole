@@ -165,6 +165,15 @@ const COMPANY_NEW_FIELDS: FieldDef[] = [
   },
 ];
 
+const INTERACTION_NEW_FIELDS: FieldDef[] = [
+  {
+    id: "seed_fld_inter_properties_000",
+    name: "Properties",
+    type: "json",
+    sortOrder: 8,
+  },
+];
+
 // ---------------------------------------------------------------------------
 // Object definitions — wholesale new tables
 // ---------------------------------------------------------------------------
@@ -834,6 +843,19 @@ export async function ensureLatestSchema(): Promise<MigrationResult> {
     // column once `normalizeUrl` accepts bare domains. Idempotent.
     await migrateCompanyDomainToUrl(dbPath);
 
+    // ── 0e. Widen `interaction.Type` into a CDP event taxonomy ────────────
+    // Email/Meeting (sync touchpoints) plus journey events (page views,
+    // form submits, purchases, custom). Idempotent: only runs while the
+    // enum is still the original two-value list.
+    await duckdbExecOnFileAsync(
+      dbPath,
+      `UPDATE fields
+       SET enum_values = '["Email","Meeting","Page View","Form Submit","Purchase","Custom"]',
+           enum_colors = '["#3b82f6","#22c55e","#8b5cf6","#f59e0b","#10b981","#6b7280"]'
+       WHERE id = 'seed_fld_inter_type_00000000000'
+         AND enum_values NOT LIKE '%Page View%';`,
+    );
+
     const existingObjectIds = await fetchObjectIds();
 
     // Existing-object field additions
@@ -860,6 +882,19 @@ export async function ensureLatestSchema(): Promise<MigrationResult> {
       result.changedObjects.push("company");
       for (const field of companyAdditions.added) {
         result.addedFields.push({ object: "company", field });
+      }
+    }
+
+    const interactionAdditions = await ensureFieldsForObject(
+      dbPath,
+      "interaction",
+      INTERACTION_OBJECT_ID,
+      INTERACTION_NEW_FIELDS,
+    );
+    if (interactionAdditions.added.length > 0) {
+      result.changedObjects.push("interaction");
+      for (const field of interactionAdditions.added) {
+        result.addedFields.push({ object: "interaction", field });
       }
     }
 

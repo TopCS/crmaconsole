@@ -244,7 +244,8 @@ describe("Workspace Tree & Browse API", () => {
       expect(rootPaths).not.toContain("email_message");
       expect(rootPaths).not.toContain("email_thread");
       expect(rootPaths).not.toContain("calendar_event");
-      expect(rootPaths).not.toContain("interaction");
+      // interaction graduated to a first-class Events object (CDP) — visible.
+      expect(rootPaths).toContain("interaction");
     });
 
     it("shows CRM sync object folders when hidden files are revealed", async () => {

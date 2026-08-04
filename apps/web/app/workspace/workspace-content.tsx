@@ -300,7 +300,7 @@ function findCrmObjectNode(nodes: TreeNode[], objectName: string): TreeNode | nu
  * is fully populated). The synthetic path matches the seed schema's raw
  * object name so `loadContent` resolves it via `/api/workspace/objects/<name>`.
  */
-function resolveCrmObjectNode(tree: TreeNode[], objectName: "people" | "company"): TreeNode {
+function resolveCrmObjectNode(tree: TreeNode[], objectName: "people" | "company" | "interaction"): TreeNode {
   return (
     findCrmObjectNode(tree, objectName) ?? {
       name: objectName,
@@ -312,15 +312,17 @@ function resolveCrmObjectNode(tree: TreeNode[], objectName: "people" | "company"
 
 /**
  * Walk the workspace tree and collect every object node that should appear in
- * the sidebar's CRM section. Excludes `people` / `company` / `companies` since
- * those already have dedicated rows in the hard-coded CRM nav. Hidden CRM-only
- * objects (`email_thread` / `email_message` / `calendar_event` / `interaction`)
- * are filtered out upstream by the tree API and never appear here.
+ * the sidebar's CRM section. Excludes `people` / `company` / `companies` /
+ * `interaction` since those already have dedicated rows in the hard-coded CRM
+ * nav. Hidden CRM-only objects (`email_thread` / `email_message` /
+ * `calendar_event`) are filtered out upstream by the tree API and never
+ * appear here.
  */
 const CRM_NAV_EXCLUDED_OBJECT_NAMES: ReadonlySet<string> = new Set([
   "people",
   "company",
   "companies",
+  "interaction",
 ]);
 
 /**
@@ -1311,7 +1313,8 @@ function WorkspacePageInner() {
         | "crm-people"
         | "crm-companies"
         | "crm-inbox"
-        | "crm-calendar",
+        | "crm-calendar"
+        | "crm-events",
     ) => {
       // Make sure the right panel is open and wide enough to actually use
       // when the user clicks one of the data tabs (People, Companies, etc.).
@@ -1328,6 +1331,15 @@ function WorkspacePageInner() {
         // preview: false → each left-sidebar click opens a NEW persistent
         // tab instead of replacing the existing preview tab. If the tab is
         // already open, the reducer focuses it.
+        openTabForNode(node, { preview: false });
+        closeEntryModalIfOpen();
+        return;
+      }
+
+      // Events: the interaction object through the same ObjectView pipeline,
+      // labelled "Events" for the CDP framing.
+      if (target === "crm-events") {
+        const node = { ...resolveCrmObjectNode(tree, "interaction"), name: "Events" };
         openTabForNode(node, { preview: false });
         closeEntryModalIfOpen();
         return;
@@ -2324,7 +2336,9 @@ function WorkspacePageInner() {
             ? "inbox" as const
             : activeContentTab?.kind === "crm-calendar"
               ? "calendar" as const
-              : null
+              : activeContentTab?.kind === "object" && activeContentTab.path === "interaction"
+                ? "events" as const
+                : null
     ),
     customCrmObjects,
     activeCrmObjectName: activeContentTab?.kind === "object" ? activeContentTab.path : null,

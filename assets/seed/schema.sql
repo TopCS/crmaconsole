@@ -474,7 +474,8 @@ VALUES ('seed_obj_interaction_00000000000', 'interaction', 'Email or meeting bet
 
 INSERT INTO fields (id, object_id, name, type, required, enum_values, enum_colors, sort_order) VALUES
   ('seed_fld_inter_type_00000000000', 'seed_obj_interaction_00000000000', 'Type', 'enum', false,
-   '["Email","Meeting"]'::JSON, '["#3b82f6","#22c55e"]'::JSON, 0);
+   '["Email","Meeting","Page View","Form Submit","Purchase","Custom"]'::JSON,
+   '["#3b82f6","#22c55e","#8b5cf6","#f59e0b","#10b981","#6b7280"]'::JSON, 0);
 
 INSERT INTO fields (id, object_id, name, type, required, sort_order) VALUES
   ('seed_fld_inter_occurred_0000000', 'seed_obj_interaction_00000000000', 'Occurred At', 'date', true, 1);
@@ -490,7 +491,8 @@ INSERT INTO fields (id, object_id, name, type, required, enum_values, enum_color
    '["Sent","Received","Internal"]'::JSON, '["#22c55e","#3b82f6","#94a3b8"]'::JSON, 6);
 
 INSERT INTO fields (id, object_id, name, type, required, sort_order) VALUES
-  ('seed_fld_inter_score_0000000000', 'seed_obj_interaction_00000000000', 'Score Contribution', 'number', false, 7);
+  ('seed_fld_inter_score_0000000000', 'seed_obj_interaction_00000000000', 'Score Contribution', 'number', false, 7),
+  ('seed_fld_inter_properties_000', 'seed_obj_interaction_00000000000', 'Properties', 'json', false, 8);
 
 CREATE OR REPLACE VIEW v_interaction AS
 PIVOT (
@@ -501,7 +503,7 @@ PIVOT (
   JOIN fields f ON f.id = ef.field_id
   WHERE e.object_id = 'seed_obj_interaction_00000000000'
 ) ON field_name IN (
-  'Type', 'Occurred At', 'Person', 'Company', 'Email', 'Event', 'Direction', 'Score Contribution'
+  'Type', 'Occurred At', 'Person', 'Company', 'Email', 'Event', 'Direction', 'Score Contribution', 'Properties'
 ) USING first(value);
 
 -- Hide CRM-only objects from the workspace tree. They have dedicated UI
