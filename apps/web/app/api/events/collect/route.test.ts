@@ -5,7 +5,8 @@ vi.mock("@/lib/tracking", () => ({
 }));
 vi.mock("@/lib/events", () => ({
   EVENT_TYPES: ["Email", "Meeting", "Page View", "Form Submit", "Purchase", "Custom"],
-  isValidEventType: (t: string) =>
+  getAllowedEventTypes: async () => ["Email", "Meeting", "Page View", "Form Submit", "Purchase", "Custom"],
+  isValidEventType: async (t: string) =>
     ["Email", "Meeting", "Page View", "Form Submit", "Purchase", "Custom"].includes(t),
   normalizeEmail: (v: unknown) => (typeof v === "string" ? v.trim().toLowerCase() : ""),
   findPersonIdByEmail: vi.fn(),

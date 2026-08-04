@@ -3,11 +3,11 @@ import {
   createPersonFromEmail,
   findPersonIdByAnonymousId,
   findPersonIdByEmail,
+  getAllowedEventTypes,
   isValidEventType,
   normalizeEmail,
   recordEvent,
   resolveShadowPersonId,
-  EVENT_TYPES,
 } from "@/lib/events";
 
 export const dynamic = "force-dynamic";
@@ -75,9 +75,10 @@ export async function POST(req: Request) {
   }
 
   const type = typeof body.type === "string" ? body.type.trim() : "";
-  if (!isValidEventType(type)) {
+  if (!(await isValidEventType(type))) {
+    const allowed = await getAllowedEventTypes();
     return Response.json(
-      { error: `Unknown event type "${type}". Expected one of: ${EVENT_TYPES.join(", ")}.` },
+      { error: `Unknown event type "${type}". Expected one of: ${allowed.join(", ")}.` },
       { status: 400, headers: CORS_HEADERS },
     );
   }

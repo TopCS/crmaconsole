@@ -3,8 +3,8 @@ import { sqlString } from "@/lib/crm-queries";
 import { ONBOARDING_OBJECT_IDS } from "@/lib/workspace-schema-migrations";
 import {
   createPersonFromEmail,
-  EVENT_TYPES,
   findPersonIdByEmail,
+  getAllowedEventTypes,
   isValidEventType,
   normalizeEmail,
   recordEvent,
@@ -41,9 +41,10 @@ export async function POST(req: Request) {
   }
 
   const type = typeof body.type === "string" ? body.type.trim() : "";
-  if (!isValidEventType(type)) {
+  if (!(await isValidEventType(type))) {
+    const allowed = await getAllowedEventTypes();
     return Response.json(
-      { error: `Unknown event type "${type}". Expected one of: ${EVENT_TYPES.join(", ")}.` },
+      { error: `Unknown event type "${type}". Expected one of: ${allowed.join(", ")}.` },
       { status: 400 },
     );
   }

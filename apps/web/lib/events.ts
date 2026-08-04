@@ -11,6 +11,38 @@ import { ONBOARDING_OBJECT_IDS } from "./workspace-schema-migrations";
 
 export const EVENT_TYPES = ["Email", "Meeting", "Page View", "Form Submit", "Purchase", "Custom"] as const;
 
+// ── Dynamic event-type validation ─────────────────────────────────────────
+// The authoritative list of allowed interaction.Type values is the schema's
+// enum (users can add custom event types from the UI). We read it from the
+// fields table and cache it per process; the static EVENT_TYPES list is the
+// fallback for when the schema row is missing.
+const INTERACTION_TYPE_FIELD_ID = "seed_fld_inter_type_00000000000";
+let cachedAllowedTypes: string[] | null = null;
+
+export async function getAllowedEventTypes(): Promise<string[]> {
+  if (cachedAllowedTypes) {return cachedAllowedTypes;}
+  try {
+    const rows = await duckdbQueryAsync<{ enum_values: string | null }>(
+      `SELECT enum_values FROM fields WHERE id = ${sqlString(INTERACTION_TYPE_FIELD_ID)} LIMIT 1;`,
+    );
+    const raw = rows[0]?.enum_values;
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed) && parsed.every((v) => typeof v === "string")) {
+        cachedAllowedTypes = parsed as string[];
+        return cachedAllowedTypes;
+      }
+    }
+  } catch {
+    // Fall through to the static list.
+  }
+  return [...EVENT_TYPES];
+}
+
+export async function isValidEventType(type: string): Promise<boolean> {
+  return (await getAllowedEventTypes()).includes(type);
+}
+
 // Stable seed literals (same ids the sync and strength-score use); the field
 // map is consulted first so a migrated/renamed schema still resolves.
 const INTERACTION_FIELD_IDS = {
@@ -26,10 +58,6 @@ function interactionFieldId(map: Record<string, string>, name: keyof typeof INTE
 
 export function normalizeEmail(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
-}
-
-export function isValidEventType(type: string): type is (typeof EVENT_TYPES)[number] {
-  return (EVENT_TYPES as readonly string[]).includes(type);
 }
 
 /** Find a people entry id by exact (case-insensitive) email match. */
