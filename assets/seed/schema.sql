@@ -309,16 +309,17 @@ PIVOT (
 -- The web `workspace-schema-migrations.ts` runs the same DDL idempotently for
 -- workspaces created before this seed shipped. Keep the two in sync.
 
--- people: Source, Strength Score, Last Interaction At, Job Title, LinkedIn URL, Avatar URL
+-- people: Source, Strength Score, Last Interaction At, Job Title, LinkedIn URL, Avatar URL, Anonymous ID
 INSERT INTO fields (id, object_id, name, type, required, enum_values, enum_colors, sort_order) VALUES
   ('seed_fld_people_source_00000000', 'seed_obj_people_00000000000000', 'Source', 'enum', false,
-   '["Manual","Gmail","Calendar"]'::JSON, '["#94a3b8","#ef4444","#3b82f6"]'::JSON, 10);
+   '["Manual","Gmail","Calendar","Anonymous"]'::JSON, '["#94a3b8","#ef4444","#3b82f6","#a1a1aa"]'::JSON, 10);
 INSERT INTO fields (id, object_id, name, type, required, sort_order) VALUES
   ('seed_fld_people_strength_000000', 'seed_obj_people_00000000000000', 'Strength Score', 'number', false, 11),
   ('seed_fld_people_lastinter_00000', 'seed_obj_people_00000000000000', 'Last Interaction At', 'date', false, 12),
   ('seed_fld_people_jobtitle_000000', 'seed_obj_people_00000000000000', 'Job Title', 'text', false, 13),
   ('seed_fld_people_linkedin_000000', 'seed_obj_people_00000000000000', 'LinkedIn URL', 'url', false, 14),
-  ('seed_fld_people_avatar_url_0000', 'seed_obj_people_00000000000000', 'Avatar URL', 'url', false, 15);
+  ('seed_fld_people_avatar_url_0000', 'seed_obj_people_00000000000000', 'Avatar URL', 'url', false, 15),
+  ('seed_fld_people_anonymous_id_000', 'seed_obj_people_00000000000000', 'Anonymous ID', 'text', false, 16);
 
 -- Mark all seeded people as Manual so the onboarding sync's `Source = Gmail`
 -- filter doesn't accidentally show fixture rows as imported.
@@ -339,7 +340,8 @@ PIVOT (
   WHERE e.object_id = 'seed_obj_people_00000000000000'
 ) ON field_name IN (
   'Full Name', 'Email Address', 'Phone Number', 'Company', 'Status', 'Notes',
-  'Source', 'Strength Score', 'Last Interaction At', 'Job Title', 'LinkedIn URL', 'Avatar URL'
+  'Source', 'Strength Score', 'Last Interaction At', 'Job Title', 'LinkedIn URL', 'Avatar URL',
+  'Anonymous ID'
 ) USING first(value);
 
 -- company: Source, Domain, Strength Score, Last Interaction At

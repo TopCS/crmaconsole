@@ -530,3 +530,35 @@ export async function mergeDuplicatePeople(): Promise<PersonMergeReport> {
     durationMs: Date.now() - startedAt,
   };
 }
+
+/**
+ * Merge ONE loser person into the canonical one: copies the loser's missing
+ * scalar fields, re-points every relation (m2o + m2m — including the
+ * interaction.Person links that carry the anonymous web-tracking history),
+ * then deletes the loser. Used by the web-tracking identify flow where the
+ * anonymous shadow profile folds into the real person.
+ */
+export async function mergePersonInto(params: {
+  canonicalId: string;
+  loserId: string;
+}): Promise<{ ok: boolean; fieldsCopied: number; relationsRemapped: number }> {
+  const dbPath = await duckdbPathAsync();
+  if (!dbPath) {
+    return { ok: false, fieldsCopied: 0, relationsRemapped: 0 };
+  }
+
+  const relationFields = await collectPeopleRelationFields();
+  const canonicalFieldIdsRows = await duckdbQueryAsync<{ field_id: string }>(
+    `SELECT field_id FROM entry_fields WHERE entry_id = ${sqlString(params.canonicalId)};`,
+  );
+  const canonicalFieldIds = new Set(canonicalFieldIdsRows.map((r) => r.field_id));
+
+  const { statements, counters } = await planMergePair({
+    canonicalId: params.canonicalId,
+    loserId: params.loserId,
+    relationFields,
+    canonicalFieldIds,
+  });
+  const ok = await duckdbExecOnFileAsync(dbPath, statements.join("\n"));
+  return { ok, ...counters };
+}

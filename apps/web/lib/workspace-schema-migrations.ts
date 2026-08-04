@@ -134,6 +134,12 @@ const PEOPLE_NEW_FIELDS: FieldDef[] = [
     type: "url",
     sortOrder: 15,
   },
+  {
+    id: "seed_fld_people_anonymous_id_000",
+    name: "Anonymous ID",
+    type: "text",
+    sortOrder: 16,
+  },
 ];
 
 const COMPANY_NEW_FIELDS: FieldDef[] = [
@@ -854,6 +860,18 @@ export async function ensureLatestSchema(): Promise<MigrationResult> {
            enum_colors = '["#3b82f6","#22c55e","#8b5cf6","#f59e0b","#10b981","#6b7280"]'
        WHERE id = 'seed_fld_inter_type_00000000000'
          AND enum_values NOT LIKE '%Page View%';`,
+    );
+
+    // ── 0f. Add "Anonymous" to `people.Source` (web-tracking shadows) ─────
+    // Shadow profiles created by the tracker before identity resolution.
+    // Idempotent: only runs while the enum lacks the Anonymous value.
+    await duckdbExecOnFileAsync(
+      dbPath,
+      `UPDATE fields
+       SET enum_values = '["Manual","Gmail","Calendar","Anonymous"]',
+           enum_colors = '["#94a3b8","#ef4444","#3b82f6","#a1a1aa"]'
+       WHERE id = 'seed_fld_people_source_00000000'
+         AND enum_values NOT LIKE '%Anonymous%';`,
     );
 
     const existingObjectIds = await fetchObjectIds();
