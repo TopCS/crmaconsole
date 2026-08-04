@@ -177,7 +177,7 @@ const INTERACTION_NEW_FIELDS: FieldDef[] = [
   {
     id: "seed_fld_inter_properties_000",
     name: "Properties",
-    type: "json",
+    type: "text",
     sortOrder: 8,
   },
 ];
@@ -495,7 +495,7 @@ const NEW_OBJECTS: ObjectDef[] = [
       {
         id: "seed_fld_segment_filter_000000",
         name: "Filter",
-        type: "json",
+        type: "text",
         sortOrder: 2,
       },
       {

@@ -494,7 +494,7 @@ INSERT INTO fields (id, object_id, name, type, required, enum_values, enum_color
 
 INSERT INTO fields (id, object_id, name, type, required, sort_order) VALUES
   ('seed_fld_inter_score_0000000000', 'seed_obj_interaction_00000000000', 'Score Contribution', 'number', false, 7),
-  ('seed_fld_inter_properties_000', 'seed_obj_interaction_00000000000', 'Properties', 'json', false, 8);
+  ('seed_fld_inter_properties_000', 'seed_obj_interaction_00000000000', 'Properties', 'text', false, 8);
 
 CREATE OR REPLACE VIEW v_interaction AS
 PIVOT (
@@ -521,7 +521,7 @@ VALUES ('seed_obj_segment_00000000000000', 'segment', 'Saved people segment (dem
 INSERT INTO fields (id, object_id, name, type, required, sort_order) VALUES
   ('seed_fld_segment_name_00000000', 'seed_obj_segment_00000000000000', 'Name', 'text', true, 0),
   ('seed_fld_segment_description_00', 'seed_obj_segment_00000000000000', 'Description', 'text', false, 1),
-  ('seed_fld_segment_filter_000000', 'seed_obj_segment_00000000000000', 'Filter', 'json', false, 2),
+  ('seed_fld_segment_filter_000000', 'seed_obj_segment_00000000000000', 'Filter', 'text', false, 2),
   ('seed_fld_segment_membercount_00', 'seed_obj_segment_00000000000000', 'Member Count', 'number', false, 3),
   ('seed_fld_segment_computed_at_000', 'seed_obj_segment_00000000000000', 'Computed At', 'date', false, 4);
 
