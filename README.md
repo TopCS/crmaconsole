@@ -131,6 +131,38 @@ The gateway binds loopback, so channels that poll outbound (Telegram polling, Ma
 
 ---
 
+## Model providers
+
+Model auth is configured per profile through the OpenClaw CLI. Fresh installs seed the common provider plugins (OpenAI, Anthropic, Google, xAI, OpenRouter, Mistral, GitHub Copilot, Ollama, Together, Hugging Face) into `plugins.allow`, so provider auth flows work out of the box:
+
+```bash
+# interactive wizard (provider + API key/OAuth + default model)
+openclaw --profile crm-a configure
+
+# or paste a key directly
+openclaw --profile crm-a models auth paste-api-key
+
+# or OAuth / device flow
+openclaw --profile crm-a models auth login --provider openrouter
+
+# then pick the default model and check state
+openclaw --profile crm-a models set anthropic/claude-sonnet-4-6
+openclaw --profile crm-a models status
+```
+
+API keys can also come from the environment (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …) instead of the auth store. Restart the gateway after changing auth or models so it picks them up.
+
+In the Docker sandbox, prefix with `docker exec` (use `-it` for interactive flows) and restart the container instead of the gateway:
+
+```bash
+docker exec -it crm-a openclaw --profile crm-a configure
+docker restart crm-a
+```
+
+On installs created before the provider seeding, provider auth flows fail with `blocked by allowlist` — extend `plugins.allow` manually as shown in the channels section above.
+
+---
+
 ## Troubleshooting
 
 ### `pairing required`

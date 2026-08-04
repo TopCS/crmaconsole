@@ -848,6 +848,22 @@ const DEFAULT_ALLOWED_CHANNEL_PLUGINS = [
   "twitch",
 ] as const;
 
+// Same idea for model provider plugins: `models auth login --provider …`
+// and `models auth paste-api-key` run provider plugin auth flows, which are
+// also gated by plugins.allow.
+const DEFAULT_ALLOWED_MODEL_PROVIDER_PLUGINS = [
+  "openai",
+  "anthropic",
+  "google",
+  "xai",
+  "openrouter",
+  "mistral",
+  "github-copilot",
+  "ollama",
+  "together",
+  "huggingface",
+] as const;
+
 async function syncBundledPlugins(params: {
   openclawCommand: string;
   profile: string;
@@ -877,11 +893,12 @@ async function syncBundledPlugins(params: {
     const currentLoadPaths = readConfiguredPluginLoadPaths(params.stateDir);
     const nextAllow = currentAllow.filter((value) => value !== "crm-a-cloud-provider");
     const nextLoadPaths = currentLoadPaths.filter((value) => !isLegacyCrmACloudPluginPath(value));
-    // Seed first-party chat channels only when the config has no allowlist
-    // yet (fresh install). Later bootstrap/update runs respect user edits —
-    // both additions and deliberate removals.
+    // Seed first-party chat channels and model providers only when the config
+    // has no allowlist yet (fresh install). Later bootstrap/update runs
+    // respect user edits — both additions and deliberate removals.
     if (!Array.isArray(asRecord(rawConfig.plugins)?.allow)) {
       nextAllow.push(...DEFAULT_ALLOWED_CHANNEL_PLUGINS);
+      nextAllow.push(...DEFAULT_ALLOWED_MODEL_PROVIDER_PLUGINS);
     }
     const legacyPluginDir = path.join(params.stateDir, "extensions", "crm-a-cloud-provider");
     const hadLegacyEntry = entries["crm-a-cloud-provider"] !== undefined;

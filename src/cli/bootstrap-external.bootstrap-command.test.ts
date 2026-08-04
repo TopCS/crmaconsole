@@ -871,6 +871,9 @@ describe("bootstrapCommand always-onboard behavior", () => {
     expect(updatedConfig.plugins.allow).toContain("telegram");
     expect(updatedConfig.plugins.allow).toContain("mattermost");
     expect(updatedConfig.plugins.allow).toContain("whatsapp");
+    expect(updatedConfig.plugins.allow).toContain("openrouter");
+    expect(updatedConfig.plugins.allow).toContain("anthropic");
+    expect(updatedConfig.plugins.allow).toContain("openai");
     expect(updatedConfig.plugins.allow).toContain("crm-a-identity");
     expect(updatedConfig.plugins.allow).toContain("crm-a-ai-gateway");
   });
@@ -903,6 +906,7 @@ describe("bootstrapCommand always-onboard behavior", () => {
     expect(updatedConfig.plugins.allow).toContain("crm-a-identity");
     expect(updatedConfig.plugins.allow).not.toContain("telegram");
     expect(updatedConfig.plugins.allow).not.toContain("mattermost");
+    expect(updatedConfig.plugins.allow).not.toContain("openrouter");
   });
 
   it("uses providers-wrapped ElevenLabs config for modern OpenClaw versions", async () => {
