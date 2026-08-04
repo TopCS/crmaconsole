@@ -163,6 +163,17 @@ On installs created before the provider seeding, provider auth flows fail with `
 
 ---
 
+## CDP: Events, Segmentation, Campagne
+
+Beyond the CRM objects, the workspace ships CDP surfaces:
+
+- **Events** — every customer-journey event (page views, purchases, form submits, plus the Email/Meeting touchpoints from sync) lives in the Events section. Record server-side events with `POST /api/crm/events` (`{ personEmail, type, occurredAt?, properties? }`).
+- **Web tracking** — Integrations → Web Tracking gives you a `tracker.js` snippet for your site: automatic pageviews, `crma.track()` for custom events, `crma.identify()` to merge anonymous visitors into real people (anonymous history follows the identified profile).
+- **Segmentation** — build people clusters from demographic filters and event conditions ("did ≥3 Page Views in the last 30 days"); membership is computed live.
+- **Campagne** — email marketing to a segment via the connected Gmail account (requires the Crm-A Cloud key + Gmail connection for sending).
+
+---
+
 ## Troubleshooting
 
 ### `pairing required`
