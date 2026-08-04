@@ -2,7 +2,7 @@
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ObjectTable } from "./object-table";
+import { AddEntryModal, ObjectTable } from "./object-table";
 import type { TableSelectionContext } from "@/lib/table-selection";
 
 describe("ObjectTable selection context", () => {
@@ -160,5 +160,91 @@ describe("ObjectTable server sort", () => {
 		// Nothing to assert on onServerSort (it was never wired); the
 		// fact that no exception fires is the guarantee.
 		expect(true).toBe(true);
+	});
+});
+
+describe("AddEntryModal edit mode", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("prepopulates the form with the existing entry and saves via PATCH", async () => {
+		const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+			const method = init?.method ?? "GET";
+			if (url === "/api/workspace/objects/people/entries/p1" && method === "GET") {
+				return new Response(
+					JSON.stringify({
+						entry: { "Full Name": "Ada Lovelace", "Email Address": "ada@example.com" },
+					}),
+				);
+			}
+			if (url === "/api/workspace/objects/people/entries/p1" && method === "PATCH") {
+				return new Response(JSON.stringify({ ok: true }));
+			}
+			throw new Error(`Unexpected fetch: ${url} ${method}`);
+		});
+		global.fetch = fetchMock as unknown as typeof fetch;
+
+		const onClose = vi.fn();
+		const onSaved = vi.fn();
+		render(
+			<AddEntryModal
+				objectName="people"
+				fields={[
+					{ id: "f1", name: "Full Name", type: "text" },
+					{ id: "f2", name: "Email Address", type: "email" },
+				]}
+				entryId="p1"
+				onClose={onClose}
+				onSaved={onSaved}
+			/>,
+		);
+
+		// Prepopulated from the fetched entry.
+		expect(await screen.findByDisplayValue("Ada Lovelace")).toBeInTheDocument();
+		expect(screen.getByDisplayValue("ada@example.com")).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: /edit/i })).toBeInTheDocument();
+
+		// Edit a field and save -> PATCH with the full values payload.
+		fireEvent.change(screen.getByDisplayValue("ada@example.com"), {
+			target: { value: "ada@new.dev" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+		await waitFor(() => expect(onSaved).toHaveBeenCalled());
+		const patchCall = fetchMock.mock.calls.find(
+			([, init]) => (init as RequestInit | undefined)?.method === "PATCH",
+		);
+		expect(patchCall).toBeDefined();
+		expect(JSON.parse(String((patchCall![1] as RequestInit).body))).toEqual({
+			fields: { "Full Name": "Ada Lovelace", "Email Address": "ada@new.dev" },
+		});
+		expect(onClose).toHaveBeenCalled();
+	});
+
+	it("create mode still POSTs a new entry", async () => {
+		const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+			new Response(JSON.stringify({ ok: true })),
+		);
+		global.fetch = fetchMock as unknown as typeof fetch;
+
+		render(
+			<AddEntryModal
+				objectName="people"
+				fields={[{ id: "f1", name: "Full Name", type: "text" }]}
+				onClose={() => {}}
+			/>,
+		);
+
+		fireEvent.change(screen.getByPlaceholderText("Full Name"), {
+			target: { value: "Grace" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+		await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+		const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+		expect(String(url)).toBe("/api/workspace/objects/people/entries");
+		expect(init.method).toBe("POST");
 	});
 });

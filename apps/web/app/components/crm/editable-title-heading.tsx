@@ -49,10 +49,10 @@ export function EditableTitleHeading({
   }, [editing]);
 
   const beginEdit = useCallback(() => {
-    setDraft("");
+    setDraft(trimmed);
     setError(null);
     setEditing(true);
-  }, []);
+  }, [trimmed]);
 
   const cancelEdit = useCallback(() => {
     setEditing(false);
