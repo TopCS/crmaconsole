@@ -22,16 +22,16 @@ let cachedAllowedTypes: string[] | null = null;
 export async function getAllowedEventTypes(): Promise<string[]> {
   if (cachedAllowedTypes) {return cachedAllowedTypes;}
   try {
-    const rows = await duckdbQueryAsync<{ enum_values: string | null }>(
+    const rows = await duckdbQueryAsync<{ enum_values: string | string[] | null }>(
       `SELECT enum_values FROM fields WHERE id = ${sqlString(INTERACTION_TYPE_FIELD_ID)} LIMIT 1;`,
     );
+    // DuckDB's -json output emits JSON columns natively: enum_values may
+    // already be an array, or a JSON string needing a parse.
     const raw = rows[0]?.enum_values;
-    if (raw) {
-      const parsed = JSON.parse(raw) as unknown;
-      if (Array.isArray(parsed) && parsed.every((v) => typeof v === "string")) {
-        cachedAllowedTypes = parsed as string[];
-        return cachedAllowedTypes;
-      }
+    const parsed: unknown = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((v) => typeof v === "string")) {
+      cachedAllowedTypes = parsed as string[];
+      return cachedAllowedTypes;
     }
   } catch {
     // Fall through to the static list.
