@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "../ui/button";
 import type { IntegrationsState } from "@/lib/integrations";
 import { ComposioAppsSection } from "./composio-apps-section";
+import { TrackingCard } from "./tracking-card";
+import { SesCard } from "./ses-card";
 
 export function IntegrationsPanel({ embedded }: { embedded?: boolean } = {}) {
   const [data, setData] = useState<IntegrationsState | null>(null);
@@ -89,16 +91,26 @@ export function IntegrationsPanel({ embedded }: { embedded?: boolean } = {}) {
       )}
 
       {!loading && !error && data && (
-        <ComposioAppsSection
-          eligible={Boolean(data.crmACloud.hasKey && data.crmACloud.isPrimaryProvider)}
-          lockBadge={
-            !data.crmACloud.hasKey
-              ? "Get Crm-A Cloud API Key"
-              : !data.crmACloud.isPrimaryProvider
-                ? "Use Crm-A Cloud"
-                : null
-          }
-        />
+        <>
+          <ComposioAppsSection
+            eligible={Boolean(data.crmACloud.hasKey && data.crmACloud.isPrimaryProvider)}
+            lockBadge={
+              !data.crmACloud.hasKey
+                ? "Get Crm-A Cloud API Key"
+                : !data.crmACloud.isPrimaryProvider
+                  ? "Use Crm-A Cloud"
+                  : null
+            }
+          />
+          {/* Workspace-level integrations — independent of Crm-A Cloud. */}
+          <div className="mt-6 space-y-3">
+            <h2 className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
+              Workspace integrations
+            </h2>
+            <SesCard />
+            <TrackingCard />
+          </div>
+        </>
       )}
     </div>
   );

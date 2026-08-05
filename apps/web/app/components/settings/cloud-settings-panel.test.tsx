@@ -269,8 +269,8 @@ describe("CloudSettingsPanel", () => {
 
     await user.click(await screen.findByRole("button", { name: "Select primary model" }));
     await user.click(await screen.findByText("Claude Opus 4.6"));
-    // Baseline: settings/cloud + models + voices + integrations + tracking-config + ses.
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    // Baseline: settings/cloud + models + voices + integrations.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
 
     const voiceTrigger = await screen.findByRole("button", {
       name: "Select ElevenLabs voice",
@@ -283,12 +283,12 @@ describe("CloudSettingsPanel", () => {
     await user.click(screen.getByRole("button", { name: "Exa:off:open" }));
 
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
 
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(7);
+      expect(fetchMock).toHaveBeenCalledTimes(5);
     });
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
