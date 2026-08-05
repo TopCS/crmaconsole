@@ -121,6 +121,7 @@ export type SegmentMember = {
   name: string | null;
   email: string | null;
   source: string | null;
+  email_status: string | null;
   strength_score: string | null;
   last_interaction_at: string | null;
 };
@@ -141,6 +142,7 @@ export async function listSegmentMembers(
             v.${quoteCol("Full Name")} AS name,
             v.${quoteCol("Email Address")} AS email,
             v.${quoteCol("Source")} AS source,
+            v.${quoteCol("Email Status")} AS email_status,
             v.${quoteCol("Strength Score")} AS strength_score,
             v.${quoteCol("Last Interaction At")} AS last_interaction_at
      FROM v_people v${whereSql}

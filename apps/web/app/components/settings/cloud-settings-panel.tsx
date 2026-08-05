@@ -7,6 +7,7 @@ import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
 import { CrmAIntegrationsSection } from "../integrations/crm-a-integrations-section";
 import { TrackingCard } from "../integrations/tracking-card";
+import { SesCard } from "../integrations/ses-card";
 import { McpServersSection } from "./mcp-servers-section";
 import type { CrmAIntegrationId, CrmAIntegrationState, IntegrationsState } from "@/lib/integrations";
 import {
@@ -921,8 +922,9 @@ export function CloudSettingsPanel() {
         <div>
           <h2 className="text-sm font-medium mb-3" style={{ color: "var(--color-text)" }}>Integrations</h2>
           <CrmAIntegrationsSection />
-          <div className="mt-3">
+          <div className="mt-3 space-y-3">
             <TrackingCard />
+            <SesCard />
           </div>
         </div>
       </div>
@@ -958,8 +960,9 @@ export function CloudSettingsPanel() {
           onRetry={() => void fetchIntegrations()}
           onRepair={() => void handleRepairIntegrations()}
         />
-        <div className="mt-3">
+        <div className="mt-3 space-y-3">
           <TrackingCard />
+          <SesCard />
         </div>
       </div>
       <EnrichmentWaterfallCard

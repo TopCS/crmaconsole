@@ -23,8 +23,10 @@ type SegmentOption = { entry_id: string; name: string };
 
 const STATUS_COLORS: Record<string, string> = {
   Draft: "#94a3b8",
-  Ready: "#3b82f6",
+  Sending: "#3b82f6",
+  Paused: "#f59e0b",
   Sent: "#22c55e",
+  Cancelled: "#ef4444",
 };
 
 const inputStyle = {
@@ -78,7 +80,7 @@ export function CampaignsView() {
 
   const handleDelete = async (row: CampaignRow) => {
     try {
-      await fetch(`/api/workspace/objects/campaign/entries/${encodeURIComponent(row.entry_id)}`, {
+      await fetch(`/api/crm/campaigns/${encodeURIComponent(row.entry_id)}`, {
         method: "DELETE",
       });
       await load();
@@ -92,14 +94,30 @@ export function CampaignsView() {
       const res = await fetch(`/api/crm/campaigns/${encodeURIComponent(row.entry_id)}/send`, {
         method: "POST",
       });
-      const data = (await res.json()) as { sent?: number; failed?: number; error?: string };
+      const data = (await res.json()) as { queued?: number; error?: string };
       if (!res.ok) {throw new Error(data.error ?? `HTTP ${res.status}`);}
-      setNotice(`"${row.Name ?? "Campaign"}" sent to ${data.sent} recipients${data.failed ? ` (${data.failed} failed)` : ""}.`);
+      setNotice(`"${row.Name ?? "Campaign"}" queued for ${data.queued} recipients — sending in progress.`);
       await load();
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Send failed.");
     } finally {
       setSendingId(null);
+    }
+  };
+
+  const handleAction = async (row: CampaignRow, action: "pause" | "resume" | "cancel") => {
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/crm/campaigns/${encodeURIComponent(row.entry_id)}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = (await res.json()) as { status?: string; error?: string };
+      if (!res.ok) {throw new Error(data.error ?? `HTTP ${res.status}`);}
+      await load();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : `${action} failed.`);
     }
   };
 
@@ -168,9 +186,12 @@ export function CampaignsView() {
                     ? ` · sent to ${row["Recipients Count"]}`
                     : ""}
                 </div>
+                {row.Status && row.Status !== "Draft" && (
+                  <CampaignStatsLine campaignId={row.entry_id} />
+                )}
               </div>
               <div className="flex items-center gap-3 shrink-0">
-                {row.Status !== "Sent" && (
+                {(row.Status === "Draft" || !row.Status) && (
                   <button
                     type="button"
                     className="text-xs font-medium disabled:opacity-50"
@@ -178,17 +199,59 @@ export function CampaignsView() {
                     disabled={sendingId === row.entry_id}
                     onClick={() => void handleSend(row)}
                   >
-                    {sendingId === row.entry_id ? "Sending…" : "Send"}
+                    {sendingId === row.entry_id ? "Queuing…" : "Send"}
                   </button>
                 )}
-                <button
-                  type="button"
-                  className="text-xs"
-                  style={{ color: "var(--color-text-muted)" }}
-                  onClick={() => { setEditing(row); setEditorOpen(true); }}
-                >
-                  Edit
-                </button>
+                {row.Status === "Sending" && (
+                  <>
+                    <button
+                      type="button"
+                      className="text-xs font-medium"
+                      style={{ color: "var(--color-accent)" }}
+                      onClick={() => void handleAction(row, "pause")}
+                    >
+                      Pause
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs"
+                      style={{ color: "var(--color-error)" }}
+                      onClick={() => void handleAction(row, "cancel")}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
+                {row.Status === "Paused" && (
+                  <>
+                    <button
+                      type="button"
+                      className="text-xs font-medium"
+                      style={{ color: "var(--color-accent)" }}
+                      onClick={() => void handleAction(row, "resume")}
+                    >
+                      Resume
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs"
+                      style={{ color: "var(--color-error)" }}
+                      onClick={() => void handleAction(row, "cancel")}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
+                {(row.Status === "Draft" || !row.Status || row.Status === "Paused") && (
+                  <button
+                    type="button"
+                    className="text-xs"
+                    style={{ color: "var(--color-text-muted)" }}
+                    onClick={() => { setEditing(row); setEditorOpen(true); }}
+                  >
+                    Edit
+                  </button>
+                )}
                 <button
                   type="button"
                   className="text-xs"
@@ -210,6 +273,49 @@ export function CampaignsView() {
           onSaved={() => { setEditorOpen(false); setEditing(null); void load(); }}
         />
       )}
+    </div>
+  );
+}
+
+/* ─── Live per-campaign send stats ─── */
+
+function CampaignStatsLine({ campaignId }: { campaignId: string }) {
+  const [stats, setStats] = useState<{
+    queued: number; sent: number; softBounced: number;
+    hardBounced: number; complained: number; failed: number; cancelled: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/crm/campaigns/${encodeURIComponent(campaignId)}/stats`, {
+          cache: "no-store",
+        });
+        if (!res.ok) {return;}
+        const data = await res.json();
+        if (!cancelled) {setStats(data);}
+      } catch { /* ignore */ }
+    };
+    void load();
+    const interval = setInterval(() => void load(), 15_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [campaignId]);
+
+  if (!stats) {return null;}
+  const parts = [
+    stats.queued > 0 ? `${stats.queued} queued` : null,
+    stats.sent > 0 ? `${stats.sent} sent` : null,
+    stats.softBounced > 0 ? `${stats.softBounced} soft bounce` : null,
+    stats.hardBounced > 0 ? `${stats.hardBounced} hard bounce` : null,
+    stats.complained > 0 ? `${stats.complained} complaints` : null,
+    stats.failed > 0 ? `${stats.failed} failed` : null,
+    stats.cancelled > 0 ? `${stats.cancelled} cancelled` : null,
+  ].filter(Boolean);
+  if (parts.length === 0) {return null;}
+  return (
+    <div className="text-[11px] mt-0.5 tabular-nums" style={{ color: "var(--color-text-muted)" }}>
+      {parts.join(" · ")}
     </div>
   );
 }

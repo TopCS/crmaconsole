@@ -321,6 +321,10 @@ INSERT INTO fields (id, object_id, name, type, required, sort_order) VALUES
   ('seed_fld_people_avatar_url_0000', 'seed_obj_people_00000000000000', 'Avatar URL', 'url', false, 15),
   ('seed_fld_people_anonymous_id_000', 'seed_obj_people_00000000000000', 'Anonymous ID', 'text', false, 16);
 
+INSERT INTO fields (id, object_id, name, type, required, enum_values, enum_colors, sort_order) VALUES
+  ('seed_fld_people_email_status_000', 'seed_obj_people_00000000000000', 'Email Status', 'enum', false,
+   '["Active","Hard Bounced","Complained","Unsubscribed"]'::JSON, '["#22c55e","#ef4444","#f59e0b","#94a3b8"]'::JSON, 17);
+
 -- Mark all seeded people as Manual so the onboarding sync's `Source = Gmail`
 -- filter doesn't accidentally show fixture rows as imported.
 INSERT INTO entry_fields (entry_id, field_id, value) VALUES
@@ -341,7 +345,7 @@ PIVOT (
 ) ON field_name IN (
   'Full Name', 'Email Address', 'Phone Number', 'Company', 'Status', 'Notes',
   'Source', 'Strength Score', 'Last Interaction At', 'Job Title', 'LinkedIn URL', 'Avatar URL',
-  'Anonymous ID'
+  'Anonymous ID', 'Email Status'
 ) USING first(value);
 
 -- company: Source, Domain, Strength Score, Last Interaction At
@@ -512,7 +516,7 @@ PIVOT (
 -- (people-list-view / inbox-view / calendar-view / person-profile / etc.)
 -- and shouldn't clutter the file-system sidebar.
 UPDATE objects SET hidden_in_sidebar = true
-WHERE name IN ('email_thread', 'email_message', 'calendar_event', 'interaction');
+WHERE name IN ('email_thread', 'email_message', 'calendar_event', 'campaign_send');
 
 -- ── New object: segment (CDP saved segments) ──
 INSERT INTO objects (id, name, description, default_view, immutable, sort_order)
@@ -556,7 +560,7 @@ INSERT INTO fields (id, object_id, name, type, required, related_object_id, rela
 
 INSERT INTO fields (id, object_id, name, type, required, enum_values, enum_colors, sort_order) VALUES
   ('seed_fld_campaign_status_00000', 'seed_obj_campaign_0000000000000', 'Status', 'enum', false,
-   '["Draft","Ready","Sent"]'::JSON, '["#94a3b8","#3b82f6","#22c55e"]'::JSON, 4);
+   '["Draft","Sending","Paused","Sent","Cancelled"]'::JSON, '["#94a3b8","#3b82f6","#f59e0b","#22c55e","#ef4444"]'::JSON, 4);
 
 CREATE OR REPLACE VIEW v_campaign AS
 PIVOT (
@@ -569,4 +573,38 @@ PIVOT (
 ) ON field_name IN (
   'Name', 'Subject', 'Body', 'Segment', 'Status', 'Scheduled At', 'Sent At',
   'Recipients Count', 'Opens', 'Clicks'
+) USING first(value);
+
+-- ── New object: campaign_send (per-recipient send log) ──
+INSERT INTO objects (id, name, description, default_view, immutable, sort_order)
+VALUES ('seed_obj_campaign_send_00000000', 'campaign_send', 'Per-recipient send log for a campaign (queue, retries, bounces)', 'table', true, 16);
+
+INSERT INTO fields (id, object_id, name, type, required, related_object_id, relationship_type, sort_order) VALUES
+  ('seed_fld_csend_campaign_00000', 'seed_obj_campaign_send_00000000', 'Campaign', 'relation', false, 'seed_obj_campaign_0000000000000', 'many_to_one', 0),
+  ('seed_fld_csend_person_0000000', 'seed_obj_campaign_send_00000000', 'Person', 'relation', false, 'seed_obj_people_00000000000000', 'many_to_one', 1);
+
+INSERT INTO fields (id, object_id, name, type, required, sort_order) VALUES
+  ('seed_fld_csend_email_00000000', 'seed_obj_campaign_send_00000000', 'Email', 'email', false, 2),
+  ('seed_fld_csend_attempts_000000', 'seed_obj_campaign_send_00000000', 'Attempts', 'number', false, 4),
+  ('seed_fld_csend_last_attempt_000', 'seed_obj_campaign_send_00000000', 'Last Attempt At', 'date', false, 5),
+  ('seed_fld_csend_next_attempt_000', 'seed_obj_campaign_send_00000000', 'Next Attempt At', 'date', false, 6),
+  ('seed_fld_csend_ses_msg_id_0000', 'seed_obj_campaign_send_00000000', 'SES Message ID', 'text', false, 7),
+  ('seed_fld_csend_error_00000000', 'seed_obj_campaign_send_00000000', 'Error', 'text', false, 8);
+
+INSERT INTO fields (id, object_id, name, type, required, enum_values, enum_colors, sort_order) VALUES
+  ('seed_fld_csend_status_0000000', 'seed_obj_campaign_send_00000000', 'Status', 'enum', false,
+   '["Queued","Sent","Soft Bounced","Hard Bounced","Complained","Failed","Cancelled"]'::JSON,
+   '["#94a3b8","#22c55e","#f59e0b","#ef4444","#f97316","#ef4444","#6b7280"]'::JSON, 3);
+
+CREATE OR REPLACE VIEW v_campaign_send AS
+PIVOT (
+  SELECT e.id as entry_id, e.created_at, e.updated_at,
+         f.name as field_name, ef.value
+  FROM entries e
+  JOIN entry_fields ef ON ef.entry_id = e.id
+  JOIN fields f ON f.id = ef.field_id
+  WHERE e.object_id = 'seed_obj_campaign_send_00000000'
+) ON field_name IN (
+  'Campaign', 'Person', 'Email', 'Status', 'Attempts', 'Last Attempt At',
+  'Next Attempt At', 'SES Message ID', 'Error'
 ) USING first(value);

@@ -28,5 +28,14 @@ export async function register() {
     // `/api/sync/poll-tick` every ~5 minutes. That process survives
     // `crm-a-console update` and web-runtime restarts, so the cron stays
     // alive without depending on Next.js boot hooks.
+
+    // Campaign send worker: drains the per-recipient send queue (SES) once
+    // a minute. State lives in DuckDB, so restarts resume cleanly.
+    try {
+      const { startCampaignWorker } = await import("./lib/campaign-worker");
+      startCampaignWorker();
+    } catch (err) {
+      console.error("[instrumentation] campaign worker failed to start:", err);
+    }
   }
 }

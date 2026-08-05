@@ -36,9 +36,10 @@ const CALENDAR_EVENT_OBJECT_ID = SEED_OBJECT_IDS.calendar_event;
 const INTERACTION_OBJECT_ID = SEED_OBJECT_IDS.interaction;
 const SEGMENT_OBJECT_ID = SEED_OBJECT_IDS.segment;
 const CAMPAIGN_OBJECT_ID = SEED_OBJECT_IDS.campaign;
+const CAMPAIGN_SEND_OBJECT_ID = SEED_OBJECT_IDS.campaign_send;
 
-const SOURCE_ENUM_VALUES = '["Manual","Gmail","Calendar"]';
-const SOURCE_ENUM_COLORS = '["#94a3b8","#ef4444","#3b82f6"]';
+const SOURCE_ENUM_VALUES = '["Manual","Gmail","Calendar","Anonymous"]';
+const SOURCE_ENUM_COLORS = '["#94a3b8","#ef4444","#3b82f6","#a1a1aa"]';
 
 const SENDER_TYPE_ENUM_VALUES =
   '["Person","Marketing","Transactional","Notification","Mailing List","Automated"]';
@@ -141,6 +142,14 @@ const PEOPLE_NEW_FIELDS: FieldDef[] = [
     name: "Anonymous ID",
     type: "text",
     sortOrder: 16,
+  },
+  {
+    id: "seed_fld_people_email_status_000",
+    name: "Email Status",
+    type: "enum",
+    enumValues: '["Active","Hard Bounced","Complained","Unsubscribed"]',
+    enumColors: '["#22c55e","#ef4444","#f59e0b","#94a3b8"]',
+    sortOrder: 17,
   },
 ];
 
@@ -588,6 +597,77 @@ const NEW_OBJECTS: ObjectDef[] = [
       },
     ],
   },
+  {
+    id: CAMPAIGN_SEND_OBJECT_ID,
+    name: "campaign_send",
+    description: "Per-recipient send log for a campaign (queue, retries, bounces)",
+    icon: "send",
+    defaultView: "table",
+    immutable: true,
+    sortOrder: 16,
+    fields: [
+      {
+        id: "seed_fld_csend_campaign_00000",
+        name: "Campaign",
+        type: "relation",
+        relatedObjectId: CAMPAIGN_OBJECT_ID,
+        relationshipType: "many_to_one",
+        sortOrder: 0,
+      },
+      {
+        id: "seed_fld_csend_person_0000000",
+        name: "Person",
+        type: "relation",
+        relatedObjectId: PEOPLE_OBJECT_ID,
+        relationshipType: "many_to_one",
+        sortOrder: 1,
+      },
+      {
+        id: "seed_fld_csend_email_00000000",
+        name: "Email",
+        type: "email",
+        sortOrder: 2,
+      },
+      {
+        id: "seed_fld_csend_status_0000000",
+        name: "Status",
+        type: "enum",
+        enumValues: '["Queued","Sent","Soft Bounced","Hard Bounced","Complained","Failed","Cancelled"]',
+        enumColors: '["#94a3b8","#22c55e","#f59e0b","#ef4444","#f97316","#ef4444","#6b7280"]',
+        sortOrder: 3,
+      },
+      {
+        id: "seed_fld_csend_attempts_000000",
+        name: "Attempts",
+        type: "number",
+        sortOrder: 4,
+      },
+      {
+        id: "seed_fld_csend_last_attempt_000",
+        name: "Last Attempt At",
+        type: "date",
+        sortOrder: 5,
+      },
+      {
+        id: "seed_fld_csend_next_attempt_000",
+        name: "Next Attempt At",
+        type: "date",
+        sortOrder: 6,
+      },
+      {
+        id: "seed_fld_csend_ses_msg_id_0000",
+        name: "SES Message ID",
+        type: "text",
+        sortOrder: 7,
+      },
+      {
+        id: "seed_fld_csend_error_00000000",
+        name: "Error",
+        type: "text",
+        sortOrder: 8,
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -732,6 +812,7 @@ const VIEW_NAMES: Array<{ object: string; objectId: string; viewName: string }> 
   { object: "interaction", objectId: INTERACTION_OBJECT_ID, viewName: "v_interaction" },
   { object: "segment", objectId: SEGMENT_OBJECT_ID, viewName: "v_segment" },
   { object: "campaign", objectId: CAMPAIGN_OBJECT_ID, viewName: "v_campaign" },
+  { object: "campaign_send", objectId: CAMPAIGN_SEND_OBJECT_ID, viewName: "v_campaign_send" },
 ];
 
 /**
@@ -941,7 +1022,7 @@ export async function ensureLatestSchema(): Promise<MigrationResult> {
     const columnSql = [
       `ALTER TABLE objects ADD COLUMN IF NOT EXISTS hidden_in_sidebar BOOLEAN DEFAULT false;`,
       `UPDATE objects SET hidden_in_sidebar = true WHERE name IN (`
-        + `'email_thread', 'email_message', 'calendar_event', 'interaction'`
+        + `'email_thread', 'email_message', 'calendar_event', 'campaign_send'`
         + `) AND (hidden_in_sidebar IS NULL OR hidden_in_sidebar = false);`,
     ].join("\n");
     const colsOk = await duckdbExecOnFileAsync(dbPath, columnSql);
@@ -994,6 +1075,23 @@ export async function ensureLatestSchema(): Promise<MigrationResult> {
            enum_colors = '["#94a3b8","#ef4444","#3b82f6","#a1a1aa"]'
        WHERE id = 'seed_fld_people_source_00000000'
          AND enum_values NOT LIKE '%Anonymous%';`,
+    );
+
+    // ── 0g. Widen `campaign.Status` for the async send lifecycle ──────────
+    // Draft → Sending ⇄ Paused → Sent/Cancelled. Legacy "Ready" maps to
+    // "Draft". Idempotent via the NOT LIKE guard + unconditional data fix.
+    await duckdbExecOnFileAsync(
+      dbPath,
+      `UPDATE fields
+       SET enum_values = '["Draft","Sending","Paused","Sent","Cancelled"]',
+           enum_colors = '["#94a3b8","#3b82f6","#f59e0b","#22c55e","#ef4444"]'
+       WHERE id = 'seed_fld_campaign_status_00000'
+         AND enum_values NOT LIKE '%Sending%';`,
+    );
+    await duckdbExecOnFileAsync(
+      dbPath,
+      `UPDATE entry_fields SET value = 'Draft'
+       WHERE field_id = 'seed_fld_campaign_status_00000' AND value = 'Ready';`,
     );
 
     const existingObjectIds = await fetchObjectIds();
@@ -1088,6 +1186,7 @@ export const ONBOARDING_OBJECT_IDS = {
   interaction: INTERACTION_OBJECT_ID,
   segment: SEGMENT_OBJECT_ID,
   campaign: CAMPAIGN_OBJECT_ID,
+  campaign_send: CAMPAIGN_SEND_OBJECT_ID,
 } as const;
 
 /**

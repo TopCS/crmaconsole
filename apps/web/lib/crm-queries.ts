@@ -30,6 +30,7 @@ export type CrmFieldMaps = {
   interaction: Record<string, string>;
   segment: Record<string, string>;
   campaign: Record<string, string>;
+  campaign_send: Record<string, string>;
 };
 
 let cachedMaps: CrmFieldMaps | null = null;
@@ -51,8 +52,9 @@ export async function loadCrmFieldMaps(force = false): Promise<CrmFieldMaps> {
   const interaction = await fetchFieldIdMap(ONBOARDING_OBJECT_IDS.interaction);
   const segment = await fetchFieldIdMap(ONBOARDING_OBJECT_IDS.segment);
   const campaign = await fetchFieldIdMap(ONBOARDING_OBJECT_IDS.campaign);
+  const campaign_send = await fetchFieldIdMap(ONBOARDING_OBJECT_IDS.campaign_send);
 
-  cachedMaps = { people, company, email_thread, email_message, calendar_event, interaction, segment, campaign };
+  cachedMaps = { people, company, email_thread, email_message, calendar_event, interaction, segment, campaign, campaign_send };
   return cachedMaps;
 }
 

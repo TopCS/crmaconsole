@@ -20,6 +20,7 @@ export const SEED_OBJECT_IDS = {
 	interaction: "seed_obj_interaction_00000000000",
 	segment: "seed_obj_segment_00000000000000",
 	campaign: "seed_obj_campaign_0000000000000",
+	campaign_send: "seed_obj_campaign_send_00000000",
 } as const;
 
 export type SeedObjectKey = keyof typeof SEED_OBJECT_IDS;
