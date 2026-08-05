@@ -6,6 +6,7 @@ import type { IntegrationsState } from "@/lib/integrations";
 import { ComposioAppsSection } from "./composio-apps-section";
 import { TrackingCard } from "./tracking-card";
 import { SesCard } from "./ses-card";
+import { ComposioCard } from "./composio-card";
 
 export function IntegrationsPanel({ embedded }: { embedded?: boolean } = {}) {
   const [data, setData] = useState<IntegrationsState | null>(null);
@@ -110,6 +111,7 @@ export function IntegrationsPanel({ embedded }: { embedded?: boolean } = {}) {
             <h2 className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
               Workspace integrations
             </h2>
+            <ComposioCard />
             <SesCard />
             <TrackingCard />
           </div>

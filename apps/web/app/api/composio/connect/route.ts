@@ -74,7 +74,7 @@ export async function POST(request: Request) {
   const apiKey = resolveComposioApiKey();
   if (!apiKey) {
     return Response.json(
-      { error: "Crm-A Cloud API key is required." },
+      { error: "A Composio API key is required — set a direct key in Integrations (Composio card) or configure Crm-A Cloud." },
       { status: 403 },
     );
   }

@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { resolveOpenClawStateDir } from "@/lib/workspace";
+import { isDirectComposioConfigured } from "@/lib/composio-direct";
 
 /**
  * Returns a guaranteed-valid working directory for spawning child processes.
@@ -646,6 +647,18 @@ function resolveCrmACloudEligibility(
   config: OpenClawConfig,
   auth: IntegrationAuthSummary,
 ): CrmACloudEligibility {
+  // Direct Composio mode: the user's own Composio API key unlocks the
+  // integrations surface with no Crm-A Cloud requirements.
+  if (isDirectComposioConfigured()) {
+    return {
+      hasKey: true,
+      isPrimaryProvider: true,
+      primaryModel: resolvePrimaryModel(config),
+      locked: false,
+      lockReason: null,
+      lockBadge: null,
+    };
+  }
   const primaryModel = resolvePrimaryModel(config);
   const isPrimaryProvider = Boolean(primaryModel?.startsWith("crm-a-cloud/"));
   if (!auth.configured) {

@@ -26,6 +26,7 @@ import {
   resolveComposioApiKey,
   resolveComposioGatewayUrl,
 } from "./composio";
+import { directComposioFetch, resolveDirectComposioApiKey } from "./composio-direct";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -201,6 +202,11 @@ export async function executeComposioTool<T = unknown>(
   const startedAt = Date.now();
   let attempt = 0;
   let lastError: ComposioToolError | null = null;
+  // Direct mode: Composio Platform API v3.1 (own API key) instead of the
+  // Crm-A Cloud gateway. The v3.1 response wraps the tool output as
+  // { data, error, successful } — unwrapped below so callers see the same
+  // payload shape the gateway returns.
+  const direct = Boolean(resolveDirectComposioApiKey());
 
   while (attempt <= maxRetries) {
     if (opts.signal?.aborted) {
@@ -209,15 +215,27 @@ export async function executeComposioTool<T = unknown>(
 
     let response: Response;
     try {
-      response = await gatewayFetch("/v1/composio/tools/execute", {
-        method: "POST",
-        signal: opts.signal,
-        body: JSON.stringify({
-          tool_slug: opts.toolSlug,
-          connected_account_id: opts.connectedAccountId,
-          arguments: opts.arguments,
-        }),
-      });
+      response = direct
+        ? await directComposioFetch(
+            `/api/v3.1/tools/execute/${encodeURIComponent(opts.toolSlug)}`,
+            {
+              method: "POST",
+              signal: opts.signal,
+              body: JSON.stringify({
+                connected_account_id: opts.connectedAccountId,
+                arguments: opts.arguments,
+              }),
+            },
+          )
+        : await gatewayFetch("/v1/composio/tools/execute", {
+            method: "POST",
+            signal: opts.signal,
+            body: JSON.stringify({
+              tool_slug: opts.toolSlug,
+              connected_account_id: opts.connectedAccountId,
+              arguments: opts.arguments,
+            }),
+          });
     } catch (err) {
       // Network error / fetch threw before getting a response.
       if ((err as { name?: string }).name === "AbortError") {throw err;}
@@ -236,7 +254,26 @@ export async function executeComposioTool<T = unknown>(
     }
 
     if (response.ok) {
-      const data = (await response.json()) as T;
+      const json = (await response.json()) as unknown;
+      if (direct) {
+        const wrapped = json as { data?: T; error?: string | null; successful?: boolean };
+        if (wrapped.successful === false || wrapped.error) {
+          throw new ComposioToolError({
+            message: `Composio ${opts.toolSlug} failed: ${wrapped.error ?? "unknown error"}`,
+            status: 200,
+            responseBody: JSON.stringify(json).slice(0, 240),
+            toolSlug: opts.toolSlug,
+            retries: attempt,
+            retriable: false,
+          });
+        }
+        return {
+          data: wrapped.data as T,
+          retries: attempt,
+          elapsedMs: Date.now() - startedAt,
+        };
+      }
+      const data = json as T;
       return {
         data,
         retries: attempt,
@@ -322,15 +359,20 @@ export async function resolveToolSlug(params: {
     return first;
   }
 
-  const response = await gatewayFetch("/v1/composio/tools/search", {
-    method: "POST",
-    signal: params.signal,
-    body: JSON.stringify({
-      toolkit_slug: params.toolkitSlug,
-      query: params.searchQuery ?? params.toolkitSlug,
-      limit: 20,
-    }),
-  });
+  const response = await (resolveDirectComposioApiKey()
+    ? directComposioFetch(
+        `/api/v3.1/tools?toolkit_slug=${encodeURIComponent(params.toolkitSlug)}&search=${encodeURIComponent(params.searchQuery ?? params.toolkitSlug)}&limit=20`,
+        { signal: params.signal },
+      )
+    : gatewayFetch("/v1/composio/tools/search", {
+        method: "POST",
+        signal: params.signal,
+        body: JSON.stringify({
+          toolkit_slug: params.toolkitSlug,
+          query: params.searchQuery ?? params.toolkitSlug,
+          limit: 20,
+        }),
+      }));
   if (!response.ok) {
     throw new Error(`Tool search for ${params.toolkitSlug} failed: HTTP ${response.status}`);
   }

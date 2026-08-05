@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { resolveOpenClawStateDir } from "@/lib/workspace";
 import { normalizeComposioToolkitSlug } from "@/lib/composio-normalization";
 import { readConfiguredCrmACloudSettings } from "../../../src/cli/crm-a-cloud";
+import { directComposioFetch, directInitiateConnect, resolveDirectComposioApiKey } from "./composio-direct";
 
 const DEFAULT_GATEWAY_URL = "https://gateway.merseoriginals.com";
 
@@ -327,6 +328,12 @@ export function resolveComposioGatewayUrl(): string {
 }
 
 export function resolveComposioApiKey(): string | null {
+  // Direct Composio mode wins when configured: every transport function
+  // branches to the direct Platform API before touching the gateway.
+  const directKey = resolveDirectComposioApiKey();
+  if (directKey) {
+    return directKey;
+  }
   const config = readConfig();
   const models = asRecord(config.models);
   const provider = asRecord(asRecord(models?.providers)?.["crm-a-cloud"]);
@@ -342,11 +349,21 @@ export function resolveComposioApiKey(): string | null {
   return null;
 }
 
+/** Which Composio transport is active: direct Platform API or Crm-A gateway. */
+export function resolveComposioMode(): "direct" | "cloud" | null {
+  if (resolveDirectComposioApiKey()) {return "direct";}
+  return resolveComposioApiKey() ? "cloud" : null;
+}
+
 export function resolveComposioEligibility(): {
   eligible: boolean;
   lockReason: "missing_crm_a_key" | "crm_a_not_primary" | null;
   lockBadge: string | null;
 } {
+  // Direct Composio key: no Crm-A Cloud requirements at all.
+  if (resolveDirectComposioApiKey()) {
+    return { eligible: true, lockReason: null, lockBadge: null };
+  }
   const config = readConfig();
   const apiKey = resolveComposioApiKey();
   if (!apiKey) {
@@ -421,6 +438,19 @@ export async function fetchComposioToolkits(
   apiKey: string,
   options?: FetchToolkitsOptions,
 ): Promise<ComposioToolkitsResponse> {
+  if (resolveDirectComposioApiKey()) {
+    const params = new URLSearchParams();
+    if (options?.search) params.set("search", options.search);
+    if (options?.category) params.set("category", options.category);
+    if (options?.cursor) params.set("cursor", options.cursor);
+    params.set("limit", String(options?.limit ?? 100));
+    const res = await directComposioFetch(`/api/v3.1/toolkits?${params.toString()}`);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch toolkits (HTTP ${res.status})`);
+    }
+    const raw = (await res.json()) as ComposioToolkitsResponse;
+    return normalizeToolkitsEnvelope(raw);
+  }
   const params = new URLSearchParams();
   if (options?.search) params.set("search", options.search);
   if (options?.category) params.set("category", options.category);
@@ -440,6 +470,37 @@ export async function fetchComposioConnections(
   gatewayUrl: string,
   apiKey: string,
 ): Promise<ComposioConnectionsResponse> {
+  if (resolveDirectComposioApiKey()) {
+    const res = await directComposioFetch("/api/v3.1/connected_accounts?limit=200");
+    if (!res.ok) {
+      throw new Error(`Failed to fetch connections (HTTP ${res.status})`);
+    }
+    const raw = (await res.json()) as {
+      items?: Array<{
+        id?: string;
+        toolkit?: { slug?: string; name?: string };
+        status?: string;
+        created_at?: string;
+        updated_at?: string;
+        alias?: string;
+        user_id?: string;
+        state?: { val?: Record<string, unknown> };
+      }>;
+    };
+    // Flatten the v3.1 shape into the record shape the app normalizers expect.
+    const items = (raw.items ?? []).map((item) => ({
+      id: item.id,
+      toolkit_slug: item.toolkit?.slug ?? null,
+      toolkit_name: item.toolkit?.name ?? null,
+      status: item.status ?? null,
+      created_at: item.created_at ?? null,
+      updated_at: item.updated_at ?? null,
+      account_label: item.alias ?? item.user_id ?? null,
+      account_email:
+        typeof item.state?.val?.email === "string" ? item.state.val.email : null,
+    }));
+    return { items } as ComposioConnectionsResponse;
+  }
   const res = await gatewayFetch(gatewayUrl, apiKey, "/v1/composio/connections");
   if (!res.ok) {
     throw new Error(`Failed to fetch connections (HTTP ${res.status})`);
@@ -453,6 +514,13 @@ export async function initiateComposioConnect(
   toolkit: string,
   callbackUrl: string,
 ): Promise<ComposioConnectResponse> {
+  if (resolveDirectComposioApiKey()) {
+    return directInitiateConnect({
+      toolkit,
+      callbackUrl,
+      userId: "crm-a-console",
+    });
+  }
   const res = await gatewayFetch(gatewayUrl, apiKey, "/v1/composio/connect", {
     method: "POST",
     body: JSON.stringify({ toolkit, callback_url: callbackUrl }),
@@ -488,6 +556,19 @@ export async function disconnectComposioApp(
   apiKey: string,
   connectionId: string,
 ): Promise<DisconnectComposioAppResult> {
+  if (resolveDirectComposioApiKey()) {
+    const res = await directComposioFetch(
+      `/api/v3.1/connected_accounts/${encodeURIComponent(connectionId)}`,
+      { method: "DELETE" },
+    );
+    if (res.status === 404) {
+      return { deleted: true, alreadyGone: true };
+    }
+    if (!res.ok) {
+      throw new Error(`Failed to disconnect (HTTP ${res.status})`);
+    }
+    return { deleted: true };
+  }
   const res = await gatewayFetch(
     gatewayUrl,
     apiKey,
