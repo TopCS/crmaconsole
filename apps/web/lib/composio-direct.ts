@@ -83,7 +83,7 @@ export async function directInitiateConnect(params: {
   toolkit: string;
   callbackUrl: string;
   userId: string;
-}): Promise<{ redirect_url: string; connected_account_id?: string }> {
+}): Promise<{ redirect_url: string; connection_id: string | null }> {
   // 1. Reuse an existing managed auth config when present.
   let authConfigId: string | null = null;
   const listRes = await directComposioFetch(
@@ -141,5 +141,5 @@ export async function directInitiateConnect(params: {
   if (!link.redirect_url) {
     throw new Error(`Connect link for ${params.toolkit} did not return a redirect URL.`);
   }
-  return { redirect_url: link.redirect_url, connected_account_id: link.connected_account_id };
+  return { redirect_url: link.redirect_url, connection_id: link.connected_account_id ?? null };
 }
