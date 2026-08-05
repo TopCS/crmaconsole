@@ -74,6 +74,124 @@ export async function directComposioFetch(path: string, init?: RequestInit): Pro
   });
 }
 
+// ---------------------------------------------------------------------------
+// Credential-based connections (API_KEY / token toolkits, e.g. Telegram)
+// ---------------------------------------------------------------------------
+
+export type ToolkitAuthInfo = {
+  /** Managed OAuth schemes Composio can drive itself (empty for token toolkits). */
+  managedSchemes: string[];
+  /** Fields the user must provide to connect (e.g. a Telegram bot token). */
+  credentialFields: Array<{
+    name: string;
+    displayName: string;
+    description?: string;
+    isSecret?: boolean;
+  }>;
+  /** The toolkit's auth scheme id (API_KEY, BEARER_TOKEN, …). */
+  authScheme: string;
+};
+
+export async function directGetToolkitAuthInfo(toolkit: string): Promise<ToolkitAuthInfo> {
+  const res = await directComposioFetch(`/api/v3.1/toolkits/${encodeURIComponent(toolkit)}`);
+  if (!res.ok) {
+    throw new Error(`Failed to load toolkit ${toolkit} (HTTP ${res.status})`);
+  }
+  const raw = (await res.json()) as {
+    composio_managed_auth_schemes?: string[];
+    auth_config_details?: Array<{
+      mode?: string;
+      fields?: {
+        connected_account_initiation?: {
+          required?: Array<{ name?: string; displayName?: string; description?: string; is_secret?: boolean }>;
+        };
+      };
+    }>;
+  };
+  const details = raw.auth_config_details?.[0];
+  const required = details?.fields?.connected_account_initiation?.required ?? [];
+  return {
+    managedSchemes: raw.composio_managed_auth_schemes ?? [],
+    credentialFields: required
+      .filter((f) => typeof f.name === "string")
+      .map((f) => ({
+        name: f.name as string,
+        displayName: f.displayName ?? (f.name as string),
+        description: f.description,
+        isSecret: f.is_secret,
+      })),
+    authScheme: details?.mode ?? "API_KEY",
+  };
+}
+
+async function directFindOrCreateAuthConfig(
+  toolkit: string,
+  authScheme: string,
+): Promise<string> {
+  const listRes = await directComposioFetch(
+    `/api/v3.1/auth_configs?toolkit_slug=${encodeURIComponent(toolkit)}&limit=1`,
+  );
+  if (listRes.ok) {
+    const list = (await listRes.json()) as { items?: Array<{ id?: string }> };
+    const existing = list.items?.[0]?.id;
+    if (existing) {return existing;}
+  }
+  const createRes = await directComposioFetch("/api/v3.1/auth_configs", {
+    method: "POST",
+    body: JSON.stringify({
+      toolkit: { slug: toolkit },
+      auth_config: { type: "use_custom_auth", name: "crm-a-console", authScheme },
+    }),
+  });
+  if (!createRes.ok) {
+    const detail = await createRes.text().catch(() => "");
+    throw new Error(
+      `Failed to create auth config for ${toolkit} (HTTP ${createRes.status})${detail ? `: ${detail}` : ""}`,
+    );
+  }
+  const created = (await createRes.json()) as { auth_config?: { id?: string }; id?: string };
+  const id = created.auth_config?.id ?? created.id;
+  if (!id) {
+    throw new Error(`No auth config available for ${toolkit}.`);
+  }
+  return id;
+}
+
+/** Connect a token-based toolkit by creating the connected account directly. */
+export async function directConnectWithCredentials(params: {
+  toolkit: string;
+  credentials: Record<string, string>;
+  userId: string;
+}): Promise<{ connection_id: string }> {
+  const info = await directGetToolkitAuthInfo(params.toolkit);
+  const authConfigId = await directFindOrCreateAuthConfig(params.toolkit, info.authScheme);
+
+  const res = await directComposioFetch("/api/v3.1/connected_accounts", {
+    method: "POST",
+    body: JSON.stringify({
+      auth_config: { id: authConfigId },
+      connection: {
+        state: { authScheme: info.authScheme, val: params.credentials },
+        user_id: params.userId,
+      },
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(
+      `Failed to connect ${params.toolkit} (HTTP ${res.status})${detail ? `: ${detail}` : ""}`,
+    );
+  }
+  const created = (await res.json()) as {
+    id?: string;
+    connected_account?: { id?: string };
+  };
+  const connectionId = created.id ?? created.connected_account?.id;
+  if (!connectionId) {
+    throw new Error(`Connect ${params.toolkit} did not return a connection id.`);
+  }
+  return { connection_id: connectionId };
+}
 /**
  * Find (or create) the Composio-managed auth config for a toolkit, then
  * create a connect link for it. Two-step because v3.1 separates auth

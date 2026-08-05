@@ -18,6 +18,11 @@ import {
 } from "@/lib/crm-a-console-state";
 import { resolveComposioConnectToolkitSlug } from "@/lib/composio-normalization";
 import { resolveAppPublicOrigin } from "@/lib/public-origin";
+import {
+  directConnectWithCredentials,
+  directGetToolkitAuthInfo,
+  resolveDirectComposioApiKey,
+} from "@/lib/composio-direct";
 import type { NormalizedComposioConnection } from "@/lib/composio";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +30,7 @@ export const runtime = "nodejs";
 
 type ConnectRequestBody = {
   toolkit?: unknown;
+  credentials?: unknown;
 };
 
 function syncToolkitFromConnection(
@@ -111,6 +117,46 @@ export async function POST(request: Request) {
   const requestedToolkit = body.toolkit.trim();
   const connectToolkit = resolveComposioConnectToolkitSlug(requestedToolkit);
   const normalizedToolkit = normalizeComposioToolkitSlug(connectToolkit);
+
+  // Direct Composio mode: token-based toolkits (no managed OAuth, e.g.
+  // Telegram's bot token) connect by submitting credentials — no popup.
+  if (resolveDirectComposioApiKey()) {
+    const authInfo = await directGetToolkitAuthInfo(connectToolkit);
+    if (authInfo.managedSchemes.length === 0) {
+      if (body.credentials && typeof body.credentials === "object" && !Array.isArray(body.credentials)) {
+        const credentials = Object.fromEntries(
+          Object.entries(body.credentials as Record<string, unknown>)
+            .filter(([, v]) => typeof v === "string" && v.trim())
+            .map(([k, v]) => [k, (v as string).trim()]),
+        );
+        try {
+          const { connection_id } = await directConnectWithCredentials({
+            toolkit: connectToolkit,
+            credentials,
+            userId: "crm-a-console",
+          });
+          return Response.json({
+            already_connected: true,
+            connection_id,
+            connected_account_id: connection_id,
+            requested_toolkit: requestedToolkit,
+            connect_toolkit: connectToolkit,
+            toolkit: normalizedToolkit,
+          });
+        } catch (err) {
+          return Response.json(
+            { error: err instanceof Error ? err.message : "Failed to connect." },
+            { status: 502 },
+          );
+        }
+      }
+      return Response.json({
+        requires_credentials: true,
+        credential_fields: authInfo.credentialFields,
+        toolkit: normalizedToolkit,
+      });
+    }
+  }
 
   try {
     const activeConnection = normalizeComposioConnections(

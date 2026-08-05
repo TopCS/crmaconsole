@@ -99,6 +99,13 @@ export function ComposioConnectModal({
   const [connecting, setConnecting] = useState(false);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [credentialFields, setCredentialFields] = useState<Array<{
+    name: string;
+    displayName: string;
+    description?: string;
+    isSecret?: boolean;
+  }> | null>(null);
+  const [credentialValues, setCredentialValues] = useState<Record<string, string>>({});
   const popupRef = useRef<Window | null>(null);
   const popupPollRef = useRef<number | null>(null);
   const callbackHandledRef = useRef(false);
@@ -133,6 +140,8 @@ export function ComposioConnectModal({
       setError(null);
       setConnecting(false);
       setDisconnectingId(null);
+      setCredentialFields(null);
+      setCredentialValues({});
       clearPopupState();
     }
   }, [clearPopupState, open]);
@@ -196,6 +205,14 @@ export function ComposioConnectModal({
       if (!res.ok) {
         throw new Error(data.error ?? "Failed to start connection.");
       }
+      // Token-based toolkits (no managed OAuth): ask for credentials inline
+      // instead of opening the redirect popup.
+      if (data.requires_credentials) {
+        setCredentialFields(data.credential_fields ?? []);
+        setCredentialValues({});
+        setConnecting(false);
+        return;
+      }
       const existingConnectionId = data.connected_account_id ?? data.connection_id;
       if (data.already_connected && existingConnectionId) {
         onConnectionChange({
@@ -249,6 +266,40 @@ export function ComposioConnectModal({
       setError(err instanceof Error ? err.message : "Failed to connect.");
     }
   }, [clearPopupState, connected, onConnectionChange, onOpenChange, stopPopupPolling, toolkit]);
+
+  const handleCredentialSubmit = useCallback(async () => {
+    if (!toolkit) {return;}
+    setConnecting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/composio/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toolkit: toolkit.connect_slug ?? toolkit.slug,
+          credentials: credentialValues,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed to connect.");
+      }
+      onConnectionChange({
+        toolkit,
+        connected: true,
+        connectedToolkitSlug: toolkit.slug,
+        connectedToolkitName: toolkit.name,
+        shouldProbeLiveAgent: true,
+      });
+      setConnecting(false);
+      setCredentialFields(null);
+      setCredentialValues({});
+      onOpenChange(false);
+    } catch (err) {
+      setConnecting(false);
+      setError(err instanceof Error ? err.message : "Failed to connect.");
+    }
+  }, [credentialValues, onConnectionChange, onOpenChange, toolkit]);
 
   const handleDisconnect = useCallback(async (connectionId: string) => {
     setDisconnectingId(connectionId);
@@ -360,6 +411,35 @@ export function ComposioConnectModal({
           {error && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-red-300">
               {error}
+            </div>
+          )}
+
+          {credentialFields && (
+            <div className="rounded-lg border px-3 py-3 space-y-2" style={{ borderColor: "var(--color-border)" }}>
+              <p className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+                {toolkit.name} connects with credentials instead of a browser popup.
+              </p>
+              {credentialFields.map((field) => (
+                <div key={field.name} className="space-y-1">
+                  <label className="block text-[11px] font-medium" style={{ color: "var(--color-text-muted)" }}>
+                    {field.displayName}
+                  </label>
+                  <input
+                    type={field.isSecret ? "password" : "text"}
+                    value={credentialValues[field.name] ?? ""}
+                    onChange={(e) =>
+                      setCredentialValues((prev) => ({ ...prev, [field.name]: e.target.value }))
+                    }
+                    placeholder={field.description ?? field.displayName}
+                    className="w-full rounded-lg px-3 py-2 text-xs outline-none"
+                    style={{
+                      background: "var(--color-surface)",
+                      border: "1px solid var(--color-border)",
+                      color: "var(--color-text)",
+                    }}
+                  />
+                </div>
+              ))}
             </div>
           )}
 
@@ -495,14 +575,16 @@ export function ComposioConnectModal({
               type="button"
               className="rounded-full px-4 py-1.5 text-sm font-medium"
               style={{ background: "var(--color-accent)", color: "#fff" }}
-              onClick={() => void handleConnect()}
+              onClick={() => void (credentialFields ? handleCredentialSubmit() : handleConnect())}
               disabled={connecting}
             >
               {connecting
                 ? "Waiting for authorization..."
-                : primaryAction === "reconnect"
-                  ? `Reconnect ${toolkit.name}`
-                  : `Connect ${toolkit.name}`}
+                : credentialFields
+                  ? "Save credentials"
+                  : primaryAction === "reconnect"
+                    ? `Reconnect ${toolkit.name}`
+                    : `Connect ${toolkit.name}`}
             </button>
           )}
         </div>
