@@ -129,7 +129,7 @@ export function CampaignsView() {
             Campagne
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--color-text-muted)" }}>
-            Email marketing campaigns to your segments, sent via the connected Gmail account.
+            Email marketing campaigns to your segments, sent via AWS SES.
           </p>
         </div>
         <button
