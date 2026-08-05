@@ -1887,15 +1887,56 @@ function createCrmASearchIntegrationsTool(api: OpenClawPluginApi): AnyAgentTool 
         ? Math.max(1, Math.min(Math.trunc(rawLimit), 100))
         : 20;
 
-      const gatewayResult = await postComposioGatewayJson({
-        api,
-        path: "/v1/composio/tools/search",
-        body: {
-          ...(query ? { query } : {}),
-          ...(normalizedToolkit ? { toolkit_slug: normalizedToolkit } : {}),
-          limit,
-        },
-      });
+      let gatewayResult: UnknownRecord | null;
+      const directComposioKey = process.env.COMPOSIO_API_KEY?.trim();
+      if (directComposioKey) {
+        // Direct Composio mode: v3.1 tools search + active connections.
+        const params = new URLSearchParams({ limit: String(limit) });
+        if (query) {
+          params.set("search", query);
+        }
+        if (normalizedToolkit) {
+          params.set("toolkit_slug", normalizedToolkit);
+        }
+        const [toolsRes, connRes] = await Promise.all([
+          fetch(`https://backend.composio.dev/api/v3.1/tools?${params.toString()}`, {
+            headers: { accept: "application/json", "x-api-key": directComposioKey },
+          }),
+          fetch(
+            "https://backend.composio.dev/api/v3.1/connected_accounts?statuses=ACTIVE&limit=100",
+            {
+              headers: { accept: "application/json", "x-api-key": directComposioKey },
+            },
+          ),
+        ]);
+        const toolsJson = toolsRes.ok ? ((await toolsRes.json()) as UnknownRecord) : null;
+        const connJson = connRes.ok ? ((await connRes.json()) as UnknownRecord) : null;
+        const connectedToolkitsDirect = new Set<string>();
+        for (const item of asRecordArray(connJson?.items) ?? []) {
+          const slug = readString(
+            asRecord(item)?.toolkit && asRecord(asRecord(item)?.toolkit)?.slug,
+          );
+          if (slug) {
+            connectedToolkitsDirect.add(slug);
+          }
+        }
+        gatewayResult = toolsJson
+          ? {
+              items: asRecordArray(toolsJson.items) ?? [],
+              connected_toolkits: [...connectedToolkitsDirect],
+            }
+          : null;
+      } else {
+        gatewayResult = await postComposioGatewayJson({
+          api,
+          path: "/v1/composio/tools/search",
+          body: {
+            ...(query ? { query } : {}),
+            ...(normalizedToolkit ? { toolkit_slug: normalizedToolkit } : {}),
+            limit,
+          },
+        });
+      }
 
       if (!gatewayResult) {
         return jsonResult({

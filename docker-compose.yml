@@ -11,6 +11,9 @@ services:
     environment:
       # Secrets come from .env (gitignored) or the shell environment.
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      # Direct Composio mode: app connections + agent integration tools talk
+      # straight to Composio's Platform API, no Crm-A Cloud key needed.
+      - COMPOSIO_API_KEY=${COMPOSIO_API_KEY:-}
       # Optional: join your tailnet and expose the Web UI publicly via
       # tailscale funnel (https://crm-a-console.<tailnet>.ts.net).
       # Requires a reusable auth key from the Tailscale admin console and

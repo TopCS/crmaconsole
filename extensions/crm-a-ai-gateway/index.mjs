@@ -91,6 +91,41 @@ function createCrmAExecuteIntegrationsTool(params) {
         });
       }
       try {
+        if (params.directApiKey) {
+          const res2 = await fetch(
+            `https://backend.composio.dev/api/v3.1/tools/execute/${encodeURIComponent(toolSlug)}`,
+            {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                accept: "application/json",
+                "x-api-key": params.directApiKey,
+              },
+              body: JSON.stringify({
+                arguments: toolArgs,
+                ...(connectedAccountId ? { connected_account_id: connectedAccountId } : {}),
+              }),
+            },
+          );
+          const text2 = await res2.text();
+          let parsed2;
+          try {
+            parsed2 = JSON.parse(text2);
+          } catch {
+            parsed2 = void 0;
+          }
+          if (!res2.ok) {
+            return jsonResult({
+              error: `Composio ${toolSlug} failed: HTTP ${res2.status}${text2 ? ` \u2014 ${text2.slice(0, 240)}` : ""}`,
+            });
+          }
+          if (parsed2?.successful === false || readString(parsed2?.error)) {
+            return jsonResult({
+              error: `Composio ${toolSlug} failed: ${readString(parsed2?.error) ?? "unknown error"}`,
+            });
+          }
+          return jsonResult(parsed2?.data ?? parsed2 ?? {});
+        }
         const res = await fetch(`${params.gatewayBaseUrl}/v1/composio/tools/execute`, {
           method: "POST",
           headers: {
@@ -184,6 +219,17 @@ function stripRuntimeComposioServer(api) {
 }
 function registerCrmAIntegrationsBridge(api, fallbackGatewayUrl) {
   stripRuntimeComposioServer(api);
+  const directApiKey = process.env.COMPOSIO_API_KEY?.trim();
+  if (directApiKey) {
+    api.registerTool(createCrmAExecuteIntegrationsTool({ directApiKey }), {
+      name: CRM_A_EXECUTE_INTEGRATIONS_NAME,
+      optional: true,
+    });
+    api.logger?.info?.(
+      `[crm-a-ai-gateway] registered ${CRM_A_EXECUTE_INTEGRATIONS_NAME} bridge tool (direct Composio)`,
+    );
+    return;
+  }
   const gatewayBaseUrl = resolveGatewayBaseUrl(api, fallbackGatewayUrl);
   const apiKey = resolveApiKey();
   if (!apiKey) {

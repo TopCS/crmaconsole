@@ -474,15 +474,55 @@ function createCrmASearchIntegrationsTool(api) {
       const limit = Number.isFinite(rawLimit)
         ? Math.max(1, Math.min(Math.trunc(rawLimit), 100))
         : 20;
-      const gatewayResult = await postComposioGatewayJson({
-        api,
-        path: "/v1/composio/tools/search",
-        body: {
-          ...(query ? { query } : {}),
-          ...(normalizedToolkit ? { toolkit_slug: normalizedToolkit } : {}),
-          limit,
-        },
-      });
+      let gatewayResult;
+      const directComposioKey = process.env.COMPOSIO_API_KEY?.trim();
+      if (directComposioKey) {
+        const params = new URLSearchParams({ limit: String(limit) });
+        if (query) {
+          params.set("search", query);
+        }
+        if (normalizedToolkit) {
+          params.set("toolkit_slug", normalizedToolkit);
+        }
+        const [toolsRes, connRes] = await Promise.all([
+          fetch(`https://backend.composio.dev/api/v3.1/tools?${params.toString()}`, {
+            headers: { accept: "application/json", "x-api-key": directComposioKey },
+          }),
+          fetch(
+            "https://backend.composio.dev/api/v3.1/connected_accounts?statuses=ACTIVE&limit=100",
+            {
+              headers: { accept: "application/json", "x-api-key": directComposioKey },
+            },
+          ),
+        ]);
+        const toolsJson = toolsRes.ok ? await toolsRes.json() : null;
+        const connJson = connRes.ok ? await connRes.json() : null;
+        const connectedToolkitsDirect = /* @__PURE__ */ new Set();
+        for (const item of asRecordArray(connJson?.items) ?? []) {
+          const slug = readString(
+            asRecord(item)?.toolkit && asRecord(asRecord(item)?.toolkit)?.slug,
+          );
+          if (slug) {
+            connectedToolkitsDirect.add(slug);
+          }
+        }
+        gatewayResult = toolsJson
+          ? {
+              items: asRecordArray(toolsJson.items) ?? [],
+              connected_toolkits: [...connectedToolkitsDirect],
+            }
+          : null;
+      } else {
+        gatewayResult = await postComposioGatewayJson({
+          api,
+          path: "/v1/composio/tools/search",
+          body: {
+            ...(query ? { query } : {}),
+            ...(normalizedToolkit ? { toolkit_slug: normalizedToolkit } : {}),
+            limit,
+          },
+        });
+      }
       if (!gatewayResult) {
         return jsonResult({
           error: `${CRM_A_INTEGRATIONS_DISPLAY_NAME} search is unavailable.`,

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { RichBodyEditor } from "./rich-body-editor";
+import { CrmEmptyState, CrmListShell, CrmLoadingState } from "../crm-list-shell";
 
 /**
  * Campagne section (CDP email marketing): create campaigns targeting a
@@ -122,16 +124,10 @@ export function CampaignsView() {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold" style={{ color: "var(--color-text)" }}>
-            Campagne
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--color-text-muted)" }}>
-            Email marketing campaigns to your segments, sent via AWS SES.
-          </p>
-        </div>
+    <CrmListShell
+      title="Campagne"
+      count={loading ? null : campaigns.length}
+      toolbar={
         <button
           type="button"
           onClick={() => { setEditing(null); setEditorOpen(true); }}
@@ -140,7 +136,12 @@ export function CampaignsView() {
         >
           New campaign
         </button>
-      </div>
+      }
+    >
+      <div className="p-6 space-y-4">
+        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+          Email marketing campaigns to your segments, sent via AWS SES.
+        </p>
 
       {notice && (
         <div
@@ -157,14 +158,12 @@ export function CampaignsView() {
       )}
 
       {loading ? (
-        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>Loading…</p>
+        <CrmLoadingState />
       ) : campaigns.length === 0 ? (
-        <div
-          className="rounded-xl p-8 text-center text-sm"
-          style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)" }}
-        >
-          No campaigns yet. Create one and target a segment.
-        </div>
+        <CrmEmptyState
+          title="No campaigns yet"
+          description="Create one and target a segment."
+        />
       ) : (
         <div className="space-y-2">
           {campaigns.map((row) => (
@@ -273,7 +272,8 @@ export function CampaignsView() {
           onSaved={() => { setEditorOpen(false); setEditing(null); void load(); }}
         />
       )}
-    </div>
+      </div>
+    </CrmListShell>
   );
 }
 
@@ -448,13 +448,10 @@ function CampaignEditor({
             className="w-full rounded-lg px-3 py-2 text-sm outline-none"
             style={inputStyle}
           />
-          <textarea
+          <RichBodyEditor
             value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="Email body (plain text)"
-            rows={8}
-            className="w-full rounded-lg px-3 py-2 text-sm outline-none resize-none"
-            style={inputStyle}
+            onChange={setBody}
+            placeholder="Write your email…"
           />
           <div className="flex items-center gap-2">
             <button

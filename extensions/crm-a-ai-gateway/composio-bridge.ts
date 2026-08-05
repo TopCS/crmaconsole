@@ -63,6 +63,8 @@ function resolveApiKey(): string | undefined {
 function createCrmAExecuteIntegrationsTool(params: {
   gatewayBaseUrl: string;
   authorization?: string;
+  /** Direct Composio Platform API key — bypasses the gateway entirely. */
+  directApiKey?: string;
 }): AnyAgentTool {
   return {
     name: CRM_A_EXECUTE_INTEGRATIONS_NAME,
@@ -83,6 +85,43 @@ function createCrmAExecuteIntegrationsTool(params: {
       }
 
       try {
+        // Direct mode: Composio Platform API v3.1 with the workspace's own key.
+        if (params.directApiKey) {
+          const res = await fetch(
+            `https://backend.composio.dev/api/v3.1/tools/execute/${encodeURIComponent(toolSlug)}`,
+            {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                accept: "application/json",
+                "x-api-key": params.directApiKey,
+              },
+              body: JSON.stringify({
+                arguments: toolArgs,
+                ...(connectedAccountId ? { connected_account_id: connectedAccountId } : {}),
+              }),
+            },
+          );
+          const text = await res.text();
+          let parsed: UnknownRecord | undefined;
+          try {
+            parsed = JSON.parse(text) as UnknownRecord;
+          } catch {
+            parsed = undefined;
+          }
+          if (!res.ok) {
+            return jsonResult({
+              error: `Composio ${toolSlug} failed: HTTP ${res.status}${text ? ` — ${text.slice(0, 240)}` : ""}`,
+            });
+          }
+          if (parsed?.successful === false || readString(parsed?.error)) {
+            return jsonResult({
+              error: `Composio ${toolSlug} failed: ${readString(parsed?.error) ?? "unknown error"}`,
+            });
+          }
+          return jsonResult(parsed?.data ?? parsed ?? {});
+        }
+
         const res = await fetch(`${params.gatewayBaseUrl}/v1/composio/tools/execute`, {
           method: "POST",
           headers: {
@@ -186,6 +225,21 @@ function stripRuntimeComposioServer(api: any): void {
 
 export function registerCrmAIntegrationsBridge(api: any, fallbackGatewayUrl: string) {
   stripRuntimeComposioServer(api);
+
+  // Direct Composio mode: a workspace-level COMPOSIO_API_KEY bypasses the
+  // Crm-A Cloud gateway entirely — the execute tool talks to the Platform
+  // API (v3.1) directly.
+  const directApiKey = process.env.COMPOSIO_API_KEY?.trim();
+  if (directApiKey) {
+    api.registerTool(createCrmAExecuteIntegrationsTool({ directApiKey }), {
+      name: CRM_A_EXECUTE_INTEGRATIONS_NAME,
+      optional: true,
+    });
+    api.logger?.info?.(
+      `[crm-a-ai-gateway] registered ${CRM_A_EXECUTE_INTEGRATIONS_NAME} bridge tool (direct Composio)`,
+    );
+    return;
+  }
 
   const gatewayBaseUrl = resolveGatewayBaseUrl(api, fallbackGatewayUrl);
   const apiKey = resolveApiKey();

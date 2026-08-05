@@ -10,6 +10,7 @@ import {
   type FilterRule,
 } from "@/lib/object-filters";
 import type { SegmentDefinition, SegmentEventCondition } from "@/lib/segments";
+import { CrmEmptyState, CrmListShell, CrmLoadingState } from "../crm-list-shell";
 
 /**
  * Segmentation section (CDP): list saved segments, build new ones with
@@ -113,16 +114,10 @@ export function SegmentsView({ onOpenPerson }: { onOpenPerson?: (entryId: string
   };
 
   return (
-    <div className="h-full overflow-y-auto p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold" style={{ color: "var(--color-text)" }}>
-            Segmentation
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--color-text-muted)" }}>
-            Clusters of people built from demographics and journey events.
-          </p>
-        </div>
+    <CrmListShell
+      title="Segmentation"
+      count={loading ? null : segments.length}
+      toolbar={
         <button
           type="button"
           onClick={() => { setEditing(null); setBuilderOpen(true); }}
@@ -131,7 +126,12 @@ export function SegmentsView({ onOpenPerson }: { onOpenPerson?: (entryId: string
         >
           New segment
         </button>
-      </div>
+      }
+    >
+      <div className="p-6 space-y-4">
+        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+          Clusters of people built from demographics and journey events.
+        </p>
 
       {error && (
         <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(239,68,68,0.08)", color: "var(--color-error)" }}>
@@ -140,14 +140,12 @@ export function SegmentsView({ onOpenPerson }: { onOpenPerson?: (entryId: string
       )}
 
       {loading ? (
-        <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>Loading…</p>
+        <CrmLoadingState />
       ) : segments.length === 0 ? (
-        <div
-          className="rounded-xl p-8 text-center text-sm"
-          style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)" }}
-        >
-          No segments yet. Create one to start clustering your people.
-        </div>
+        <CrmEmptyState
+          title="No segments yet"
+          description="Create one to start clustering your people."
+        />
       ) : (
         <div className="space-y-2">
           {segments.map((row) => (
@@ -216,7 +214,8 @@ export function SegmentsView({ onOpenPerson }: { onOpenPerson?: (entryId: string
           onOpenPerson={(id) => { setMembersFor(null); onOpenPerson?.(id); }}
         />
       )}
-    </div>
+      </div>
+    </CrmListShell>
   );
 }
 

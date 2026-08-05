@@ -396,15 +396,6 @@ export function WorkspaceSidebar({
 
 	const bottomNavItems = [
 		{
-			id: "cloud" as const,
-			label: "Cloud",
-			icon: (
-				<svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-					<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
-				</svg>
-			),
-		},
-		{
 			id: "integrations" as const,
 			label: "Integrations",
 			icon: <RiApps2AiLine className="h-4 w-4 shrink-0" aria-hidden />,
@@ -820,15 +811,12 @@ export function WorkspaceSidebar({
 		)}
 
 		<div className="px-2 py-1.5 flex items-center justify-between">
-			<a
-				href="https://dench.com"
-				target="_blank"
-				rel="noopener noreferrer"
+			<span
 				className="flex items-center gap-2 px-2 py-1 rounded-lg text-[11px]"
 				style={{ color: "var(--color-text-muted)" }}
 			>
-				dench.com{process.env.NEXT_PUBLIC_CRM_A_CONSOLE_VERSION ? ` v${process.env.NEXT_PUBLIC_CRM_A_CONSOLE_VERSION}` : ""}
-			</a>
+				sati{process.env.NEXT_PUBLIC_CRM_A_CONSOLE_VERSION ? ` v${process.env.NEXT_PUBLIC_CRM_A_CONSOLE_VERSION}` : ""}
+			</span>
 			<div className="flex items-center gap-0.5">
 				{onToggleHidden && (
 					<button

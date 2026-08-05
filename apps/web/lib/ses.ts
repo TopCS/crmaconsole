@@ -86,8 +86,10 @@ function sesClient(config: SesConfig): SESv2Client {
 }
 
 /**
- * Send a single plain-text email via SES. Returns the SES message id
- * (used to correlate bounce/complaint notifications).
+ * Send an email via SES. Bodies containing HTML markup are sent as
+ * HTML + plain-text fallback (tag-stripped); plain text stays plain text.
+ * Returns the SES message id (used to correlate bounce/complaint
+ * notifications).
  */
 export async function sendSesEmail(params: {
   to: string;
@@ -102,6 +104,16 @@ export async function sendSesEmail(params: {
     ? `${config.fromName.replace(/[<>"]/g, "")} <${config.fromEmail}>`
     : config.fromEmail;
 
+  const isHtml = /<\/?[a-z][\s\S]*>/i.test(params.body);
+  const textFallback = isHtml
+    ? params.body
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/(p|li|h[1-6])>/gi, "\n")
+        .replace(/<[^>]+>/g, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim()
+    : params.body;
+
   const result = await sesClient(config).send(
     new SendEmailCommand({
       FromEmailAddress: from,
@@ -109,7 +121,10 @@ export async function sendSesEmail(params: {
       Content: {
         Simple: {
           Subject: { Data: params.subject, Charset: "UTF-8" },
-          Body: { Text: { Data: params.body, Charset: "UTF-8" } },
+          Body: {
+            Text: { Data: textFallback, Charset: "UTF-8" },
+            ...(isHtml ? { Html: { Data: params.body, Charset: "UTF-8" } } : {}),
+          },
         },
       },
       ...(config.configurationSet
