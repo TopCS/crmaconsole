@@ -30,6 +30,29 @@ fi
 openclaw --profile "$PROFILE" gateway --port "$GATEWAY_PORT" &
 gateway_pid=$!
 
+# Optional Tailscale exposure: when TAILSCALE_AUTHKEY is set, join the tailnet
+# and publish the Web UI publicly via funnel (https://<host>.<tailnet>.ts.net).
+# Note: funnel must be enabled for the node in the tailnet ACLs.
+if [ -n "${TAILSCALE_AUTHKEY:-}" ]; then
+  TS_HOSTNAME="${TAILSCALE_HOSTNAME:-crm-a-console}"
+  mkdir -p "$STATE_DIR/tailscale"
+  tailscaled --tun=userspace-networking --statedir="$STATE_DIR/tailscale" &
+  for _ in $(seq 1 30); do
+    tailscale status >/dev/null 2>&1 && break
+    sleep 1
+  done
+  if tailscale up --authkey="$TAILSCALE_AUTHKEY" --hostname="$TS_HOSTNAME"; then
+    tailscale funnel --bg "$WEB_PORT" || true
+    TS_DNS=$(tailscale status --peers=false --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);process.stdout.write((j.Self?.DNSName||"").replace(/\.$/,""))}catch{}})')
+    if [ -n "$TS_DNS" ]; then
+      export CRM_A_CONSOLE_PUBLIC_URL="https://$TS_DNS"
+      echo "Tailscale funnel: https://$TS_DNS"
+    fi
+  else
+    echo "Tailscale login failed — continuing without funnel." >&2
+  fi
+fi
+
 # Start (and refresh) the managed web runtime (Next.js on WEB_PORT). `update`
 # replaces the runtime assets with the ones baked into this image — `start`
 # would keep whatever stale copy sits in the state volume.

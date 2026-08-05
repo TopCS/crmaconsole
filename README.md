@@ -80,6 +80,14 @@ docker restart crm-a
 
 Web UI: `http://localhost:3100`. `docker-compose.yml` is included as a shortcut (`docker compose up -d`).
 
+Optional **Tailscale funnel** exposure (public URL, useful e.g. for the SES bounce webhook): set a reusable auth key in `.env` or the environment and the container joins your tailnet and publishes the Web UI at `https://crm-a-console.<tailnet>.ts.net`:
+
+```bash
+TAILSCALE_AUTHKEY=tskey-auth-... docker compose up -d
+```
+
+Requires funnel enabled for the node in your tailnet ACLs. The public URL is exported as `CRM_A_CONSOLE_PUBLIC_URL`, so the SES card shows the right webhook URL automatically.
+
 For other containers or environments without systemd/launchd, set the environment variable once:
 
 ```bash

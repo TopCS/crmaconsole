@@ -43,8 +43,14 @@ ENV NODE_ENV=production \
 # The CLI drives a global OpenClaw install (peer dependency), the web app
 # shells out to the DuckDB CLI for every workspace query, and the CLI shells
 # out to lsof/ps/which for port and process management (absent from slim).
+# Tailscale is included so the container can expose the Web UI on a tailnet
+# (serve) or publicly (funnel) when TAILSCALE_AUTHKEY is provided.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends lsof procps debianutils ca-certificates curl unzip \
+  && apt-get install -y --no-install-recommends lsof procps debianutils ca-certificates curl unzip gnupg \
+  && curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg \
+  && curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.tailscale-keyring.list -o /etc/apt/sources.list.d/tailscale.list \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends tailscale \
   && rm -rf /var/lib/apt/lists/* \
   && arch="$(dpkg --print-architecture)" \
   && case "$arch" in amd64) duckarch=amd64 ;; arm64) duckarch=aarch64 ;; *) echo "unsupported arch: $arch" >&2; exit 1 ;; esac \

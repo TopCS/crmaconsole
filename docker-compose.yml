@@ -9,7 +9,14 @@ services:
       - crm-a-data:/root/.openclaw-crm-a
     restart: unless-stopped
     environment:
-      - OPENROUTER_API_KEY=***REMOVED***
+      # Secrets come from .env (gitignored) or the shell environment.
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      # Optional: join your tailnet and expose the Web UI publicly via
+      # tailscale funnel (https://crm-a-console.<tailnet>.ts.net).
+      # Requires a reusable auth key from the Tailscale admin console and
+      # funnel enabled in the tailnet ACLs.
+      - TAILSCALE_AUTHKEY=${TAILSCALE_AUTHKEY:-}
+      - TAILSCALE_HOSTNAME=${TAILSCALE_HOSTNAME:-crm-a-console}
 
 volumes:
   crm-a-data:
