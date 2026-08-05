@@ -72,11 +72,12 @@ describe("IntegrationsPanel", () => {
     render(<IntegrationsPanel />);
 
     expect(screen.getByRole("heading", { name: "Integrations" })).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Composio" })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByText("Discover")).toBeInTheDocument();
     });
+    // The Composio badge lives in the async "App connections" group.
+    expect(screen.getByRole("img", { name: "Composio" })).toBeInTheDocument();
   });
 
   it("shows marketplace apps in the Discover section", async () => {

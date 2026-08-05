@@ -36,36 +36,19 @@ export function IntegrationsPanel({ embedded }: { embedded?: boolean } = {}) {
   return (
     <div className={embedded ? "" : ""}>
       {!embedded && (
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <h1
-              className="font-instrument text-3xl tracking-tight"
-              style={{ color: "var(--color-text)" }}
-            >
-              Integrations
-            </h1>
-            <p
-              className="mt-1 text-sm"
-              style={{ color: "var(--color-text-muted)" }}
-            >
-              Connect third-party apps to your Crm-A Cloud workspace.
-            </p>
-          </div>
-          <a
-            className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-opacity hover:opacity-80"
-            style={{
-              background: "var(--color-surface)",
-              border: "1px solid var(--color-border)",
-              color: "var(--color-text-muted)",
-            }}
+        <div className="mb-6">
+          <h1
+            className="font-instrument text-3xl tracking-tight"
+            style={{ color: "var(--color-text)" }}
           >
-            Powered by
-            <img
-              src="/logo/composio.webp"
-              alt="Composio"
-              className="h-10 w-auto dark:invert"
-            />
-          </a>
+            Integrations
+          </h1>
+          <p
+            className="mt-1 text-sm"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            App connections and workspace services.
+          </p>
         </div>
       )}
 
@@ -92,6 +75,26 @@ export function IntegrationsPanel({ embedded }: { embedded?: boolean } = {}) {
 
       {!loading && !error && data && (
         <>
+          <div className="mb-3 flex items-center justify-between gap-4">
+            <h2 className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
+              App connections
+            </h2>
+            <span
+              className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium"
+              style={{
+                background: "var(--color-surface)",
+                border: "1px solid var(--color-border)",
+                color: "var(--color-text-muted)",
+              }}
+            >
+              Powered by
+              <img
+                src="/logo/composio.webp"
+                alt="Composio"
+                className="h-6 w-auto dark:invert"
+              />
+            </span>
+          </div>
           <ComposioAppsSection
             eligible={Boolean(data.crmACloud.hasKey && data.crmACloud.isPrimaryProvider)}
             lockBadge={
