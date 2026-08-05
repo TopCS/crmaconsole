@@ -1,17 +1,20 @@
 import { deleteSesConfig, readSesConfig, writeSesConfig, type SesConfig } from "@/lib/ses";
+import { resolveAppPublicOrigin } from "@/lib/public-origin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
  * GET/POST/DELETE /api/settings/ses — manage the AWS SES transport config
- * (stored per workspace in .crm-a-ses.json). GET masks the secret.
+ * (stored per workspace in .crm-a-ses.json). GET masks the secret and
+ * includes the public SNS webhook URL for bounce/complaint wiring.
  */
 
-export async function GET() {
+export async function GET(req: Request) {
+  const webhookUrl = `${resolveAppPublicOrigin(req)}/api/crm/campaigns/ses-webhook`;
   const config = readSesConfig();
   if (!config) {
-    return Response.json({ configured: false });
+    return Response.json({ configured: false, webhookUrl });
   }
   return Response.json({
     configured: true,
@@ -21,6 +24,7 @@ export async function GET() {
     configurationSet: config.configurationSet ?? "",
     accessKeyId: config.accessKeyId,
     secretAccessKeyMasked: `••••${config.secretAccessKey.slice(-4)}`,
+    webhookUrl,
   });
 }
 

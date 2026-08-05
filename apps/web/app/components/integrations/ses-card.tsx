@@ -14,6 +14,8 @@ export function SesCard() {
   const [fromEmail, setFromEmail] = useState("");
   const [fromName, setFromName] = useState("");
   const [configurationSet, setConfigurationSet] = useState("");
+  const [webhookUrl, setWebhookUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -23,6 +25,7 @@ export function SesCard() {
       try {
         const res = await fetch("/api/settings/ses", { cache: "no-store" });
         const data = await res.json();
+        setWebhookUrl(data.webhookUrl ?? null);
         if (data.configured) {
           setConfigured(true);
           setRegion(data.region ?? "");
@@ -35,6 +38,15 @@ export function SesCard() {
       setLoaded(true);
     })();
   }, []);
+
+  const copyWebhook = async () => {
+    if (!webhookUrl) {return;}
+    try {
+      await navigator.clipboard.writeText(webhookUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* clipboard unavailable */ }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -103,9 +115,38 @@ export function SesCard() {
       </div>
       <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-muted)" }}>
         Email transport for Campagne. Requires a verified sender identity in AWS.
-        For bounce handling, point an SNS HTTPS subscription to{" "}
-        <code>/api/crm/campaigns/ses-webhook</code>.
       </p>
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
+          SNS bounce webhook
+        </p>
+        <div className="flex items-start gap-2">
+          <code
+            className="flex-1 rounded-lg px-3 py-2 text-[11px] break-all"
+            style={{
+              background: "var(--color-background)",
+              border: "1px solid var(--color-border)",
+              color: "var(--color-text)",
+            }}
+          >
+            {webhookUrl ?? "Loading…"}
+          </code>
+          <button
+            type="button"
+            onClick={() => void copyWebhook()}
+            disabled={!webhookUrl}
+            className="shrink-0 rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50"
+            style={{ background: "var(--color-accent)", color: "#fff" }}
+          >
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <p className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>
+          In AWS: SES configuration set → event publishing → SNS topic → HTTPS subscription
+          to this URL. Hard bounces and complaints suppress the person automatically;
+          soft bounces are retried (1h/6h/24h).
+        </p>
+      </div>
       {loaded && (
         <div className="grid grid-cols-2 gap-2">
           <input
