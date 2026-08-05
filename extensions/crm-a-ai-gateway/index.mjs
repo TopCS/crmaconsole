@@ -103,7 +103,11 @@ function createCrmAExecuteIntegrationsTool(params) {
               },
               body: JSON.stringify({
                 arguments: toolArgs,
-                ...(connectedAccountId ? { connected_account_id: connectedAccountId } : {}),
+                ...(connectedAccountId
+                  ? { connected_account_id: connectedAccountId }
+                  : // Without an explicit account, Composio resolves it from
+                    // the user id used at connect time.
+                    { user_id: "crm-a-console" }),
               }),
             },
           );

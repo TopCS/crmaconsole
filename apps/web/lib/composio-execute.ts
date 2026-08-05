@@ -223,6 +223,9 @@ export async function executeComposioTool<T = unknown>(
               signal: opts.signal,
               body: JSON.stringify({
                 connected_account_id: opts.connectedAccountId,
+                // Without an explicit account, Composio resolves it from the
+                // user id used at connect time.
+                user_id: "crm-a-console",
                 arguments: opts.arguments,
               }),
             },

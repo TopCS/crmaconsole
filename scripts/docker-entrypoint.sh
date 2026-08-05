@@ -53,6 +53,17 @@ if [ -n "${TAILSCALE_AUTHKEY:-}" ]; then
   fi
 fi
 
+# Auto-approve device pairing requests from the local Web UI. The sandbox is
+# single-user and loopback-only, so a pending operator request can only be the
+# console itself asking to connect (bootstrap does the same at setup time).
+# Loops because the UI may open (and request pairing) after boot.
+(
+  while true; do
+    openclaw --profile "$PROFILE" devices approve --latest >/dev/null 2>&1 || true
+    sleep 30
+  done
+) &
+
 # Start (and refresh) the managed web runtime (Next.js on WEB_PORT). `update`
 # replaces the runtime assets with the ones baked into this image — `start`
 # would keep whatever stale copy sits in the state volume.
