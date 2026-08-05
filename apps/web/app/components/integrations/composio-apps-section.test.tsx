@@ -381,10 +381,10 @@ describe("ComposioAppsSection", () => {
     expect(normalized.categories).toEqual([]);
   });
 
-  it("shows lock badge when not eligible", () => {
-    render(<ComposioAppsSection eligible={false} lockBadge="Get Crm-A Cloud API Key" />);
+  it("shows the connect hint when not eligible", () => {
+    render(<ComposioAppsSection eligible={false} lockBadge="Add your Composio API key above" />);
 
-    expect(screen.getByText("Available with Crm-A Cloud")).toBeInTheDocument();
-    expect(screen.getByText("Get Crm-A Cloud API Key")).toBeInTheDocument();
+    expect(screen.getByText("Connect Composio to browse apps")).toBeInTheDocument();
+    expect(screen.getByText("Add your Composio API key above")).toBeInTheDocument();
   });
 });

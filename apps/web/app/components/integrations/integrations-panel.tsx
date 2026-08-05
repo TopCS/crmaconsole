@@ -76,6 +76,15 @@ export function IntegrationsPanel({ embedded }: { embedded?: boolean } = {}) {
 
       {!loading && !error && data && (
         <>
+          {/* Workspace-level integrations first — independent of Crm-A Cloud. */}
+          <div className="mb-6 space-y-3">
+            <h2 className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
+              Workspace integrations
+            </h2>
+            <ComposioCard />
+            <SesCard />
+            <TrackingCard />
+          </div>
           <div className="mb-3 flex items-center justify-between gap-4">
             <h2 className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
               App connections
@@ -100,21 +109,12 @@ export function IntegrationsPanel({ embedded }: { embedded?: boolean } = {}) {
             eligible={Boolean(data.crmACloud.hasKey && data.crmACloud.isPrimaryProvider)}
             lockBadge={
               !data.crmACloud.hasKey
-                ? "Get Crm-A Cloud API Key"
+                ? "Add your Composio API key above"
                 : !data.crmACloud.isPrimaryProvider
                   ? "Use Crm-A Cloud"
                   : null
             }
           />
-          {/* Workspace-level integrations — independent of Crm-A Cloud. */}
-          <div className="mt-6 space-y-3">
-            <h2 className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
-              Workspace integrations
-            </h2>
-            <ComposioCard />
-            <SesCard />
-            <TrackingCard />
-          </div>
         </>
       )}
     </div>

@@ -280,8 +280,8 @@ const CRM_NAV_ITEMS: SearchIndexItem[] = [
   { id: "~crm/companies", label: "Companies", sublabel: "CRM", kind: "file", path: "~crm/companies", nodeType: "folder", icon: "building" },
   { id: "~crm/inbox", label: "Inbox", sublabel: "CRM", kind: "file", path: "~crm/inbox", nodeType: "folder", icon: "inbox" },
   { id: "~crm/calendar", label: "Calendar", sublabel: "CRM", kind: "file", path: "~crm/calendar", nodeType: "folder", icon: "calendar" },
-  { id: "~crm/segment", label: "Segmentation", sublabel: "CRM", kind: "file", path: "~crm/segment", nodeType: "folder", icon: "filter" },
-  { id: "~crm/campaign", label: "Campagne", sublabel: "CRM", kind: "file", path: "~crm/campaign", nodeType: "folder", icon: "mail" },
+  { id: "~crm/segmentation", label: "Segmentations", sublabel: "CRM", kind: "file", path: "~crm/segmentation", nodeType: "folder", icon: "filter" },
+  { id: "~crm/campaigns", label: "Campaigns", sublabel: "CRM", kind: "file", path: "~crm/campaigns", nodeType: "folder", icon: "mail" },
 ];
 
 export async function GET() {

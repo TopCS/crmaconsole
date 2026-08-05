@@ -90,7 +90,7 @@ describe("IntegrationsPanel", () => {
     });
   });
 
-  it("shows Crm-A Cloud lock badge when not eligible", async () => {
+  it("shows the connect-Composio hint when no key is configured", async () => {
     const lockedPayload = {
       ...eligiblePayload,
       crmACloud: {
@@ -109,9 +109,9 @@ describe("IntegrationsPanel", () => {
     render(<IntegrationsPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText("Available with Crm-A Cloud")).toBeInTheDocument();
+      expect(screen.getByText("Connect Composio to browse apps")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Get Crm-A Cloud API Key")).toBeInTheDocument();
+    expect(screen.getByText("Add your Composio API key above")).toBeInTheDocument();
   });
 });
