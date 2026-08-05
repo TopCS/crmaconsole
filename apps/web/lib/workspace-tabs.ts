@@ -980,6 +980,22 @@ export function contentTabFromUrl(
         preview: false,
       });
     }
+    if (url.crm === "segmentation") {
+      return makeContentTab({
+        kind: "crm-segmentation",
+        path: "~crm/segmentation",
+        title: "Segmentation",
+        preview: false,
+      });
+    }
+    if (url.crm === "campaigns") {
+      return makeContentTab({
+        kind: "crm-campaigns",
+        path: "~crm/campaigns",
+        title: "Campagne",
+        preview: false,
+      });
+    }
     return null;
   }
 

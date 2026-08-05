@@ -1823,6 +1823,13 @@ export function AddEntryModal({
 	const [saving, setSaving] = useState(false);
 	const backdropRef = useRef<HTMLDivElement>(null);
 
+	// Sync-internal interaction fields (Email/Event relations, Direction,
+	// Score Contribution) are populated by the Gmail/Calendar sync — they
+	// only confuse the manual "Add event" form.
+	const visibleFields = objectName === "interaction"
+		? fields.filter((f) => !["Email", "Event", "Direction", "Score Contribution"].includes(f.name))
+		: fields;
+
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (e.key === "Escape") {onClose();}
@@ -1920,7 +1927,7 @@ export function AddEntryModal({
 					onSubmit={(e) => { e.preventDefault(); void handleSave(); }}
 					className="flex-1 overflow-y-auto px-6 py-5 space-y-4"
 				>
-					{fields.map((field) => {
+					{visibleFields.map((field) => {
 						const isRelation = field.type === "relation";
 						const isUser = field.type === "user";
 

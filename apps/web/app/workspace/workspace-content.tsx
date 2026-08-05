@@ -387,6 +387,8 @@ function nodeToContentTabKind(nodeType: string, path: string): ContentTabKind {
   if (path === "~cloud") return "cloud";
   if (path === "~crm/inbox") return "crm-inbox";
   if (path === "~crm/calendar") return "crm-calendar";
+  if (path === "~crm/segmentation") return "crm-segmentation";
+  if (path === "~crm/campaigns") return "crm-campaigns";
   switch (nodeType) {
     case "object": return "object";
     case "document": return "document";

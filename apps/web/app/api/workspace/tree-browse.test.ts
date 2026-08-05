@@ -480,13 +480,15 @@ describe("Workspace Tree & Browse API", () => {
       // always present so cmd-K can navigate to them even before the
       // user has a workspace. Anything else here would imply a real DB
       // hit, which the mock prevents.
-      expect(json.items.length).toBe(4);
+      expect(json.items.length).toBe(6);
       expect(json.items.every((it: { sublabel: string }) => it.sublabel === "CRM")).toBe(true);
       expect(json.items.map((it: { id: string }) => it.id)).toEqual([
         "~crm/people",
         "~crm/companies",
         "~crm/inbox",
         "~crm/calendar",
+        "~crm/segmentation",
+        "~crm/campaigns",
       ]);
     });
 
