@@ -171,7 +171,7 @@ export async function POST(req: Request) {
 
     const event = await recordEvent({
       personId: resolution.personId,
-      type: "Custom",
+      type: "Call",
       propertiesJson: JSON.stringify(properties),
     });
     if (!event) {

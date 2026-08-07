@@ -1122,6 +1122,61 @@ async function migrateCompanyDomainToUrl(dbPath: string): Promise<void> {
 }
 
 /**
+ * Stable IDs for fields whose enums participate in one-shot migrations.
+ */
+const INTERACTION_TYPE_FIELD_ID = "seed_fld_inter_type_00000000000";
+
+/**
+ * One-shot migration that adds `Call` to `interaction.Type` (and an
+ * index-aligned color to `enum_colors`) so phone-call interactions render as
+ * "Call" on the timeline. Idempotent via the `NOT LIKE '%Call%'` guard and a
+ * re-check before writing — never rewrites the existing Email/Meeting/…
+ * entries out of order.
+ */
+async function migrateInteractionTypeAddCall(dbPath: string): Promise<void> {
+  let rows: Array<{
+    enum_values: string | string[] | null;
+    enum_colors: string | string[] | null;
+  }> = [];
+  try {
+    rows = await duckdbQueryOnFileAsync(
+      dbPath,
+      `SELECT enum_values, enum_colors FROM fields WHERE id = '${INTERACTION_TYPE_FIELD_ID}' LIMIT 1;`,
+    );
+  } catch {
+    return;
+  }
+  const row = rows[0];
+  if (!row) {return;}
+
+  const asArray = (v: string | string[] | null): string[] => {
+    if (Array.isArray(v)) {return v;}
+    if (typeof v === "string" && v.trim()) {
+      try {
+        const parsed = JSON.parse(v);
+        if (Array.isArray(parsed)) {return parsed.map(String);}
+      } catch {
+        /* fall through */
+      }
+    }
+    return [];
+  };
+  const values = asArray(row.enum_values);
+  if (values.includes("Call")) {return;}
+  const colors = asArray(row.enum_colors);
+
+  values.push("Call");
+  colors.push("#f472b6"); // index-aligned with the new "Call" slot
+  const enc = (a: string[]) => `'${JSON.stringify(a).replace(/'/g, "''")}'`;
+  await duckdbExecOnFileAsync(
+    dbPath,
+    `UPDATE fields
+     SET enum_values = ${enc(values)}, enum_colors = ${enc(colors)}
+     WHERE id = '${INTERACTION_TYPE_FIELD_ID}';`,
+  );
+}
+
+/**
  * Apply all onboarding-related migrations against the active workspace's
  * DuckDB. Idempotent: returns details about anything actually changed.
  */
@@ -1196,6 +1251,9 @@ export async function ensureLatestSchema(): Promise<MigrationResult> {
        WHERE id = 'seed_fld_inter_type_00000000000'
          AND enum_values NOT LIKE '%Page View%';`,
     );
+
+    // Add "Call" (phone interactions) to the same enum, index-aligned.
+    await migrateInteractionTypeAddCall(dbPath);
 
     // ── 0f. Add "Anonymous" to `people.Source` (web-tracking shadows) ─────
     // Shadow profiles created by the tracker before identity resolution.

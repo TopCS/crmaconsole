@@ -502,7 +502,6 @@ export async function handleSesNotification(notification: SesNotification): Prom
   const send = rows[0];
   if (!send) {return false;}
 
-  const now = new Date().toISOString();
   if (eventType === "Bounce") {
     const permanent = notification.bounce?.bounceType === "Permanent";
     if (permanent) {

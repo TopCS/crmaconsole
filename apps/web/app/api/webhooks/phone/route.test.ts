@@ -168,8 +168,8 @@ describe("/api/webhooks/phone", () => {
     expect(payload.actions).toContain("person_updated");
 
     const sql = mockedExec.mock.calls.map((call) => String(call[1])).join("\n");
-    // interaction Type=Custom carrying kind:Call + callId
-    expect(sql).toContain("Custom");
+    // interaction Type=Call carrying kind:Call + callId
+    expect(sql).toContain("Call");
     expect(sql).toContain('"kind":"Call"');
     expect(sql).toContain("call-42");
     expect(sql).toContain("fld_inter_person");
