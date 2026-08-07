@@ -3,6 +3,8 @@ import { duckdbExecOnFileAsync, duckdbPathAsync, duckdbQueryAsync } from "./work
 import { loadCrmFieldMaps, sqlString } from "./crm-queries";
 import { listSegmentMembers, type SegmentDefinition } from "./segments";
 import { sendSesEmail } from "./ses";
+import { normalizePhone } from "./events";
+import { deliverToSession } from "./openclaw-send";
 import { ONBOARDING_OBJECT_IDS } from "./workspace-schema-migrations";
 
 /**
@@ -115,6 +117,101 @@ export async function resolveAudience(segmentEntryId: string): Promise<AudienceM
         !suppressed.has(m.email_status ?? ""),
     )
     .map((m) => ({ entry_id: m.entry_id, name: m.name, email: m.email as string }));
+}
+
+// ---------------------------------------------------------------------------
+// Multichannel send (Atto 3): route each recipient by Preferred Contact
+// Channel — email via SES, Telegram via the OpenClaw runtime. Additive to the
+// SES queue above; does not rework campaign_send.
+// ---------------------------------------------------------------------------
+
+export type ChannelAudienceMember = AudienceMember & {
+  preferredContact: string | null;
+  phone: string | null;
+};
+
+/** Load per-member channel preference + phone from the people rows. */
+async function hydrateAudienceChannels(
+  members: AudienceMember[],
+): Promise<ChannelAudienceMember[]> {
+  if (members.length === 0) {return [];}
+  const fieldMaps = await loadCrmFieldMaps();
+  const prefFieldId = fieldMaps.people["Preferred Contact Channel"];
+  const phoneFieldId = fieldMaps.people["Phone Number"];
+  if (!prefFieldId && !phoneFieldId) {
+    return members.map((m) => ({ ...m, preferredContact: null, phone: null }));
+  }
+  const inList = members.map((m) => `'${m.entry_id.replace(/'/g, "''")}'`).join(", ");
+  const rows = await duckdbQueryAsync<{ person_id: string; pref: string | null; phone: string | null }>(
+    `SELECT e.id AS person_id,
+       ${prefFieldId ? `MAX(CASE WHEN ef.field_id = '${prefFieldId}' THEN ef.value END)` : "NULL"} AS pref,
+       ${phoneFieldId ? `MAX(CASE WHEN ef.field_id = '${phoneFieldId}' THEN ef.value END)` : "NULL"} AS phone
+       FROM entries e
+       LEFT JOIN entry_fields ef ON ef.entry_id = e.id
+      WHERE e.object_id = '${ONBOARDING_OBJECT_IDS.people}' AND e.id IN (${inList})
+      GROUP BY e.id;`,
+  );
+  const byId = new Map(rows.map((r) => [r.person_id, r]));
+  return members.map((m) => {
+    const row = byId.get(m.entry_id);
+    return {
+      ...m,
+      preferredContact: row?.pref ?? null,
+      phone: row?.phone ?? null,
+    };
+  });
+}
+
+export type MultichannelSendResult = {
+  sent: number;
+  telegram: number;
+  email: number;
+  failed: string[];
+};
+
+/**
+ * Send a launch message to a segment audience, routing by the recipient's
+ * `Preferred Contact Channel` (default email). Telegram goes through the
+ * OpenClaw runtime on the per-contact session (`phone:<e164>`); email via SES.
+ * Non-fatal per-recipient errors are collected in `failed`.
+ */
+export async function sendCampaignMultichannel(params: {
+  segmentEntryId: string;
+  subject: string;
+  body: string;
+}): Promise<MultichannelSendResult> {
+  const audience = await resolveAudience(params.segmentEntryId);
+  const members = await hydrateAudienceChannels(audience);
+
+  const result: MultichannelSendResult = { sent: 0, telegram: 0, email: 0, failed: [] };
+  for (const m of members) {
+    const useTelegram = m.preferredContact === "telegram";
+    try {
+      if (useTelegram) {
+        const phone = normalizePhone(m.phone);
+        if (!phone) {
+          result.failed.push(`${m.entry_id}: telegram preferred but no phone`);
+          continue;
+        }
+        const res = await deliverToSession({
+          sessionKey: `phone:${phone}`,
+          message: `${params.subject}\n\n${params.body}`,
+        });
+        if (!res.ok) {
+          result.failed.push(`${m.entry_id}: ${res.error ?? "delivery failed"}`);
+          continue;
+        }
+        result.telegram++;
+      } else {
+        await sendSesEmail({ to: m.email, subject: params.subject, body: params.body });
+        result.email++;
+      }
+      result.sent++;
+    } catch (err) {
+      result.failed.push(`${m.entry_id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------

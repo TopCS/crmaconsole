@@ -43,6 +43,11 @@ const FIELD_MAPS = {
     Person: "fld_inter_person",
     Properties: "fld_inter_properties",
   },
+  segment: {},
+  campaign: {},
+  campaign_send: {},
+  product: {},
+  order: {},
 };
 
 describe("/api/crm/events", () => {

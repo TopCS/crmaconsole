@@ -32,6 +32,9 @@ vi.mock("@/lib/segments", () => ({
 vi.mock("@/lib/ses", () => ({
   sendSesEmail: vi.fn(),
 }));
+vi.mock("@/lib/openclaw-send", () => ({
+  deliverToSession: vi.fn(),
+}));
 
 const {
   enqueueCampaign,
@@ -40,15 +43,20 @@ const {
   cancelCampaign,
   processCampaignQueue,
   handleSesNotification,
+  sendCampaignMultichannel,
 } = await import("./campaigns");
 const { duckdbQueryAsync, duckdbExecOnFileAsync } = await import("@/lib/workspace");
 const { listSegmentMembers } = await import("@/lib/segments");
 const { sendSesEmail } = await import("@/lib/ses");
+const { deliverToSession } = await import("@/lib/openclaw-send");
+const { loadCrmFieldMaps } = await import("@/lib/crm-queries");
 
 const mockedQuery = vi.mocked(duckdbQueryAsync);
 const mockedExec = vi.mocked(duckdbExecOnFileAsync);
 const mockedMembers = vi.mocked(listSegmentMembers);
 const mockedSes = vi.mocked(sendSesEmail);
+const mockedDeliver = vi.mocked(deliverToSession);
+const mockedFieldMaps = vi.mocked(loadCrmFieldMaps);
 
 const CAMPAIGN = {
   entry_id: "camp-1",
@@ -242,5 +250,70 @@ describe("campaign engine", () => {
       mail: { messageId: "unknown" },
     });
     expect(handled).toBe(false);
+  });
+});
+
+describe("sendCampaignMultichannel", () => {
+  const MEMBERS_VIEW = [{ id: "r", filter: "{}" }];
+  const MEMBERS = [
+    { entry_id: "tg-1", name: "Lorenzo", email: "lorenzo@example.com", source: "Manual", email_status: "Active" },
+    { entry_id: "em-1", name: "Giulia", email: "giulia@example.com", source: "Manual", email_status: "Active" },
+    { entry_id: "fail-1", name: "TeleNoPhone", email: "tp@example.com", source: "Manual", email_status: "Active" },
+  ];
+  const CHANNELS = [
+    { person_id: "tg-1", pref: "telegram", phone: "+393312345678" },
+    { person_id: "em-1", pref: "email", phone: null },
+    { person_id: "fail-1", pref: "telegram", phone: null },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedQuery.mockResolvedValue(MEMBERS_VIEW as never); // resolveAudience: v_segment filter
+    mockedMembers.mockResolvedValue({ members: MEMBERS as never, total: 3 });
+    mockedFieldMaps.mockResolvedValue({
+      people: {
+        "Preferred Contact Channel": "fld_pref",
+        "Phone Number": "fld_phone",
+      },
+      segment: { Name: "fld_seg_name", Filter: "fld_seg_filter" },
+    } as never);
+    mockedDeliver.mockResolvedValue({ ok: true, payload: { messageId: "tg-x" } });
+    mockedSes.mockResolvedValue({ messageId: "m1" } as never);
+  });
+
+  it("routes by Preferred Contact Channel: Telegram via runtime, email via SES", async () => {
+    mockedQuery
+      .mockResolvedValueOnce(MEMBERS_VIEW as never) // segment filter
+      .mockResolvedValueOnce(CHANNELS as never); // hydrate
+
+    const result = await sendCampaignMultichannel({
+      segmentEntryId: "seg-1",
+      subject: "Lancio Galaxy",
+      body: "Disponibile dal 18 ottobre",
+    });
+
+    expect(result.sent).toBe(2);
+    expect(result.telegram).toBe(1);
+    expect(result.email).toBe(1);
+    expect(mockedDeliver).toHaveBeenCalledWith({
+      sessionKey: "phone:+393312345678",
+      message: "Lancio Galaxy\n\nDisponibile dal 18 ottobre",
+    });
+    expect(mockedSes).toHaveBeenCalledWith({
+      to: "giulia@example.com",
+      subject: "Lancio Galaxy",
+      body: "Disponibile dal 18 ottobre",
+    });
+  });
+
+  it("collects per-recipient failures without failing the run", async () => {
+    mockedQuery
+      .mockResolvedValueOnce(MEMBERS_VIEW as never)
+      .mockResolvedValueOnce(CHANNELS as never);
+
+    const result = await sendCampaignMultichannel({ segmentEntryId: "seg-1", subject: "", body: "x" });
+    expect(result.failed.length).toBe(1);
+    expect(result.failed[0]).toContain("no phone");
+    expect(result.sent).toBe(2);
   });
 });

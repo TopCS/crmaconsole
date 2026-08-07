@@ -37,6 +37,8 @@ const INTERACTION_OBJECT_ID = SEED_OBJECT_IDS.interaction;
 const SEGMENT_OBJECT_ID = SEED_OBJECT_IDS.segment;
 const CAMPAIGN_OBJECT_ID = SEED_OBJECT_IDS.campaign;
 const CAMPAIGN_SEND_OBJECT_ID = SEED_OBJECT_IDS.campaign_send;
+const PRODUCT_OBJECT_ID = SEED_OBJECT_IDS.product;
+const ORDER_OBJECT_ID = SEED_OBJECT_IDS.order;
 
 const SOURCE_ENUM_VALUES = '["Manual","Gmail","Calendar","Anonymous"]';
 const SOURCE_ENUM_COLORS = '["#94a3b8","#ef4444","#3b82f6","#a1a1aa"]';
@@ -150,6 +152,20 @@ const PEOPLE_NEW_FIELDS: FieldDef[] = [
     enumValues: '["Active","Hard Bounced","Complained","Unsubscribed"]',
     enumColors: '["#22c55e","#ef4444","#f59e0b","#94a3b8"]',
     sortOrder: 17,
+  },
+  {
+    id: "seed_fld_people_pref_contact_000",
+    name: "Preferred Contact Channel",
+    type: "enum",
+    enumValues: '["telegram","email","phone"]',
+    enumColors: '["#2AABEE","#3b82f6","#22c55e"]',
+    sortOrder: 18,
+  },
+  {
+    id: "seed_fld_people_marketing_optin_0",
+    name: "Marketing Opt-in",
+    type: "boolean",
+    sortOrder: 19,
   },
 ];
 
@@ -668,6 +684,120 @@ const NEW_OBJECTS: ObjectDef[] = [
       },
     ],
   },
+  {
+    id: PRODUCT_OBJECT_ID,
+    name: "product",
+    description: "Product catalog (e.g. launches and SKUs)",
+    icon: "package",
+    defaultView: "table",
+    sortOrder: 17,
+    fields: [
+      {
+        id: "seed_fld_product_name_0000000",
+        name: "Name",
+        type: "text",
+        required: true,
+        sortOrder: 0,
+      },
+      {
+        id: "seed_fld_product_brand_0000000",
+        name: "Brand",
+        type: "text",
+        sortOrder: 1,
+      },
+      {
+        id: "seed_fld_product_sku_000000000",
+        name: "SKU",
+        type: "text",
+        sortOrder: 2,
+      },
+      {
+        id: "seed_fld_product_price_0000000",
+        name: "Price",
+        type: "number",
+        sortOrder: 3,
+      },
+      {
+        id: "seed_fld_product_avail_0000000",
+        name: "Available From",
+        type: "date",
+        sortOrder: 4,
+      },
+      {
+        id: "seed_fld_product_status_000000",
+        name: "Status",
+        type: "enum",
+        enumValues: '["Upcoming","Available","Discontinued"]',
+        enumColors: '["#f59e0b","#22c55e","#94a3b8"]',
+        sortOrder: 5,
+      },
+    ],
+  },
+  {
+    id: ORDER_OBJECT_ID,
+    name: "order",
+    description: "Customer orders / purchases and delivery state",
+    icon: "shopping-cart",
+    defaultView: "table",
+    sortOrder: 18,
+    fields: [
+      {
+        id: "seed_fld_order_customer_000000",
+        name: "Customer",
+        type: "relation",
+        required: true,
+        relatedObjectId: PEOPLE_OBJECT_ID,
+        relationshipType: "many_to_one",
+        sortOrder: 0,
+      },
+      {
+        id: "seed_fld_order_product_0000000",
+        name: "Product",
+        type: "relation",
+        relatedObjectId: PRODUCT_OBJECT_ID,
+        relationshipType: "many_to_one",
+        sortOrder: 1,
+      },
+      {
+        id: "seed_fld_order_ordered_0000000",
+        name: "Ordered At",
+        type: "date",
+        sortOrder: 2,
+      },
+      {
+        id: "seed_fld_order_amount_00000000",
+        name: "Amount",
+        type: "number",
+        sortOrder: 3,
+      },
+      {
+        id: "seed_fld_order_status_00000000",
+        name: "Status",
+        type: "enum",
+        enumValues: '["Pending","Paid","Shipped","Delivered","Cancelled"]',
+        enumColors: '["#94a3b8","#3b82f6","#8b5cf6","#22c55e","#ef4444"]',
+        sortOrder: 4,
+      },
+      {
+        id: "seed_fld_order_courier_0000000",
+        name: "Courier",
+        type: "text",
+        sortOrder: 5,
+      },
+      {
+        id: "seed_fld_order_delivery_0000000",
+        name: "Delivery Status",
+        type: "text",
+        sortOrder: 6,
+      },
+      {
+        id: "seed_fld_order_tracking_000000",
+        name: "Tracking URL",
+        type: "url",
+        sortOrder: 7,
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -813,6 +943,8 @@ const VIEW_NAMES: Array<{ object: string; objectId: string; viewName: string }> 
   { object: "segment", objectId: SEGMENT_OBJECT_ID, viewName: "v_segment" },
   { object: "campaign", objectId: CAMPAIGN_OBJECT_ID, viewName: "v_campaign" },
   { object: "campaign_send", objectId: CAMPAIGN_SEND_OBJECT_ID, viewName: "v_campaign_send" },
+  { object: "product", objectId: PRODUCT_OBJECT_ID, viewName: "v_product" },
+  { object: "order", objectId: ORDER_OBJECT_ID, viewName: "v_order" },
 ];
 
 /**
@@ -1187,6 +1319,8 @@ export const ONBOARDING_OBJECT_IDS = {
   segment: SEGMENT_OBJECT_ID,
   campaign: CAMPAIGN_OBJECT_ID,
   campaign_send: CAMPAIGN_SEND_OBJECT_ID,
+  product: PRODUCT_OBJECT_ID,
+  order: ORDER_OBJECT_ID,
 } as const;
 
 /**

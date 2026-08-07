@@ -73,6 +73,158 @@ export async function findPersonIdByEmail(email: string): Promise<string | null>
   return rows[0]?.entry_id ?? null;
 }
 
+/**
+ * Normalize a phone number for storage/lookup: strip spaces, dashes,
+ * parentheses and dots, keep an optional leading `+` (E.164). Empty input
+ * yields `""`.
+ */
+export function normalizePhone(value: unknown): string {
+  if (typeof value !== "string") {return "";}
+  const s = value.trim().replace(/[\s\-().]/g, "");
+  return s;
+}
+
+/** Find a people entry id by exact (normalized) phone match. */
+export async function findPersonIdByPhone(phone: string): Promise<string | null> {
+  const fieldMaps = await loadCrmFieldMaps();
+  const phoneFieldId = fieldMaps.people["Phone Number"];
+  if (!phoneFieldId) {return null;}
+  const rows = await duckdbQueryAsync<{ entry_id: string }>(
+    `SELECT entry_id FROM entry_fields
+     WHERE field_id = ${sqlString(phoneFieldId)} AND value = ${sqlString(phone)}
+     LIMIT 1;`,
+  );
+  return rows[0]?.entry_id ?? null;
+}
+
+/** Create a real person (Source=Manual) from a phone number. */
+export async function createPersonFromPhone(
+  phone: string,
+  name?: string,
+): Promise<string | null> {
+  const personId = randomUUID();
+  const values: Array<[string, string]> = [
+    ["Phone Number", phone],
+    ["Source", "Manual"],
+  ];
+  const cleanName = name?.trim();
+  if (cleanName) {
+    values.push(["Full Name", cleanName]);
+  }
+  const ok = await insertPersonRow({ personId, values });
+  return ok ? personId : null;
+}
+
+/** Upsert field values onto an existing person (delete + insert per field). */
+export async function updatePersonFields(
+  personId: string,
+  values: Array<[string, string]>,
+): Promise<boolean> {
+  const dbPath = await duckdbPathAsync();
+  if (!dbPath) {return false;}
+  const fieldMaps = await loadCrmFieldMaps();
+  const statements: string[] = [];
+  for (const [fieldName, value] of values) {
+    const fieldId = fieldMaps.people[fieldName];
+    if (!fieldId) {continue;}
+    statements.push(
+      `DELETE FROM entry_fields WHERE entry_id = ${sqlString(personId)} AND field_id = ${sqlString(fieldId)};`,
+      `INSERT INTO entry_fields (entry_id, field_id, value) VALUES (${sqlString(personId)}, ${sqlString(fieldId)}, ${sqlString(value)});`,
+    );
+  }
+  if (statements.length === 0) {return true;}
+  return duckdbExecOnFileAsync(dbPath, statements.join("\n"));
+}
+
+/** Create an order linked to a person (optional product + delivery fields). */
+export async function createOrder(params: {
+  personId: string;
+  productId?: string | null;
+  orderedAt?: string;
+  amount?: number;
+  status?: string;
+  courier?: string;
+  deliveryStatus?: string;
+  trackingUrl?: string;
+}): Promise<string | null> {
+  const dbPath = await duckdbPathAsync();
+  if (!dbPath) {return null;}
+  const fieldMaps = await loadCrmFieldMaps();
+  const orderId = randomUUID();
+  const now = new Date().toISOString();
+
+  const values: Array<[string, string]> = [["Customer", params.personId]];
+  if (params.productId) {values.push(["Product", params.productId]);}
+  if (params.orderedAt) {values.push(["Ordered At", params.orderedAt]);}
+  if (params.amount != null) {values.push(["Amount", String(params.amount)]);}
+  if (params.status) {values.push(["Status", params.status]);}
+  if (params.courier) {values.push(["Courier", params.courier]);}
+  if (params.deliveryStatus) {values.push(["Delivery Status", params.deliveryStatus]);}
+  if (params.trackingUrl) {values.push(["Tracking URL", params.trackingUrl]);}
+
+  const statements = [
+    `INSERT INTO entries (id, object_id, created_at, updated_at) VALUES (${sqlString(orderId)}, ${sqlString(ONBOARDING_OBJECT_IDS.order)}, ${sqlString(now)}, ${sqlString(now)});`,
+  ];
+  for (const [fieldName, value] of values) {
+    const fieldId = fieldMaps.order[fieldName];
+    if (!fieldId) {continue;}
+    statements.push(
+      `INSERT INTO entry_fields (entry_id, field_id, value) VALUES (${sqlString(orderId)}, ${sqlString(fieldId)}, ${sqlString(value)});`,
+    );
+  }
+  const ok = await duckdbExecOnFileAsync(dbPath, statements.join("\n"));
+  return ok ? orderId : null;
+}
+
+/** Find a catalog product id by exact SKU match. */
+export async function findProductIdBySku(sku: string): Promise<string | null> {
+  const fieldMaps = await loadCrmFieldMaps();
+  const skuFieldId = fieldMaps.product["SKU"];
+  if (!skuFieldId) {return null;}
+  const rows = await duckdbQueryAsync<{ entry_id: string }>(
+    `SELECT entry_id FROM entry_fields
+     WHERE field_id = ${sqlString(skuFieldId)} AND value = ${sqlString(sku)}
+     LIMIT 1;`,
+  );
+  return rows[0]?.entry_id ?? null;
+}
+
+/** Create a catalog product. */
+export async function createProduct(params: {
+  name: string;
+  brand?: string;
+  sku?: string;
+  price?: number;
+  availableFrom?: string;
+  status?: string;
+}): Promise<string | null> {
+  const dbPath = await duckdbPathAsync();
+  if (!dbPath) {return null;}
+  const fieldMaps = await loadCrmFieldMaps();
+  const productId = randomUUID();
+  const now = new Date().toISOString();
+
+  const values: Array<[string, string]> = [["Name", params.name]];
+  if (params.brand) {values.push(["Brand", params.brand]);}
+  if (params.sku) {values.push(["SKU", params.sku]);}
+  if (params.price != null) {values.push(["Price", String(params.price)]);}
+  if (params.availableFrom) {values.push(["Available From", params.availableFrom]);}
+  if (params.status) {values.push(["Status", params.status]);}
+
+  const statements = [
+    `INSERT INTO entries (id, object_id, created_at, updated_at) VALUES (${sqlString(productId)}, ${sqlString(ONBOARDING_OBJECT_IDS.product)}, ${sqlString(now)}, ${sqlString(now)});`,
+  ];
+  for (const [fieldName, value] of values) {
+    const fieldId = fieldMaps.product[fieldName];
+    if (!fieldId) {continue;}
+    statements.push(
+      `INSERT INTO entry_fields (entry_id, field_id, value) VALUES (${sqlString(productId)}, ${sqlString(fieldId)}, ${sqlString(value)});`,
+    );
+  }
+  const ok = await duckdbExecOnFileAsync(dbPath, statements.join("\n"));
+  return ok ? productId : null;
+}
+
 /** Find a people entry id by its Anonymous ID field (web-tracking shadow). */
 export async function findPersonIdByAnonymousId(anonymousId: string): Promise<string | null> {
   const fieldMaps = await loadCrmFieldMaps();
