@@ -62,6 +62,18 @@ Il Copilot usa la skill `crm` sui dati seedati: segmento "Lancio Samsung Galaxy"
 
 ## Atto 3 — Orchestrazione (campagna multicanale)
 
+**Passo 0 — Export del brief di marketing (contenuto per l'ambiente telefonico):**
+La conoscenza del prodotto viaggia come MD importato nell'ambiente telefonico (che fa l'AI della conversazione), non come lookup a runtime.
+```bash
+curl -s -H "Authorization: Bearer $CRM_A_PHONE_WEBHOOK_SECRET" \
+  "localhost:3100/api/marketing/brief?promotedSku=SAM-S27&previousSku=SAM-S26" \
+  -o brief-galaxy-s27.md
+# Contiene: prodotto+lancio, copy ufficiale (caratteristiche/differenze/vantaggi/limiti,
+# promo, link acquisto), confronto vs S26, pubblico, esempio memoria Atto 5.
+# → importare brief-galaxy-s27.md nell'ambiente telefonico (briefing dell'AI).
+```
+
+**Passo 1 — Invio multicanale per preferenza di canale:**
 ```bash
 curl -sX POST localhost:3100/api/campaigns/send-multichannel \
   -H "Authorization: Bearer $CRM_A_PHONE_WEBHOOK_SECRET" -H 'content-type: application/json' \
@@ -79,13 +91,14 @@ Mostra la segmentazione per canale: chi ha scelto Telegram riceve su Telegram, c
 
 ## Atto 4 — Il cliente riceve il messaggio e conversa
 
-Messaggio Telegram in ingresso → la Console restituisce il contesto del prodotto:
+L'ambiente telefonico risponde alla domanda del cliente usando il **brief MD importato all'Atto 3** (caratteristiche, differenze vs S26, vantaggi, limiti). La Console, su messaggio in ingresso, restituisce il contesto del cliente:
 ```bash
 curl -sX POST localhost:3100/api/webhooks/phone \
   -H "Authorization: Bearer $CRM_A_PHONE_WEBHOOK_SECRET" -H 'content-type: application/json' \
   -d '{"action":"message","messageId":"tg-1","contact":{"phone":"+393312345678","name":"Lorenzo"},
        "text":"Grazie, l'"'"'offerta mi interessa. Vale la pena?"}'
-# → { person, context:"…prodotto Galaxy…", replyFor:"message" }
+# → { person: profilo cliente, context: contesto CRM (identità/storico/acquisti), replyFor:"message" }
+#    Il contenuto del prodotto viene dal brief MD importato (Atto 3).
 ```
 
 Acquisto → si registra (webhook `completed` con `data.order`, oppure evento `Purchase` via `/api/crm/events`).

@@ -197,6 +197,7 @@ export async function createProduct(params: {
   price?: number;
   availableFrom?: string;
   status?: string;
+  marketingMessage?: string;
 }): Promise<string | null> {
   const dbPath = await duckdbPathAsync();
   if (!dbPath) {return null;}
@@ -210,6 +211,7 @@ export async function createProduct(params: {
   if (params.price != null) {values.push(["Price", String(params.price)]);}
   if (params.availableFrom) {values.push(["Available From", params.availableFrom]);}
   if (params.status) {values.push(["Status", params.status]);}
+  if (params.marketingMessage) {values.push(["Marketing Message", params.marketingMessage]);}
 
   const statements = [
     `INSERT INTO entries (id, object_id, created_at, updated_at) VALUES (${sqlString(productId)}, ${sqlString(ONBOARDING_OBJECT_IDS.product)}, ${sqlString(now)}, ${sqlString(now)});`,

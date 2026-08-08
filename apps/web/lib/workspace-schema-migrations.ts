@@ -207,6 +207,15 @@ const INTERACTION_NEW_FIELDS: FieldDef[] = [
   },
 ];
 
+const PRODUCT_NEW_FIELDS: FieldDef[] = [
+  {
+    id: "seed_fld_product_marketing_000",
+    name: "Marketing Message",
+    type: "richtext",
+    sortOrder: 6,
+  },
+];
+
 // ---------------------------------------------------------------------------
 // Object definitions — wholesale new tables
 // ---------------------------------------------------------------------------
@@ -1323,6 +1332,19 @@ export async function ensureLatestSchema(): Promise<MigrationResult> {
       result.changedObjects.push("interaction");
       for (const field of interactionAdditions.added) {
         result.addedFields.push({ object: "interaction", field });
+      }
+    }
+
+    const productAdditions = await ensureFieldsForObject(
+      dbPath,
+      "product",
+      PRODUCT_OBJECT_ID,
+      PRODUCT_NEW_FIELDS,
+    );
+    if (productAdditions.added.length > 0) {
+      result.changedObjects.push("product");
+      for (const field of productAdditions.added) {
+        result.addedFields.push({ object: "product", field });
       }
     }
 

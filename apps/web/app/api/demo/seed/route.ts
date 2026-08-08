@@ -111,6 +111,7 @@ async function upsertProduct(p: {
   price: number;
   availableFrom: string | null;
   status: string;
+  marketingMessage?: string;
 }): Promise<string | null> {
   const existing = await findProductIdBySku(p.sku);
   if (existing) {return existing;}
@@ -121,6 +122,7 @@ async function upsertProduct(p: {
     price: p.price,
     availableFrom: p.availableFrom ?? undefined,
     status: p.status,
+    marketingMessage: p.marketingMessage,
   });
 }
 
@@ -139,6 +141,14 @@ export async function POST(req: Request) {
     price: 1199,
     availableFrom: "2026-10-18",
     status: "Upcoming",
+    marketingMessage:
+      "Samsung Galaxy S27 — il nuovo flagship.\n"
+      + "**Caratteristiche**: display AMOLED 120Hz, fotocamera principale 200MP con IA, batteria 5500 mAh, ricarica 65W.\n"
+      + "**Differenze rispetto a S26**: chip più veloce (+18%), batteria maggiore, sensore fotocamera migliorato in bassa luce.\n"
+      + "**Vantaggi**: 7 anni di aggiornamenti, resistenza IP68, ecosistema Galaxy.\n"
+      + "**Limiti**: prezzo di fascia alta; la cover non è inclusa.\n"
+      + "**Promo lancio**: fino a €150 di bonus permuta per i primi clienti; garantito anche per i possessori di S26.\n"
+      + "**Link acquisto**: https://example.com/galaxy-s27",
   });
   const s26 = await upsertProduct({
     name: "Samsung Galaxy S26",
