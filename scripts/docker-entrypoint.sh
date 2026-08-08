@@ -26,6 +26,14 @@ if [ ! -f "$STATE_DIR/openclaw.json" ]; then
     --no-open || true
 fi
 
+# Apply the operator's default model at every boot (idempotent). Makes the
+# selection deterministic regardless of a crm-a-cloud/manual reset or a freshly
+# recreated state volume. Configure via CRM_A_DEFAULT_MODEL in docker-compose /
+# the shell; unset → no-op. Failing open so a bad model id never blocks boot.
+if [ -n "${CRM_A_DEFAULT_MODEL:-}" ]; then
+  openclaw --profile "$PROFILE" models set "$CRM_A_DEFAULT_MODEL" || true
+fi
+
 # Daemonless mode: run the gateway ourselves.
 openclaw --profile "$PROFILE" gateway --port "$GATEWAY_PORT" &
 gateway_pid=$!

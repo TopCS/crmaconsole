@@ -20,6 +20,9 @@ services:
       # funnel enabled in the tailnet ACLs.
       - TAILSCALE_AUTHKEY=${TAILSCALE_AUTHKEY:-}
       - TAILSCALE_HOSTNAME=${TAILSCALE_HOSTNAME:-crm-a-console}
+      # Default model applied at every boot (e.g. openrouter/deepseek/deepseek-v4-pro).
+      # Idempotent override — survives volume recreation and manual resets.
+      - CRM_A_DEFAULT_MODEL=${CRM_A_DEFAULT_MODEL:-}
 
 volumes:
   crm-a-data:
