@@ -21,6 +21,11 @@ import {
   normalizePhone,
 } from "./events";
 
+/** Lookup a people entry id by (normalized) phone — no creation. */
+export async function lookupPersonIdByPhone(phone: string): Promise<string | null> {
+  return findPersonIdByPhone(phone);
+}
+
 // ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------

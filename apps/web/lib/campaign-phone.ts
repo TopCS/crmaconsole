@@ -103,6 +103,7 @@ export type PhoneCampaignEnqueueResult = {
 export async function createPhonePearlForCampaign(
   campaignId: string,
   requestOrigin: string,
+  brief?: string,
 ): Promise<string> {
   const cfg = await loadCampaignPhoneConfig(campaignId);
   if (!cfg) {throw new Error("Campaign not found.");}
@@ -132,6 +133,7 @@ export async function createPhonePearlForCampaign(
           transitions: [{ name: "ok", toNodeId: "speak" }] },
         { nodeId: "speak", name: "Offerta", nodeType: 10,
           script: "Vorremmo presentarle una nuova offerta.",
+          instructions: brief ? `Contenuto offerta da comunicare:\n${brief.trim().slice(0, 8000)}` : undefined,
           transitions: [{ name: "end", toNodeId: "end" }] },
         { nodeId: "end", name: "Fine", nodeType: 100,
           transitions: [] },

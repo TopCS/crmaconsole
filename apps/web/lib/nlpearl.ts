@@ -314,3 +314,11 @@ export async function resolveVoiceId(): Promise<string | null> {
     return null;
   }
 }
+
+/** Create a Voice Pearl (node graph); returns the new Pearl ID (plain string). */
+export async function createVoicePearl(payload: Record<string, unknown>): Promise<string> {
+  const res = await nlpearlRequest<string>("POST", "/Pearl/Voice", payload);
+  const id = String(res ?? "").replace(/"/g, "").trim();
+  if (!id) {throw new Error("NLPearl Pearl creation returned empty ID.");}
+  return id;
+}
