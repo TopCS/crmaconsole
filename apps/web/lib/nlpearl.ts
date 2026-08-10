@@ -253,3 +253,53 @@ export function buildNlpearlCallbackUrls(origin: string, token?: string): Nlpear
     leadWebhookUrl: `${base}/api/nlpearl/webhook/lead${query}`,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Account voices / phone numbers (needed for Pearl creation)
+// ---------------------------------------------------------------------------
+
+export type NlpearlPhoneNumber = {
+  id: string;
+  phoneNumber?: string;
+  isActive?: boolean;
+};
+
+export type NlpearlVoice = {
+  id: string;
+  name?: string;
+  language?: string;
+  gender?: string;
+};
+
+/** Get available phone numbers. */
+export async function listPhoneNumbers(): Promise<NlpearlPhoneNumber[]> {
+  return nlpearlRequest<NlpearlPhoneNumber[]>("GET", "/Account/PhoneNumbers");
+}
+
+/** Get available voices. */
+export async function listVoices(): Promise<NlpearlVoice[]> {
+  return nlpearlRequest<NlpearlVoice[]>("GET", "/Account/Voices");
+}
+
+let cachedVoiceId: string | null | undefined;
+
+/**
+ * Resolve a suitable voice ID for Pearl creation.
+ * Priority: env `NLPEARL_VOICE_ID` → first Italian-language voice from
+ * NLPearl → first available voice → `null` (caller must set env).
+ */
+export async function resolveVoiceId(): Promise<string | null> {
+  if (cachedVoiceId !== undefined) {return cachedVoiceId;}
+  const envVoice = process.env.NLPEARL_VOICE_ID?.trim();
+  if (envVoice) {cachedVoiceId = envVoice; return cachedVoiceId;}
+  try {
+    const voices = await listVoices();
+    if (voices.length === 0) {cachedVoiceId = null; return null;}
+    const it = voices.find((v) => v.language?.toLowerCase()?.startsWith("it"));
+    cachedVoiceId = it?.id ?? voices[0].id ?? null;
+    return cachedVoiceId;
+  } catch {
+    cachedVoiceId = null;
+    return null;
+  }
+}

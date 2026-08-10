@@ -224,9 +224,9 @@ const CAMPAIGN_NEW_FIELDS: FieldDef[] = [
     sortOrder: 10,
   },
   {
-    id: "seed_fld_campaign_caller_00000",
-    name: "Caller Phone Number",
-    type: "phone",
+    id: "seed_fld_campaign_phone_id_00000",
+    name: "Nlpearl Phone ID",
+    type: "text",
     sortOrder: 11,
   },
   {
@@ -260,25 +260,16 @@ const CAMPAIGN_NEW_FIELDS: FieldDef[] = [
     sortOrder: 16,
   },
   {
-    id: "seed_fld_campaign_retry_hrs_0000",
-    name: "Retry Interval Hours",
+    id: "seed_fld_campaign_retryrate_00000",
+    name: "Nlpearl Retry Rate",
     type: "number",
     sortOrder: 17,
   },
   {
-    id: "seed_fld_campaign_concurrent_000",
-    name: "Concurrent Calls",
+    id: "seed_fld_campaign_agents_00000000",
+    name: "Nlpearl Agent Count",
     type: "number",
     sortOrder: 18,
-  },
-];
-
-const CAMPAIGN_SEND_NEW_FIELDS: FieldDef[] = [
-  {
-    id: "seed_fld_csend_external_id_0000",
-    name: "External ID",
-    type: "text",
-    sortOrder: 9,
   },
 ];
 // ---------------------------------------------------------------------------
