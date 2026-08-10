@@ -22,8 +22,8 @@ describe("buildInboundPearlPayload", () => {
       "/api/nlpearl/precall?phone={phoneNumber}",
     );
     const vars = p.variables.map((v) => v.id);
-    expect(vars).toContain("firstName");
-    expect(vars).toContain("context");
+    // firstName is a built-in lead variable (not declarable); context is custom.
+    expect(vars).toEqual(["context"]);
     expect(p.inbound.callWebhookUrl).toBe("https://crm.example.net/api/nlpearl/webhook/call");
     expect(p.inbound.phoneNumberId).toBeUndefined();
   });

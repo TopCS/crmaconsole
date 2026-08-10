@@ -24,9 +24,11 @@ export type InboundPearlPayload = {
   name: string;
   pearl: {
     companyName: string;
+    companyDescription?: string;
     agentPersonality: string;
     modelType: number;
     agents: Array<{ name: string; voiceId: string }>;
+    timeZone?: string;
     nodes: Array<Record<string, unknown>>;
   };
   variables: Array<{ id: string; name: string; group: number }>;
@@ -34,6 +36,7 @@ export type InboundPearlPayload = {
     phoneNumberId?: string;
     totalAgents: number;
     callWebhookUrl?: string;
+    waitingSentence?: string;
   };
 };
 
@@ -55,9 +58,11 @@ export function buildInboundPearlPayload(params: InboundPearlParams & {
     name: params.name,
     pearl: {
       companyName: params.companyName ?? "Crm-A",
+      companyDescription: "Servizio clienti gestito da Crm-A Console.",
       agentPersonality: params.personality ?? "Professional and warm",
       modelType: 3,
       agents: [{ name: "Agent", voiceId: params.voiceId }],
+      timeZone: "Romance Standard Time",
       nodes: [
         {
           nodeId: "lookup", name: "Lookup cliente", nodeType: 3,
@@ -96,14 +101,12 @@ export function buildInboundPearlPayload(params: InboundPearlParams & {
         { nodeId: "end", name: "Fine", nodeType: 100, transitions: [] },
       ],
     },
-    variables: [
-      { id: "firstName", name: "Nome", group: 1 },
-      { id: "context", name: "Contesto CRM", group: 1 },
-    ],
+    variables: [{ id: "context", name: "Contesto CRM", group: 1 }],
     inbound: {
       ...(params.phoneId ? { phoneNumberId: params.phoneId } : {}),
       totalAgents: 5,
       callWebhookUrl: params.callWebhookUrl,
+      waitingSentence: "La preghiamo di attendere, un operatore è subito con lei.",
     },
   };
 }

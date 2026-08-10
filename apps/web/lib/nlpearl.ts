@@ -333,10 +333,23 @@ export async function resolveVoiceId(): Promise<string | null> {
   }
 }
 
-/** Create a Voice Pearl (node graph); returns the new Pearl ID (plain string). */
+/** Create a Voice Pearl (node graph); returns the new Pearl ID (plain text). */
 export async function createVoicePearl(payload: Record<string, unknown>): Promise<string> {
-  const res = await nlpearlRequest<string>("POST", "/Pearl/Voice", payload);
-  const id = String(res ?? "").replace(/"/g, "").trim();
+  const auth = readNlpearlAuth();
+  if (!auth) {throw new Error("NLPearl is not configured.");}
+  const res = await fetch(`${baseUrl()}/Pearl/Voice`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${auth.accountId}:${auth.secretKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`NLPearl POST /Pearl/Voice failed (${res.status}): ${detail}`);
+  }
+  const id = (await res.text()).replace(/"/g, "").trim();
   if (!id) {throw new Error("NLPearl Pearl creation returned empty ID.");}
   return id;
 }

@@ -17,12 +17,11 @@ import { loadCrmFieldMaps, sqlString } from "./crm-queries";
 import { ONBOARDING_OBJECT_IDS } from "./workspace-schema-migrations";
 import {
   isNlpearlConfigured,
-  readNlpearlAuth,
   buildNlpearlCallbackUrls,
   resolveVoiceId,
   addLead,
   setPearlActive,
-  NLPEARL_DEFAULT_BASE_URL,
+  createVoicePearl,
 } from "./nlpearl";
 import { readPhoneWebhookSecret } from "./phone-webhook";
 
@@ -124,9 +123,11 @@ export async function createPhonePearlForCampaign(
     name: `Campaign ${campaignId.slice(0, 8)}`,
     pearl: {
       companyName: "Crm-A",
+      companyDescription: "Campagna chiamante gestita da Crm-A Console.",
       agentPersonality: "Professional and warm",
       modelType: 3,
       agents: [{ name: "Agent", voiceId }],
+      timeZone: windowsTimeZone(cfg.timezone),
       nodes: [
         { nodeId: "open", name: "Saluto", nodeType: 2,
           script: "Buongiorno {firstName}, una chiamata per conto di Crm-A Console.",
@@ -139,7 +140,7 @@ export async function createPhonePearlForCampaign(
           transitions: [] },
       ],
     },
-    variables: [{ id: "firstName", name: "Nome", group: 1 }],
+    variables: [{ id: "customerNote", name: "Nota", group: 2 }],
     outbound: {
       phoneNumberId: cfg.phoneId,
       totalAgents: cfg.agentCount,
@@ -152,21 +153,7 @@ export async function createPhonePearlForCampaign(
     },
   };
 
-  const auth = readNlpearlAuth()!;
-  const pearlRes = await fetch(`${NLPEARL_DEFAULT_BASE_URL}/Pearl/Voice`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${auth.accountId}:${auth.secretKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-  if (!pearlRes.ok) {
-    const detail = await pearlRes.text().catch(() => "");
-    throw new Error(`Failed to create NLPearl Pearl: ${pearlRes.status} ${detail}`);
-  }
-  const pearlId = (await pearlRes.text()).replace(/"/g, "").trim();
-  if (!pearlId) {throw new Error("NLPearl Pearl creation returned empty ID.");}
+  const pearlId = await createVoicePearl(payload as unknown as Record<string, unknown>);
 
   const dbPath = await duckdbPathAsync();
   const fieldMaps = await loadCrmFieldMaps();
