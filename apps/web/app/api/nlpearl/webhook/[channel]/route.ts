@@ -6,12 +6,14 @@
  * embedded in the URL (see `buildNlpearlCallbackUrls`) is the only auth.
  *
  * The harness records an `interaction` for each event and resolves/updates
- * the relevant Person by phone number. Idempotent by call/lead id:
- * duplicate deliveries are silently accepted.
+ * the relevant Person by phone number. For lead webhooks with an externalId,
+ * the matching campaign_send row's Status is updated (Fase C contract).
+ * Idempotent by call/lead id: duplicate deliveries are silently accepted.
  */
 
 import { duckdbQueryAsync } from "@/lib/workspace";
 import { loadCrmFieldMaps, sqlString } from "@/lib/crm-queries";
+import { updateCampaignSendByExternalId } from "@/lib/campaign-phone";
 import {
   classifyCallConversationStatus,
   mapNlpearlLeadStatus,
@@ -132,6 +134,12 @@ async function handleLeadWebhook(payload: NlpearlLeadWebhook) {
   await updatePersonFields(personId, [
     ["Last Interaction At", new Date().toISOString()],
   ]);
+
+  // Update campaign_send status via External ID (Fase C contract)
+  if (payload.externalId) {
+    await updateCampaignSendByExternalId(payload.externalId, sendStatus);
+  }
+
   return Response.json({ ok: true, interactionId: event.eventId, personId, sendStatus });
 }
 

@@ -5,6 +5,10 @@
  * (Nlpearl Pearl ID, Phone ID, calling window, retry, agent count) and
  * `campaign_send` rows extended with `External ID` (NLPearl Lead ID).
  * Only the phone path uses NLPearl; email campaigns continue to use SES.
+ *
+ * Key contract: campaign_send is created BEFORE addLead so the send row's
+ * UUID is the externalId; lead webhook callbacks can then resolve the row
+ * and update its status.
  */
 
 import { randomUUID } from "node:crypto";
@@ -187,8 +191,9 @@ function windowsTimeZone(iana: string | null): string {
 }
 
 /**
- * Enqueue a campaign's segment audience as NLPearl leads and create
- * campaign_send rows tracking them (phone transport).
+ * Enqueue a campaign's phone-preference audience as NLPearl leads.
+ * campaign_send rows are created BEFORE addLead so the UUID is the externalId,
+ * enabling lead webhook callbacks to update Status.
  */
 export async function enqueuePhoneCampaign(campaignId: string): Promise<PhoneCampaignEnqueueResult> {
   const cfg = await loadCampaignPhoneConfig(campaignId);
@@ -200,26 +205,13 @@ export async function enqueuePhoneCampaign(campaignId: string): Promise<PhoneCam
   if (!dbPath) {throw new Error("DuckDB not found.");}
   const fieldMaps = await loadCrmFieldMaps();
 
+  // Only contacts who chose phone (Preferred Contact Channel = "phone")
   const audience = await resolveAudienceForCampaign();
   const errors: string[] = [];
   let leadsCreated = 0;
 
   for (const member of audience) {
-    const externalId = `crm-${campaignId.slice(0, 8)}-${member.entry_id.slice(0, 8)}`;
-    try {
-      await addLead({
-        pearlId: cfg.pearlId,
-        phoneNumber: member.phone ?? "",
-        externalId,
-        callData: { firstName: member.name ?? "Cliente", email: member.email },
-      });
-    } catch (err) {
-      errors.push(`${member.entry_id}: ${err instanceof Error ? err.message : String(err)}`);
-      continue;
-    }
-    leadsCreated++;
-
-    // Create campaign_send row with External ID
+    // Create campaign_send row FIRST — its UUID IS the externalId
     const sendId = randomUUID();
     const now = new Date().toISOString();
     const statements: string[] = [
@@ -235,19 +227,33 @@ export async function enqueuePhoneCampaign(campaignId: string): Promise<PhoneCam
     ef("Email", member.email ?? "");
     ef("Status", "Queued");
     ef("Attempts", "0");
-    ef("External ID", externalId);
+    ef("External ID", sendId);
     await duckdbExecOnFileAsync(dbPath, statements.join("\n"));
+
+    try {
+      await addLead({
+        pearlId: cfg.pearlId,
+        phoneNumber: member.phone ?? "",
+        externalId: sendId,
+        callData: { firstName: member.name ?? "Cliente", email: member.email },
+      });
+      leadsCreated++;
+    } catch (err) {
+      errors.push(`${member.entry_id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   return { pearlId: cfg.pearlId, leadsCreated, errors };
 }
 
+/** Return phone-preference contacts with a phone number and marketing opt-in. */
 async function resolveAudienceForCampaign(): Promise<Array<{ entry_id: string; name: string | null; email: string | null; phone: string | null }>> {
   const fieldMaps = await loadCrmFieldMaps();
   const phoneFld = fieldMaps.people["Phone Number"];
   const nameFld = fieldMaps.people["Full Name"];
   const emailFld = fieldMaps.people["Email Address"];
   const optinFld = fieldMaps.people["Marketing Opt-in"];
+  const prefFld = fieldMaps.people["Preferred Contact Channel"];
   if (!phoneFld) {return [];}
   const sql = `
     SELECT e.id AS entry_id,
@@ -258,11 +264,30 @@ async function resolveAudienceForCampaign(): Promise<Array<{ entry_id: string; n
     LEFT JOIN entry_fields ef ON ef.entry_id = e.id
     WHERE e.object_id = '${ONBOARDING_OBJECT_IDS.people}'
       ${optinFld ? `AND EXISTS (SELECT 1 FROM entry_fields o WHERE o.entry_id = e.id AND o.field_id = '${optinFld}' AND o.value = 'true')` : ""}
+      ${prefFld ? `AND EXISTS (SELECT 1 FROM entry_fields p WHERE p.entry_id = e.id AND p.field_id = '${prefFld}' AND p.value = 'phone')` : ""}
     GROUP BY e.id
     HAVING MAX(CASE WHEN ef.field_id = '${phoneFld}' THEN ef.value END) IS NOT NULL AND MAX(CASE WHEN ef.field_id = '${phoneFld}' THEN ef.value END) != ''
     LIMIT 500;`;
   const rows = await duckdbQueryAsync<{ entry_id: string; name: string | null; email: string | null; phone: string | null }>(sql);
   return rows;
+}
+
+/** Look up a campaign_send row by its External ID and update the Status. */
+export async function updateCampaignSendByExternalId(
+  externalId: string,
+  status: string,
+): Promise<boolean> {
+  const dbPath = await duckdbPathAsync();
+  if (!dbPath) {return false;}
+  const fieldMaps = await loadCrmFieldMaps();
+  const extIdField = fieldMaps.campaign_send["External ID"];
+  const statusField = fieldMaps.campaign_send["Status"];
+  if (!extIdField || !statusField) {return false;}
+  await duckdbExecOnFileAsync(dbPath, [
+    `DELETE FROM entry_fields WHERE entry_id IN (SELECT entry_id FROM entry_fields WHERE field_id = ${sqlString(extIdField)} AND value = ${sqlString(externalId)}) AND field_id = ${sqlString(statusField)};`,
+    `INSERT INTO entry_fields (entry_id, field_id, value) SELECT entry_id, ${sqlString(statusField)}, ${sqlString(status)} FROM entry_fields WHERE field_id = ${sqlString(extIdField)} AND value = ${sqlString(externalId)} LIMIT 1;`,
+  ].join("\n"));
+  return true;
 }
 
 /** Pause or resume the Pearl's outbound activity. */
