@@ -239,11 +239,17 @@ export type NlpearlCallbackUrls = {
   leadWebhookUrl: string;
 };
 
-/** Build the webhook URLs that a Pearl should call back — one per channel. */
-export function buildNlpearlCallbackUrls(origin: string): NlpearlCallbackUrls {
+/**
+ * Build the webhook URLs that a Pearl should call back — one per channel.
+ * Optional `token` is appended as a query param so the public webhook can
+ * verify the caller without custom headers. Defaults to the phone webhook
+ * secret (same secret used for /api/webhooks/phone + demo seed).
+ */
+export function buildNlpearlCallbackUrls(origin: string, token?: string): NlpearlCallbackUrls {
   const base = origin.replace(/\/+$/, "");
+  const query = token ? `?token=${encodeURIComponent(token)}` : "";
   return {
-    callWebhookUrl: `${base}/api/nlpearl/webhook/call`,
-    leadWebhookUrl: `${base}/api/nlpearl/webhook/lead`,
+    callWebhookUrl: `${base}/api/nlpearl/webhook/call${query}`,
+    leadWebhookUrl: `${base}/api/nlpearl/webhook/lead${query}`,
   };
 }

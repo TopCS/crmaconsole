@@ -115,4 +115,10 @@ describe("buildNlpearlCallbackUrls", () => {
     expect(urls.callWebhookUrl).toBe("https://crm-a-console.example.net/api/nlpearl/webhook/call");
     expect(urls.leadWebhookUrl).toBe("https://crm-a-console.example.net/api/nlpearl/webhook/lead");
   });
+
+  it("appends a verify token query param when provided", () => {
+    const urls = buildNlpearlCallbackUrls("https://crm.example.net", "my-secret");
+    expect(urls.callWebhookUrl).toContain("?token=my-secret");
+    expect(urls.leadWebhookUrl).toContain("?token=my-secret");
+  });
 });
