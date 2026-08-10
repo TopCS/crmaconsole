@@ -4,6 +4,7 @@ import {
   getCall,
   isNlpearlConfigured,
   listPearls,
+  listVoices,
   addLead,
   setPearlActive,
 } from "./nlpearl";
@@ -120,5 +121,31 @@ describe("buildNlpearlCallbackUrls", () => {
     const urls = buildNlpearlCallbackUrls("https://crm.example.net", "my-secret");
     expect(urls.callWebhookUrl).toContain("?token=my-secret");
     expect(urls.leadWebhookUrl).toContain("?token=my-secret");
+  });
+});
+
+describe("listVoices (grouped shape)", () => {
+  beforeEach(() => {
+    process.env.NLPEARL_ACCOUNT_ID = "ACC123";
+    process.env.NLPEARL_SECRET_KEY = "KEY456";
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => {
+    delete process.env.NLPEARL_ACCOUNT_ID;
+    delete process.env.NLPEARL_SECRET_KEY;
+    vi.unstubAllGlobals();
+  });
+  it("flattens per-language groups and tags into voice entries", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify([
+        { language: "Italian", voices: [{ id: "v1", name: "Tommaso", tags: ["IT"] }, { id: "v2", name: "Federica", tags: ["IT"] }] },
+        { language: "English", voices: [{ id: "v3", name: "John", tags: ["EN"] }] },
+      ]), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    const voices = await listVoices();
+    expect(voices).toHaveLength(3);
+    expect(voices[0]).toEqual({ id: "v1", name: "Tommaso", language: "Italian", tags: ["IT"] });
+    expect(voices[2].language).toBe("English");
   });
 });

@@ -278,6 +278,13 @@ export type NlpearlVoice = {
   name?: string;
   language?: string;
   gender?: string;
+  /** Language tags from the voice (e.g. ["IT"]). */
+  tags?: string[];
+};
+
+export type NlpearlVoiceGroup = {
+  language: string;
+  voices: Array<{ id: string; name?: string; tags?: string[] }>;
 };
 
 /** Get available phone numbers. */
@@ -285,9 +292,16 @@ export async function listPhoneNumbers(): Promise<NlpearlPhoneNumber[]> {
   return nlpearlRequest<NlpearlPhoneNumber[]>("GET", "/Account/PhoneNumbers");
 }
 
-/** Get available voices. */
+/** Get available voices, flattened from the per-language grouped shape. */
 export async function listVoices(): Promise<NlpearlVoice[]> {
-  return nlpearlRequest<NlpearlVoice[]>("GET", "/Account/Voices");
+  const groups = await nlpearlRequest<NlpearlVoiceGroup[]>("GET", "/Account/Voices");
+  const out: NlpearlVoice[] = [];
+  for (const g of groups) {
+    for (const v of g.voices) {
+      out.push({ id: v.id, name: v.name, language: g.language, tags: v.tags });
+    }
+  }
+  return out;
 }
 
 let cachedVoiceId: string | null | undefined;
@@ -306,7 +320,11 @@ export async function resolveVoiceId(): Promise<string | null> {
   try {
     const voices = await listVoices();
     if (voices.length === 0) {cachedVoiceId = null; return null;}
-    const it = voices.find((v) => v.language?.toLowerCase()?.startsWith("it"));
+    const it = voices.find(
+      (v) =>
+        v.language?.toLowerCase().includes("ital") ||
+        v.tags?.some((t) => t.toLowerCase().startsWith("it")),
+    );
     cachedVoiceId = it?.id ?? voices[0].id ?? null;
     return cachedVoiceId;
   } catch {
