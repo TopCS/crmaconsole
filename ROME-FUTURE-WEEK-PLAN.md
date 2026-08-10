@@ -105,3 +105,30 @@ Decisioni chiuse (dal committente):
 ## 6. Conclusione
 
 Implementazione completa delle Fasi 0–5. Il collo di bottiglia (contratto + webhook telefonico) è risolto e testato; Telegram outbound è via openclaw (runtime), il dial telefonico via provider. Per l'invio Telegram dal vivo serve un bot/gateway connesso. Guida operativa per la presentazione: `DEMO-RUNBOOK.md`.
+
+---
+
+## 7. Stato lavori + istruzioni per la prossima sessione
+
+### Fatto (committato su `main`, fork TopCS/crmaconsole)
+- **RFW Fase 0–5**: webhook telefono (inbound/completed/message, Bearer, idempotenza), identità per numero, campagne SES, modello commerce (product/order), seed demo, runbook. 
+- **NLPearl Fase A–E**: client v2 tipizzato + status mapping; webhook esiti call/lead → `interaction` + persona + `campaign_send` (External ID); campagna telefonica (Pearl lifecycle, routing `Preferred Contact Channel`, pausa/riattiva); inbound customer-care (PreCallAPI lookup-only 404→branch sconosciuto); brief MD come istruzioni voce; card Integrations (credenziali + webhook URL copy); client validato LIVE (creazione Pearl paused OK).
+- **Script**: `scripts/nlpearl-e2e.sh` (orchestra il collaudo E2E).
+
+### In sospeso (prossima sessione)
+1. **Origine pubblica dei callback (GATE)** — senza un URL pubblico raggiungibile da NLPearl, i callback non sono collaudabili. Opzioni: Tailscale funnel su :3100 (`CRM_A_CONSOLE_PUBLIC_URL`), tunnel path-scoped, o deploy con origin pubblica. Verificare con `curl` esterno verso `/api/nlpearl/webhook/call?token=...`.
+2. **E2E live** — `bash scripts/nlpearl-e2e.sh`: `--check` → `--create-inbound` → `--create-campaign` → (solo con numero di test tuo) `--send-lead` → `--activate` → verifica esito via webhook (interaction + `campaign_send.Status`). Mai usare numeri seed/demo.
+3. **Pulizia dashboard NLPearl** — rimuovere le 4 Pearl `OMP-Test-*` (paused) create durante il collaudo: `6a79f5dd13744b2317945739` (outbound), `6a79f52d13744b2317945734`, `6a79f4b6...`, `6a79f4da...` (inbound). L'API non espone DELETE (405).
+4. **Lead/attivazione** — solo esplicito, su un numero che l'operatore controlla; burn crediti.
+
+### Convenzioni chiave NLPearl (verificate live — non smarrirle)
+- `direction` nei PhoneNumbers **non è** inbound/outbound; non tutti i numeri sono autorizzati outbound. Funzionante per entrambe: `686fd112a91849a9e59a5353` (+39654547159).
+- `firstName`/`email` = variabili built-in (non dichiarabili); `variables` deve essere array non vuoto (custom operational, es. `customerNote` group 2).
+- Creazione Pearl richiede `pearl.timeZone` (Windows), `pearl.companyDescription`, (inbound) `inbound.waitingSentence`. `POST /Pearl/Voice` risponde col Pearl ID come **plain text**.
+- Voce italiana auto: `resolveVoiceId` → `691c9263f52bb9e1b5b5d1f1` (Tommaso); override `NLPEARL_VOICE_ID` o campo Voice ID in Integrations.
+
+### Variabili richieste (.env)
+`CRM_A_PHONE_WEBHOOK_SECRET`, `NLPEARL_ACCOUNT_ID`, `NLPEARL_SECRET_KEY`, `CRM_A_CONSOLE_PUBLIC_URL` (per callback). Opzionali: `NLPEARL_BASE_URL`, `NLPEARL_VOICE_ID`.
+
+### Verifica suite
+`pnpm --dir apps/web test` (o i singoli `lib/*.test.ts` / `app/api/nlpearl/*`). Tsc: `tsc --noEmit -p apps/web/tsconfig.json`. Lint: `npx oxlint --type-aware apps/web/...`.
