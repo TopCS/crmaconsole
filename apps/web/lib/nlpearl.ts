@@ -12,6 +12,8 @@
  * Endpoint `NLPEARL_BASE_URL` (default https://api.nlpearl.ai/v2).
  */
 
+import { readNlpearlConfig } from "./nlpearl-config";
+
 export const NLPEARL_DEFAULT_BASE_URL = "https://api.nlpearl.ai/v2";
 
 // ---------------------------------------------------------------------------
@@ -146,10 +148,15 @@ export type NlpearlLeadWebhook = {
 export type NlpearlAuth = { accountId: string; secretKey: string };
 
 export function readNlpearlAuth(): NlpearlAuth | null {
-  const accountId = process.env.NLPEARL_ACCOUNT_ID?.trim();
-  const secretKey = process.env.NLPEARL_SECRET_KEY?.trim();
-  if (!accountId || !secretKey) {return null;}
-  return { accountId, secretKey };
+  // Env (Docker) wins; otherwise the Integrations UI config file.
+  const envAccountId = process.env.NLPEARL_ACCOUNT_ID?.trim();
+  const envSecretKey = process.env.NLPEARL_SECRET_KEY?.trim();
+  if (envAccountId && envSecretKey) {
+    return { accountId: envAccountId, secretKey: envSecretKey };
+  }
+  const cfg = readNlpearlConfig();
+  if (!cfg) {return null;}
+  return { accountId: cfg.accountId, secretKey: cfg.secretKey };
 }
 
 export function isNlpearlConfigured(): boolean {
@@ -157,7 +164,9 @@ export function isNlpearlConfigured(): boolean {
 }
 
 function baseUrl(): string {
-  return process.env.NLPEARL_BASE_URL?.trim() || NLPEARL_DEFAULT_BASE_URL;
+  const env = process.env.NLPEARL_BASE_URL?.trim();
+  if (env) {return env;}
+  return readNlpearlConfig()?.baseUrl?.trim() || NLPEARL_DEFAULT_BASE_URL;
 }
 
 function authToken(): string {
@@ -292,6 +301,8 @@ export async function resolveVoiceId(): Promise<string | null> {
   if (cachedVoiceId !== undefined) {return cachedVoiceId;}
   const envVoice = process.env.NLPEARL_VOICE_ID?.trim();
   if (envVoice) {cachedVoiceId = envVoice; return cachedVoiceId;}
+  const cfgVoice = readNlpearlConfig()?.voiceId?.trim();
+  if (cfgVoice) {cachedVoiceId = cfgVoice; return cachedVoiceId;}
   try {
     const voices = await listVoices();
     if (voices.length === 0) {cachedVoiceId = null; return null;}
