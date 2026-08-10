@@ -128,3 +128,26 @@ L'AI telefonica pronuncia "Bentornato Lorenzo… il corriere… consegna entro l
 | `CRM_A_PHONE_WEBHOOK_SECRET` | auth ingress + seed + campagne |
 | `CRM_A_PHONE_OUTBOUND_URL` / `_SECRET` | dial telefonico (provider) |
 | Telegram bot nel gateway | outbound Telegram (runtime) |
+
+---
+
+## Note NLPearl (verificate in live)
+
+- **Phone Number ID**: il campo `direction` non è inbound/outbound. Non tutti i
+  numeri dell'account sono autorizzati per l'outbound (`400 "not authorized for
+  outbound calls"`). Verificato funzionante per entrambe le direzioni:
+  `686fd112a91849a9e59a5353` (+39654547159). Scegli il `phoneNumberId` dalle
+  voci prive di errore 400 alla creazione Pearl.
+- **Variabili**: `firstName`/`email` sono built-in delle lead (non dichiarabili);
+  `variables` deve essere un array non vuoto (usa una custom operational,
+  es. `customerNote`, group 2).
+- **Creazione Pearl**: richiede `pearl.timeZone` (Windows Time), `pearl.companyDescription`
+  e (inbound) `inbound.waitingSentence`. La risposta di `POST /Pearl/Voice` è
+  il Pearl ID come plain text (non JSON).
+- **Prerequisito E2E**: le URL webhook necessitano di un'origine **pubblica**
+  raggiungibile da NLPearl (`CRM_A_CONSOLE_PUBLIC_URL` + funnel/tunnel/deploy).
+  Finché non c'è, le Pearl si creano (paused, sintassi ok) ma i callback
+  restano non collaudabili.
+- **Test di creazione live** (paused, senza chiamate): inbound
+  `6a79f52d13744b2317945734` (type 1), outbound `6a79f5dd13744b2317945739`
+  (type 2) — rimossi/o da dashboard a fine demo.
