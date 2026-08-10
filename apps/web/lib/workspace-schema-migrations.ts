@@ -216,6 +216,71 @@ const PRODUCT_NEW_FIELDS: FieldDef[] = [
   },
 ];
 
+const CAMPAIGN_NEW_FIELDS: FieldDef[] = [
+  {
+    id: "seed_fld_campaign_nlpearl_id_00",
+    name: "Nlpearl Pearl ID",
+    type: "text",
+    sortOrder: 10,
+  },
+  {
+    id: "seed_fld_campaign_caller_00000",
+    name: "Caller Phone Number",
+    type: "phone",
+    sortOrder: 11,
+  },
+  {
+    id: "seed_fld_campaign_window_start0",
+    name: "Calling Window Start",
+    type: "text",
+    sortOrder: 12,
+  },
+  {
+    id: "seed_fld_campaign_window_end_00",
+    name: "Calling Window End",
+    type: "text",
+    sortOrder: 13,
+  },
+  {
+    id: "seed_fld_campaign_timezone_0000",
+    name: "Calling Timezone",
+    type: "text",
+    sortOrder: 14,
+  },
+  {
+    id: "seed_fld_campaign_days_0000000",
+    name: "Calling Days",
+    type: "text",
+    sortOrder: 15,
+  },
+  {
+    id: "seed_fld_campaign_attempts_00000",
+    name: "Max Attempts",
+    type: "number",
+    sortOrder: 16,
+  },
+  {
+    id: "seed_fld_campaign_retry_hrs_0000",
+    name: "Retry Interval Hours",
+    type: "number",
+    sortOrder: 17,
+  },
+  {
+    id: "seed_fld_campaign_concurrent_000",
+    name: "Concurrent Calls",
+    type: "number",
+    sortOrder: 18,
+  },
+];
+
+const CAMPAIGN_SEND_NEW_FIELDS: FieldDef[] = [
+  {
+    id: "seed_fld_csend_external_id_0000",
+    name: "External ID",
+    type: "text",
+    sortOrder: 9,
+  },
+];
 // ---------------------------------------------------------------------------
 // Object definitions — wholesale new tables
 // ---------------------------------------------------------------------------
@@ -1345,6 +1410,31 @@ export async function ensureLatestSchema(): Promise<MigrationResult> {
       result.changedObjects.push("product");
       for (const field of productAdditions.added) {
         result.addedFields.push({ object: "product", field });
+      }
+    }
+    const campaignAdditions = await ensureFieldsForObject(
+      dbPath,
+      "campaign",
+      CAMPAIGN_OBJECT_ID,
+      CAMPAIGN_NEW_FIELDS,
+    );
+    if (campaignAdditions.added.length > 0) {
+      result.changedObjects.push("campaign");
+      for (const field of campaignAdditions.added) {
+        result.addedFields.push({ object: "campaign", field });
+      }
+    }
+
+    const campaignSendAdditions = await ensureFieldsForObject(
+      dbPath,
+      "campaign_send",
+      CAMPAIGN_SEND_OBJECT_ID,
+      CAMPAIGN_SEND_NEW_FIELDS,
+    );
+    if (campaignSendAdditions.added.length > 0) {
+      result.changedObjects.push("campaign_send");
+      for (const field of campaignSendAdditions.added) {
+        result.addedFields.push({ object: "campaign_send", field });
       }
     }
 
