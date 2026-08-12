@@ -3465,6 +3465,11 @@ export async function bootstrapCommand(
       enabled: crmACloudSelection.enabled,
       ...(crmACloudSelection.enabled ? { config: { enabled: true } } : {}),
     },
+    {
+      pluginId: "crm-a-nlpearl-outbound",
+      sourceDirName: "crm-a-nlpearl-outbound",
+      enabled: true,
+    },
   ];
 
   // Trust managed bundled plugins BEFORE onboard so the gateway daemon never

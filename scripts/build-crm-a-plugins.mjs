@@ -4,7 +4,11 @@ import { build } from "esbuild";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-const plugins = ["extensions/crm-a-identity/index.ts", "extensions/crm-a-ai-gateway/index.ts"];
+const plugins = [
+  "extensions/crm-a-identity/index.ts",
+  "extensions/crm-a-ai-gateway/index.ts",
+  "extensions/crm-a-nlpearl-outbound/index.ts",
+];
 
 for (const entry of plugins) {
   await build({

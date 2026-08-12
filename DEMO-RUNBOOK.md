@@ -151,3 +151,14 @@ L'AI telefonica pronuncia "Bentornato Lorenzo… il corriere… consegna entro l
 - **Test di creazione live** (paused, senza chiamate): inbound
   `6a79f52d13744b2317945734` (type 1), outbound `6a79f5dd13744b2317945739`
   (type 2) — rimossi/o da dashboard a fine demo.
+
+## Crea una campagna outbound chattando con l'agente
+
+L'operatore digita: "crea una campagna outbound per il Galaxy, con una breve comparazione rispetto al modello precedente, chiama chi preferisce il telefono".
+
+1. `crm_a_phone_campaign` upsert → crea/aggiorna la scheda (prodotto, comparazioni→Voice Brief, config telefono) → campaignId.
+2. `crm_a_phone_campaign` create → crea il Pearl NLPearl (PAUSED, nessuna chiamata).
+3. `crm_a_phone_campaign` send → anteprima + conferma operatore → enqueua i lead compliant (conferma richiesta).
+4. `crm_a_phone_campaign` resume (= activate) → conferma operatore → il Pearl inizia a chiamare.
+
+Regole: send/activate SEMPRE dietro conferma esplicita (`confirm: true`); MAI numeri seed/demo; callback webhook richiedono origin pubblico (`CRM_A_CONSOLE_PUBLIC_URL` o tunnel) per essere collaudabili.

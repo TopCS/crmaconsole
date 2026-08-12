@@ -225,3 +225,14 @@ Idempotenza: `callId` (ingressi) e `conversationId` (outgress) deduplicati; retr
 - Sessione per contatto `phone:<e164>` (riuso `active-runs`/`agent-runner`).
 - Client outbound verso `null` provider (`/outbound/dial`, `/outbound/telegram`) — endpoint da inventariare in Fase 1.
 - Campi `people`: `Preferred Contact Channel`, `Marketing Opt-in` (Fase 2).
+
+---
+
+## 9. Agent tool: crm_a_phone_campaign (outbound dalla chat)
+
+- Estensione `crm-a-nlpearl-outbound` registra il tool `crm_a_phone_campaign`.
+- Chiama `POST /api/campaigns/phone` (azioni upsert/create/send/pause/resume) con Bearer = `CRM_A_PHONE_WEBHOOK_SECRET`.
+- `send` e `resume` richiedono `confirm: true` obbligatorio (altrimenti `needsConfirmation`) — mai chiamate automatiche.
+- `upsert` crea/aggiorna la scheda campagna: Name, Nlpearl Phone ID, finestra/TZ/days, Max Attempts, Retry Rate, Agent Count, Voice Brief.
+- `create` passa il `brief` (Voice Brief) al Pearl: la voce parla di prodotto/comparazioni della scheda.
+- `send` accetta criteri audience `{ segmentId?, count? }` sopra il filtro di compliance obbligatorio (opt-in + pref=telefono).

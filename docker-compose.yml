@@ -23,6 +23,8 @@ services:
       # Default model applied at every boot (e.g. openrouter/deepseek/deepseek-v4-pro).
       # Idempotent override — survives volume recreation and manual resets.
       - CRM_A_DEFAULT_MODEL=${CRM_A_DEFAULT_MODEL:-}
+      # Phone outbound (NLPearl): condiviso tra la web route e il gateway OpenClaw (tool crm_a_phone_campaign).
+      - CRM_A_PHONE_WEBHOOK_SECRET=${CRM_A_PHONE_WEBHOOK_SECRET:-}
 
 volumes:
   crm-a-data:
