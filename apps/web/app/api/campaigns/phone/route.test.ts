@@ -4,6 +4,7 @@ vi.mock("@/lib/campaign-phone", () => ({
   createPhonePearlForCampaign: vi.fn(async (_id: string, _o: string) => "pearl-1"),
   enqueuePhoneCampaign: vi.fn(async (_id: string) => ({ pearlId: "pearl-1", leadsCreated: 3, errors: [] })),
   setCampaignPearlPaused: vi.fn(async () => {}),
+  upsertPhoneCampaign: vi.fn(async (input: { campaignId?: string }) => input?.campaignId ?? "C-new"),
 }));
 vi.mock("@/lib/phone-webhook", () => ({
   isPhoneWebhookAuthorized: vi.fn(() => true),
@@ -18,10 +19,12 @@ const {
   createPhonePearlForCampaign,
   enqueuePhoneCampaign,
   setCampaignPearlPaused,
+  upsertPhoneCampaign,
 } = await import("@/lib/campaign-phone");
 const mockedCreate = vi.mocked(createPhonePearlForCampaign);
 const mockedEnqueue = vi.mocked(enqueuePhoneCampaign);
 const mockedPause = vi.mocked(setCampaignPearlPaused);
+const mockedUpsert = vi.mocked(upsertPhoneCampaign);
 
 const { isPhoneWebhookAuthorized } = await import("@/lib/phone-webhook");
 const mockedAuth = vi.mocked(isPhoneWebhookAuthorized);
@@ -80,5 +83,24 @@ describe("POST /api/campaigns/phone", () => {
     const res = await POST(post({ action: "create", campaignId: "c1" }));
     expect(res.status).toBe(500);
     expect((await res.json()).error).toContain("boom");
+  });
+
+  it("upsert creates a card and returns its id", async () => {
+    const res = await POST(post({ action: "upsert", name: "Demo", phoneId: "p", brief: "hi" }));
+    expect(res.status).toBe(200);
+    const p = await res.json();
+    expect(p.ok).toBe(true);
+    expect(p.campaignId).toBe("C-new");
+    expect(mockedUpsert).toHaveBeenCalledWith(expect.objectContaining({ name: "Demo", phoneId: "p", brief: "hi" }));
+  });
+
+  it("create passes brief when provided", async () => {
+    await POST(post({ action: "create", campaignId: "c1", brief: "ciao" }));
+    expect(mockedCreate).toHaveBeenCalledWith("c1", "https://crm.example.net", "ciao");
+  });
+
+  it("send passes criteria", async () => {
+    await POST(post({ action: "send", campaignId: "c1", criteria: { segmentId: "S1", count: 5 } }));
+    expect(mockedEnqueue).toHaveBeenCalledWith("c1", { segmentId: "S1", count: 5 });
   });
 });

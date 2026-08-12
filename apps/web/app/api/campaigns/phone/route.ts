@@ -17,6 +17,8 @@ import {
   createPhonePearlForCampaign,
   enqueuePhoneCampaign,
   setCampaignPearlPaused,
+  upsertPhoneCampaign,
+  type PhoneAudienceCriteria,
 } from "@/lib/campaign-phone";
 import { isPhoneWebhookAuthorized } from "@/lib/phone-webhook";
 import { resolveAppPublicOrigin } from "@/lib/public-origin";
@@ -24,11 +26,32 @@ import { resolveAppPublicOrigin } from "@/lib/public-origin";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const ACTIONS = ["create", "send", "pause", "resume"] as const;
+const ACTIONS = ["upsert", "create", "send", "pause", "resume"] as const;
 type Action = (typeof ACTIONS)[number];
 
 function jsonError(message: string, status: number): Response {
   return Response.json({ error: message }, { status });
+}
+
+function asString(v: unknown): string | undefined {
+  return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+function asNumber(v: unknown): number | undefined {
+  if (typeof v === "number" && Number.isFinite(v)) { return v; }
+  if (typeof v === "string" && v.trim() !== "") { const n = Number(v); return Number.isFinite(n) ? n : undefined; }
+  return undefined;
+}
+function asDays(v: unknown): number[] | undefined {
+  if (Array.isArray(v)) { const d = v.filter((x) => typeof x === "number").map((x) => Number(x)); return d.length ? d : undefined; }
+  return undefined;
+}
+function parseAudienceCriteria(v: unknown): PhoneAudienceCriteria | undefined {
+  if (!v || typeof v !== "object") { return undefined; }
+  const o = v as Record<string, unknown>;
+  const segmentId = asString(o.segmentId);
+  const count = asNumber(o.count);
+  if (!segmentId && count === undefined) { return undefined; }
+  return { segmentId, count };
 }
 
 export async function POST(req: Request) {
@@ -45,20 +68,48 @@ export async function POST(req: Request) {
   if (!ACTIONS.includes(action as Action)) {
     return jsonError(`Unknown action '${String(action)}'.`, 400);
   }
-  const campaignId = typeof body.campaignId === "string" ? body.campaignId.trim() : "";
+  const campaignId = asString(body.campaignId) ?? "";
+  const origin = resolveAppPublicOrigin(req);
+  const brief = asString(body.brief);
+  const criteria = parseAudienceCriteria(body.criteria);
+
+  if (action === "upsert") {
+    try {
+      const result = await upsertPhoneCampaign({
+        campaignId: campaignId || undefined,
+        name: asString(body.name),
+        phoneId: asString(body.phoneId),
+        windowStart: asString(body.windowStart),
+        windowEnd: asString(body.windowEnd),
+        timezone: asString(body.timezone),
+        days: asDays(body.days),
+        maxAttempts: asNumber(body.maxAttempts),
+        retryRate: asNumber(body.retryRate),
+        agentCount: asNumber(body.agentCount),
+        brief,
+      });
+      return Response.json({ ok: true, campaignId: result });
+    } catch (err) {
+      return jsonError(err instanceof Error ? err.message : "Upsert failed.", 500);
+    }
+  }
+
   if (!campaignId) {
     return jsonError("campaignId is required.", 400);
   }
-  const origin = resolveAppPublicOrigin(req);
 
   try {
     switch (action) {
       case "create": {
-        const pearlId = await createPhonePearlForCampaign(campaignId, origin);
+        const pearlId = brief
+          ? await createPhonePearlForCampaign(campaignId, origin, brief)
+          : await createPhonePearlForCampaign(campaignId, origin);
         return Response.json({ ok: true, pearlId });
       }
       case "send": {
-        const result = await enqueuePhoneCampaign(campaignId);
+        const result = criteria
+          ? await enqueuePhoneCampaign(campaignId, criteria)
+          : await enqueuePhoneCampaign(campaignId);
         return Response.json({ ok: true, ...result });
       }
       case "pause": {
