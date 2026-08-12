@@ -24,6 +24,7 @@ import {
   createVoicePearl,
 } from "./nlpearl";
 import { readPhoneWebhookSecret } from "./phone-webhook";
+import { listSegmentMembers, type SegmentDefinition } from "./segments";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -39,13 +40,14 @@ export type CampaignPhoneConfig = {
   maxAttempts: number;
   retryRate: number;
   agentCount: number;
+  brief: string | null;
 };
 
 // ---------------------------------------------------------------------------
 // Read phone config from campaign fields
 // ---------------------------------------------------------------------------
 
-async function loadCampaignPhoneConfig(campaignId: string): Promise<CampaignPhoneConfig | null> {
+export async function loadCampaignPhoneConfig(campaignId: string): Promise<CampaignPhoneConfig | null> {
   const fieldMaps = await loadCrmFieldMaps();
   const map = fieldMaps.campaign;
   const sql = `
@@ -59,7 +61,8 @@ async function loadCampaignPhoneConfig(campaignId: string): Promise<CampaignPhon
       ${map["Calling Days"] ? `MAX(CASE WHEN ef.field_id = '${map["Calling Days"]}' THEN ef.value END) AS daysRaw` : "NULL AS daysRaw"},
       ${map["Max Attempts"] ? `MAX(CASE WHEN ef.field_id = '${map["Max Attempts"]}' THEN ef.value END) AS maxAttempts` : "NULL AS maxAttempts"},
       ${map["Nlpearl Retry Rate"] ? `MAX(CASE WHEN ef.field_id = '${map["Nlpearl Retry Rate"]}' THEN ef.value END) AS retryRate` : "NULL AS retryRate"},
-      ${map["Nlpearl Agent Count"] ? `MAX(CASE WHEN ef.field_id = '${map["Nlpearl Agent Count"]}' THEN ef.value END) AS agentCount` : "NULL AS agentCount"}
+      ${map["Nlpearl Agent Count"] ? `MAX(CASE WHEN ef.field_id = '${map["Nlpearl Agent Count"]}' THEN ef.value END) AS agentCount` : "NULL AS agentCount"},
+      ${map["Voice Brief"] ? `MAX(CASE WHEN ef.field_id = '${map["Voice Brief"]}' THEN ef.value END) AS brief` : "NULL AS brief"}
     FROM entries e
     LEFT JOIN entry_fields ef ON ef.entry_id = e.id
     WHERE e.object_id = '${ONBOARDING_OBJECT_IDS.campaign}' AND e.id = ${sqlString(campaignId)}
@@ -86,7 +89,63 @@ async function loadCampaignPhoneConfig(campaignId: string): Promise<CampaignPhon
     maxAttempts: r.maxAttempts ? Number(r.maxAttempts) : 3,
     retryRate: r.retryRate ? Number(r.retryRate) : 1,
     agentCount: r.agentCount ? Number(r.agentCount) : 5,
+    brief: r.brief ?? null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Upsert campaign card (create/update) for the phone path
+// ---------------------------------------------------------------------------
+
+export type PhoneCampaignUpsertInput = {
+  campaignId?: string;
+  name?: string;
+  phoneId?: string;
+  windowStart?: string;
+  windowEnd?: string;
+  timezone?: string;
+  days?: number[];
+  maxAttempts?: number;
+  retryRate?: number;
+  agentCount?: number;
+  brief?: string;
+};
+
+/**
+ * Create/update a campaign card + its phone config (insert-or-ignore the
+ * entry, then delete+reinsert the phone/voice fields). Returns the campaignId
+ * (a fresh UUID if input.campaignId was omitted).
+ */
+export async function upsertPhoneCampaign(input: PhoneCampaignUpsertInput): Promise<string> {
+  const dbPath = await duckdbPathAsync();
+  if (!dbPath) {throw new Error("DuckDB not found.");}
+  const fieldMaps = await loadCrmFieldMaps();
+  const campaignId = input.campaignId?.trim() ? input.campaignId.trim() : randomUUID();
+  const now = new Date().toISOString();
+  const statements: string[] = [
+    `INSERT OR IGNORE INTO entries (id, object_id, created_at, updated_at) VALUES (${sqlString(campaignId)}, ${sqlString(ONBOARDING_OBJECT_IDS.campaign)}, ${sqlString(now)}, ${sqlString(now)});`,
+  ];
+  const writeField = (name: string, value: string | number | null | undefined) => {
+    const fieldId = fieldMaps.campaign[name];
+    if (!fieldId || value === undefined || value === null || value === "") {return;}
+    statements.push(
+      `DELETE FROM entry_fields WHERE entry_id = ${sqlString(campaignId)} AND field_id = ${sqlString(fieldId)};`,
+      `INSERT INTO entry_fields (entry_id, field_id, value) VALUES (${sqlString(campaignId)}, ${sqlString(fieldId)}, ${sqlString(String(value))});`,
+    );
+  };
+  writeField("Name", input.name);
+  writeField("Nlpearl Phone ID", input.phoneId);
+  writeField("Calling Window Start", input.windowStart);
+  writeField("Calling Window End", input.windowEnd);
+  writeField("Calling Timezone", input.timezone);
+  writeField("Calling Days", input.days ? JSON.stringify(input.days) : undefined);
+  writeField("Max Attempts", input.maxAttempts);
+  writeField("Nlpearl Retry Rate", input.retryRate);
+  writeField("Nlpearl Agent Count", input.agentCount);
+  writeField("Voice Brief", input.brief);
+  statements.push(`UPDATE entries SET updated_at = ${sqlString(now)} WHERE id = ${sqlString(campaignId)};`);
+  await duckdbExecOnFileAsync(dbPath, statements.join("\n"));
+  return campaignId;
 }
 
 export type PhoneCampaignEnqueueResult = {
@@ -116,6 +175,7 @@ export async function createPhonePearlForCampaign(
   const days = cfg.days ?? [1, 2, 3, 4, 5];
   const start = cfg.windowStart ?? "09:00";
   const end = cfg.windowEnd ?? "18:00";
+  const briefContent = brief ?? cfg.brief ?? undefined;
   const token = readPhoneWebhookSecret() ?? undefined;
   const urls = buildNlpearlCallbackUrls(requestOrigin, token);
 
@@ -134,7 +194,7 @@ export async function createPhonePearlForCampaign(
           transitions: [{ name: "ok", toNodeId: "speak" }] },
         { nodeId: "speak", name: "Offerta", nodeType: 10,
           script: "Vorremmo presentarle una nuova offerta.",
-          instructions: brief ? `Contenuto offerta da comunicare:\n${brief.trim().slice(0, 8000)}` : undefined,
+          instructions: briefContent ? `Contenuto offerta da comunicare:\n${briefContent.trim().slice(0, 8000)}` : undefined,
           transitions: [{ name: "end", toNodeId: "end" }] },
         { nodeId: "end", name: "Fine", nodeType: 100,
           transitions: [] },
@@ -184,7 +244,10 @@ function windowsTimeZone(iana: string | null): string {
  * campaign_send rows are created BEFORE addLead so the UUID is the externalId,
  * enabling lead webhook callbacks to update Status.
  */
-export async function enqueuePhoneCampaign(campaignId: string): Promise<PhoneCampaignEnqueueResult> {
+export async function enqueuePhoneCampaign(
+  campaignId: string,
+  criteria?: PhoneAudienceCriteria,
+): Promise<PhoneCampaignEnqueueResult> {
   const cfg = await loadCampaignPhoneConfig(campaignId);
   if (!cfg) {throw new Error("Campaign not found.");}
   if (!cfg.pearlId) {throw new Error("Campaign has no NLPearl Pearl ID — run createPhonePearlForCampaign first.");}
@@ -194,8 +257,7 @@ export async function enqueuePhoneCampaign(campaignId: string): Promise<PhoneCam
   if (!dbPath) {throw new Error("DuckDB not found.");}
   const fieldMaps = await loadCrmFieldMaps();
 
-  // Only contacts who chose phone (Preferred Contact Channel = "phone")
-  const audience = await resolveAudienceForCampaign();
+  const audience = await resolveAudienceForCampaign(campaignId, criteria);
   const errors: string[] = [];
   let leadsCreated = 0;
 
@@ -235,16 +297,62 @@ export async function enqueuePhoneCampaign(campaignId: string): Promise<PhoneCam
   return { pearlId: cfg.pearlId, leadsCreated, errors };
 }
 
-/** Return phone-preference contacts with a phone number and marketing opt-in. */
-async function resolveAudienceForCampaign(): Promise<Array<{ entry_id: string; name: string | null; email: string | null; phone: string | null }>> {
+// ---------------------------------------------------------------------------
+// Audience resolution
+// ---------------------------------------------------------------------------
+
+export type PhoneAudienceCriteria = {
+  segmentId?: string;
+  count?: number;
+};
+
+async function resolveCampaignSegmentId(campaignId: string): Promise<string | null> {
+  const fieldMaps = await loadCrmFieldMaps();
+  const segFld = fieldMaps.campaign["Segment"];
+  if (!segFld) { return null; }
+  const rows = await duckdbQueryAsync<{ segment: string | null }>(
+    `SELECT MAX(CASE WHEN ef.field_id = '${segFld}' THEN ef.value END) AS segment
+     FROM entries e LEFT JOIN entry_fields ef ON ef.entry_id = e.id
+     WHERE e.object_id = '${ONBOARDING_OBJECT_IDS.campaign}' AND e.id = ${sqlString(campaignId)}
+     GROUP BY e.id LIMIT 1;`,
+  );
+  return rows[0]?.segment?.trim() || null;
+}
+
+async function resolveSegmentMemberIds(segmentId: string): Promise<Set<string>> {
+  const rows = await duckdbQueryAsync<{ filter: string | null }>(
+    `SELECT v."Filter" AS filter FROM v_segment v WHERE v.entry_id = ${sqlString(segmentId)} LIMIT 1;`,
+  );
+  if (rows.length === 0) { throw new Error("Segment not found."); }
+  let def: SegmentDefinition = {};
+  if (rows[0]?.filter) { def = JSON.parse(rows[0].filter) as SegmentDefinition; }
+  const { members } = await listSegmentMembers(def, { limit: 2000 });
+  return new Set(members.map((m) => m.entry_id));
+}
+
+function cap(criteria?: PhoneAudienceCriteria): number {
+  return criteria?.count && criteria.count > 0 ? Math.floor(criteria.count) : 500;
+}
+
+/**
+ * Phone-compliant audience (opt-in + preferred channel = phone), optionally
+ * scoped to a segment (explicit criteria.segmentId, else the campaign Segment)
+ * and capped by criteria.count. Fixes the prior bug where the audience ignored
+ * campaignId.
+ */
+export async function resolveAudienceForCampaign(
+  campaignId: string,
+  criteria?: PhoneAudienceCriteria,
+): Promise<Array<{ entry_id: string; name: string | null; email: string | null; phone: string | null }>> {
   const fieldMaps = await loadCrmFieldMaps();
   const phoneFld = fieldMaps.people["Phone Number"];
   const nameFld = fieldMaps.people["Full Name"];
   const emailFld = fieldMaps.people["Email Address"];
   const optinFld = fieldMaps.people["Marketing Opt-in"];
   const prefFld = fieldMaps.people["Preferred Contact Channel"];
-  if (!phoneFld) {return [];}
-  const sql = `
+  if (!phoneFld) { return []; }
+
+  const baseSql = `
     SELECT e.id AS entry_id,
       ${nameFld ? `MAX(CASE WHEN ef.field_id = '${nameFld}' THEN ef.value END)` : "NULL"} AS name,
       ${emailFld ? `MAX(CASE WHEN ef.field_id = '${emailFld}' THEN ef.value END)` : "NULL"} AS email,
@@ -255,9 +363,19 @@ async function resolveAudienceForCampaign(): Promise<Array<{ entry_id: string; n
       ${optinFld ? `AND EXISTS (SELECT 1 FROM entry_fields o WHERE o.entry_id = e.id AND o.field_id = '${optinFld}' AND o.value = 'true')` : ""}
       ${prefFld ? `AND EXISTS (SELECT 1 FROM entry_fields p WHERE p.entry_id = e.id AND p.field_id = '${prefFld}' AND p.value = 'phone')` : ""}
     GROUP BY e.id
-    HAVING MAX(CASE WHEN ef.field_id = '${phoneFld}' THEN ef.value END) IS NOT NULL AND MAX(CASE WHEN ef.field_id = '${phoneFld}' THEN ef.value END) != ''
-    LIMIT 500;`;
-  const rows = await duckdbQueryAsync<{ entry_id: string; name: string | null; email: string | null; phone: string | null }>(sql);
+    HAVING MAX(CASE WHEN ef.field_id = '${phoneFld}' THEN ef.value END) IS NOT NULL
+       AND MAX(CASE WHEN ef.field_id = '${phoneFld}' THEN ef.value END) != ''`;
+  const segmentId = criteria?.segmentId?.trim() || (await resolveCampaignSegmentId(campaignId)) || undefined;
+  if (segmentId) {
+    // Segment-scoped: base query senza LIMIT (condivisa), filtro in memoria + cap.
+    const rows = await duckdbQueryAsync<{ entry_id: string; name: string | null; email: string | null; phone: string | null }>(`${baseSql};`);
+    const members = await resolveSegmentMemberIds(segmentId);
+    const scoped = rows.filter((r) => members.has(r.entry_id));
+    return scoped.slice(0, cap(criteria));
+  }
+  // No-segment: il cap è spinto nel SQL per non caricare tutta la popolazione compliant.
+  const limitedSql = `${baseSql} LIMIT ${cap(criteria)};`;
+  const rows = await duckdbQueryAsync<{ entry_id: string; name: string | null; email: string | null; phone: string | null }>(limitedSql);
   return rows;
 }
 
