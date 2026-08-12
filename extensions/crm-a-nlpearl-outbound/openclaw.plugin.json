@@ -1,0 +1,16 @@
+{
+  "id": "crm-a-nlpearl-outbound",
+  "name": "Crm-A NLPearl Outbound",
+  "version": "1.0.0",
+  "description": "Registers crm_a_phone_campaign: create/update an outbound phone campaign card and drive NLPearl (Pearl create, lead enqueue, pause/resume) from chat. send/activate require explicit operator confirmation.",
+  "activation": { "onStartup": true },
+  "contracts": {
+    "tools": ["crm_a_phone_campaign"]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": { "enabled": { "type": "boolean", "default": true } },
+    "required": []
+  }
+}

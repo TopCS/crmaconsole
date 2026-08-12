@@ -1,0 +1,10 @@
+{
+  "name": "@crm-a-console/crm-a-nlpearl-outbound",
+  "version": "1.0.0",
+  "private": true,
+  "openclaw": {
+    "extensions": [
+      "./index.mjs"
+    ]
+  }
+}
