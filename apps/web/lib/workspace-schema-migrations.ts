@@ -216,7 +216,7 @@ const PRODUCT_NEW_FIELDS: FieldDef[] = [
   },
 ];
 
-const CAMPAIGN_NEW_FIELDS: FieldDef[] = [
+export const CAMPAIGN_NEW_FIELDS: FieldDef[] = [
   {
     id: "seed_fld_campaign_nlpearl_id_00",
     name: "Nlpearl Pearl ID",
@@ -270,6 +270,27 @@ const CAMPAIGN_NEW_FIELDS: FieldDef[] = [
     name: "Nlpearl Agent Count",
     type: "number",
     sortOrder: 18,
+  },
+  {
+    id: "seed_fld_campaign_voice_brief0",
+    name: "Voice Brief",
+    type: "text",
+    sortOrder: 19,
+  },
+];
+
+/**
+ * Phone-delivery tracking fields for `campaign_send`. Additive to the seed
+ * campaign_send schema. `External ID` carries the NLPearl lead id (equal to the
+ * campaign_send row UUID) so lead/call webhooks can resolve the row and update
+ * Status (see campaign-phone.ts updateCampaignSendByExternalId).
+ */
+export const CAMPAIGN_SEND_NEW_FIELDS: FieldDef[] = [
+  {
+    id: "seed_fld_campaign_send_extid0",
+    name: "External ID",
+    type: "text",
+    sortOrder: 10,
   },
 ];
 // ---------------------------------------------------------------------------
