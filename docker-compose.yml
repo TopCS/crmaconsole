@@ -8,6 +8,8 @@ services:
     volumes:
       - crm-a-data:/root/.openclaw-crm-a
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       # Secrets come from .env (gitignored) or the shell environment.
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
