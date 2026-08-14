@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://denchclaw.com">
+  <a href="#">
     <img src="assets/crm-a-console-hero.png" alt="Crm-A Console — AI CRM, hosted locally on your Mac. Built on OpenClaw." width="680" />
   </a>
 </p>
@@ -11,13 +11,13 @@
 </p>
 
 <p align="center">
-  <a href="https://denchclaw.com">Website</a> · <a href="https://discord.gg/PDFXNVQj9n">Discord</a> · <a href="https://skills.sh">Skills Store</a> · <a href="https://www.youtube.com/watch?v=pfACTbc3Bh4&t=44s">Demo Video</a>
+  <a href="#">Website</a> · <a href="https://discord.gg/PDFXNVQj9n">Discord</a> · <a href="https://skills.sh">Skills Store</a> · <a href="https://www.youtube.com/watch?v=pfACTbc3Bh4&t=44s">Demo Video</a>
 </p>
 
 <br />
 
 <p align="center">
-  <a href="https://denchclaw.com">
+  <a href="#">
     <img src="assets/crm-a-console-app.png" alt="Crm-A Console Web UI — workspace, object tables, and AI chat" width="780" />
   </a>
   <br />
@@ -231,6 +231,25 @@ Web UI development:
 pnpm install
 pnpm web:dev
 ```
+
+```bash
+   cd /home/andrea-batazzi/dev/crm-a/crmaconsole
+
+   # 1) VALORIZZA il segreto (obbligatorio solo per il TOOL in chat, non per la card)
+   #    aggiungi in `.env` (finito in interpolazione, SENZA `export`):
+   #      CRM_A_PHONE_WEBHOOK_SECRET=<il-tuo-segreto>
+
+   # 2) RIGENERA i bundle estensioni + RICOSTRUISCI l'immagine e ricrea il container
+   #    (--build è la chiave: senza, l'immagine resta vecchia e il container identico a prima)
+   pnpm build:crm-a-plugins
+   docker compose up -d --build --force-recreate
+
+   # 3) VERIFICA che la nuova app sia attiva
+   curl -s -o /dev/null -w "integrations: %{http_code}\n" http://localhost:3100/api/integrations
+   curl -s http://localhost:3100/api/settings/nlpearl
+
+   # 4) (per il tool) conferma che l'estensione sia stata registrata nel gateway
+   docker logs crm-a-console 2>&1 | grep -i "crm-a-nlpearl-outbound"
 
 ---
 
