@@ -33,23 +33,20 @@ var CRM_A_EXECUTE_INTEGRATIONS_PARAMETERS = {
   properties: {
     tool_slug: {
       type: "string",
-      description:
-        "Exact tool slug returned by crm_a_search_integrations, for example GMAIL_FETCH_EMAILS or YOUTUBE_LIST_USER_SUBSCRIPTIONS.",
+      description: "Exact tool slug returned by crm_a_search_integrations, for example GMAIL_FETCH_EMAILS or YOUTUBE_LIST_USER_SUBSCRIPTIONS."
     },
     arguments: {
       type: "object",
       additionalProperties: true,
-      description:
-        "JSON arguments object matching the tool's input_schema from the search results.",
-      properties: {},
+      description: "JSON arguments object matching the tool's input_schema from the search results.",
+      properties: {}
     },
     connected_account_id: {
       type: "string",
-      description:
-        "Optional connected account id. Required only when multiple accounts are connected for the same toolkit. The gateway auto-selects when only one account exists.",
-    },
+      description: "Optional connected account id. Required only when multiple accounts are connected for the same toolkit. The gateway auto-selects when only one account exists."
+    }
   },
-  required: ["tool_slug"],
+  required: ["tool_slug"]
 };
 function asRecord(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
@@ -60,7 +57,7 @@ function readString(value) {
 function jsonResult(payload, details) {
   return {
     content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
-    details: details ?? payload,
+    details: details ?? payload
   };
 }
 function resolveGatewayBaseUrl(api, fallbackGatewayUrl) {
@@ -86,8 +83,7 @@ function createCrmAExecuteIntegrationsTool(params) {
       const toolArgs = asRecord(payload.arguments) ?? {};
       if (!toolSlug) {
         return jsonResult({
-          error:
-            "The `tool_slug` field is required. Use crm_a_search_integrations to find available tools first.",
+          error: "The `tool_slug` field is required. Use crm_a_search_integrations to find available tools first."
         });
       }
       try {
@@ -99,17 +95,17 @@ function createCrmAExecuteIntegrationsTool(params) {
               headers: {
                 "content-type": "application/json",
                 accept: "application/json",
-                "x-api-key": params.directApiKey,
+                "x-api-key": params.directApiKey
               },
               body: JSON.stringify({
                 arguments: toolArgs,
-                ...(connectedAccountId
-                  ? { connected_account_id: connectedAccountId }
-                  : // Without an explicit account, Composio resolves it from
-                    // the user id used at connect time.
-                    { user_id: "crm-a-console" }),
-              }),
-            },
+                ...connectedAccountId ? { connected_account_id: connectedAccountId } : (
+                  // Without an explicit account, Composio resolves it from
+                  // the user id used at connect time.
+                  { user_id: "crm-a-console" }
+                )
+              })
+            }
           );
           const text2 = await res2.text();
           let parsed2;
@@ -120,12 +116,12 @@ function createCrmAExecuteIntegrationsTool(params) {
           }
           if (!res2.ok) {
             return jsonResult({
-              error: `Composio ${toolSlug} failed: HTTP ${res2.status}${text2 ? ` \u2014 ${text2.slice(0, 240)}` : ""}`,
+              error: `Composio ${toolSlug} failed: HTTP ${res2.status}${text2 ? ` \u2014 ${text2.slice(0, 240)}` : ""}`
             });
           }
           if (parsed2?.successful === false || readString(parsed2?.error)) {
             return jsonResult({
-              error: `Composio ${toolSlug} failed: ${readString(parsed2?.error) ?? "unknown error"}`,
+              error: `Composio ${toolSlug} failed: ${readString(parsed2?.error) ?? "unknown error"}`
             });
           }
           return jsonResult(parsed2?.data ?? parsed2 ?? {});
@@ -135,13 +131,13 @@ function createCrmAExecuteIntegrationsTool(params) {
           headers: {
             "content-type": "application/json",
             accept: "application/json",
-            ...(params.authorization ? { authorization: params.authorization } : {}),
+            ...params.authorization ? { authorization: params.authorization } : {}
           },
           body: JSON.stringify({
             tool_slug: toolSlug,
             arguments: toolArgs,
-            ...(connectedAccountId ? { connected_account_id: connectedAccountId } : {}),
-          }),
+            ...connectedAccountId ? { connected_account_id: connectedAccountId } : {}
+          })
         });
         const text = await res.text();
         let parsed;
@@ -152,62 +148,60 @@ function createCrmAExecuteIntegrationsTool(params) {
         }
         if (!res.ok) {
           const errorCode = readString(asRecord(parsed?.error)?.code) ?? readString(parsed?.code);
-          const errorMessage =
-            readString(asRecord(parsed?.error)?.message) ?? readString(parsed?.error) ?? text;
+          const errorMessage = readString(asRecord(parsed?.error)?.message) ?? readString(parsed?.error) ?? text;
           if (errorCode === "composio_account_selection_required") {
             return jsonResult(
               {
                 error: errorMessage,
                 account_selection_required: true,
-                instruction:
-                  "Ask the user which connected account to use and pass its connected_account_id.",
+                instruction: "Ask the user which connected account to use and pass its connected_account_id."
               },
-              { status: "error", errorCode, tool_slug: toolSlug },
+              { status: "error", errorCode, tool_slug: toolSlug }
             );
           }
           if (errorCode === "composio_not_connected") {
             return jsonResult(
               { error: errorMessage, not_connected: true },
-              { status: "error", errorCode, tool_slug: toolSlug },
+              { status: "error", errorCode, tool_slug: toolSlug }
             );
           }
           return jsonResult(
             {
               error: `${CRM_A_INTEGRATIONS_DISPLAY_NAME} tool ${toolSlug} failed (HTTP ${res.status}).`,
-              detail: parsed ?? (text || void 0),
+              detail: parsed ?? (text || void 0)
             },
-            { status: "error", tool_slug: toolSlug },
+            { status: "error", tool_slug: toolSlug }
           );
         }
         const data = parsed?.data;
         const error = readString(parsed?.error);
-        const contentPayload = error ? { error, data } : (data ?? parsed ?? {});
+        const contentPayload = error ? { error, data } : data ?? parsed ?? {};
         return {
           content: [
             {
               type: "text",
-              text: JSON.stringify(contentPayload, null, 2),
-            },
+              text: JSON.stringify(contentPayload, null, 2)
+            }
           ],
           details: {
             crmAIntegrations: true,
             tool_slug: toolSlug,
-            ...(parsed?.log_id ? { logId: parsed.log_id } : {}),
-            ...(data !== void 0 ? { structuredContent: data } : {}),
-            ...(error ? { status: "error", error } : {}),
-            ...(connectedAccountId ? { connectedAccountId } : {}),
-          },
+            ...parsed?.log_id ? { logId: parsed.log_id } : {},
+            ...data !== void 0 ? { structuredContent: data } : {},
+            ...error ? { status: "error", error } : {},
+            ...connectedAccountId ? { connectedAccountId } : {}
+          }
         };
       } catch (error) {
         return jsonResult(
           {
             error: `${CRM_A_INTEGRATIONS_DISPLAY_NAME} tool ${toolSlug} failed.`,
-            detail: error instanceof Error ? error.message : String(error),
+            detail: error instanceof Error ? error.message : String(error)
           },
-          { status: "error", tool_slug: toolSlug },
+          { status: "error", tool_slug: toolSlug }
         );
       }
-    },
+    }
   };
 }
 function stripRuntimeComposioServer(api) {
@@ -227,10 +221,10 @@ function registerCrmAIntegrationsBridge(api, fallbackGatewayUrl) {
   if (directApiKey) {
     api.registerTool(createCrmAExecuteIntegrationsTool({ directApiKey }), {
       name: CRM_A_EXECUTE_INTEGRATIONS_NAME,
-      optional: true,
+      optional: true
     });
     api.logger?.info?.(
-      `[crm-a-ai-gateway] registered ${CRM_A_EXECUTE_INTEGRATIONS_NAME} bridge tool (direct Composio)`,
+      `[crm-a-ai-gateway] registered ${CRM_A_EXECUTE_INTEGRATIONS_NAME} bridge tool (direct Composio)`
     );
     return;
   }
@@ -241,14 +235,14 @@ function registerCrmAIntegrationsBridge(api, fallbackGatewayUrl) {
   }
   const tool = createCrmAExecuteIntegrationsTool({
     gatewayBaseUrl,
-    authorization: `Bearer ${apiKey}`,
+    authorization: `Bearer ${apiKey}`
   });
   api.registerTool(tool, {
     name: CRM_A_EXECUTE_INTEGRATIONS_NAME,
-    optional: true,
+    optional: true
   });
   api.logger?.info?.(
-    `[crm-a-ai-gateway] registered ${CRM_A_EXECUTE_INTEGRATIONS_NAME} bridge tool`,
+    `[crm-a-ai-gateway] registered ${CRM_A_EXECUTE_INTEGRATIONS_NAME} bridge tool`
   );
 }
 
@@ -320,8 +314,7 @@ function stripTrailingSlashes(url) {
 }
 function normalizeCrmAGatewayUrl(value) {
   const raw = (value || DEFAULT_CRM_A_CLOUD_GATEWAY_URL).trim();
-  const withProtocol =
-    raw.startsWith("http://") || raw.startsWith("https://") ? raw : `https://${raw}`;
+  const withProtocol = raw.startsWith("http://") || raw.startsWith("https://") ? raw : `https://${raw}`;
   let base = stripTrailingSlashes(withProtocol);
   if (base.endsWith("/v1")) {
     base = stripTrailingSlashes(base.slice(0, -3));
@@ -355,8 +348,8 @@ var FALLBACK_CRM_A_CLOUD_MODELS = [
       input: 0.81,
       output: 4.05,
       cacheRead: 0,
-      cacheWrite: 0,
-    },
+      cacheWrite: 0
+    }
   },
   {
     id: "claude-opus-4.6",
@@ -377,8 +370,8 @@ var FALLBACK_CRM_A_CLOUD_MODELS = [
       input: 6.75,
       output: 33.75,
       cacheRead: 0.675,
-      cacheWrite: 8.4375,
-    },
+      cacheWrite: 8.4375
+    }
   },
   {
     id: "gpt-5.4",
@@ -399,8 +392,8 @@ var FALLBACK_CRM_A_CLOUD_MODELS = [
       input: 3.375,
       output: 20.25,
       cacheRead: 0.3375,
-      cacheWrite: 0,
-    },
+      cacheWrite: 0
+    }
   },
   {
     id: "claude-sonnet-4.6",
@@ -421,15 +414,15 @@ var FALLBACK_CRM_A_CLOUD_MODELS = [
       input: 4.05,
       output: 20.25,
       cacheRead: 0.405,
-      cacheWrite: 5.0625,
-    },
-  },
+      cacheWrite: 5.0625
+    }
+  }
 ];
 function cloneFallbackCrmACloudModels() {
   return FALLBACK_CRM_A_CLOUD_MODELS.map((model) => ({
     ...model,
     input: [...model.input],
-    cost: { ...model.cost },
+    cost: { ...model.cost }
   }));
 }
 function normalizeCrmACloudCatalogModel(input) {
@@ -442,25 +435,15 @@ function normalizeCrmACloudCatalogModel(input) {
   const displayName = readString2(record, "name", "displayName", "display_name");
   const provider = readString2(record, "provider");
   const transportProvider = readString2(record, "transportProvider", "transport_provider");
-  if (
-    !publicId ||
-    !stableId ||
-    !displayName ||
-    !isNonEmptyString(provider) ||
-    !isNonEmptyString(transportProvider)
-  ) {
+  if (!publicId || !stableId || !displayName || !isNonEmptyString(provider) || !isNonEmptyString(transportProvider)) {
     return null;
   }
   const supportsImages = readBoolean(record, "supportsImages", "supports_images") ?? false;
   const supportsStreaming = readBoolean(record, "supportsStreaming", "supports_streaming") ?? true;
   const supportsResponses = readBoolean(record, "supportsResponses", "supports_responses") ?? true;
-  const supportsReasoning =
-    readBoolean(record, "supportsReasoning", "supports_reasoning") ??
-    readBoolean(record, "reasoning") ??
-    false;
+  const supportsReasoning = readBoolean(record, "supportsReasoning", "supports_reasoning") ?? readBoolean(record, "reasoning") ?? false;
   const contextWindow = readNumber(record, "contextWindow", "context_window") ?? 2e5;
-  const maxTokens =
-    readNumber(record, "maxTokens", "max_tokens", "maxOutputTokens", "max_output_tokens") ?? 64e3;
+  const maxTokens = readNumber(record, "maxTokens", "max_tokens", "maxOutputTokens", "max_output_tokens") ?? 64e3;
   const costRecord = asRecord2(record.cost) ?? {};
   const inputCost = readNumber(costRecord, "input") ?? 0;
   const outputCost = readNumber(costRecord, "output") ?? 0;
@@ -485,8 +468,8 @@ function normalizeCrmACloudCatalogModel(input) {
       input: inputCost,
       output: outputCost,
       cacheRead,
-      cacheWrite,
-    },
+      cacheWrite
+    }
   };
 }
 function normalizeCrmACloudCatalogResponse(payload) {
@@ -517,18 +500,18 @@ function buildCrmACloudProviderModels(models) {
       input: model.cost.input,
       output: model.cost.output,
       cacheRead: model.cost.cacheRead,
-      cacheWrite: model.cost.cacheWrite,
+      cacheWrite: model.cost.cacheWrite
     },
     contextWindow: model.contextWindow,
-    maxTokens: model.maxTokens,
+    maxTokens: model.maxTokens
   }));
 }
 function buildCrmACloudAgentModelEntries(models) {
   return Object.fromEntries(
     models.map((model) => [
       `crm-a-cloud/${model.stableId}`,
-      { alias: `${model.displayName} (Crm-A Cloud)` },
-    ]),
+      { alias: `${model.displayName} (Crm-A Cloud)` }
+    ])
   );
 }
 function resolveCrmACloudModel(models, requestedId) {
@@ -546,7 +529,10 @@ function formatCrmACloudModelHint(model) {
 }
 
 // extensions/crm-a-ai-gateway/config-patch.ts
-var CRM_A_COMPOSIO_WRAPPER_TOOLS = ["crm_a_search_integrations", "crm_a_execute_integrations"];
+var CRM_A_COMPOSIO_WRAPPER_TOOLS = [
+  "crm_a_search_integrations",
+  "crm_a_execute_integrations"
+];
 var CRM_A_CLOUD_TOOL_ALLOWLIST = [
   "read",
   "write",
@@ -572,14 +558,14 @@ var CRM_A_CLOUD_TOOL_ALLOWLIST = [
   "image_generate",
   "music_generate",
   "video_generate",
-  ...CRM_A_COMPOSIO_WRAPPER_TOOLS,
+  ...CRM_A_COMPOSIO_WRAPPER_TOOLS
 ];
 function buildCrmACloudProviderConfig(params) {
   return {
     baseUrl: buildCrmAGatewayApiBaseUrl(params.gatewayUrl),
     apiKey: params.apiKey,
     api: "openai-responses",
-    models: buildCrmACloudProviderModels(params.models),
+    models: buildCrmACloudProviderModels(params.models)
   };
 }
 function buildCrmACloudConfigPatch(params) {
@@ -587,13 +573,13 @@ function buildCrmACloudConfigPatch(params) {
     models: {
       mode: "merge",
       providers: {
-        "crm-a-cloud": buildCrmACloudProviderConfig(params),
-      },
+        "crm-a-cloud": buildCrmACloudProviderConfig(params)
+      }
     },
     agents: {
       defaults: {
-        models: buildCrmACloudAgentModelEntries(params.models),
-      },
+        models: buildCrmACloudAgentModelEntries(params.models)
+      }
     },
     messages: {
       tts: {
@@ -601,19 +587,19 @@ function buildCrmACloudConfigPatch(params) {
         providers: {
           elevenlabs: {
             baseUrl: params.gatewayUrl,
-            apiKey: params.apiKey,
-          },
-        },
-      },
+            apiKey: params.apiKey
+          }
+        }
+      }
     },
     tools: {
       alsoAllow: [...CRM_A_COMPOSIO_WRAPPER_TOOLS],
       byProvider: {
         "crm-a-cloud": {
-          allow: [...CRM_A_CLOUD_TOOL_ALLOWLIST],
-        },
-      },
-    },
+          allow: [...CRM_A_CLOUD_TOOL_ALLOWLIST]
+        }
+      }
+    }
   };
 }
 
@@ -635,9 +621,7 @@ function readNumber2(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
 function resolveSyncTriggerConfig(api) {
-  const pluginConfig = asRecord3(asRecord3(asRecord3(api?.config)?.plugins)?.entries)?.[
-    "crm-a-ai-gateway"
-  ];
+  const pluginConfig = asRecord3(asRecord3(asRecord3(api?.config)?.plugins)?.entries)?.["crm-a-ai-gateway"];
   return asRecord3(asRecord3(pluginConfig)?.config?.["syncTrigger"]);
 }
 function resolveStateDir() {
@@ -723,7 +707,7 @@ function armSyncTrigger(api) {
   const intervalMs = readNumber2(config?.intervalMs) ?? DEFAULT_INTERVAL_MS;
   if (intervalMs < 1e3) {
     api?.logger?.info?.(
-      `[crm-a-ai-gateway] sync-trigger intervalMs=${intervalMs} below safety floor; not arming.`,
+      `[crm-a-ai-gateway] sync-trigger intervalMs=${intervalMs} below safety floor; not arming.`
     );
     return;
   }
@@ -739,18 +723,15 @@ function armSyncTrigger(api) {
         method: "POST",
         headers: {
           authorization: `Bearer ${apiKey}`,
-          "content-type": "application/json",
+          "content-type": "application/json"
         },
         body: "{}",
-        signal: controller.signal,
+        signal: controller.signal
       });
-      outcome = response.ok
-        ? { kind: "ok" }
-        : { kind: "http", statusBucket: bucketFor(response.status), status: response.status };
+      outcome = response.ok ? { kind: "ok" } : { kind: "http", statusBucket: bucketFor(response.status), status: response.status };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const aborted =
-        err instanceof Error && (err.name === "AbortError" || /aborted/i.test(message));
+      const aborted = err instanceof Error && (err.name === "AbortError" || /aborted/i.test(message));
       outcome = aborted ? { kind: "timeout" } : { kind: "network", message };
     } finally {
       clearTimeout(timeoutHandle);
@@ -763,7 +744,7 @@ function armSyncTrigger(api) {
       }
     } else if (key !== lastOutcomeKey) {
       api?.logger?.info?.(
-        `[crm-a-ai-gateway] sync-trigger tick ${describeOutcome(outcome)} from ${tickUrl}`,
+        `[crm-a-ai-gateway] sync-trigger tick ${describeOutcome(outcome)} from ${tickUrl}`
       );
     }
     lastOutcomeKey = key;
@@ -772,9 +753,7 @@ function armSyncTrigger(api) {
     void tick();
   }, intervalMs);
   _armed = true;
-  api?.logger?.info?.(
-    `[crm-a-ai-gateway] sync-trigger armed (every ${intervalMs}ms \u2192 ${tickUrl})`,
-  );
+  api?.logger?.info?.(`[crm-a-ai-gateway] sync-trigger armed (every ${intervalMs}ms \u2192 ${tickUrl})`);
 }
 
 // extensions/crm-a-ai-gateway/sync-refresh-tools.ts
@@ -785,12 +764,12 @@ var RESYNC_TIMEOUT_MS = 6e4;
 var REFRESH_PARAMETERS = {
   type: "object",
   additionalProperties: false,
-  properties: {},
+  properties: {}
 };
 function jsonResult2(payload, details) {
   return {
     content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
-    details: details ?? payload,
+    details: details ?? payload
   };
 }
 function summarize(mode, body) {
@@ -835,7 +814,7 @@ async function callRefreshRoute(webBaseUrl, mode, timeoutMs) {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify({ mode }),
-      signal: controller.signal,
+      signal: controller.signal
     });
     const text = await res.text();
     let body = {};
@@ -856,37 +835,36 @@ function createRefreshSyncTool(api) {
   return {
     name: REFRESH_TOOL_NAME,
     label: "Refresh Gmail/Calendar sync",
-    description:
-      "Trigger an incremental Gmail and Calendar sync tick right now. Use this when the user asks to refresh, sync now, pull new emails, or check whether anything new has arrived. Cheap and fast (1-2 seconds). For a full re-import use crm_a_console_resync_full instead.",
+    description: "Trigger an incremental Gmail and Calendar sync tick right now. Use this when the user asks to refresh, sync now, pull new emails, or check whether anything new has arrived. Cheap and fast (1-2 seconds). For a full re-import use crm_a_console_resync_full instead.",
     parameters: REFRESH_PARAMETERS,
     async execute(_toolCallId, _input) {
       try {
         const { status, body } = await callRefreshRoute(
           webBaseUrl,
           "incremental",
-          REFRESH_TIMEOUT_MS,
+          REFRESH_TIMEOUT_MS
         );
         if (status >= 400) {
           return jsonResult2(
             {
               error: body.error ?? `Refresh failed (HTTP ${status}).`,
-              mode: "incremental",
+              mode: "incremental"
             },
-            { status: "error", httpStatus: status },
+            { status: "error", httpStatus: status }
           );
         }
         return {
           content: [{ type: "text", text: summarize("incremental", body) }],
-          details: { mode: "incremental", response: body },
+          details: { mode: "incremental", response: body }
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return jsonResult2(
           { error: `Refresh request failed: ${message}`, mode: "incremental" },
-          { status: "error" },
+          { status: "error" }
         );
       }
-    },
+    }
   };
 }
 function createResyncFullTool(api) {
@@ -894,8 +872,7 @@ function createResyncFullTool(api) {
   return {
     name: RESYNC_TOOL_NAME,
     label: "Full Gmail/Calendar resync",
-    description:
-      "Trigger a full Gmail and Calendar backfill \u2014 re-imports messages and events from scratch. Use this only when the user explicitly asks for a full resync, after they have reconnected an account, or when the incremental refresh (crm_a_console_refresh_sync) repeatedly fails to surface messages they expect to see. Heavier than incremental sync; runs in the background.",
+    description: "Trigger a full Gmail and Calendar backfill \u2014 re-imports messages and events from scratch. Use this only when the user explicitly asks for a full resync, after they have reconnected an account, or when the incremental refresh (crm_a_console_refresh_sync) repeatedly fails to surface messages they expect to see. Heavier than incremental sync; runs in the background.",
     parameters: REFRESH_PARAMETERS,
     async execute(_toolCallId, _input) {
       try {
@@ -904,23 +881,23 @@ function createResyncFullTool(api) {
           return jsonResult2(
             {
               error: body.error ?? `Resync failed (HTTP ${status}).`,
-              mode: "backfill",
+              mode: "backfill"
             },
-            { status: "error", httpStatus: status },
+            { status: "error", httpStatus: status }
           );
         }
         return {
           content: [{ type: "text", text: summarize("backfill", body) }],
-          details: { mode: "backfill", response: body },
+          details: { mode: "backfill", response: body }
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return jsonResult2(
           { error: `Resync request failed: ${message}`, mode: "backfill" },
-          { status: "error" },
+          { status: "error" }
         );
       }
-    },
+    }
   };
 }
 function registerSyncRefreshTools(api) {
@@ -945,10 +922,9 @@ function resolvePluginConfig(api) {
 }
 function resolveGatewayUrl(api) {
   const pluginConfig = resolvePluginConfig(api);
-  const configured =
-    typeof pluginConfig?.gatewayUrl === "string" ? pluginConfig.gatewayUrl : void 0;
+  const configured = typeof pluginConfig?.gatewayUrl === "string" ? pluginConfig.gatewayUrl : void 0;
   return normalizeCrmAGatewayUrl(
-    configured || process.env.CRM_A_GATEWAY_URL || DEFAULT_CRM_A_CLOUD_GATEWAY_URL,
+    configured || process.env.CRM_A_GATEWAY_URL || DEFAULT_CRM_A_CLOUD_GATEWAY_URL
   );
 }
 function resolveEnvApiKey() {
@@ -964,15 +940,14 @@ async function promptForApiKey(prompter) {
   if (typeof prompter?.secret === "function") {
     return String(
       await prompter.secret(
-        "Enter your Crm-A Cloud API key (sign up at dench.com and get it at dench.com/settings)",
-      ),
+        "Enter your Crm-A Cloud API key (sign up at dench.com and get it at dench.com/settings)"
+      )
     ).trim();
   }
   return String(
     await prompter.text({
-      message:
-        "Enter your Crm-A Cloud API key (sign up at dench.com and get it at dench.com/settings)",
-    }),
+      message: "Enter your Crm-A Cloud API key (sign up at dench.com and get it at dench.com/settings)"
+    })
   ).trim();
 }
 async function fetchCrmACloudCatalog(gatewayUrl) {
@@ -992,7 +967,7 @@ async function fetchCrmACloudCatalog(gatewayUrl) {
     return {
       models: cloneFallbackCrmACloudModels(),
       source: "fallback",
-      detail,
+      detail
     };
   }
 }
@@ -1003,23 +978,20 @@ async function validateCrmACloudApiKey(gatewayUrl, apiKey) {
   try {
     response = await fetch(`${apiBaseUrl}/models`, {
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`
       },
-      signal: AbortSignal.timeout(CRM_A_CLOUD_API_KEY_VALIDATION_TIMEOUT_MS),
+      signal: AbortSignal.timeout(CRM_A_CLOUD_API_KEY_VALIDATION_TIMEOUT_MS)
     });
   } catch (err) {
     const cause = err instanceof Error ? err.message : String(err);
     throw new Error(
-      `Could not reach Crm-A Cloud gateway at ${apiBaseUrl} (${cause}). Check your network connection and gateway URL, then try again.`,
+      `Could not reach Crm-A Cloud gateway at ${apiBaseUrl} (${cause}). Check your network connection and gateway URL, then try again.`
     );
   }
   if (response.ok) {
     return;
   }
-  const message =
-    response.status === 401 || response.status === 403
-      ? "Invalid Crm-A Cloud API key."
-      : `Crm-A Cloud validation failed with HTTP ${response.status}.`;
+  const message = response.status === 401 || response.status === 403 ? "Invalid Crm-A Cloud API key." : `Crm-A Cloud validation failed with HTTP ${response.status}.`;
   throw new Error(`${message} Check your key at dench.com/settings.`);
 }
 async function promptForModelSelection(params) {
@@ -1029,10 +1001,10 @@ async function promptForModelSelection(params) {
       options: params.models.map((model) => ({
         value: model.stableId,
         label: model.displayName,
-        hint: formatCrmACloudModelHint(model),
+        hint: formatCrmACloudModelHint(model)
       })),
-      ...(params.initialStableId ? { initialValue: params.initialStableId } : {}),
-    }),
+      ...params.initialStableId ? { initialValue: params.initialStableId } : {}
+    })
   );
   const selected = resolveCrmACloudModel(params.models, selectedStableId);
   if (!selected) {
@@ -1042,11 +1014,11 @@ async function promptForModelSelection(params) {
 }
 function buildAuthNotes(params) {
   const notes = [
-    `Crm-A Cloud uses ${buildCrmAGatewayApiBaseUrl(params.gatewayUrl)} for model traffic.`,
+    `Crm-A Cloud uses ${buildCrmAGatewayApiBaseUrl(params.gatewayUrl)} for model traffic.`
   ];
   if (params.catalog.source === "fallback") {
     notes.push(
-      `Model catalog fell back to Crm-A Console's bundled list (${params.catalog.detail ?? "public catalog unavailable"}).`,
+      `Model catalog fell back to Crm-A Console's bundled list (${params.catalog.detail ?? "public catalog unavailable"}).`
     );
   }
   return notes;
@@ -1059,20 +1031,20 @@ function buildProviderAuthResult(params) {
         credential: {
           type: "api_key",
           provider: PROVIDER_ID,
-          key: params.apiKey,
-        },
-      },
+          key: params.apiKey
+        }
+      }
     ],
     defaultModel: `${PROVIDER_ID}/${params.selected.stableId}`,
     configPatch: buildCrmACloudConfigPatch({
       gatewayUrl: params.gatewayUrl,
       apiKey: params.apiKey,
-      models: params.catalog.models,
+      models: params.catalog.models
     }),
     notes: buildAuthNotes({
       gatewayUrl: params.gatewayUrl,
-      catalog: params.catalog,
-    }),
+      catalog: params.catalog
+    })
   };
 }
 async function runInteractiveAuth(ctx, gatewayUrl) {
@@ -1084,29 +1056,29 @@ async function runInteractiveAuth(ctx, gatewayUrl) {
   const catalog = await fetchCrmACloudCatalog(gatewayUrl);
   const selected = await promptForModelSelection({
     prompter: ctx.prompter,
-    models: catalog.models,
+    models: catalog.models
   });
   return buildProviderAuthResult({
     gatewayUrl,
     apiKey,
     catalog,
-    selected,
+    selected
   });
 }
 async function runNonInteractiveAuth(ctx, gatewayUrl) {
   const apiKey = String(
-    ctx?.opts?.crmACloudApiKey || ctx?.opts?.crmACloudKey || resolveEnvApiKey() || "",
+    ctx?.opts?.crmACloudApiKey || ctx?.opts?.crmACloudKey || resolveEnvApiKey() || ""
   ).trim();
   if (!apiKey) {
     throw new Error(
-      "Crm-A Cloud non-interactive auth requires CRM_A_CLOUD_API_KEY or --crm-a-cloud-api-key.",
+      "Crm-A Cloud non-interactive auth requires CRM_A_CLOUD_API_KEY or --crm-a-cloud-api-key."
     );
   }
   await validateCrmACloudApiKey(gatewayUrl, apiKey);
   const catalog = await fetchCrmACloudCatalog(gatewayUrl);
   const selected = resolveCrmACloudModel(
     catalog.models,
-    String(ctx?.opts?.crmACloudModel || process.env.CRM_A_CLOUD_MODEL || "").trim(),
+    String(ctx?.opts?.crmACloudModel || process.env.CRM_A_CLOUD_MODEL || "").trim()
   );
   if (!selected) {
     throw new Error("Configured Crm-A Cloud model is not available.");
@@ -1115,7 +1087,7 @@ async function runNonInteractiveAuth(ctx, gatewayUrl) {
     gatewayUrl,
     apiKey,
     catalog,
-    selected,
+    selected
   });
 }
 function buildDiscoveryProvider(api, gatewayUrl) {
@@ -1150,8 +1122,8 @@ function register(api) {
         kind: "api_key",
         run: async (ctx) => await runInteractiveAuth(ctx, gatewayUrl),
         // Newer OpenClaw builds can call this hook during headless onboarding.
-        runNonInteractive: async (ctx) => await runNonInteractiveAuth(ctx, gatewayUrl),
-      },
+        runNonInteractive: async (ctx) => await runNonInteractiveAuth(ctx, gatewayUrl)
+      }
     ],
     // Newer OpenClaw builds can surface provider-specific wizard entries.
     wizard: {
@@ -1162,13 +1134,13 @@ function register(api) {
         groupId: "crm-a",
         groupLabel: "Crm-A",
         groupHint: "Managed Crm-A Cloud models",
-        methodId: "api-key",
+        methodId: "api-key"
       },
       modelPicker: {
         label: PROVIDER_LABEL,
         hint: "Connect Crm-A Cloud with your API key",
-        methodId: "api-key",
-      },
+        methodId: "api-key"
+      }
     },
     // Best-effort discovery so newer OpenClaw builds can rehydrate provider config.
     discovery: {
@@ -1176,15 +1148,15 @@ function register(api) {
       run: async () => {
         const provider = buildDiscoveryProvider(api, gatewayUrl);
         return provider ? { provider } : null;
-      },
-    },
+      }
+    }
   });
   registerCrmAIntegrationsBridge(api, gatewayUrl);
   armSyncTrigger(api);
   if (typeof api?.registerTool === "function" && readCrmAAuthProfileKey()) {
     const registered = registerSyncRefreshTools(api);
     api.logger?.info?.(
-      `[crm-a-ai-gateway] registered sync refresh tools: ${registered.join(", ")}`,
+      `[crm-a-ai-gateway] registered sync refresh tools: ${registered.join(", ")}`
     );
   }
   api.registerService({
@@ -1194,7 +1166,7 @@ function register(api) {
     },
     stop: () => {
       api.logger?.info?.("[crm-a-ai-gateway] stopped");
-    },
+    }
   });
 }
 export {
@@ -1202,5 +1174,5 @@ export {
   register as default,
   fetchCrmACloudCatalog,
   id,
-  validateCrmACloudApiKey,
+  validateCrmACloudApiKey
 };

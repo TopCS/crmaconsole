@@ -1,0 +1,16 @@
+{
+  "id": "crm-a-shopify-admin",
+  "name": "Crm-A Shopify Admin",
+  "version": "1.0.0",
+  "description": "Registers shopify_admin for safe Shopify store queries and confirmed product/fulfillment mutations from chat.",
+  "activation": { "onStartup": true },
+  "contracts": {
+    "tools": ["shopify_admin"]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": { "enabled": { "type": "boolean", "default": true } },
+    "required": []
+  }
+}

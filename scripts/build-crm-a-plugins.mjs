@@ -8,6 +8,7 @@ const plugins = [
   "extensions/crm-a-identity/index.ts",
   "extensions/crm-a-ai-gateway/index.ts",
   "extensions/crm-a-nlpearl-outbound/index.ts",
+  "extensions/crm-a-shopify-admin/index.ts",
 ];
 
 for (const entry of plugins) {

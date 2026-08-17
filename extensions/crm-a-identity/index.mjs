@@ -1,7 +1,8 @@
-// extensions/shared/crm-a-auth.ts
-import { existsSync, readFileSync } from "node:fs";
 // extensions/crm-a-identity/index.ts
 import path2 from "node:path";
+
+// extensions/shared/crm-a-auth.ts
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 var DEFAULT_GATEWAY_URL = "https://gateway.merseoriginals.com";
 var AUTH_PROFILES_REL = path.join("agents", "main", "agent", "auth-profiles.json");
@@ -44,19 +45,18 @@ var CRM_A_SEARCH_INTEGRATIONS_PARAMETERS = {
   properties: {
     query: {
       type: "string",
-      description: "Natural-language description of the third-party app action or data you need.",
+      description: "Natural-language description of the third-party app action or data you need."
     },
     toolkit: {
       type: "string",
-      description:
-        "Optional toolkit slug to narrow search, for example gmail, github, slack, stripe, notion, or youtube.",
+      description: "Optional toolkit slug to narrow search, for example gmail, github, slack, stripe, notion, or youtube."
     },
     limit: {
       type: "integer",
-      description: "Maximum number of results to return. Defaults to 20.",
-    },
+      description: "Maximum number of results to return. Defaults to 20."
+    }
   },
-  required: ["query"],
+  required: ["query"]
 };
 var APP_ALIASES = {
   gmail: "gmail",
@@ -81,7 +81,7 @@ var APP_ALIASES = {
   linear: "linear",
   stripe: "stripe",
   billing: "stripe",
-  payments: "stripe",
+  payments: "stripe"
 };
 var STATIC_COMPOSIO_FALLBACK = {
   gmail: [
@@ -91,20 +91,20 @@ var STATIC_COMPOSIO_FALLBACK = {
       required_args: [],
       arg_hints: {
         label_ids: 'Must be a JSON array like ["INBOX"].',
-        max_results: "Integer count, for example 10.",
+        max_results: "Integer count, for example 10."
       },
       default_args: { label_ids: ["INBOX"], max_results: 10 },
-      example_prompts: ["check my recent emails", "show my inbox"],
+      example_prompts: ["check my recent emails", "show my inbox"]
     },
     {
       intent: "Read one email",
       tool: "GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID",
       required_args: ["message_id"],
       arg_hints: {
-        message_id: "Use the message id from a list result.",
+        message_id: "Use the message id from a list result."
       },
-      example_prompts: ["read one message", "open this email"],
-    },
+      example_prompts: ["read one message", "open this email"]
+    }
   ],
   slack: [
     {
@@ -112,10 +112,10 @@ var STATIC_COMPOSIO_FALLBACK = {
       tool: "SLACK_SEND_MESSAGE",
       required_args: ["channel", "text"],
       arg_hints: {
-        channel: "Slack channel ID or schema-supported identifier.",
+        channel: "Slack channel ID or schema-supported identifier."
       },
-      example_prompts: ["send a Slack message", "post in Slack"],
-    },
+      example_prompts: ["send a Slack message", "post in Slack"]
+    }
   ],
   github: [
     {
@@ -123,14 +123,14 @@ var STATIC_COMPOSIO_FALLBACK = {
       tool: "GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER",
       required_args: [],
       arg_hints: {},
-      example_prompts: ["list my GitHub repositories"],
+      example_prompts: ["list my GitHub repositories"]
     },
     {
       intent: "Find pull requests",
       tool: "GITHUB_FIND_PULL_REQUESTS",
       required_args: [],
       arg_hints: {},
-      example_prompts: ["check my recent PRs", "show my recent pull requests"],
+      example_prompts: ["check my recent PRs", "show my recent pull requests"]
     },
     {
       intent: "List repo pull requests",
@@ -138,9 +138,9 @@ var STATIC_COMPOSIO_FALLBACK = {
       required_args: ["owner", "repo"],
       arg_hints: {
         owner: "Repository owner or organization login.",
-        repo: "Repository name without the .git suffix.",
+        repo: "Repository name without the .git suffix."
       },
-      example_prompts: ["list PRs for this repo", "show pull requests in this repository"],
+      example_prompts: ["list PRs for this repo", "show pull requests in this repository"]
     },
     {
       intent: "Get pull request",
@@ -149,10 +149,10 @@ var STATIC_COMPOSIO_FALLBACK = {
       arg_hints: {
         owner: "Repository owner or organization login.",
         repo: "Repository name without the .git suffix.",
-        pull_number: "Numeric pull request number.",
+        pull_number: "Numeric pull request number."
       },
-      example_prompts: ["show this pull request", "get PR details"],
-    },
+      example_prompts: ["show this pull request", "get PR details"]
+    }
   ],
   notion: [
     {
@@ -160,8 +160,8 @@ var STATIC_COMPOSIO_FALLBACK = {
       tool: "NOTION_SEARCH",
       required_args: [],
       arg_hints: {},
-      example_prompts: ["search Notion", "find a Notion page"],
-    },
+      example_prompts: ["search Notion", "find a Notion page"]
+    }
   ],
   "google-calendar": [
     {
@@ -170,9 +170,9 @@ var STATIC_COMPOSIO_FALLBACK = {
       required_args: [],
       arg_hints: {
         time_min: "RFC3339 datetime string.",
-        time_max: "RFC3339 datetime string.",
+        time_max: "RFC3339 datetime string."
       },
-      example_prompts: ["what's upcoming on my calendar", "show upcoming calendar events"],
+      example_prompts: ["what's upcoming on my calendar", "show upcoming calendar events"]
     },
     {
       intent: "List events",
@@ -180,9 +180,9 @@ var STATIC_COMPOSIO_FALLBACK = {
       required_args: [],
       arg_hints: {
         time_min: "RFC3339 datetime string.",
-        time_max: "RFC3339 datetime string.",
+        time_max: "RFC3339 datetime string."
       },
-      example_prompts: ["show my calendar events", "list upcoming meetings"],
+      example_prompts: ["show my calendar events", "list upcoming meetings"]
     },
     {
       intent: "Find event",
@@ -191,10 +191,10 @@ var STATIC_COMPOSIO_FALLBACK = {
       arg_hints: {
         query: "Search text for matching events if the tool supports it.",
         time_min: "RFC3339 datetime string.",
-        time_max: "RFC3339 datetime string.",
+        time_max: "RFC3339 datetime string."
       },
-      example_prompts: ["find my event tomorrow", "search for a calendar event"],
-    },
+      example_prompts: ["find my event tomorrow", "search for a calendar event"]
+    }
   ],
   linear: [
     {
@@ -202,8 +202,8 @@ var STATIC_COMPOSIO_FALLBACK = {
       tool: "LINEAR_LIST_ISSUES",
       required_args: [],
       arg_hints: {},
-      example_prompts: ["list Linear issues", "show Linear tickets"],
-    },
+      example_prompts: ["list Linear issues", "show Linear tickets"]
+    }
   ],
   stripe: [
     {
@@ -214,43 +214,43 @@ var STATIC_COMPOSIO_FALLBACK = {
       example_prompts: [
         "list subscriptions",
         "show subscriptions with trial info",
-        "calculate recurring revenue from subscriptions",
-      ],
+        "calculate recurring revenue from subscriptions"
+      ]
     },
     {
       intent: "Search subscriptions",
       tool: "STRIPE_SEARCH_SUBSCRIPTIONS",
       required_args: [],
       arg_hints: {},
-      example_prompts: ["search Stripe subscriptions", "find a Stripe subscription"],
+      example_prompts: ["search Stripe subscriptions", "find a Stripe subscription"]
     },
     {
       intent: "List customers",
       tool: "STRIPE_LIST_CUSTOMERS",
       required_args: [],
       arg_hints: {},
-      example_prompts: ["list Stripe customers"],
+      example_prompts: ["list Stripe customers"]
     },
     {
       intent: "List invoices",
       tool: "STRIPE_LIST_INVOICES",
       required_args: [],
       arg_hints: {},
-      example_prompts: ["list Stripe invoices"],
+      example_prompts: ["list Stripe invoices"]
     },
     {
       intent: "Retrieve balance",
       tool: "STRIPE_RETRIEVE_BALANCE",
       required_args: [],
       arg_hints: {},
-      example_prompts: ["show Stripe balance"],
-    },
-  ],
+      example_prompts: ["show Stripe balance"]
+    }
+  ]
 };
 function jsonResult(payload) {
   return {
     content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
-    details: payload,
+    details: payload
   };
 }
 function asRecord(value) {
@@ -277,15 +277,9 @@ function humanizeResolverApp(value) {
     github: "GitHub",
     notion: "Notion",
     "google-calendar": "Google Calendar",
-    linear: "Linear",
+    linear: "Linear"
   };
-  return (
-    labels[normalized] ??
-    normalized
-      .split("-")
-      .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-      .join(" ")
-  );
+  return labels[normalized] ?? normalized.split("-").map((token) => token.charAt(0).toUpperCase() + token.slice(1)).join(" ");
 }
 function buildComposioActionLink(action, app) {
   const normalizedApp = normalizeResolverApp(app);
@@ -294,7 +288,7 @@ function buildComposioActionLink(action, app) {
   }
   const params = new URLSearchParams({
     toolkit: normalizedApp,
-    name: humanizeResolverApp(normalizedApp),
+    name: humanizeResolverApp(normalizedApp)
   });
   const label = `${action === "connect" ? "Connect" : "Reconnect"} ${humanizeResolverApp(normalizedApp)}`;
   return `[${label}](crm-a://composio/${action}?${params.toString()})`;
@@ -308,14 +302,11 @@ function buildResolverActionDetails(action, app) {
     action_required: action,
     toolkit_slug: normalizedApp,
     toolkit_name: humanizeResolverApp(normalizedApp),
-    action_link_markdown: buildComposioActionLink(action, normalizedApp),
+    action_link_markdown: buildComposioActionLink(action, normalizedApp)
   };
 }
 function tokenize(value) {
-  return value
-    .toLowerCase()
-    .split(/[^a-z0-9]+/u)
-    .filter((token) => token.length > 1);
+  return value.toLowerCase().split(/[^a-z0-9]+/u).filter((token) => token.length > 1);
 }
 function scoreMatch(text, queryTokens) {
   const haystack = text.toLowerCase();
@@ -354,24 +345,21 @@ async function postComposioGatewayJson(params) {
       headers: {
         "content-type": "application/json",
         accept: "application/json",
-        authorization: `Bearer ${apiKey}`,
+        authorization: `Bearer ${apiKey}`
       },
-      body: JSON.stringify(params.body),
+      body: JSON.stringify(params.body)
     });
     const text = await response.text();
     const parsed = text.trim().length > 0 ? JSON.parse(text) : {};
     if (!response.ok) {
       return {
-        error:
-          readString(asRecord(parsed)?.error) ??
-          readString(asRecord(asRecord(parsed)?.error)?.message) ??
-          `Gateway request failed with HTTP ${response.status}.`,
+        error: readString(asRecord(parsed)?.error) ?? readString(asRecord(asRecord(parsed)?.error)?.message) ?? `Gateway request failed with HTTP ${response.status}.`
       };
     }
     return asRecord(parsed) ?? {};
   } catch (error) {
     return {
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.message : String(error)
     };
   }
 }
@@ -382,8 +370,8 @@ function chooseFallbackTool(app, queryText) {
   let bestScore = -1;
   for (const recipe of recipes) {
     const score = scoreMatch(
-      [recipe.intent, recipe.tool, ...(recipe.example_prompts ?? [])].join(" "),
-      queryTokens,
+      [recipe.intent, recipe.tool, ...recipe.example_prompts ?? []].join(" "),
+      queryTokens
     );
     if (score > bestScore) {
       best = recipe;
@@ -400,13 +388,13 @@ function buildStaticFallbackInputSchema(recipe) {
   for (const [key, hint] of Object.entries(recipe.arg_hints ?? {})) {
     properties[key] = {
       type: typeof hint === "number" ? "number" : Array.isArray(hint) ? "array" : "string",
-      description: Array.isArray(hint) ? JSON.stringify(hint) : String(hint),
+      description: Array.isArray(hint) ? JSON.stringify(hint) : String(hint)
     };
   }
   return {
     type: "object",
     properties,
-    required: recipe.required_args ?? [],
+    required: recipe.required_args ?? []
   };
 }
 function buildStaticFallbackSearchResults(toolkitSlug, queryText) {
@@ -421,15 +409,15 @@ function buildStaticFallbackSearchResults(toolkitSlug, queryText) {
       description: `Known ${humanizeResolverApp(toolkitSlug)} recipe (local fallback because gateway search returned no matches).`,
       toolkit: {
         slug: toolkitSlug,
-        name: humanizeResolverApp(toolkitSlug),
+        name: humanizeResolverApp(toolkitSlug)
       },
       input_schema: buildStaticFallbackInputSchema(recipe),
       suggested_arguments: recipe.default_args ?? {},
       is_connected: true,
       account_count: null,
       accounts: [],
-      match_source: "static_recipe_fallback",
-    },
+      match_source: "static_recipe_fallback"
+    }
   ];
 }
 function buildEmptyConnectedSearchInstruction(params) {
@@ -437,22 +425,19 @@ function buildEmptyConnectedSearchInstruction(params) {
     const top = params.fallbackResults[0] ?? {};
     const slug = readString(top.tool_slug) ?? "the top fallback tool_slug";
     const suggested = top.suggested_arguments;
-    const suggestedText =
-      suggested && typeof suggested === "object" && Object.keys(suggested).length > 0
-        ? ` and suggested_arguments ${JSON.stringify(suggested)}`
-        : "";
+    const suggestedText = suggested && typeof suggested === "object" && Object.keys(suggested).length > 0 ? ` and suggested_arguments ${JSON.stringify(suggested)}` : "";
     return [
       `Gateway search returned no matches, but ${humanizeResolverApp(params.normalizedToolkit)} is connected.`,
       "Do NOT stop the task, do NOT mention gog, and do NOT switch to shell CLIs.",
       `Call ${CRM_A_EXECUTE_INTEGRATIONS_NAME} immediately with tool_slug "${slug}"${suggestedText}.`,
-      `If execution fails, retry ${CRM_A_SEARCH_INTEGRATIONS_NAME} with toolkit only (omit query) or a shorter query.`,
+      `If execution fails, retry ${CRM_A_SEARCH_INTEGRATIONS_NAME} with toolkit only (omit query) or a shorter query.`
     ].join(" ");
   }
   return [
     `No ${humanizeResolverApp(params.normalizedToolkit)} integration tools matched gateway search.`,
     "Do NOT stop \u2014 retry search with toolkit only (omit query), a shorter query, or a different keyword.",
     `Then execute the best match with ${CRM_A_EXECUTE_INTEGRATIONS_NAME}.`,
-    "Never fall back to gog while this app is connected.",
+    "Never fall back to gog while this app is connected."
   ].join(" ");
 }
 function createCrmASearchIntegrationsTool(api) {
@@ -471,9 +456,7 @@ function createCrmASearchIntegrationsTool(api) {
       const toolkit = readString(payload.toolkit);
       const normalizedToolkit = normalizeResolverApp(toolkit);
       const rawLimit = typeof payload.limit === "number" ? payload.limit : Number(payload.limit);
-      const limit = Number.isFinite(rawLimit)
-        ? Math.max(1, Math.min(Math.trunc(rawLimit), 100))
-        : 20;
+      const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(Math.trunc(rawLimit), 100)) : 20;
       let gatewayResult;
       const directComposioKey = process.env.COMPOSIO_API_KEY?.trim();
       if (directComposioKey) {
@@ -486,66 +469,57 @@ function createCrmASearchIntegrationsTool(api) {
         }
         const [toolsRes, connRes] = await Promise.all([
           fetch(`https://backend.composio.dev/api/v3.1/tools?${params.toString()}`, {
-            headers: { accept: "application/json", "x-api-key": directComposioKey },
+            headers: { accept: "application/json", "x-api-key": directComposioKey }
           }),
           fetch(
             "https://backend.composio.dev/api/v3.1/connected_accounts?statuses=ACTIVE&limit=100",
             {
-              headers: { accept: "application/json", "x-api-key": directComposioKey },
-            },
-          ),
+              headers: { accept: "application/json", "x-api-key": directComposioKey }
+            }
+          )
         ]);
         const toolsJson = toolsRes.ok ? await toolsRes.json() : null;
         const connJson = connRes.ok ? await connRes.json() : null;
         const connectedToolkitsDirect = /* @__PURE__ */ new Set();
         for (const item of asRecordArray(connJson?.items) ?? []) {
           const slug = readString(
-            asRecord(item)?.toolkit && asRecord(asRecord(item)?.toolkit)?.slug,
+            asRecord(item)?.toolkit && asRecord(asRecord(item)?.toolkit)?.slug
           );
           if (slug) {
             connectedToolkitsDirect.add(slug);
           }
         }
-        gatewayResult = toolsJson
-          ? {
-              items: asRecordArray(toolsJson.items) ?? [],
-              connected_toolkits: [...connectedToolkitsDirect],
-            }
-          : null;
+        gatewayResult = toolsJson ? {
+          items: asRecordArray(toolsJson.items) ?? [],
+          connected_toolkits: [...connectedToolkitsDirect]
+        } : null;
       } else {
         gatewayResult = await postComposioGatewayJson({
           api,
           path: "/v1/composio/tools/search",
           body: {
-            ...(query ? { query } : {}),
-            ...(normalizedToolkit ? { toolkit_slug: normalizedToolkit } : {}),
-            limit,
-          },
+            ...query ? { query } : {},
+            ...normalizedToolkit ? { toolkit_slug: normalizedToolkit } : {},
+            limit
+          }
         });
       }
       if (!gatewayResult) {
         return jsonResult({
           error: `${CRM_A_INTEGRATIONS_DISPLAY_NAME} search is unavailable.`,
-          guidance: `Check the Crm-A Cloud gateway/API key configuration, then retry ${CRM_A_SEARCH_INTEGRATIONS_NAME}.`,
+          guidance: `Check the Crm-A Cloud gateway/API key configuration, then retry ${CRM_A_SEARCH_INTEGRATIONS_NAME}.`
         });
       }
       let items = asRecordArray(gatewayResult.items) ?? [];
-      let connectedToolkits = Array.isArray(gatewayResult.connected_toolkits)
-        ? gatewayResult.connected_toolkits
-        : [];
-      if (
-        items.length === 0 &&
-        normalizedToolkit &&
-        query &&
-        connectedToolkits.includes(normalizedToolkit)
-      ) {
+      let connectedToolkits = Array.isArray(gatewayResult.connected_toolkits) ? gatewayResult.connected_toolkits : [];
+      if (items.length === 0 && normalizedToolkit && query && connectedToolkits.includes(normalizedToolkit)) {
         const retryResult = await postComposioGatewayJson({
           api,
           path: "/v1/composio/tools/search",
           body: {
             toolkit_slug: normalizedToolkit,
-            limit,
-          },
+            limit
+          }
         });
         if (retryResult) {
           const retryItems = asRecordArray(retryResult.items) ?? [];
@@ -557,11 +531,7 @@ function createCrmASearchIntegrationsTool(api) {
           }
         }
       }
-      if (
-        items.length === 0 &&
-        normalizedToolkit &&
-        !connectedToolkits.includes(normalizedToolkit)
-      ) {
+      if (items.length === 0 && normalizedToolkit && !connectedToolkits.includes(normalizedToolkit)) {
         const actionLink = buildComposioActionLink("connect", normalizedToolkit);
         return jsonResult({
           query,
@@ -570,35 +540,24 @@ function createCrmASearchIntegrationsTool(api) {
           result_count: 0,
           results: [],
           connected_toolkits: connectedToolkits,
-          instruction: actionLink
-            ? `${humanizeResolverApp(normalizedToolkit)} is not connected. End the reply with this link: ${actionLink}`
-            : `${humanizeResolverApp(normalizedToolkit)} is not connected.`,
-          ...buildResolverActionDetails("connect", normalizedToolkit),
+          instruction: actionLink ? `${humanizeResolverApp(normalizedToolkit)} is not connected. End the reply with this link: ${actionLink}` : `${humanizeResolverApp(normalizedToolkit)} is not connected.`,
+          ...buildResolverActionDetails("connect", normalizedToolkit)
         });
       }
       if (items.length === 0) {
-        const fallbackResults =
-          normalizedToolkit && connectedToolkits.includes(normalizedToolkit)
-            ? buildStaticFallbackSearchResults(normalizedToolkit, query)
-            : [];
+        const fallbackResults = normalizedToolkit && connectedToolkits.includes(normalizedToolkit) ? buildStaticFallbackSearchResults(normalizedToolkit, query) : [];
         return jsonResult({
           query,
           toolkit_filter: normalizedToolkit,
           result_count: fallbackResults.length,
           results: fallbackResults,
           connected_toolkits: connectedToolkits,
-          search_source:
-            fallbackResults.length > 0 ? "static_recipe_fallback" : "gateway_tool_router",
-          instruction:
-            normalizedToolkit && connectedToolkits.includes(normalizedToolkit)
-              ? buildEmptyConnectedSearchInstruction({
-                  normalizedToolkit,
-                  query,
-                  fallbackResults,
-                })
-              : normalizedToolkit
-                ? `No ${humanizeResolverApp(normalizedToolkit)} integration tools matched. Refine the query or try a broader search.`
-                : "No integration tools matched. Refine the query or specify a toolkit.",
+          search_source: fallbackResults.length > 0 ? "static_recipe_fallback" : "gateway_tool_router",
+          instruction: normalizedToolkit && connectedToolkits.includes(normalizedToolkit) ? buildEmptyConnectedSearchInstruction({
+            normalizedToolkit,
+            query,
+            fallbackResults
+          }) : normalizedToolkit ? `No ${humanizeResolverApp(normalizedToolkit)} integration tools matched. Refine the query or try a broader search.` : "No integration tools matched. Refine the query or specify a toolkit."
         });
       }
       const results = items.map((item) => {
@@ -610,20 +569,18 @@ function createCrmASearchIntegrationsTool(api) {
           description: readString(item.description),
           toolkit: {
             slug: readString(toolkitRec?.slug),
-            name: readString(toolkitRec?.name),
+            name: readString(toolkitRec?.name)
           },
           input_schema: item.input_parameters ?? item.input_schema,
           is_connected: connStatus?.is_connected === true,
-          account_count:
-            typeof connStatus?.account_count === "number" ? connStatus.account_count : 0,
-          accounts: Array.isArray(connStatus?.accounts) ? connStatus.accounts : [],
+          account_count: typeof connStatus?.account_count === "number" ? connStatus.account_count : 0,
+          accounts: Array.isArray(connStatus?.accounts) ? connStatus.accounts : []
         };
       });
       const hasMultiAccountToolkit = results.some((r) => r.account_count > 1);
       let instruction = `Found ${results.length} integration tool(s). Use \`${CRM_A_EXECUTE_INTEGRATIONS_NAME}\` with the tool_slug and arguments to execute.`;
       if (hasMultiAccountToolkit) {
-        instruction +=
-          " Some toolkits have multiple connected accounts \u2014 ask the user which account to use and pass `connected_account_id` to execute.";
+        instruction += " Some toolkits have multiple connected accounts \u2014 ask the user which account to use and pass `connected_account_id` to execute.";
       }
       return jsonResult({
         query,
@@ -631,9 +588,9 @@ function createCrmASearchIntegrationsTool(api) {
         result_count: results.length,
         results,
         connected_toolkits: connectedToolkits,
-        instruction,
+        instruction
       });
-    },
+    }
   };
 }
 function buildComposioDefaultGuidance(composioAppsSkillPath) {
@@ -657,7 +614,7 @@ function buildComposioDefaultGuidance(composioAppsSkillPath) {
     "- If an integration tool call fails because of argument shape, fix the arguments and retry once before considering any fallback.",
     "- When search returns zero gateway matches but the app is connected, the tool may include `static_recipe_fallback` results with `suggested_arguments`. Execute the top match immediately \u2014 do NOT stop the turn or switch to gog.",
     "- When the user implicitly asks for the full dataset, keep paginating until the tool response no longer advertises more pages.",
-    "",
+    ""
   ].join("\n");
 }
 function buildIdentityPrompt(workspaceDir) {
@@ -772,13 +729,9 @@ For multi-session projects, write a session handoff summary to \`${workspaceDir}
 - **Never** use curl or raw HTTP to call gateway integration endpoints \u2014 always use the integration wrapper tools.
 - **Never** use \`gog\` for Gmail/Calendar/Drive when ${CRM_A_INTEGRATIONS_DISPLAY_NAME} is connected or the user mentions the connected-app layer/rube/map/MCP. \`gog\` is a fallback only when the user explicitly asks for it or the integration layer is unavailable.
 
-${
-  composioGuidance
-    ? `
+${composioGuidance ? `
 ${composioGuidance}
-`
-    : ""
-}
+` : ""}
 ## Sync controls
 
 Gmail and Calendar are kept fresh by a background poll every ~5 minutes. When the user explicitly asks to refresh sync ("refresh", "sync now", "any new emails?", "pull latest", "my inbox looks stale"), call \`crm_a_console_refresh_sync\` to run an immediate incremental tick \u2014 fast (1-2 seconds) and surfaces a one-line summary of what was synced.
@@ -804,17 +757,13 @@ function register(api) {
     return;
   }
   const workspaceDir = resolveWorkspaceDir(api);
-  if (
-    workspaceDir &&
-    typeof api.registerTool === "function" &&
-    shouldRegisterIntegrationTools(workspaceDir)
-  ) {
+  if (workspaceDir && typeof api.registerTool === "function" && shouldRegisterIntegrationTools(workspaceDir)) {
     api.registerTool(createCrmASearchIntegrationsTool(api), {
       name: CRM_A_SEARCH_INTEGRATIONS_NAME,
-      optional: true,
+      optional: true
     });
     api.logger?.info?.(
-      `[crm-a-identity] registered ${CRM_A_SEARCH_INTEGRATIONS_NAME} integration tool`,
+      `[crm-a-identity] registered ${CRM_A_SEARCH_INTEGRATIONS_NAME} integration tool`
     );
   }
   api.on(
@@ -825,10 +774,15 @@ function register(api) {
         return;
       }
       return {
-        prependSystemContext: buildIdentityPrompt(workspaceDir2),
+        prependSystemContext: buildIdentityPrompt(workspaceDir2)
       };
     },
-    { priority: 100 },
+    { priority: 100 }
   );
 }
-export { buildIdentityPrompt, register as default, id, resolveWorkspaceDir };
+export {
+  buildIdentityPrompt,
+  register as default,
+  id,
+  resolveWorkspaceDir
+};

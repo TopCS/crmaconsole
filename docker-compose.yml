@@ -27,6 +27,9 @@ services:
       - CRM_A_DEFAULT_MODEL=${CRM_A_DEFAULT_MODEL:-}
       # Phone outbound (NLPearl): condiviso tra la web route e il gateway OpenClaw (tool crm_a_phone_campaign).
       - CRM_A_PHONE_WEBHOOK_SECRET=${CRM_A_PHONE_WEBHOOK_SECRET:-}
+      # E-commerce touchpoint (Shopify): API secret verifies the webhook HMAC.
+      - SHOPIFY_API_SECRET=${SHOPIFY_API_SECRET:-}
+      - SHOPIFY_STORE_DOMAIN=${SHOPIFY_STORE_DOMAIN:-}
 
 volumes:
   crm-a-data:

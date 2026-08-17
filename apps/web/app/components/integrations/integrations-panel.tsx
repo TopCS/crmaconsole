@@ -7,6 +7,7 @@ import { ComposioAppsSection } from "./composio-apps-section";
 import { TrackingCard } from "./tracking-card";
 import { SesCard } from "./ses-card";
 import { NlpearlCard } from "./nlpearl-card";
+import { ShopifyCard } from "./shopify-card";
 import { ComposioCard } from "./composio-card";
 
 export function IntegrationsPanel({ embedded }: { embedded?: boolean } = {}) {
@@ -85,6 +86,7 @@ export function IntegrationsPanel({ embedded }: { embedded?: boolean } = {}) {
             <ComposioCard />
             <SesCard />
             <NlpearlCard />
+            <ShopifyCard />
             <TrackingCard />
           </div>
           <div className="mb-3 flex items-center justify-between gap-4">
