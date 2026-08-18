@@ -1,7 +1,7 @@
 # Script Presentatore — Demo "Rome Future Week" (Crm-A Console)
 
-> Percorso consolidato della demo, beat per beat. Durata indicativa: **~28–30 min**.
-> Tono: vendita/educazione, ritmo **"touchpoint → record → campagna → chiamata vera → riconoscimento"**.
+> Percorso consolidato della demo, beat per beat. Durata indicativa: **~30–32 min**.
+> Tono: vendita/educazione, ritmo **"touchpoint → record → campagna → chiamata vera → campagna inbound → riconoscimento"**.
 >
 > **Niente CURL sul palco.** Ogni azione è una di queste tre cose:
 > 1. un **comando in chat** all'agente (Copilot);
@@ -12,6 +12,8 @@
 >
 > **Premessa narrativa:** nessun contatto è pre-seeded. La demo parte **vuota**: il primo record
 > nasce dal vivo, da un acquisto sull'e-commerce. Il touchpoint crea il cliente; da lì il CRM ricorda.
+> Due servizi telefonici nascono **dal vivo in chat**: prima la campagna outbound (Atto 1), poi
+> l'agente inbound di customer care (Atto 5) — entrambi costruiti dall'agente, mai pre-creati.
 
 ---
 
@@ -139,11 +141,41 @@
 
 ---
 
-## Atto 5 — Il cliente richiama: la memoria risponde (5 min)
+## Atto 5 — La campagna inbound nasce dalla chat (3 min) *(il servizio che risponde)*
+
+**Obiettivo:** mostrare il secondo strumento telefonico: `crm_a_inbound_care`. L'agente costruisce
+**dal vivo** l'agente inbound di customer care — lo stesso che poi risponderà a Lorenzo nell'Atto 6 —
+invece di averlo pre-creato in preparazione. Di qui parte il callback dell'Atto 6.
+
+**🖥️ Azione:** in chat:
+
+> "Crea l'agente inbound di customer care per il lancio Galaxy: saluta per nome chi già conosciamo,
+> usa la memoria dell'ordine in consegna e proponi il brief del Galaxy 27. Usa il numero inbound
+> `686fd112a91849a9e59a5353`."
+
+**🎙️ Script (beat):**
+> *(`create`)* "Stesso principio dell'outbound, ma al contrario. L'agente crea la **Pearl inbound**:
+> prima di salutare, una chiamata al CRM — il **PreCallAPI** — cerca il numero tra i contatti. Se lo
+> conosce, saluta per nome e legge lo stato dell'ordine; se non lo conosce, saluta genericamente. Parte
+> **in pausa**: nessuna chiamata in ingresso finché non la attivo io."
+>
+> *(`activate` → conferma)* "Ora la accendo. Come per l'outbound, **l'agente mi chiede conferma** prima
+> di attivare la linea. Confermo — da qui in poi quel numero risponde davvero." *(Confermare →
+> `active: true`.)*
+
+**👀 Pubblico vede:** tool-call `create→activate`; Pearl inbound `Paused` → attiva; gate di conferma
+su `activate`.
+
+**Regole sul palco:** `activate` solo dietro conferma esplicita (`confirm: true`). Il numero inbound
+va collaudato **prima** di salire (mai la prima attivazione sul palco — vedi checklist).
+
+---
+
+## Atto 6 — Il cliente richiama: la memoria risponde (5 min)
 
 **Obiettivo:** il momento "wow": Lorenzo richiama e la Console lo riconosce — nome, ordine in consegna, e la nuova offerta.
 
-**🖥️ Azione:** il presentatore, dallo stesso telefono, **chiama il numero inbound** (Pearl inbound attiva). Vivavoce; narrare prima e dopo; seguire il copione.
+**🖥️ Azione:** il presentatore, dallo stesso telefono, **chiama il numero inbound** (la Pearl inbound appena creata e attivata nell'Atto 5). Vivavoce; narrare prima e dopo; seguire il copione.
 
 **📞 SCRIPT CHIAMATA INBOUND (Lorenzo → Pearl inbound):**
 > **[AI]** "Buongiorno Lorenzo, come posso aiutarla?"
@@ -165,7 +197,7 @@
 *(L'agente riassume: due ordini — S26 in consegna GLS + S27 pre-ordinato — consenso, canale, timeline.)*
 
 **🎙️ Script:**
-> "E adesso il tocco finale. Lorenzo richiama — e ascoltate come il CRM lo riconosce: sa chi è, cosa ha comprato e dove è la consegna: 'in carico oggi, domani entro le 18'. Ha incrociato il brief dell'Atto 4 per il S27 — e ha chiuso il pre-ordine con la promo. Il cliente nato dieci minuti fa da un acquisto è ora una storia: due ordini, un consenso, una campagna, tre interazioni. **Niente più 'chi parla?'. È questo il CRM che ricorda.**"
+> "E adesso il tocco finale. Lorenzo richiama — e ascoltate come il CRM lo riconosce: sa chi è, cosa ha comprato e dove è la consegna: 'in carico oggi, domani entro le 18'. Quella è la Pearl inbound che ho appena creato dall'Atto 5 — il PreCallAPI ha cercato il numero, l'ha trovato e ha personalizzato il saluto. Ha incrociato il brief dell'Atto 4 per il S27 — e ha chiuso il pre-ordine con la promo. Il cliente nato dieci minuti fa da un acquisto è ora una storia: due ordini, un consenso, due campagne, tre interazioni. **Niente più 'chi parla?'. È questo il CRM che ricorda.**"
 
 **👀 Pubblico vede:** chiamata in vivavoce (saluto per nome + stato ordine); timeline che si aggiorna; comando di registrazione ordine; riassunto "cosa sappiamo di Lorenzo".
 
@@ -174,7 +206,7 @@
 ## Chiusura (2 min) — Call to action
 
 **🎙️ Script:**
-> "Ricapitolando. Il CRM partiva **vuoto**: il primo record è nato da un touchpoint — un acquisto sull'e-commerce che, via webhook, ha creato l'anagrafica, l'evento e l'ordine. L'operatore ha poi abilitato il consenso e creato la campagna in chat — mai in automatico: ogni invio passa dalla conferma umana. Il telefono ha squillato davvero: una voce vera, un consenso registrato. La stessa conoscenza è diventata un brief multicanale, instradato per canale. E quando il cliente ha richiamato, il CRM lo ha riconosciuto: nome, ordine, consegna, offerta — e ha chiuso il pre-ordine. Crm-A Console: **il CRM che ascolta, ricorda e agisce.** Domande?"
+> "Ricapitolando. Il CRM partiva **vuoto**: il primo record è nato da un touchpoint — un acquisto sull'e-commerce che, via webhook, ha creato l'anagrafica, l'evento e l'ordine. L'operatore ha poi abilitato il consenso e creato in chat **due servizi telefonici** — mai in automatico: la campagna outbound e l'agente inbound di customer care, entrambi con conferma umana prima di attivare. Il telefono ha squillato davvero: una voce vera, un consenso registrato. La stessa conoscenza è diventata un brief multicanale, instradato per canale. E quando il cliente ha richiamato, il CRM lo ha riconosciuto: nome, ordine, consegna, offerta — e ha chiuso il pre-ordine. Crm-A Console: **il CRM che ascolta, ricorda e agisce.** Domande?"
 
 **🖥️ Azione:** aprire le domande. Tenere pronti `DEMO-RUNBOOK.md`, `SHOPIFY-SETUP.md` e `NLPEARL-SERVICES-PROMPT.md` per chi chiede come è costruito.
 
@@ -209,8 +241,8 @@ Origin pubblica attuale: **`https://top-mgm-00.taileb6b.ts.net`** (già impostat
 - [ ] Funnel attivo: `https://top-mgm-00.taileb6b.ts.net/api/integrations` → 200
 - [ ] **Shopify**: dev store + prodotto SAM-S26 + app custom con webhook `orders/create` e `order/fulfilled` → URL Console (vedi `SHOPIFY-SETUP.md`)
 - [ ] Seed eseguito (catalogo+segmento) + **rimosso il contatto "Lorenzo"** del seed (il primo record nasce dal vivo in Atto 0)
-- [ ] Pearl **inbound** creata e **attiva** (da `NLPEARL-SERVICES-PROMPT.md` o `/api/nlpearl/inbound`)
-- [ ] Numero outbound **verificato**; chiamata outbound **collaudata** (mai la prima volta sul palco)
+- [ ] Numero inbound **verificato** (`686fd112a91849a9e59a5353`); numero outbound **verificato**; chiamata outbound **collaudata** (mai la prima volta sul palco)
+- [ ] **Collaudo inbound prima del palco**: `create` + `activate` + una chiamata inbound reale di prova (la Pearl inbound nasce **dal vivo** nell'Atto 5, non in prep) — poi `pause` e lasciare pulita la dashboard
 - [ ] Collaudo webhook Shopify con `scripts/shopify-demo-simulate.sh` (+ `--fulfilled`)
 - [ ] Canali Telegram/email (Atto 4) collaudati — o script pronto a narrarne i `failed: [...]`
 - [ ] Pearl residue di collaudo rimosse dalla dashboard NLPearl
