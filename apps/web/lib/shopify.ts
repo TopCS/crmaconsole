@@ -165,7 +165,7 @@ export function deliveryTextFromFulfillment(status: string | null): string | nul
   if (!status) {return null;}
   const s = status.toLowerCase();
   if (s === "delivered") {return "Consegnato.";}
-  if (s === "in_transit") {return "Corriere in carico; consegna prevista entro 48 ore.";}
+  if (s === "in_transit") {return "Corriere in carico oggi; consegna prevista domani entro le 18.";}
   if (s === "attempted_delivery") {return "Primo tentativo di consegna effettuato.";}
   if (s === "out_for_delivery") {return "In consegna oggi.";}
   if (s === "ready_for_pickup") {return "Disponibile per il ritiro.";}
