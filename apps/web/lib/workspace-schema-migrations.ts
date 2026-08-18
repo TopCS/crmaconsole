@@ -167,6 +167,30 @@ const PEOPLE_NEW_FIELDS: FieldDef[] = [
     type: "boolean",
     sortOrder: 19,
   },
+  {
+    id: "seed_fld_people_firstname_0000",
+    name: "First Name",
+    type: "text",
+    sortOrder: 20,
+  },
+  {
+    id: "seed_fld_people_lastname_000000",
+    name: "Last Name",
+    type: "text",
+    sortOrder: 21,
+  },
+  {
+    id: "seed_fld_people_cf_00000000000",
+    name: "Codice Fiscale",
+    type: "text",
+    sortOrder: 22,
+  },
+  {
+    id: "seed_fld_people_piva_0000000000",
+    name: "PIVA",
+    type: "text",
+    sortOrder: 23,
+  },
 ];
 
 const COMPANY_NEW_FIELDS: FieldDef[] = [

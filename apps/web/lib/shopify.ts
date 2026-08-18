@@ -61,6 +61,10 @@ export type ShopifyOrderData = {
   email: string;
   phone: string;
   name: string;
+  firstName: string;
+  lastName: string;
+  codiceFiscale: string;
+  piva: string;
   createdAt: string;
   totalPrice: number;
   currency: string;
@@ -78,15 +82,54 @@ function asRecord(v: unknown): Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
 
-/** Best-effort person identifiers from a Shopify order payload. */
-function identifiers(body: Record<string, unknown>): { email: string; phone: string; name: string } {
+/** Best-effort person identifiers + Italian tax/business fields from a Shopify order payload. */
+function identifiers(body: Record<string, unknown>): {
+  email: string;
+  phone: string;
+  name: string;
+  firstName: string;
+  lastName: string;
+  codiceFiscale: string;
+  piva: string;
+} {
   const customer = asRecord(body.customer);
   const firstName = asStr(customer.first_name);
   const lastName = asStr(customer.last_name);
   const name = [firstName, lastName].filter(Boolean).join(" ") || asStr(customer.name) || "";
   const email = normalizeEmail(asStr(customer.email) || asStr(body.email));
   const phone = normalizePhone(asStr(customer.phone) || asStr(body.phone));
-  return { email, phone, name };
+
+  // CF / PIVA are not standard Shopify fields — they typically arrive as
+  // order note_attributes (cart lines) or customer metafields. Look in both.
+  const noteAttrs = noteAttributeMap(body);
+  const customerMeta = noteAttributeMap(asRecord(customer.metafields ?? customer.metafield));
+  const codiceFiscale = asStr(customerMeta.codice_fiscale ?? customerMeta.cf)
+    || asStr(customerMeta["Codice Fiscale"])
+    || asStr(noteAttrs.codice_fiscale ?? noteAttrs.cf);
+  const piva = asStr(customerMeta.piva ?? customerMeta.partita_iva ?? customerMeta.vat)
+    || asStr(customerMeta["Partita IVA"] ?? customerMeta["P.IVA"]) 
+    || asStr(noteAttrs.piva ?? noteAttrs.partita_iva);
+
+  return { email, phone, name, firstName, lastName, codiceFiscale, piva };
+}
+
+/**
+ * Shopify note_attributes / metafields arrive as `[{ name, value }]`.
+ * Collapse into a `{ name -> value }` map (case-insensitive keys) so the
+ * caller can look up CF / PIVA / custom checkout fields without knowing the
+ * exact casing Shopify used.
+ */
+function noteAttributeMap(source: Record<string, unknown>): Record<string, unknown> {
+  const arr = Array.isArray(source) ? source : undefined;
+  if (!arr) {return {};}
+  const out: Record<string, unknown> = {};
+  for (const item of arr) {
+    const rec = asRecord(item);
+    const rawName = asStr(rec.name);
+    if (!rawName) {continue;}
+    out[rawName.toLowerCase()] = rec.value;
+  }
+  return out;
 }
 
 /**
@@ -104,7 +147,7 @@ export function mapShopifyOrder(body: unknown): ShopifyOrderData | null {
       : "";
   if (!id) {return null;}
 
-  const { email, phone, name } = identifiers(rec);
+  const { email, phone, name, firstName, lastName, codiceFiscale, piva } = identifiers(rec);
   const createdRaw = asStr(rec.created_at);
   const createdAt = createdRaw && !Number.isNaN(Date.parse(createdRaw))
     ? new Date(createdRaw).toISOString()
@@ -122,6 +165,10 @@ export function mapShopifyOrder(body: unknown): ShopifyOrderData | null {
     email,
     phone,
     name,
+    firstName,
+    lastName,
+    codiceFiscale,
+    piva,
     createdAt,
     totalPrice: Number.isFinite(totalPrice) ? totalPrice : 0,
     currency: asStr(rec.currency) || "EUR",
@@ -243,11 +290,14 @@ async function resolveCommercePerson(data: ShopifyOrderData): Promise<CommerceRe
   if (data.name) {values.push(["Full Name", data.name]);}
   if (data.email) {values.push(["Email Address", data.email]);}
   if (data.phone) {values.push(["Phone Number", data.phone]);}
+  for (const [fieldName, value] of identityTaxFieldValues(data)) {
+    if (value) {values.push([fieldName, value]);}
+  }
   if (values.length > 0) {await updatePersonFields(personId, values);}
   return { personId, matched: "created", email: data.email, phone: data.phone };
 }
 
-/** Fill only empty Full Name / Phone/Email fields — never overwrite a set one. */
+/** Fill only empty Full Name / Phone / Email / name-parts / tax fields — never overwrite a set one. */
 async function gapFillPerson(personId: string, data: ShopifyOrderData): Promise<void> {
   const person = await loadPhonePerson(personId);
   if (!person) {return;}
@@ -255,7 +305,23 @@ async function gapFillPerson(personId: string, data: ShopifyOrderData): Promise<
   if (data.name && !person.name) {updates.push(["Full Name", data.name]);}
   if (data.email && !person.email) {updates.push(["Email Address", data.email]);}
   if (data.phone && !person.phone) {updates.push(["Phone Number", data.phone]);}
+  for (const [fieldName, value] of identityTaxFieldValues(data)) {
+    if (value) {updates.push([fieldName, value]);}
+  }
   if (updates.length > 0) {await updatePersonFields(personId, updates);}
+}
+
+/**
+ * First/Last name + CF/PIVA field values derived from the order. Empty
+ * strings are filtered out by the caller so we never write blank rows.
+ */
+function identityTaxFieldValues(data: ShopifyOrderData): Array<[string, string]> {
+  return [
+    ["First Name", data.firstName],
+    ["Last Name", data.lastName],
+    ["Codice Fiscale", data.codiceFiscale],
+    ["PIVA", data.piva],
+  ];
 }
 
 // ---------------------------------------------------------------------------
