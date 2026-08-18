@@ -118,7 +118,12 @@ export function heuristicGraphFilter(query: string): GraphFilter {
   // 3) focus phrase ("collegate ad Acme", "connected to Sarah", "intorno a X")
   const focusMatch = text.match(/(?:collegat[oei]?\s*(?:ad?|con|a)|connected\s+to|neighbors?\s+of|around|near|intorno\s+a|vicino\s+a|da\s+)\s+([A-Za-z0-9À-ÿ .'’&+-]{2,60})/i);
   if (focusMatch) {
-    out.focusLabel = focusMatch[1].trim().replace(/[.]+$/, "");
+    out.focusLabel = focusMatch[1]
+      .trim()
+      .replace(/[.]+$/, "")
+      .replace(/\s+(?:entro|within|in)\s+\d*\s*(?:hops?|livell\w*|grad\w*|pass\w*|salt\w*|depth).*$/i, "")
+      .replace(/\s+\d+\s*(?:hops?|livell\w*|grad\w*|pass\w*|salt\w*|depth).*$/i, "")
+      .trim();
   }
 
   return out;

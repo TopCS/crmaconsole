@@ -48,6 +48,12 @@ describe("heuristicGraphFilter", () => {
     );
   });
 
+  it("strips a trailing hop-depth phrase from the focus label", () => {
+    const f = heuristicGraphFilter("persone collegate ad Acme entro 2 hop");
+    expect(f.focusLabel).toBe("Acme");
+    expect(f.depth).toBe(2);
+  });
+
   it("returns an empty filter for a blank query", () => {
     expect(heuristicGraphFilter("   ")).toEqual(EMPTY_GRAPH_FILTER);
   });
