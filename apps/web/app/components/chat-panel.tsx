@@ -1388,6 +1388,12 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 			): Promise<boolean> => {
 				const abort = new AbortController();
 				reconnectAbortRef.current = abort;
+				// A run that never finalizes (e.g. the gateway dropped the
+				// subscribe method, or the agent hung) must not pin the UI
+				// on "Resuming stream…" forever. Force-abort after this
+				// deadline so the catch below clears isReconnecting.
+				const RECONNECT_TIMEOUT_MS = 10 * 60_000;
+				let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
 
 				try {
 					const sk = options?.sessionKey;
@@ -1414,6 +1420,12 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 					}
 
 					setIsReconnecting(true);
+					deadlineTimer = setTimeout(() => {
+						console.error(
+							"[chat] reconnect deadline exceeded; aborting stale stream",
+						);
+						abort.abort();
+					}, RECONNECT_TIMEOUT_MS);
 
 					const parser = createStreamParser();
 					const reader = res.body.getReader();
@@ -1490,10 +1502,18 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 						savedMessageIdsRef.current.add(reconnectMsgId);
 					}
 
+					if (deadlineTimer) {
+						clearTimeout(deadlineTimer);
+						deadlineTimer = null;
+					}
 					setIsReconnecting(false);
 					reconnectAbortRef.current = null;
 					return true;
 				} catch (err) {
+					if (deadlineTimer) {
+						clearTimeout(deadlineTimer);
+						deadlineTimer = null;
+					}
 					if (
 						(err as Error).name !== "AbortError"
 					) {

@@ -108,6 +108,8 @@ export type ActiveRun = {
 	_finalizeTimer?: ReturnType<typeof setTimeout> | null;
 	/** @internal short reconciliation window before waiting-run completion */
 	_waitingFinalizeTimer?: ReturnType<typeof setTimeout> | null;
+	/** @internal force-finalize timer for subscribe-only runs that never end */
+	_subscribeDeadlineTimer?: ReturnType<typeof setTimeout> | null;
 	/** Agent ID captured at run creation time. Used for abort, transcript enrichment. */
 	pinnedAgentId?: string;
 	/** Full gateway session key captured at run creation time. */
@@ -125,6 +127,7 @@ const SUBSCRIBE_LIFECYCLE_END_GRACE_MS = 750;
 const WAITING_FINALIZE_RECONCILE_MS = 5_000;
 const MAX_WAITING_DURATION_MS = 10 * 60_000;
 const SUBAGENT_REGISTRY_STALENESS_MS = 15 * 60_000;
+const SUBSCRIBE_RUN_MAX_DURATION_MS = 10 * 60_000;
 const MAX_FILTER_DROP_LOGS = 8;
 const EMPTY_RESPONSE_EVENT_SAMPLE_LIMIT = 5;
 const TRANSCRIPT_TURN_CLOCK_SKEW_MS = 5_000;
@@ -763,6 +766,18 @@ export function startSubscribeRun(params: {
 
 	activeRuns.set(sessionKey, run);
 	wireSubscribeOnlyProcess(run, subscribeChild, sessionKey);
+
+	// Safety net: a subscribe-only run that never receives a terminal
+	// event (e.g. the gateway's `agent.subscribe` method is unavailable
+	// and no lifecycle/end ever arrives) must not stay "running" forever
+	// — the reconnect stream would stay open indefinitely. Force-finalize
+	// after the same max duration the parent waiting-runs use.
+	run._subscribeDeadlineTimer = setTimeout(() => {
+		if (run.status === "running") {
+			finalizeSubscribeRun(run, "completed");
+		}
+	}, SUBSCRIBE_RUN_MAX_DURATION_MS);
+
 	return run;
 }
 
@@ -1332,6 +1347,7 @@ const rl = createInterface({ input: child.stdout! });
 function finalizeSubscribeRun(run: ActiveRun, status: "completed" | "error" = "completed"): void {
 	if (run.status !== "running") { return; }
 	if (run._finalizeTimer) { clearTimeout(run._finalizeTimer); run._finalizeTimer = null; }
+	if (run._subscribeDeadlineTimer) { clearTimeout(run._subscribeDeadlineTimer); run._subscribeDeadlineTimer = null; }
 	clearWaitingFinalizeTimer(run);
 	resetSubscribeRetryState(run);
 
@@ -2593,6 +2609,7 @@ function cleanupRun(sessionId: string) {
 	const run = activeRuns.get(sessionId);
 	if (!run) {return;}
 	if (run._persistTimer) {clearTimeout(run._persistTimer);}
+	if (run._subscribeDeadlineTimer) {clearTimeout(run._subscribeDeadlineTimer); run._subscribeDeadlineTimer = null;}
 	clearWaitingFinalizeTimer(run);
 	stopSubscribeProcess(run);
 	activeRuns.delete(sessionId);
