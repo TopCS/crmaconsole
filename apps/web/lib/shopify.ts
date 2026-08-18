@@ -65,6 +65,12 @@ export type ShopifyOrderData = {
   lastName: string;
   codiceFiscale: string;
   piva: string;
+  address1: string;
+  address2: string;
+  city: string;
+  zip: string;
+  province: string;
+  country: string;
   createdAt: string;
   totalPrice: number;
   currency: string;
@@ -93,11 +99,19 @@ function identifiers(body: Record<string, unknown>): {
   piva: string;
 } {
   const customer = asRecord(body.customer);
+  const billing = asRecord(body.billing_address);
+  const shipping = asRecord(body.shipping_address);
   const firstName = asStr(customer.first_name);
   const lastName = asStr(customer.last_name);
   const name = [firstName, lastName].filter(Boolean).join(" ") || asStr(customer.name) || "";
   const email = normalizeEmail(asStr(customer.email) || asStr(body.email));
-  const phone = normalizePhone(asStr(customer.phone) || asStr(body.phone));
+  // Shopify usually stores phone on billing/shipping_address, not customer.
+  const phone = normalizePhone(
+    asStr(customer.phone)
+    || asStr(body.phone)
+    || asStr(shipping.phone)
+    || asStr(billing.phone),
+  );
 
   // CF / PIVA are not standard Shopify fields — they typically arrive as
   // order note_attributes (cart lines) or customer metafields. Look in both.
@@ -148,6 +162,13 @@ export function mapShopifyOrder(body: unknown): ShopifyOrderData | null {
   if (!id) {return null;}
 
   const { email, phone, name, firstName, lastName, codiceFiscale, piva } = identifiers(rec);
+
+  // Address: prefer shipping (destination), fall back to billing.
+  const shipping = asRecord(rec.shipping_address);
+  const billing = asRecord(rec.billing_address);
+  const addressSource = (shipping.address1 || shipping.city || shipping.zip || shipping.phone)
+    ? shipping
+    : billing;
   const createdRaw = asStr(rec.created_at);
   const createdAt = createdRaw && !Number.isNaN(Date.parse(createdRaw))
     ? new Date(createdRaw).toISOString()
@@ -169,6 +190,12 @@ export function mapShopifyOrder(body: unknown): ShopifyOrderData | null {
     lastName,
     codiceFiscale,
     piva,
+    address1: asStr(addressSource.address1),
+    address2: asStr(addressSource.address2),
+    city: asStr(addressSource.city),
+    zip: asStr(addressSource.zip),
+    province: asStr(addressSource.province),
+    country: asStr(addressSource.country),
     createdAt,
     totalPrice: Number.isFinite(totalPrice) ? totalPrice : 0,
     currency: asStr(rec.currency) || "EUR",
@@ -286,7 +313,10 @@ async function resolveCommercePerson(data: ShopifyOrderData): Promise<CommerceRe
       ? await createPersonFromPhone(data.phone, data.name || undefined)
       : null;
   if (!personId) {return null;}
-  const values: Array<[string, string]> = [];
+  const values: Array<[string, string]> = [
+    ["Status", "Active"],
+    ["Source", "Shopify"],
+  ];
   if (data.name) {values.push(["Full Name", data.name]);}
   if (data.email) {values.push(["Email Address", data.email]);}
   if (data.phone) {values.push(["Phone Number", data.phone]);}
@@ -302,6 +332,8 @@ async function gapFillPerson(personId: string, data: ShopifyOrderData): Promise<
   const person = await loadPhonePerson(personId);
   if (!person) {return;}
   const updates: Array<[string, string]> = [];
+  // A purchase is an active-buyer signal: promote only when unset.
+  if (!person.status) {updates.push(["Status", "Active"]);}
   if (data.name && !person.name) {updates.push(["Full Name", data.name]);}
   if (data.email && !person.email) {updates.push(["Email Address", data.email]);}
   if (data.phone && !person.phone) {updates.push(["Phone Number", data.phone]);}
@@ -312,15 +344,22 @@ async function gapFillPerson(personId: string, data: ShopifyOrderData): Promise<
 }
 
 /**
- * First/Last name + CF/PIVA field values derived from the order. Empty
- * strings are filtered out by the caller so we never write blank rows.
+ * First/Last name, CF/PIVA, and address field values derived from the order.
+ * `Address` composes street + unit into one field; empty strings are filtered
+ * out by the caller so we never write blank rows.
  */
 function identityTaxFieldValues(data: ShopifyOrderData): Array<[string, string]> {
+  const street = [data.address1, data.address2].filter(Boolean).join(", ");
   return [
     ["First Name", data.firstName],
     ["Last Name", data.lastName],
     ["Codice Fiscale", data.codiceFiscale],
     ["PIVA", data.piva],
+    ["Address", street],
+    ["City", data.city],
+    ["Postal Code", data.zip],
+    ["Province", data.province],
+    ["Country", data.country],
   ];
 }
 

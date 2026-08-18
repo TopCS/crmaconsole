@@ -40,8 +40,8 @@ const CAMPAIGN_SEND_OBJECT_ID = SEED_OBJECT_IDS.campaign_send;
 const PRODUCT_OBJECT_ID = SEED_OBJECT_IDS.product;
 const ORDER_OBJECT_ID = SEED_OBJECT_IDS.order;
 
-const SOURCE_ENUM_VALUES = '["Manual","Gmail","Calendar","Anonymous"]';
-const SOURCE_ENUM_COLORS = '["#94a3b8","#ef4444","#3b82f6","#a1a1aa"]';
+const SOURCE_ENUM_VALUES = '["Manual","Gmail","Calendar","Anonymous","Shopify"]';
+const SOURCE_ENUM_COLORS = '["#94a3b8","#ef4444","#3b82f6","#a1a1aa","#96BF48"]';
 
 const SENDER_TYPE_ENUM_VALUES =
   '["Person","Marketing","Transactional","Notification","Mailing List","Automated"]';
@@ -190,6 +190,36 @@ const PEOPLE_NEW_FIELDS: FieldDef[] = [
     name: "PIVA",
     type: "text",
     sortOrder: 23,
+  },
+  {
+    id: "seed_fld_people_address_0000000",
+    name: "Address",
+    type: "text",
+    sortOrder: 24,
+  },
+  {
+    id: "seed_fld_people_city_0000000000",
+    name: "City",
+    type: "text",
+    sortOrder: 25,
+  },
+  {
+    id: "seed_fld_people_zip_00000000000",
+    name: "Postal Code",
+    type: "text",
+    sortOrder: 26,
+  },
+  {
+    id: "seed_fld_people_province_000000",
+    name: "Province",
+    type: "text",
+    sortOrder: 27,
+  },
+  {
+    id: "seed_fld_people_country_00000000",
+    name: "Country",
+    type: "text",
+    sortOrder: 28,
   },
 ];
 
@@ -1365,16 +1395,16 @@ export async function ensureLatestSchema(): Promise<MigrationResult> {
     // Add "Call" (phone interactions) to the same enum, index-aligned.
     await migrateInteractionTypeAddCall(dbPath);
 
-    // ── 0f. Add "Anonymous" to `people.Source` (web-tracking shadows) ─────
-    // Shadow profiles created by the tracker before identity resolution.
-    // Idempotent: only runs while the enum lacks the Anonymous value.
+    // ── 0f. Widen `people.Source` (web-tracking shadows + e-commerce) ────
+    // Shadow profiles from the tracker, plus incoming Shopify purchasers.
+    // Idempotent: only runs while the enum lacks the Shopify value.
     await duckdbExecOnFileAsync(
       dbPath,
       `UPDATE fields
-       SET enum_values = '["Manual","Gmail","Calendar","Anonymous"]',
-           enum_colors = '["#94a3b8","#ef4444","#3b82f6","#a1a1aa"]'
+       SET enum_values = '["Manual","Gmail","Calendar","Anonymous","Shopify"]',
+           enum_colors = '["#94a3b8","#ef4444","#3b82f6","#a1a1aa","#96BF48"]'
        WHERE id = 'seed_fld_people_source_00000000'
-         AND enum_values NOT LIKE '%Anonymous%';`,
+         AND enum_values NOT LIKE '%Shopify%';`,
     );
 
     // ── 0g. Widen `campaign.Status` for the async send lifecycle ──────────

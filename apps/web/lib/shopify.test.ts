@@ -102,6 +102,51 @@ describe("mapShopifyOrder", () => {
     expect(mapShopifyOrder({ ...ORDER, financial_status: "voided" })!.status).toBe("Refunded");
     expect(mapShopifyOrder({ ...ORDER, financial_status: "pending" })!.status).toBe("Pending");
   });
+
+  it("falls back to shipping/billing address for phone and maps address fields", () => {
+    const body = {
+      ...ORDER,
+      customer: { email: "lorenzo@example.com", first_name: "Lorenzo", last_name: "Rossi", phone: null },
+      shipping_address: {
+        first_name: "Lorenzo",
+        last_name: "Rossi",
+        address1: "Via Benedetto Croce, 44",
+        address2: "22",
+        city: "Rome",
+        zip: "00142",
+        province: "Roma",
+        country: "Italy",
+        phone: "0645210201",
+      },
+      billing_address: {
+        first_name: "Lorenzo",
+        last_name: "Rossi",
+        address1: "Via Billing",
+        city: "Rome",
+        zip: "00142",
+        province: "Roma",
+        country: "Italy",
+        phone: "0645219999",
+      },
+    };
+    const data = mapShopifyOrder(body)!;
+    expect(data.phone).toBe("0645210201"); // from shipping address
+    expect(data.address1).toBe("Via Benedetto Croce, 44");
+    expect(data.city).toBe("Rome");
+    expect(data.zip).toBe("00142");
+    expect(data.province).toBe("Roma");
+    expect(data.country).toBe("Italy");
+  });
+
+  it("falls back to billing address phone when shipping is missing", () => {
+    const body = {
+      ...ORDER,
+      customer: { email: "lorenzo@example.com", first_name: "Lorenzo", last_name: "Rossi", phone: null },
+      billing_address: { phone: "0645210201" },
+    };
+    const data = mapShopifyOrder(body)!;
+    expect(data.phone).toBe("0645210201");
+  });
 });
 
 describe("deliveryTextFromFulfillment", () => {
