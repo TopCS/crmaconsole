@@ -1329,9 +1329,18 @@ export function ObjectTable({
 					const justEnriched = enrichedCellIds.has(entryId) && enrichmentProgress?.fieldId === field.id;
 
 					if (fieldIdx === 0 && onEntryClick) {
+						// The first column is the object's display field. When that field is
+						// a relation (e.g. the order's `Customer`), resolve the raw id to the
+						// human label so the row shows the full name instead of a UUID.
+						let displayValue: unknown = info.getValue();
+						if (field.type === "relation" && fieldRelationLabels) {
+							const ids = parseRelationValue(safeString(displayValue));
+							const labels = ids.map((id) => fieldRelationLabels[id] ?? id);
+							if (labels.length > 0) { displayValue = labels.join(", "); }
+						}
 						return (
 							<FirstColumnCell
-								value={info.getValue()}
+								value={displayValue}
 								entryId={entryId}
 								onEntryClick={onEntryClick}
 							/>
