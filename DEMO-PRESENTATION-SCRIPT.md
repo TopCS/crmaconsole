@@ -22,7 +22,32 @@
 **🎬 Scena:** due tab affiancati: la Console (chat Copilot pronta) e lo **Shopify dev store**
 (`crm-a-demo-store`). Telefono del presentatore in vivavoce. Dashboard NLPearl in un altro tab.
 
-**🖥️ Azione (solo prep, NON mostrata):** seed eseguito per **catalogo + segmento** (SAM-S26, SAM-S27, SAM-S25, segmento "Lancio Samsung Galaxy"); poi **rimuovere il contatto "Lorenzo"** del seed (chat: "Rimuovi il contatto Lorenzo" — o via UI) così il primo record nasce dal vivo in Atto 0; webhook Shopify configurato (`SHOPIFY_API_SECRET`); funnel attivo.
+**🖥️ Azione (solo prep, NON mostrata):** eseguire il **seed retail** + rimozione di Lorenzo con lo script dedicato (un solo comando, idempotente):
+
+```bash
+bash scripts/demo-seed.sh
+# → seed (catalogo+persone+ordine+segmento) → rimuove Lorenzo → verifica
+```
+
+Dettaglio di ciò che crea il seed (`POST /api/demo/seed`) e di come si pulisce:
+
+| Tipo | Contenuto |
+|---|---|
+| **Prodotti (3)** | `SAM-S27` *Samsung Galaxy S27* — €1199, `Upcoming`, disponibile dal 2026-10-18, con messaggio marketing completo (chip +18%, batteria 5500 mAh, foto 200MP low-light, 7 anni update, promo €150 permuta) · `SAM-S26` — €999, `Available` · `SAM-S25` — €899, `Discontinued` |
+| **Persone (4)** | `Lorenzo` (+393312345678, lorenzo@example.com, telegram, opt-in **true**) · `Giulia` (email, opt-in true) · `Marco` (telegram, opt-in true) · `Sara` (email, opt-in **false**) |
+| **Ordine (1)** | ordine S26 di Lorenzo — `Shipped`, corriere `GLS` |
+| **Segmento (1)** | `Lancio Samsung Galaxy` — filtro: *Marketing Opt-in = true* |
+
+Poi lo script **rimuove Lorenzo** (persona + il suo ordine seed, in quest'ordine) così il CRM parte senza di lui: il primo record nascerà dal vivo in Atto 0. Il catalogo, gli altri 3 contatti e il segmento restano.
+
+**Verifica alternativa (senza script):**
+```bash
+curl -sX POST localhost:3100/api/demo/seed -H "Authorization: Bearer $CRM_A_PHONE_WEBHOOK_SECRET"
+# → {"ok":true,"seeded":["products","people","order","segment"]}
+# rimozione Lorenzo via chat: "Rimuovi il contatto Lorenzo" (persona + ordine)
+```
+
+Webhook Shopify configurato (`SHOPIFY_API_SECRET`); funnel attivo.
 
 **Mostra in console:** **Integrations → card NLPearl** e **card Shopify** (URL webhook). Poi:
 > *(Mostra la card Shopify.)* "Questo è il punto di ingresso: l'e-commerce. Quando qualcuno compra
@@ -46,6 +71,21 @@
    → webhook `order/fulfilled` → l'ordine riceve corriere + stato di consegna.
 4. In console mostrare il **profilo appena creato** (nome, email, telefono) con la timeline:
    interazione `Purchase` + ordine S26.
+
+**Dettaglio del beat 3 ("segno l'ordine evaso"):**
+- **Dove si clicca:** nell'ordine di Lorenzo, **Shopify admin → l'ordine → "Fulfill item" / "Mark as fulfilled"**,
+  aggiungendo la spedizione: **corriere `GLS`**, tracking number (es. `DEMO-S26`), stato **`in_transit`**.
+- **Cosa succede dietro le quinte:** Shopify invia il webhook `order/fulfilled` a
+  `/api/webhooks/shopify` (HMAC `X-Shopify-Hmac-Sha256` con `SHOPIFY_API_SECRET`). La Console:
+  1. **trova la persona** per email → telefono (**solo ricerca, mai creazione**: un fulfillment
+     senza `orders/create` precedente non genera record fantasma);
+  2. carica il suo **ultimo ordine** (`loadLastOrder`);
+  3. **aggiorna i campi dell'ordine**: `Courier` = `GLS`, `Tracking URL`, e
+     `Delivery Status` = *"Corriere in carico oggi; consegna prevista domani entro le 18."*
+     (testo derivato da `in_transit` in `deliveryTextFromFulfillment`);
+  4. aggiorna `Last Interaction At` sulla persona.
+- **Cosa vede il pubblico:** in console l'ordine S26 ora ha `Courier: GLS` + `Delivery Status`
+  compilati — è la **memoria** che la Pearl inbound pronuncerà nell'Atto 6.
 
 **🎙️ Script:**
 > "Guardate: il CRM era vuoto. Ora qualcuno acquista il Galaxy S26 — ed ecco cosa succede: il
@@ -124,18 +164,29 @@
 
 ---
 
-## Atto 4 — Orchestrazione multicanale (4 min)
+## Atto 4 — Orchestrazione multicanale: gli accessori (4 min)
+
+**Obiettivo:** un **secondo caso d'uso distinto** dall'Atto 1: dopo il lancio del telefono, il CRM
+propone gli **accessori** (cover, auricolari, caricatore) al pubblico — sempre instradato per canale
+preferito. Stessa meccanica "brief → invio", ma su un **prodotto diverso** dal telefono.
 
 **🖥️ Azione:** in chat:
 
-> "Prepara il brief di lancio del Galaxy 27, con il confronto col modello precedente, e invia l'annuncio al segmento 'Lancio Samsung Galaxy' per canale preferito."
+> "Prepara il brief degli accessori Galaxy per i clienti del lancio: cover S27, Galaxy Buds e
+> caricatore rapido, con i prezzi e il link d'acquisto, e invialo al segmento 'Lancio Samsung
+> Galaxy' per canale preferito."
 
 **🎙️ Script (beat):**
-> *(L'agente scrive `brief-galaxy-s27.md` e lo apre.)* "Il prodotto 'viaggia' come un brief di marketing: caratteristiche, differenze col S26, promo, link d'acquisto — la stessa conoscenza che ha parlato al telefono nell'Atto 2."
+> *(L'agente scrive `brief-accessori-galaxy.md` e lo apre.)* "Il prodotto 'viaggia' come un brief di
+> marketing — stavolta però **accessori**, non il telefono: cover, auricolari, caricatore. La stessa
+> conoscenza che ha parlato al telefono nell'Atto 2, applicata a un'offerta nuova. Il CRM non è un
+> foglio S27: è una base viva che sa proporre il prodotto giusto al momento giusto."
 >
-> *(L'agente lancia l'invio multicanale e mostra il risultato.)* "Stessa campagna, instradata **per canale preferito**: chi ha scelto Telegram la riceve su Telegram, chi email su email. Ecco il risultato: `sent`, i destinatari per canale, `failed: []`."
+> *(L'agente lancia l'invio multicanale e mostra il risultato.)* "Instradato **per canale preferito**:
+> chi ha scelto Telegram la riceve su Telegram, chi email su email. Ecco il risultato: `sent`, i
+> destinatari per canale, `failed: []`."
 
-**👀 Pubblico vede:** `brief-galaxy-s27.md`; JSON `{ ok, sent, telegram:[…], email:[…], failed:[] }`.
+**👀 Pubblico vede:** `brief-accessori-galaxy.md`; JSON `{ ok, sent, telegram:[…], email:[…], failed:[] }`.
 
 **Nota onesta:** l'invio reale richiede i canali collegati. Se in prova qualche canale fallisce, narrarlo: "i canali live della demo sono il telefono — l'avete appena visto". Collaudare prima.
 
@@ -197,7 +248,7 @@ va collaudato **prima** di salire (mai la prima attivazione sul palco — vedi c
 *(L'agente riassume: due ordini — S26 in consegna GLS + S27 pre-ordinato — consenso, canale, timeline.)*
 
 **🎙️ Script:**
-> "E adesso il tocco finale. Lorenzo richiama — e ascoltate come il CRM lo riconosce: sa chi è, cosa ha comprato e dove è la consegna: 'in carico oggi, domani entro le 18'. Quella è la Pearl inbound che ho appena creato dall'Atto 5 — il PreCallAPI ha cercato il numero, l'ha trovato e ha personalizzato il saluto. Ha incrociato il brief dell'Atto 4 per il S27 — e ha chiuso il pre-ordine con la promo. Il cliente nato dieci minuti fa da un acquisto è ora una storia: due ordini, un consenso, due campagne, tre interazioni. **Niente più 'chi parla?'. È questo il CRM che ricorda.**"
+> "E adesso il tocco finale. Lorenzo richiama — e ascoltate come il CRM lo riconosce: sa chi è, cosa ha comprato e dove è la consegna: 'in carico oggi, domani entro le 18'. Quella è la Pearl inbound che ho appena creato dall'Atto 5 — il PreCallAPI ha cercato il numero, l'ha trovato e ha personalizzato il saluto. Il brief del Galaxy 27 è lo stesso che ha parlato al telefono nell'Atto 2 — e ha chiuso il pre-ordine con la promo. Il cliente nato dieci minuti fa da un acquisto è ora una storia: due ordini, un consenso, due campagne, tre interazioni. **Niente più 'chi parla?'. È questo il CRM che ricorda.**"
 
 **👀 Pubblico vede:** chiamata in vivavoce (saluto per nome + stato ordine); timeline che si aggiorna; comando di registrazione ordine; riassunto "cosa sappiamo di Lorenzo".
 
@@ -206,7 +257,7 @@ va collaudato **prima** di salire (mai la prima attivazione sul palco — vedi c
 ## Chiusura (2 min) — Call to action
 
 **🎙️ Script:**
-> "Ricapitolando. Il CRM partiva **vuoto**: il primo record è nato da un touchpoint — un acquisto sull'e-commerce che, via webhook, ha creato l'anagrafica, l'evento e l'ordine. L'operatore ha poi abilitato il consenso e creato in chat **due servizi telefonici** — mai in automatico: la campagna outbound e l'agente inbound di customer care, entrambi con conferma umana prima di attivare. Il telefono ha squillato davvero: una voce vera, un consenso registrato. La stessa conoscenza è diventata un brief multicanale, instradato per canale. E quando il cliente ha richiamato, il CRM lo ha riconosciuto: nome, ordine, consegna, offerta — e ha chiuso il pre-ordine. Crm-A Console: **il CRM che ascolta, ricorda e agisce.** Domande?"
+> "Ricapitolando. Il CRM partiva **vuoto**: il primo record è nato da un touchpoint — un acquisto sull'e-commerce che, via webhook, ha creato l'anagrafica, l'evento e l'ordine. L'operatore ha poi abilitato il consenso e creato in chat **due servizi telefonici** — mai in automatico: la campagna outbound e l'agente inbound di customer care, entrambi con conferma umana prima di attivare. Il telefono ha squillato davvero: una voce vera, un consenso registrato. La stessa meccanica è diventata un **brief multicanale per gli accessori**, instradato per canale — un secondo caso d'uso, non una ripetizione. E quando il cliente ha richiamato, il CRM lo ha riconosciuto: nome, ordine, consegna, offerta — e ha chiuso il pre-ordine. Crm-A Console: **il CRM che ascolta, ricorda e agisce.** Domande?"
 
 **🖥️ Azione:** aprire le domande. Tenere pronti `DEMO-RUNBOOK.md`, `SHOPIFY-SETUP.md` e `NLPEARL-SERVICES-PROMPT.md` per chi chiede come è costruito.
 
@@ -240,7 +291,7 @@ Origin pubblica attuale: **`https://top-mgm-00.taileb6b.ts.net`** (già impostat
 - [ ] `.env`: `CRM_A_PHONE_WEBHOOK_SECRET`, `NLPEARL_ACCOUNT_ID`, `NLPEARL_SECRET_KEY`, `TAILSCALE_AUTHKEY` (+ `TAILSCALE_HOSTNAME`), `SHOPIFY_API_SECRET`, `SHOPIFY_STORE_DOMAIN`
 - [ ] Funnel attivo: `https://top-mgm-00.taileb6b.ts.net/api/integrations` → 200
 - [ ] **Shopify**: dev store + prodotto SAM-S26 + app custom con webhook `orders/create` e `order/fulfilled` → URL Console (vedi `SHOPIFY-SETUP.md`)
-- [ ] Seed eseguito (catalogo+segmento) + **rimosso il contatto "Lorenzo"** del seed (il primo record nasce dal vivo in Atto 0)
+- [ ] **Seed + reset**: `bash scripts/demo-seed.sh` → crea catalogo (SAM-S27/S26/S25) + 4 contatti + ordine Lorenzo + segmento "Lancio Samsung Galaxy", poi **rimuove Lorenzo** (persona+ordine). Verifica finale: 3 prodotti, 3 contatti (senza Lorenzo), 1 segmento.
 - [ ] Numero inbound **verificato** (`686fd112a91849a9e59a5353`); numero outbound **verificato**; chiamata outbound **collaudata** (mai la prima volta sul palco)
 - [ ] **Collaudo inbound prima del palco**: `create` + `activate` + una chiamata inbound reale di prova (la Pearl inbound nasce **dal vivo** nell'Atto 5, non in prep) — poi `pause` e lasciare pulita la dashboard
 - [ ] Collaudo webhook Shopify con `scripts/shopify-demo-simulate.sh` (+ `--fulfilled`)

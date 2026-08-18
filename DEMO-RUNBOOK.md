@@ -18,11 +18,25 @@ export CRM_A_PHONE_OUTBOUND_SECRET=<provider-secret>
 #    (openclaw.json → channels.telegram.token). NON passa dal provider.
 ```
 
-Avvio console e **seed** dello scenario:
+Avvio console e **seed** dello scenario (un solo comando: seed + rimozione Lorenzo + verifica):
 ```bash
-curl -X POST localhost:3100/api/demo/seed \
-  -H "Authorization: Bearer $CRM_A_PHONE_WEBHOOK_SECRET"
-# → products, people, order, segment
+bash scripts/demo-seed.sh
+# → seed (catalogo + 4 persone + ordine Lorenzo + segmento)
+# → rimuove Lorenzo (persona + ordine) così il primo record nasce dal vivo
+# → verifica finale
+```
+
+Cosa crea il seed (`POST /api/demo/seed`, idempotente):
+- **Prodotti (3)**: `SAM-S27` (€1199, Upcoming, messaggio marketing completo), `SAM-S26` (€999, Available), `SAM-S25` (€899, Discontinued).
+- **Persone (4)**: `Lorenzo` (+393312345678, telegram, opt-in true), `Giulia` (email, opt-in true), `Marco` (telegram, opt-in true), `Sara` (email, opt-in false).
+- **Ordine (1)**: S26 di Lorenzo, `Shipped`, GLS.
+- **Segmento (1)**: `Lancio Samsung Galaxy` — filtro *Marketing Opt-in = true*.
+
+Lo script poi **rimuove Lorenzo** (persona + ordine seed) così la demo parte senza di lui: il primo record nasce dal vivo dall'acquisto Shopify. Manuale equivalente:
+```bash
+curl -X POST localhost:3100/api/demo/seed -H "Authorization: Bearer $CRM_A_PHONE_WEBHOOK_SECRET"
+# → {"ok":true,"seeded":["products","people","order","segment"]}
+# rimozione Lorenzo: chat "Rimuovi il contatto Lorenzo" (persona + ordine)
 ```
 
 ---
