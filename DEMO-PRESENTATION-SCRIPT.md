@@ -183,21 +183,22 @@
 ## Raggiungibilità — Tailscale funnel (scelta: Tailscale)
 
 La Console deve essere raggiungibile da NLPearl (callback) **e** da Shopify (webhook ordine).
-**Scelta: Tailscale funnel** — già integrato nell'immagine Docker (l'entrypoint si unisce al tailnet,
-pubblica la porta 3100 e imposta `CRM_A_CONSOLE_PUBLIC_URL` da solo).
+**Scelta: Tailscale funnel.** In produzione è attivo il funnel **sull'host** (nodo
+`top-mgm-00`, tailnet `taileb6b`) che pubblica la porta 3100 della Console:
 
-1. Tailscale admin → **reusable auth key**; abilitare **funnel** per il nodo nelle ACL
-   (es. `"funnels": [{"dnsName": "crm-a-console", "ports": [3100]}]`).
-2. In `.env`:
-   ```bash
-   TAILSCALE_AUTHKEY=tskey-auth-...
-   TAILSCALE_HOSTNAME=crm-a-console
-   ```
-3. Riavviare: `docker compose up -d --force-recreate`.
-4. Verifica nei log: `Tailscale funnel: https://crm-a-console.<tailnet>.ts.net`.
-5. Verifica esterna (prep): `curl -s -o /dev/null -w '%{http_code}' https://crm-a-console.<tailnet>.ts.net/api/integrations` → `200`.
+```bash
+# Sul host (già fatto — verificare con:)
+tailscale funnel status
+# → https://top-mgm-00.taileb6b.ts.net/ → proxy http://127.0.0.1:3100
+```
 
-*Alternativa non scelta:* **zrok** richiederebbe client/registrazione esterni e l'export manuale di `CRM_A_CONSOLE_PUBLIC_URL`; Tailscale è già nel container.
+Origin pubblica attuale: **`https://top-mgm-00.taileb6b.ts.net`** (già impostata come
+`CRM_A_CONSOLE_PUBLIC_URL` in `.env`).
+
+*Alternativa nel container* (non usata ora): l'entrypoint Docker si unisce al tailnet e pubblica
+:3100 con `TAILSCALE_AUTHKEY`+`TAILSCALE_HOSTNAME` in `.env`; il log stampa
+`Tailscale funnel: https://crm-a-console.<tailnet>.ts.net`. Serve una auth key riutilizzabile e
+`funnel` abilitato nelle ACL per il nodo.
 
 ---
 
@@ -205,7 +206,7 @@ pubblica la porta 3100 e imposta `CRM_A_CONSOLE_PUBLIC_URL` da solo).
 
 - [ ] `pnpm build:crm-a-plugins` + `docker compose up -d --build --force-recreate`
 - [ ] `.env`: `CRM_A_PHONE_WEBHOOK_SECRET`, `NLPEARL_ACCOUNT_ID`, `NLPEARL_SECRET_KEY`, `TAILSCALE_AUTHKEY` (+ `TAILSCALE_HOSTNAME`), `SHOPIFY_API_SECRET`, `SHOPIFY_STORE_DOMAIN`
-- [ ] Funnel attivo: `https://crm-a-console.<tailnet>.ts.net/api/integrations` → 200
+- [ ] Funnel attivo: `https://top-mgm-00.taileb6b.ts.net/api/integrations` → 200
 - [ ] **Shopify**: dev store + prodotto SAM-S26 + app custom con webhook `orders/create` e `order/fulfilled` → URL Console (vedi `SHOPIFY-SETUP.md`)
 - [ ] Seed eseguito (catalogo+segmento) + **rimosso il contatto "Lorenzo"** del seed (il primo record nasce dal vivo in Atto 0)
 - [ ] Pearl **inbound** creata e **attiva** (da `NLPEARL-SERVICES-PROMPT.md` o `/api/nlpearl/inbound`)
