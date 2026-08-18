@@ -269,6 +269,7 @@ function kindIsDerived(kind: ContentTab["kind"]): boolean {
     case "crm-calendar":
     case "crm-segmentation":
     case "crm-campaigns":
+    case "crm-graph":
     case "crm-person":
     case "crm-company":
       return true;
@@ -321,6 +322,8 @@ function resolveDerivedContent(
       return { kind: "crm-segmentation" };
     case "crm-campaigns":
       return { kind: "crm-campaigns" };
+    case "crm-graph":
+      return { kind: "crm-graph" };
     case "crm-person":
       return {
         kind: "crm-person",

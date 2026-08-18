@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.75",
+    "@antv/g6": "5.1.1",
     "@aws-sdk/client-sesv2": "^3.1103.0",
     "@base-ui/react": "^1.2.0",
     "@dnd-kit/core": "^6.3.1",

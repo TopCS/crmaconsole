@@ -21,7 +21,8 @@ type IconKind =
   | "app"
   | "object"
   | "folder"
-  | "file";
+  | "file"
+  | "graph";
 
 function resolveIconKind(tab: ContentTab): IconKind {
   const path = tab.path ?? "";
@@ -39,6 +40,7 @@ function resolveIconKind(tab: ContentTab): IconKind {
   if (tab.kind === "crm-company") return "company";
   if (tab.kind === "crm-inbox") return "inbox";
   if (tab.kind === "crm-calendar") return "calendar";
+  if (tab.kind === "crm-graph") return "graph";
   if (tab.kind === "cloud") return "cloud";
   if (tab.kind === "skills") return "skills";
   if (tab.kind === "integrations") return "integrations";
@@ -144,6 +146,17 @@ export function TabIcon({ tab }: { tab: ContentTab }) {
       return (
         <svg {...common}>
           <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+        </svg>
+      );
+    case "graph":
+      return (
+        <svg {...common}>
+          <circle cx="6" cy="6" r="2.5" />
+          <circle cx="18" cy="6" r="2.5" />
+          <circle cx="12" cy="18" r="2.5" />
+          <path d="m8 7.5 3 8.5" />
+          <path d="m16 7.5-3 8.5" />
+          <path d="M8.5 6h7" />
         </svg>
       );
     case "file":

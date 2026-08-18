@@ -95,10 +95,11 @@ type WorkspaceSidebarProps = {
       | "crm-calendar"
       | "crm-events"
       | "crm-segmentation"
-      | "crm-campaigns",
+      | "crm-campaigns"
+      | "crm-graph",
   ) => void;
   /** Currently-active CRM nav item, used to highlight the row. */
-  activeCrmTarget?: "people" | "companies" | "inbox" | "calendar" | "events" | "segmentation" | "campaigns" | null;
+  activeCrmTarget?: "people" | "companies" | "inbox" | "calendar" | "events" | "segmentation" | "campaigns" | "graph" | null;
   /** Custom CRM tables (workspace.duckdb objects) to list under the default CRM nav. */
   customCrmObjects?: CustomCrmObject[];
   /** Currently-active custom CRM object name, used to highlight the row. */
@@ -389,6 +390,21 @@ export function WorkspaceSidebar({
 				<svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
 					<path d="m3 11 18-5v12L3 14v-3z" />
 					<path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+				</svg>
+			),
+		},
+		{
+			id: "crm-graph" as const,
+			label: "Graph",
+			target: "graph" as const,
+			icon: (
+				<svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+					<circle cx="6" cy="6" r="2.5" />
+					<circle cx="18" cy="6" r="2.5" />
+					<circle cx="12" cy="18" r="2.5" />
+					<path d="m8 7.5 3 8.5" />
+					<path d="m16 7.5-3 8.5" />
+					<path d="M8.5 6h7" />
 				</svg>
 			),
 		},

@@ -36,6 +36,7 @@ import { InboxView } from "../components/crm/inbox-view";
 import { CalendarView } from "../components/crm/calendar-view";
 import { SegmentsView } from "../components/crm/segments/segments-view";
 import { CampaignsView } from "../components/crm/campaigns/campaigns-view";
+import { GraphView } from "../components/crm/graph/graph-view";
 import { PersonProfile } from "../components/crm/person-profile";
 import { CompanyProfile } from "../components/crm/company-profile";
 import { ChatPanel, type ChatPanelHandle, type SubagentSpawnInfo } from "../components/chat-panel";
@@ -389,6 +390,7 @@ function nodeToContentTabKind(nodeType: string, path: string): ContentTabKind {
   if (path === "~crm/calendar") return "crm-calendar";
   if (path === "~crm/segmentation") return "crm-segmentation";
   if (path === "~crm/campaigns") return "crm-campaigns";
+  if (path === "~crm/graph") return "crm-graph";
   switch (nodeType) {
     case "object": return "object";
     case "document": return "document";
@@ -1322,7 +1324,8 @@ function WorkspacePageInner() {
         | "crm-calendar"
         | "crm-events"
         | "crm-segmentation"
-        | "crm-campaigns",
+        | "crm-campaigns"
+        | "crm-graph",
     ) => {
       // Make sure the right panel is open and wide enough to actually use
       // when the user clicks one of the data tabs (People, Companies, etc.).
@@ -1363,6 +1366,7 @@ function WorkspacePageInner() {
         "crm-calendar": { path: "~crm/calendar", name: "Calendar" },
         "crm-segmentation": { path: "~crm/segmentation", name: "Segmentation" },
         "crm-campaigns": { path: "~crm/campaigns", name: "Campagne" },
+        "crm-graph": { path: "~crm/graph", name: "Graph" },
       }[target];
       openTabForNode({ path: config.path, name: config.name, type: "folder" }, { preview: false });
       closeEntryModalIfOpen();
@@ -2352,7 +2356,9 @@ function WorkspacePageInner() {
                   ? "segmentation" as const
                   : activeContentTab?.kind === "crm-campaigns"
                     ? "campaigns" as const
-                    : null
+                    : activeContentTab?.kind === "crm-graph"
+                      ? "graph" as const
+                      : null
     ),
     customCrmObjects,
     activeCrmObjectName: activeContentTab?.kind === "object" ? activeContentTab.path : null,
@@ -3124,6 +3130,8 @@ function ContentRenderer({
 
     case "crm-campaigns":
       return <CampaignsView />;
+    case "crm-graph":
+      return <GraphView />;
 
     case "crm-person":
       return (

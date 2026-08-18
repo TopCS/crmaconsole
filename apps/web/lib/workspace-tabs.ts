@@ -71,7 +71,8 @@ export type ContentTabKind =
   | "crm-person"
   | "crm-company"
   | "crm-segmentation"
-  | "crm-campaigns";
+  | "crm-campaigns"
+  | "crm-graph";
 
 /**
  * Tab in the right-panel content strip.
@@ -352,6 +353,7 @@ export function inferContentTabKindFromPath(path: string): ContentTabKind {
   if (path === "~crm/calendar") return "crm-calendar";
   if (path === "~crm/segmentation") return "crm-segmentation";
   if (path === "~crm/campaigns") return "crm-campaigns";
+  if (path === "~crm/graph") return "crm-graph";
   return "file";
 }
 
@@ -367,6 +369,7 @@ export function inferContentTabTitle(path: string, fallback?: string): string {
   if (path === "~crm/calendar") return "Calendar";
   if (path === "~crm/segmentation") return "Segmentation";
   if (path === "~crm/campaigns") return "Campagne";
+  if (path === "~crm/graph") return "Graph";
   return path.split("/").pop() || path;
 }
 

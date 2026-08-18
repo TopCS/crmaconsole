@@ -182,6 +182,22 @@ Beyond the CRM objects, the workspace ships CDP surfaces:
 
 ---
 
+## Relationship graph
+
+A read-only property-graph view over the workspace, rendered as an interactive force-directed graph under **Graph** in the CRM sidebar. It gives a "colpo d'occhio" of how entities relate — no separate graph database, no agent dependency.
+
+- **Model** — vertices are `entries` (typed by their `objects.name`); edges are the `fields` rows with `type='relation'` (their `entry_fields.value` holds the target `entry_id`, or a JSON array for `many_to_many`). The projection lives in `apps/web/lib/crm-graph.ts` and is pure SQL — it works on every DuckDB version and never writes to the workspace.
+- **Endpoints**
+  - `GET /api/crm/graph?type=people,company&focus=<id|label>&depth=2` → `{ nodes, edges, truncated }`
+  - `GET /api/crm/graph/node?entryId=<id>` → full field map for a single vertex
+  - `POST /api/crm/graph/query` `{ "query": "persone collegate ad Acme entro 2 hop" }` → a structured filter (OpenRouter LLM when `OPENROUTER_API_KEY` is set, otherwise a local keyword heuristic)
+- **Extending for new CRM tables** — add the object and its relation fields the usual way (see `apps/web/lib/workspace-schema-migrations.ts`); the graph picks them up automatically. Two optional touch points for nicer output:
+  1. `KNOWN_OBJECT_TYPES` in `apps/web/lib/crm-graph.ts` — whitelist the new type for the natural-language filter.
+  2. `LABEL_SQL` in the same file — add a preferred label field (e.g. `Subject`) so nodes show a readable name instead of `type #id`.
+- **Opt-in engine** — today the graph is the SQL projection above (zero extra deps). LadybugDB is the planned opt-in graph engine for richer Cypher queries; enabling it requires a spike to confirm it can ATTACH DuckDB views read-only against the workspace.
+
+---
+
 ## Troubleshooting
 
 ### `pairing required`
