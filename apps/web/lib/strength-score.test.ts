@@ -8,6 +8,7 @@ import {
   recencyDecay,
   roundScore,
   scoreEmailInteraction,
+  scoreEventInteraction,
   scoreMeetingInteraction,
 } from "./strength-score";
 
@@ -163,6 +164,30 @@ describe("scoreMeetingInteraction", () => {
       response: "accepted",
     });
     expect(old / recent).toBeLessThan(0.05);
+  });
+});
+
+describe("scoreEventInteraction", () => {
+  it("scores a fresh Purchase with the purchase weight", () => {
+    expect(scoreEventInteraction("Purchase", 0)).toBe(SCORE_WEIGHTS.purchase);
+    expect(SCORE_WEIGHTS.purchase).toBeGreaterThanOrEqual(20); // → Active
+  });
+
+  it("scores a fresh Call with the call weight", () => {
+    expect(scoreEventInteraction("Call", 0)).toBe(SCORE_WEIGHTS.call);
+  });
+
+  it("scores 0 for unweighted event types", () => {
+    expect(scoreEventInteraction("Page View", 0)).toBe(0);
+    expect(scoreEventInteraction("Custom", 0)).toBe(0);
+    expect(scoreEventInteraction("Form Submit", 0)).toBe(0);
+    expect(scoreEventInteraction("Email", 0)).toBe(0);
+    expect(scoreEventInteraction("Meeting", 0)).toBe(0);
+  });
+
+  it("applies recency decay to purchases", () => {
+    const old = scoreEventInteraction("Purchase", 90);
+    expect(old / SCORE_WEIGHTS.purchase).toBeCloseTo(Math.exp(-1), 3);
   });
 });
 

@@ -30,6 +30,8 @@ export const SCORE_WEIGHTS = {
   oneOnOneMeeting: 8.0,
   smallGroupMeeting: 3.0, // 3–5 attendees
   largeGroupMeeting: 0.5, // > 5 attendees
+  purchase: 25.0, // a fresh e-commerce purchase → Active (≥ 20)
+  call: 12.0, // a phone call → Weak (a few real exchanges)
 } as const;
 
 export const DIRECTNESS = {
@@ -131,6 +133,24 @@ export function scoreMeetingInteraction(input: MeetingScoreInput): number {
     recencyDecay(input.ageDays) *
     meetingDirectness(input.role, input.response)
   );
+}
+
+/**
+ * Score non-email/meeting CDP events (Purchase, Call, …). These are buying /
+ * direct-conversation signals the sync paths don't emit — they arrive via
+ * `recordEvent` from the Shopify e-commerce touchpoint and the phone
+ * webhook. Unknown types (e.g. Page View, Form Submit, Custom) score 0 by
+ * default until an explicit weight is assigned.
+ */
+export function scoreEventInteraction(type: string, ageDays: number): number {
+  const weight =
+    type === "Purchase"
+      ? SCORE_WEIGHTS.purchase
+      : type === "Call"
+        ? SCORE_WEIGHTS.call
+        : 0;
+  if (weight === 0) {return 0;}
+  return weight * recencyDecay(ageDays);
 }
 
 /** Round to 4 decimal places to keep DB rows readable. */

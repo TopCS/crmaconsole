@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { duckdbExecOnFileAsync, duckdbPathAsync, duckdbQueryAsync } from "./workspace";
 import { loadCrmFieldMaps, sqlString } from "./crm-queries";
 import { ONBOARDING_OBJECT_IDS } from "./workspace-schema-migrations";
+import { roundScore, scoreEventInteraction } from "./strength-score";
 
 /**
  * Shared CDP event/person write helpers, used by both ingestion surfaces:
@@ -50,10 +51,18 @@ const INTERACTION_FIELD_IDS = {
   "Occurred At": "seed_fld_inter_occurred_0000000",
   Person: "seed_fld_inter_person_000000000",
   Properties: "seed_fld_inter_properties_000",
+  "Score Contribution": "seed_fld_inter_score_0000000000",
 } as const;
 
 function interactionFieldId(map: Record<string, string>, name: keyof typeof INTERACTION_FIELD_IDS) {
   return map[name] ?? INTERACTION_FIELD_IDS[name];
+}
+
+/** Days elapsed since an ISO timestamp, clamped to ≥ 0. */
+function ageDays(iso: string): number {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) {return 0;}
+  return Math.max(0, (Date.now() - ms) / 86_400_000);
 }
 
 export function normalizeEmail(value: unknown): string {
@@ -316,6 +325,15 @@ export async function recordEvent(params: {
   ];
   if (params.propertiesJson) {
     values.push(["Properties", params.propertiesJson]);
+  }
+
+  // Score CDP events (Purchase, Call, …) so buying/direct-conversation signals
+  // aggregate into the person's Strength Score instead of leaving them "Cold".
+  const score = roundScore(
+    scoreEventInteraction(params.type, ageDays(occurredAt)),
+  );
+  if (score > 0) {
+    values.push(["Score Contribution", String(score)]);
   }
 
   const statements = [
