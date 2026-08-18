@@ -265,6 +265,24 @@ export function getActiveRun(sessionId: string): ActiveRun | undefined {
 	return activeRuns.get(sessionId);
 }
 
+/**
+ * Reconcile a subscribe-only run with the gateway's on-disk state and
+ * finalize it if the gateway has already ended it (e.g. the terminal
+ * `chat`/`lifecycle` event never reached this process). Call this before
+ * treating a "running" run as blocking a new message.
+ */
+export function reconcileSubscribeRun(sessionId: string): ActiveRun | undefined {
+	const run = activeRuns.get(sessionId);
+	if (!run) {return undefined;}
+	if (run.isSubscribeOnly && run.status === "running") {
+		const diskStatus = reconcileSubscribeOnlyRunWithDisk(run);
+		if (diskStatus === "completed" || diskStatus === "error") {
+			finalizeSubscribeRun(run, diskStatus);
+		}
+	}
+	return run;
+}
+
 /** Check whether a *running* (not just completed) run exists for a session. */
 export function hasActiveRun(sessionId: string): boolean {
 	const run = activeRuns.get(sessionId);
@@ -437,6 +455,10 @@ export function reactivateSubscribeRun(
 
 	run.status = "running";
 	run._lifecycleEnded = false;
+	if (run._subscribeDeadlineTimer) {clearTimeout(run._subscribeDeadlineTimer); run._subscribeDeadlineTimer = null;}
+	run._subscribeDeadlineTimer = setTimeout(() => {
+		if (run.status === "running") {finalizeSubscribeRun(run, "completed");}
+	}, SUBSCRIBE_RUN_MAX_DURATION_MS);
 	if (run._finalizeTimer) {clearTimeout(run._finalizeTimer); run._finalizeTimer = null;}
 	clearWaitingFinalizeTimer(run);
 	resetSubscribeRetryState(run);
