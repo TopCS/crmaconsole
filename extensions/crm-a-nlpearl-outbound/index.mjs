@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 var id = "crm-a-nlpearl-outbound";
 var TOOL_NAME = "crm_a_phone_campaign";
+var INBOUND_TOOL_NAME = "crm_a_inbound_care";
 var DEFAULT_WEB_PORT = 3100;
 var PROCESS_JSON_REL = path.join("web-runtime", "process.json");
 var CALL_TIMEOUT_MS = 6e4;
@@ -120,6 +121,97 @@ async function callPhoneRoute(webBaseUrl, secret, body) {
     clearTimeout(timer);
   }
 }
+var INBOUND_ACTIONS = ["create", "activate", "pause"];
+var INBOUND_CARE_PARAMETERS = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    action: {
+      type: "string",
+      enum: [...INBOUND_ACTIONS],
+      description: "create: build the inbound customer-care Pearl (paused). activate/pause: toggle the inbound Pearl's activity (activate requires confirm:true)."
+    },
+    name: { type: "string", description: "Inbound Pearl name (create)." },
+    phoneId: { type: "string", description: "NLPearl phone number ID assigned to the inbound number (create)." },
+    brief: { type: "string", description: "Marketing Message MD the agent should speak (create)." },
+    pearlId: { type: "string", description: "Inbound Pearl ID (activate/pause)." },
+    confirm: { type: "boolean", description: "MUST be true to run activate; anything else refuses the action." }
+  },
+  required: ["action"]
+};
+async function callInboundRoute(webBaseUrl, secret, body) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CALL_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${webBaseUrl}/api/nlpearl/inbound`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        authorization: `Bearer ${secret}`
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    const text = await res.text();
+    let parsed = {};
+    if (text.trim()) {
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        parsed = { error: text.slice(0, 240) };
+      }
+    }
+    return { status: res.status, body: parsed };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+function createInboundCareTool(webBaseUrl, secret) {
+  return {
+    name: INBOUND_TOOL_NAME,
+    label: "NLPearl inbound customer care",
+    description: "Drive the NLPearl inbound customer-care Pearl from chat. create: build the inbound Pearl (paused, PreCallAPI greeting + order memory + offer brief). activate/pause: toggle whether the inbound number is answered. activate requires the operator's explicit confirmation (confirm: true).",
+    parameters: INBOUND_CARE_PARAMETERS,
+    async execute(_toolCallId, input) {
+      const action = readString(input.action);
+      if (!action) {
+        return jsonResult({ error: "action is required: create|activate|pause" });
+      }
+      const confirm = input.confirm === true;
+      if (action === "activate" && !confirm) {
+        return jsonResult({
+          error: "Refusing to activate without confirmation. Ask the operator to confirm, then call again with confirm: true.",
+          needsConfirmation: true
+        });
+      }
+      const body = { action };
+      if (action === "create") {
+        for (const k of ["name", "phoneId", "brief"]) {
+          const v = readString(input[k]);
+          if (v) {
+            body[k] = v;
+          }
+        }
+      } else {
+        const pearlId = readString(input.pearlId);
+        if (!pearlId) {
+          return jsonResult({ error: "pearlId is required for activate/pause." });
+        }
+        body.pearlId = pearlId;
+      }
+      try {
+        const { status, body: resBody } = await callInboundRoute(webBaseUrl, secret, body);
+        if (status >= 400) {
+          return jsonResult({ error: resBody.error ?? `Inbound care ${action} failed (HTTP ${status}).` });
+        }
+        return jsonResult(resBody);
+      } catch (err) {
+        return jsonResult({ error: `Inbound care ${action} request failed: ${err instanceof Error ? err.message : String(err)}` });
+      }
+    }
+  };
+}
 function createPhoneCampaignTool(webBaseUrl, secret) {
   return {
     name: TOOL_NAME,
@@ -212,7 +304,11 @@ function register(api) {
     name: TOOL_NAME,
     optional: true
   });
-  api.logger?.info?.(`[crm-a-nlpearl-outbound] registered ${TOOL_NAME} (web: ${webBaseUrl})`);
+  api.registerTool(createInboundCareTool(webBaseUrl, secret), {
+    name: INBOUND_TOOL_NAME,
+    optional: true
+  });
+  api.logger?.info?.(`[crm-a-nlpearl-outbound] registered ${TOOL_NAME} + ${INBOUND_TOOL_NAME} (web: ${webBaseUrl})`);
 }
 export {
   register as default,

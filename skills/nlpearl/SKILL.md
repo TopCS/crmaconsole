@@ -9,7 +9,8 @@ metadata: { "openclaw": { "inject": true, "emoji": "📞" } }
 NLPearl.AI is an AI-powered voice/text agent platform. "Pearls" are autonomous agents that handle inbound/outbound calls and text conversations. In Crm-A Console, NLPearl is the **phone transport** for outbound campaigns and inbound customer-care. You can drive it two ways:
 
 1. **`crm_a_phone_campaign` agent tool** — high-level, opinionated outbound flow (create campaign card → Pearl paused → audience → send/activate), built for the chat operator. **`send`/`resume` require `confirm: true`** (never run them without the operator's explicit go).
-2. **Raw NLPearl API v2** (below) — everything else: list Pearls, voices, phone numbers, calls, transcripts, analytics, inbound config.
+2. **`crm_a_inbound_care` agent tool** — high-level inbound customer-care flow (create the inbound Pearl → activate/pause). **`activate` requires `confirm: true`** (creation stays un-gated: it's paused and harmless).
+3. **Raw NLPearl API v2** (below) — everything else: list Pearls, voices, phone numbers, calls, transcripts, analytics, inbound config.
 
 **Credentials:** set via the **NLPearl card** in the workspace **Integrations** page (Account ID + Secret Key), or env `NLPEARL_ACCOUNT_ID` / `NLPEARL_SECRET_KEY`. The console webhook route also needs `CRM_A_PHONE_WEBHOOK_SECRET`.
 
@@ -19,6 +20,7 @@ NLPearl.AI is an AI-powered voice/text agent platform. "Pearls" are autonomous a
 
 - Managing AI voice/text agents (Pearls) programmatically
 - Driving an outbound calling campaign (prefer `crm_a_phone_campaign`, or raw API for fine control)
+- Creating/activating the inbound customer-care Pearl (prefer `crm_a_inbound_care`)
 - Adding leads for outbound calling
 - Retrieving call recordings/transcripts and analytics
 - Managing blacklists and phone numbers
@@ -123,6 +125,16 @@ The `crm-a-nlpearl-outbound` extension registers one agent tool for the outbound
 - `pause` / `resume` — toggle Pearl activity; `resume` **requires `confirm: true`** (starts dialing → credits).
 
 **Safety rule (non-negotiable):** `send` and `resume` must ALWAYS be gated behind the operator's explicit confirmation (`confirm: true`). Never auto-send or auto-activate. Prefer small `count` (3–5) in demos — `addLead` is serial and the tool call times out at 60s for large audiences.
+
+## Console tool — `crm_a_inbound_care`
+
+The `crm-a-nlpearl-outbound` extension also registers `crm_a_inbound_care` for the inbound customer-care flow. It calls `POST /api/nlpearl/inbound`. Actions:
+
+- `create` — build the inbound customer-care Pearl (**paused**): PreCallAPI node looks up the caller's phone in the CRM before the greeting (known → greet by name + order/delivery context; unknown → generic greeting), then a dialogue node carries the offer brief. Params: `name`, `phoneId` (inbound number), `brief` (Marketing Message MD).
+- `activate` — make the inbound number answer calls. **Requires `confirm: true`** (turns on a live inbound line).
+- `pause` — stop answering (no confirmation required; safe).
+
+**Safety rule:** `activate` must ALWAYS be gated behind `confirm: true`. Creation is safe (paused, nothing answers). Validate the Pearl was created paused before relying on it (the NLPearl contract has changed in the past).
 
 ## Recipes
 

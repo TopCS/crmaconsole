@@ -1,21 +1,25 @@
 /**
- * Crm-A Console — NLPearl outbound phone campaign agent tool.
+ * Crm-A Console — NLPearl phone agent tools (outbound campaigns + inbound care).
  *
- * Registers `crm_a_phone_campaign`, which lets the chat agent drive
- * outbound phone campaigns end-to-end by calling the existing
- * `POST /api/campaigns/phone` route on the local web app:
+ * Registers two chat tools backed by the local web app:
  *
- *   upsert  → create/update the campaign card (name, phone config, Voice Brief)
- *   create  → build the NLPearl Voice Pearl (paused; no dialing)
- *   send    → enqueue the phone-compliant audience as NLPearl leads
- *   pause / resume → toggle Pearl activity
+ *   crm_a_phone_campaign (outbound) → POST /api/campaigns/phone
+ *     upsert  → create/update the campaign card (name, phone config, Voice Brief)
+ *     create  → build the NLPearl Voice Pearl (paused; no dialing)
+ *     send    → enqueue the phone-compliant audience as NLPearl leads
+ *     pause / resume → toggle Pearl activity
  *
- * Safety: `send` and `resume` (which starts dialing) REQUIRE the caller to
- * pass `confirm: true`, else the tool refuses. The agent must ask the
- * operator for explicit confirmation before sending leads or activating.
+ *   crm_a_inbound_care (inbound) → POST /api/nlpearl/inbound
+ *     create   → build the inbound customer-care Pearl (paused)
+ *     activate / pause → toggle the inbound Pearl's activity
+ *
+ * Safety: `send`, `resume` (which starts dialing) and `activate` (which makes
+ * the inbound line answer) REQUIRE the caller to pass `confirm: true`, else
+ * the tool refuses. The agent must ask the operator for explicit confirmation
+ * before sending leads or activating.
  *
  * Auth: reuses `CRM_A_PHONE_WEBHOOK_SECRET` (the same secret the route
- * validates) read from the shared env. If not set the tool is not
+ * validates) read from the shared env. If not set the tools are not
  * registered — mirroring how other extensions gate on a missing key.
  */
 
@@ -27,6 +31,7 @@ import type { AnyAgentTool } from "openclaw/plugin-sdk";
 export const id = "crm-a-nlpearl-outbound";
 
 const TOOL_NAME = "crm_a_phone_campaign";
+const INBOUND_TOOL_NAME = "crm_a_inbound_care";
 const DEFAULT_WEB_PORT = 3100;
 const PROCESS_JSON_REL = path.join("web-runtime", "process.json");
 const CALL_TIMEOUT_MS = 60_000;
@@ -150,6 +155,103 @@ async function callPhoneRoute(
   }
 }
 
+const INBOUND_ACTIONS = ["create", "activate", "pause"] as const;
+
+const INBOUND_CARE_PARAMETERS = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    action: {
+      type: "string",
+      enum: [...INBOUND_ACTIONS],
+      description:
+        "create: build the inbound customer-care Pearl (paused). activate/pause: toggle the inbound Pearl's activity (activate requires confirm:true).",
+    },
+    name: { type: "string", description: "Inbound Pearl name (create)." },
+    phoneId: { type: "string", description: "NLPearl phone number ID assigned to the inbound number (create)." },
+    brief: { type: "string", description: "Marketing Message MD the agent should speak (create)." },
+    pearlId: { type: "string", description: "Inbound Pearl ID (activate/pause)." },
+    confirm: { type: "boolean", description: "MUST be true to run activate; anything else refuses the action." },
+  },
+  required: ["action"],
+} as const;
+
+async function callInboundRoute(
+  webBaseUrl: string,
+  secret: string,
+  body: Record<string, unknown>,
+): Promise<{ status: number; body: UnknownRecord }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CALL_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${webBaseUrl}/api/nlpearl/inbound`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    let parsed: UnknownRecord = {};
+    if (text.trim()) {
+      try { parsed = JSON.parse(text) as UnknownRecord; } catch { parsed = { error: text.slice(0, 240) }; }
+    }
+    return { status: res.status, body: parsed };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function createInboundCareTool(webBaseUrl: string, secret: string): AnyAgentTool {
+  return {
+    name: INBOUND_TOOL_NAME,
+    label: "NLPearl inbound customer care",
+    description:
+      "Drive the NLPearl inbound customer-care Pearl from chat. create: build the inbound Pearl (paused, PreCallAPI greeting + order memory + offer brief). activate/pause: toggle whether the inbound number is answered. activate requires the operator's explicit confirmation (confirm: true).",
+    parameters: INBOUND_CARE_PARAMETERS,
+    async execute(_toolCallId: string, input: UnknownRecord) {
+      const action = readString(input.action);
+      if (!action) {
+        return jsonResult({ error: "action is required: create|activate|pause" });
+      }
+      const confirm = input.confirm === true;
+      if (action === "activate" && !confirm) {
+        return jsonResult({
+          error: "Refusing to activate without confirmation. Ask the operator to confirm, then call again with confirm: true.",
+          needsConfirmation: true,
+        });
+      }
+
+      const body: Record<string, unknown> = { action };
+      if (action === "create") {
+        for (const k of ["name", "phoneId", "brief"] as const) {
+          const v = readString(input[k]);
+          if (v) { body[k] = v; }
+        }
+      } else {
+        const pearlId = readString(input.pearlId);
+        if (!pearlId) {
+          return jsonResult({ error: "pearlId is required for activate/pause." });
+        }
+        body.pearlId = pearlId;
+      }
+
+      try {
+        const { status, body: resBody } = await callInboundRoute(webBaseUrl, secret, body);
+        if (status >= 400) {
+          return jsonResult({ error: resBody.error ?? `Inbound care ${action} failed (HTTP ${status}).` });
+        }
+        return jsonResult(resBody);
+      } catch (err) {
+        return jsonResult({ error: `Inbound care ${action} request failed: ${err instanceof Error ? err.message : String(err)}` });
+      }
+    },
+  } as AnyAgentTool;
+}
+
 function createPhoneCampaignTool(webBaseUrl: string, secret: string): AnyAgentTool {
   return {
     name: TOOL_NAME,
@@ -229,5 +331,9 @@ export default function register(api: any) {
     name: TOOL_NAME,
     optional: true,
   });
-  api.logger?.info?.(`[crm-a-nlpearl-outbound] registered ${TOOL_NAME} (web: ${webBaseUrl})`);
+  api.registerTool(createInboundCareTool(webBaseUrl, secret), {
+    name: INBOUND_TOOL_NAME,
+    optional: true,
+  });
+  api.logger?.info?.(`[crm-a-nlpearl-outbound] registered ${TOOL_NAME} + ${INBOUND_TOOL_NAME} (web: ${webBaseUrl})`);
 }
