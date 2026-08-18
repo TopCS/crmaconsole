@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button } from "../ui/button";
 import { CrmEmptyState, CrmLoadingState } from "./crm-list-shell";
 import { formatAbsoluteDate, formatRelativeDate } from "./format-relative-date";
@@ -13,9 +13,12 @@ import { ThreadMessages } from "./inbox/thread-messages";
 
 export type ActivityDirection = "Sent" | "Received" | "Internal" | null;
 
+export type ActivityType = "Email" | "Meeting" | "Purchase" | "Call" | "Other";
+
 export type ActivityRow = {
   id: string;
-  type: "Email" | "Meeting";
+  type: ActivityType;
+  rawType: string | null;
   direction: ActivityDirection;
   occurred_at: string | null;
   email: {
@@ -37,6 +40,7 @@ export type ActivityRow = {
     end_at: string | null;
     meeting_type: string | null;
   } | null;
+  properties: Record<string, unknown> | null;
 };
 
 type ActivityResponse = {
@@ -294,7 +298,7 @@ export function ActivityTimeline({
     return (
       <CrmEmptyState
         title="No activity yet"
-        description="Emails and meetings appear here once they're synced."
+        description="Emails, meetings, calls and purchases appear here as they're recorded."
       />
     );
   }
@@ -383,10 +387,7 @@ function ActivityRowItem({
   const tintBg = dirStyle ? `${dirStyle.color}1a` : "var(--color-surface-hover)";
   const tintFg = dirStyle ? dirStyle.color : "var(--color-text-muted)";
 
-  const title =
-    row.type === "Email"
-      ? row.email?.subject?.trim() || "(no subject)"
-      : row.event?.title?.trim() || "(no title)";
+  const title = activityTitle(row);
 
   return (
     <li
@@ -430,7 +431,11 @@ function ActivityRowItem({
           }}
           aria-hidden
         >
-          {row.type === "Email" ? <EnvelopeIcon /> : <CalendarIcon />}
+          {row.type === "Email" ? <EnvelopeIcon />
+            : row.type === "Meeting" ? <CalendarIcon />
+            : row.type === "Purchase" ? <CartIcon />
+            : row.type === "Call" ? <PhoneIcon />
+            : <DotIcon />}
         </span>
 
         {/* Body */}
@@ -528,7 +533,110 @@ function ContextLine({ row }: { row: ActivityRow }) {
       </p>
     );
   }
+  return activitySubtitle(row);
+}
+
+/** Human title for non-Email/Meeting activity rows. */
+function activityTitle(row: ActivityRow): string {
+  if (row.type === "Email") {
+    return row.email?.subject?.trim() || "(no subject)";
+  }
+  if (row.type === "Meeting") {
+    return row.event?.title?.trim() || "(no title)";
+  }
+  if (row.type === "Purchase") {
+    const amount = toNumber(row.properties?.amount);
+    const currency = row.properties?.currency;
+    const items = toLineItems(row.properties?.items);
+    const itemLabel = items.length > 0
+      ? items.map((i) => i.title || i.sku || null).filter(Boolean).join(", ")
+      : null;
+    const amountLabel = amount != null
+      ? [currency, formatMoney(amount)].filter(Boolean).join(" ")
+      : null;
+    return itemLabel || amountLabel || "Purchase";
+  }
+  if (row.type === "Call") {
+    return "Phone call";
+  }
+  return toString(row.rawType) || "Event";
+}
+
+/** Subtitle line for CDP events (Purchase/Call/Other). */
+function activitySubtitle(row: ActivityRow): ReactNode {
+  if (row.type === "Purchase") {
+    const amount = toNumber(row.properties?.amount);
+    const currency = row.properties?.currency;
+    const status = toString(row.properties?.status);
+    const orderNumber = toString(row.properties?.orderNumber);
+    const parts: string[] = [];
+    if (orderNumber) {parts.push(`Order #${orderNumber}`);}
+    if (amount != null) {parts.push([currency, formatMoney(amount)].filter(Boolean).join(" "));}
+    if (status) {parts.push(status);}
+    if (parts.length === 0) {return null;}
+    return (
+      <p className="mt-0.5 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+        {parts.join(" · ")}
+      </p>
+    );
+  }
+  if (row.type === "Call") {
+    const summary = toString(row.properties?.summary);
+    const duration = toNumber(row.properties?.duration);
+    const parts: string[] = [];
+    if (duration != null && duration > 0) {parts.push(`${Math.round(duration)}s`);}
+    if (summary) {parts.push(summary);}
+    if (parts.length === 0) {return null;}
+    return (
+      <p className="mt-0.5 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+        {parts.join(" · ")}
+      </p>
+    );
+  }
+  // Other: show a compact JSON preview of the event properties.
+  const snippet = row.properties
+    ? JSON.stringify(row.properties).slice(0, 140)
+    : null;
+  if (!snippet) {return null;}
+  return (
+    <p className="mt-0.5 truncate text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+      {snippet}
+    </p>
+  );
+}
+
+function toString(v: unknown): string | null {
+  if (typeof v === "string" && v.trim()) {return v.trim();}
+  if (typeof v === "number") {return String(v);}
   return null;
+}
+
+function toNumber(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) {return v;}
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number.parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function toLineItems(v: unknown): Array<{ sku?: string; title?: string; quantity?: number }> {
+  if (!Array.isArray(v)) {return [];}
+  return v
+    .filter((i) => i && typeof i === "object")
+    .map((i) => i as Record<string, unknown>)
+    .map((i) => ({
+      sku: typeof i.sku === "string" ? i.sku : undefined,
+      title: typeof i.title === "string" ? i.title : undefined,
+      quantity: typeof i.quantity === "number" ? i.quantity : undefined,
+    }));
+}
+
+function formatMoney(v: number): string {
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(v);
 }
 
 function ExpandedBody({
@@ -611,6 +719,58 @@ function EnvelopeIcon() {
     >
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="m3 7 9 6 9-6" />
+    </svg>
+  );
+}
+
+function CartIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="9" cy="21" r="1" />
+      <circle cx="20" cy="21" r="1" />
+      <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+    </svg>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  );
+}
+
+function DotIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="5" />
     </svg>
   );
 }

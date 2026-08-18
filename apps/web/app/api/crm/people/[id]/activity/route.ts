@@ -50,6 +50,7 @@ export async function GET(
   const directionFieldId = fieldMaps.interaction["Direction"];
   const emailRelFieldId = fieldMaps.interaction["Email"];
   const eventRelFieldId = fieldMaps.interaction["Event"];
+  const propsFieldId = fieldMaps.interaction["Properties"];
 
   if (!personRelFieldId || !typeFieldId || !occurredFieldId) {
     return Response.json({
@@ -105,6 +106,13 @@ export async function GET(
   } else {
     pivotSelectParts.push(`NULL AS event_id`);
   }
+  if (propsFieldId) {
+    pivotSelectParts.push(
+      `MAX(CASE WHEN ef.field_id = '${propsFieldId.replace(/'/g, "''")}' THEN ef.value END) AS properties`,
+    );
+  } else {
+    pivotSelectParts.push(`NULL AS properties`);
+  }
 
   const interactionsSql = `
     SELECT * FROM (
@@ -128,6 +136,7 @@ export async function GET(
     direction: string | null;
     email_id: string | null;
     event_id: string | null;
+    properties: string | null;
   }>(interactionsSql);
 
   if (interactionRows.length === 0) {
@@ -161,9 +170,12 @@ export async function GET(
     fieldMaps.people,
   );
 
+  type ActivityType = "Email" | "Meeting" | "Purchase" | "Call" | "Other";
+
   type Activity = {
     id: string;
-    type: "Email" | "Meeting";
+    type: ActivityType;
+    rawType: string | null;
     direction: "Sent" | "Received" | "Internal" | null;
     occurred_at: string | null;
     email: {
@@ -185,11 +197,19 @@ export async function GET(
       end_at: string | null;
       meeting_type: string | null;
     } | null;
+    /** Parsed `Properties` JSON for CDP events (Purchase/Call/Custom/…). */
+    properties: Record<string, unknown> | null;
   };
 
   const activities: Activity[] = interactionRows.map((row) => {
     const direction = normalizeDirection(row.direction);
-    const type = row.type === "Meeting" ? "Meeting" : "Email";
+    const rawType = row.type;
+    const type: ActivityType =
+      rawType === "Meeting" ? "Meeting"
+        : rawType === "Email" ? "Email"
+          : rawType === "Purchase" ? "Purchase"
+            : rawType === "Call" ? "Call"
+              : "Other";
 
     let email: Activity["email"] = null;
     if (type === "Email" && row.email_id) {
@@ -220,13 +240,27 @@ export async function GET(
       }
     }
 
+    let properties: Record<string, unknown> | null = null;
+    if (row.properties) {
+      try {
+        const parsed = JSON.parse(row.properties) as unknown;
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          properties = parsed as Record<string, unknown>;
+        }
+      } catch {
+        properties = null;
+      }
+    }
+
     return {
       id: row.interaction_id,
       type,
+      rawType,
       direction,
       occurred_at: row.occurred_at,
       email,
       event,
+      properties,
     };
   });
 
