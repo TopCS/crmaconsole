@@ -16,6 +16,18 @@ type G6CanvasProps = {
  * Thin wrapper around a G6 graph instance. G6 is loaded client-only (this
  * component is reached through `next/dynamic` with `ssr:false` in the view)
  * because it needs a real DOM/canvas.
+ *
+ * Two G6-specific gotchas are handled here:
+ *  - G6 reserves the `type` data field for the element SHAPE (circle/line/…),
+ *    so our entity/relation type is renamed to `entityType` / `relationType`
+ *    before the data is handed over (otherwise G6 logs "element <x> not
+ *    registered").
+ *  - `Graph.render()` is async and initializes the runtime (`initRuntime`,
+ *    which sets `context.transform`) only after `await initCanvas()`. Calling
+ *    `render()` twice concurrently on mount races that init and throws
+ *    `Cannot read properties of undefined (reading 'getTransformInstance')`.
+ *    The graph is therefore created once here (no render) and the data effect
+ *    below drives the single first render.
  */
 export function G6Canvas({ nodes, edges, onNodeClick }: G6CanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -30,23 +42,22 @@ export function G6Canvas({ nodes, edges, onNodeClick }: G6CanvasProps) {
     const graph = new Graph({
       container,
       autoFit: "view",
-      data: { nodes, edges },
       node: {
         style: {
           size: 26,
-          labelText: (d: unknown) => (d as G6Node).label ?? "",
+          labelText: (d: unknown) => (d as { label?: string }).label ?? "",
           labelPlacement: "bottom",
           labelFill: "#475569",
           labelFontSize: 11,
         },
-        palette: { field: "type", color: "tableau" },
+        palette: { field: "entityType", color: "tableau" },
       },
       edge: {
         style: {
           stroke: "#cbd5e1",
           lineWidth: 1,
           endArrow: true,
-          labelText: (d: unknown) => (d as G6Edge).type ?? "",
+          labelText: (d: unknown) => (d as { relationType?: string }).relationType ?? "",
           labelFill: "#94a3b8",
           labelFontSize: 9,
         },
@@ -60,22 +71,26 @@ export function G6Canvas({ nodes, edges, onNodeClick }: G6CanvasProps) {
       if (typeof id === "string") {clickRef.current?.(id);}
     });
 
-    void graph.render();
     graphRef.current = graph;
 
     return () => {
       graph.destroy();
       graphRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     const graph = graphRef.current;
     if (!graph) {return;}
-    graph.setData({ nodes, edges });
-    void graph.render();
+
+    graph.setData({
+      nodes: nodes.map((n) => ({ id: n.id, label: n.label, entityType: n.type })),
+      edges: edges.map((e) => ({ source: e.source, target: e.target, relationType: e.type })),
+    });
+    graph.render().catch((err: unknown) => {
+      console.error("[crm-graph] G6 render failed:", err);
+    });
   }, [nodes, edges]);
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return <div ref={containerRef} className="absolute inset-0" />;
 }
