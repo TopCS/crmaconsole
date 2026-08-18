@@ -2,10 +2,12 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
+  fetchComposioConnections,
   fetchComposioMcpToolsList,
   resolveComposioApiKey,
   resolveComposioEligibility,
   resolveComposioGatewayUrl,
+  resolveComposioMode,
 } from "@/lib/composio";
 import { refreshIntegrationsRuntime, type IntegrationRuntimeRefresh } from "@/lib/integrations";
 import {
@@ -385,6 +387,64 @@ export async function getComposioMcpHealth(options?: {
   const gatewayUrl = resolveComposioGatewayUrl();
   const apiKey = resolveComposioApiKey();
   const eligibility = resolveComposioEligibility();
+  // Direct Composio mode talks to Composio's Platform API (backend.composio.dev)
+  // through the Console's wrapper tools (crm_a_search_integrations /
+  // crm_a_execute_integrations). There is no Crm-A Cloud gateway MCP bridge, so
+  // the cloud-gateway config match, tools/list probe, and MCP-visibility
+  // live-agent probe do not apply here.
+  const directMode = resolveComposioMode() === "direct";
+  if (directMode && apiKey) {
+    const checkedAt = generatedAt;
+    const notApplicable = "Direct Composio mode — no Crm-A Cloud gateway MCP bridge is used.";
+    let summary: ComposioMcpHealth["summary"];
+    try {
+      await fetchComposioConnections(gatewayUrl, apiKey);
+      summary = {
+        level: "healthy",
+        verified: true,
+        message: `${crmAIntegrationsBrand.displayName} is configured in direct Composio mode and reachable.`,
+      };
+    } catch (error) {
+      summary = {
+        level: "error",
+        verified: false,
+        message: `${crmAIntegrationsBrand.displayName} is configured in direct Composio mode, but the key could not reach Composio: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
+    }
+    return {
+      generatedAt,
+      workspaceDir,
+      gatewayUrl,
+      eligible: eligibility.eligible,
+      lockReason: eligibility.lockReason,
+      lockBadge: eligibility.lockBadge,
+      config: {
+        status: "unknown",
+        detail: notApplicable,
+        checkedAt,
+        matchesExpected: false,
+        configured: { url: null, transport: null, authorizationHeader: null },
+        expected: { url: null, transport: null, authorizationHeader: null },
+      },
+      gatewayTools: {
+        status: "unknown",
+        detail: "Direct Composio mode — tools run through the Console wrapper, not the gateway MCP bridge.",
+        checkedAt,
+        toolCount: null,
+      },
+      liveAgent: {
+        status: "unknown",
+        detail: "Direct Composio mode — MCP tool visibility is not applicable.",
+        checkedAt,
+        visible: null,
+        evidence: [],
+        toolCallsDetected: false,
+      },
+      summary,
+    };
+  }
   const cachedGatewayTools = cachedGatewayToolsCheck;
   const cachedLiveAgent = cachedLiveAgentCheck;
 
