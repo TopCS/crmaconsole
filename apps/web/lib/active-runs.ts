@@ -86,6 +86,8 @@ export type ActiveRun = {
 	_lastPersistedAt: number;
 	/** @internal last globalSeq seen from the gateway event stream */
 	lastGlobalSeq: number;
+	/** @internal last time an event was received (subscribe-only staleness) */
+	_lastEventAt: number;
 	/** @internal subscribe child process for waiting-for-subagents continuation */
 	_subscribeProcess?: AgentProcessHandle | null;
 	/** @internal retry timer for subscribe stream restarts */
@@ -128,6 +130,7 @@ const WAITING_FINALIZE_RECONCILE_MS = 5_000;
 const MAX_WAITING_DURATION_MS = 10 * 60_000;
 const SUBAGENT_REGISTRY_STALENESS_MS = 15 * 60_000;
 const SUBSCRIBE_RUN_MAX_DURATION_MS = 10 * 60_000;
+const SUBSCRIBE_STALE_MS = 60_000;
 const MAX_FILTER_DROP_LOGS = 8;
 const EMPTY_RESPONSE_EVENT_SAMPLE_LIMIT = 5;
 const TRANSCRIPT_TURN_CLOCK_SKEW_MS = 5_000;
@@ -278,6 +281,8 @@ export function reconcileSubscribeRun(sessionId: string): ActiveRun | undefined 
 		const diskStatus = reconcileSubscribeOnlyRunWithDisk(run);
 		if (diskStatus === "completed" || diskStatus === "error") {
 			finalizeSubscribeRun(run, diskStatus);
+		} else if (Date.now() - run._lastEventAt > SUBSCRIBE_STALE_MS) {
+			finalizeSubscribeRun(run, "completed");
 		}
 	}
 	return run;
@@ -454,6 +459,7 @@ export function reactivateSubscribeRun(
 	if (run.status === "running") {return true;}
 
 	run.status = "running";
+	run._lastEventAt = Date.now();
 	run._lifecycleEnded = false;
 	if (run._subscribeDeadlineTimer) {clearTimeout(run._subscribeDeadlineTimer); run._subscribeDeadlineTimer = null;}
 	run._subscribeDeadlineTimer = setTimeout(() => {
@@ -696,6 +702,7 @@ export function startRun(params: {
 		_persistTimer: null,
 		_lastPersistedAt: 0,
 		lastGlobalSeq: 0,
+		_lastEventAt: Date.now(),
 		_subscribeRetryTimer: null,
 		_subscribeRetryAttempt: 0,
 		_waitingFinalizeTimer: null,
@@ -774,6 +781,7 @@ export function startSubscribeRun(params: {
 		_persistTimer: null,
 		_lastPersistedAt: 0,
 		lastGlobalSeq: 0,
+		_lastEventAt: Date.now(),
 		sessionKey,
 		parentSessionId,
 		task,
@@ -1326,6 +1334,7 @@ const rl = createInterface({ input: child.stdout! });
 		if ((run._subscribeRetryAttempt ?? 0) > 0) {
 			resetSubscribeRetryState(run);
 		}
+		run._lastEventAt = Date.now();
 		processEvent(ev);
 	});
 
