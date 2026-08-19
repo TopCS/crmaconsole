@@ -41,6 +41,22 @@ function sqlEscape(s: string): string {
 	return s.replace(/'/g, "''");
 }
 
+/**
+ * Escape a VALUE for interpolation into a DuckDB string literal. Uses the
+ * E'...' escape-string syntax so multi-line / special content (newlines,
+ * carriage returns, tabs, backslashes, quotes) round-trips intact. The plain
+ * `sqlEscape` above only escapes single quotes, which breaks on raw newlines.
+ */
+function escapeStringValue(s: string): string {
+	return `E'${s
+		.replace(/\\/g, "\\\\")
+		.replace(/'/g, "''")
+		.replace(/\n/g, "\\n")
+		.replace(/\r/g, "\\r")
+		.replace(/\t/g, "\\t")
+	}'`;
+}
+
 function tryParseJson(value: unknown): unknown {
 	if (typeof value !== "string") {
 		return value;
@@ -363,7 +379,7 @@ export async function PATCH(
 		if (!fieldId) {continue;}
 
 		const escapedValue =
-			value == null ? "NULL" : `'${sqlEscape(String(value))}'`;
+			value == null ? "NULL" : escapeStringValue(String(value));
 
 		// Try update first, then insert if no rows affected
 		const existingRows = q<{ cnt: number }>(dbFile,
