@@ -1,5 +1,6 @@
 import { buildWhereClause, type FieldMeta, type FilterGroup } from "./object-filters";
-import { duckdbExecOnFileAsync, duckdbPathAsync, duckdbQueryAsync } from "./workspace";
+import { duckdbExecOnFileParamsBatchAsync, duckdbPathAsync, duckdbQueryAsync } from "./workspace";
+import type { ParameterizedStatement } from "./workspace";
 import { loadCrmFieldMaps, sqlString } from "./crm-queries";
 import { ONBOARDING_OBJECT_IDS } from "./workspace-schema-migrations";
 
@@ -161,18 +162,18 @@ export async function updateSegmentCache(entryId: string, count: number): Promis
   const countFieldId = fieldMaps.segment["Member Count"];
   const computedFieldId = fieldMaps.segment["Computed At"];
   const now = new Date().toISOString();
-  const statements: string[] = [];
+  const statements: ParameterizedStatement[] = [];
   for (const [fieldId, value] of [
     [countFieldId, String(count)],
     [computedFieldId, now],
   ] as const) {
     if (!fieldId) {continue;}
     statements.push(
-      `DELETE FROM entry_fields WHERE entry_id = ${sqlString(entryId)} AND field_id = ${sqlString(fieldId)};`,
-      `INSERT INTO entry_fields (entry_id, field_id, value) VALUES (${sqlString(entryId)}, ${sqlString(fieldId)}, ${sqlString(value)});`,
+      { sql: `DELETE FROM entry_fields WHERE entry_id = ? AND field_id = ?`, params: [entryId, fieldId] },
+      { sql: `INSERT INTO entry_fields (entry_id, field_id, value) VALUES (?, ?, ?)`, params: [entryId, fieldId, value] },
     );
   }
   if (statements.length > 0) {
-    await duckdbExecOnFileAsync(dbPath, statements.join("\n"));
+    await duckdbExecOnFileParamsBatchAsync(dbPath, statements);
   }
 }
