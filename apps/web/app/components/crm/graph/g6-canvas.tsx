@@ -114,7 +114,20 @@ export function G6Canvas({ nodes, edges, theme, onNodeClick }: G6CanvasProps) {
 
     graphRef.current = graph;
 
+    // Keep the canvas in sync with its container. When the detail panel
+    // opens/closes the flex column resizes, and without this the canvas keeps
+    // its old width and overlaps the panel.
+    const observer = new ResizeObserver(() => {
+      const g = graphRef.current;
+      if (!g) {return;}
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      if (w > 0 && h > 0) {g.setSize(w, h);}
+    });
+    observer.observe(container);
+
     return () => {
+      observer.disconnect();
       graph.destroy();
       graphRef.current = null;
     };

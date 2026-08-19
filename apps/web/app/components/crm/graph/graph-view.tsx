@@ -234,7 +234,7 @@ export function GraphView() {
 
       {/* Canvas + detail panel */}
       <div className="flex min-h-0 flex-1">
-        <div className="relative min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1 overflow-hidden">
           {loading ? (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
               Loading graph…
