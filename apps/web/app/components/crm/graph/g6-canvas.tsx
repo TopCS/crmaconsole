@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { Graph, NodeEvent } from "@antv/g6";
+import { metaForType, truncateLabel, type GraphTheme } from "./graph-meta";
 
 export type G6Node = { id: string; label: string; type: string };
 export type G6Edge = { source: string; target: string; type: string; rel: string };
@@ -9,6 +10,7 @@ export type G6Edge = { source: string; target: string; type: string; rel: string
 type G6CanvasProps = {
   nodes: G6Node[];
   edges: G6Edge[];
+  theme: GraphTheme;
   onNodeClick?: (id: string) => void;
 };
 
@@ -17,19 +19,15 @@ type G6CanvasProps = {
  * component is reached through `next/dynamic` with `ssr:false` in the view)
  * because it needs a real DOM/canvas.
  *
- * Two G6-specific gotchas are handled here:
- *  - G6 reserves the `type` data field for the element SHAPE (circle/line/…),
- *    so our entity/relation type is renamed to `entityType` / `relationType`
- *    before the data is handed over (otherwise G6 logs "element <x> not
- *    registered").
- *  - `Graph.render()` is async and initializes the runtime (`initRuntime`,
- *    which sets `context.transform`) only after `await initCanvas()`. Calling
- *    `render()` twice concurrently on mount races that init and throws
- *    `Cannot read properties of undefined (reading 'getTransformInstance')`.
- *    The graph is therefore created once here (no render) and the data effect
- *    below drives the single first render.
+ * Load-bearing details (do not restructure):
+ *  - G6 reserves the `type` data field for the element SHAPE, so the entity
+ *    type is renamed to `entityType` / `relationType` before handing data over.
+ *  - `Graph.render()` is async and initializes the runtime only after
+ *    `await initCanvas()`, so the graph is created once (no render) and the
+ *    data effect drives the first render — two concurrent renders race the
+ *    init and throw `getTransformInstance`.
  */
-export function G6Canvas({ nodes, edges, onNodeClick }: G6CanvasProps) {
+export function G6Canvas({ nodes, edges, theme, onNodeClick }: G6CanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<Graph | null>(null);
   const clickRef = useRef(onNodeClick);
@@ -42,28 +40,71 @@ export function G6Canvas({ nodes, edges, onNodeClick }: G6CanvasProps) {
     const graph = new Graph({
       container,
       autoFit: "view",
+      padding: 24,
       node: {
         style: {
-          size: 26,
-          labelText: (d: unknown) => (d as { label?: string }).label ?? "",
+          size: 34,
+          fill: (d: unknown) => metaForType((d as { entityType?: string }).entityType).color,
+          stroke: theme.background,
+          lineWidth: 2,
+          iconText: (d: unknown) => metaForType((d as { entityType?: string }).entityType).icon,
+          iconFill: "#ffffff",
+          iconFontSize: 14,
+          labelText: (d: unknown) => truncateLabel((d as { label?: string }).label ?? ""),
           labelPlacement: "bottom",
-          labelFill: "#475569",
+          labelFill: theme.foreground,
           labelFontSize: 11,
+          labelFontWeight: 500,
+          labelBackground: true,
+          labelBackgroundFill: theme.background,
+          labelBackgroundRadius: 4,
+          labelBackgroundPadding: [2, 4] as [number, number],
         },
-        palette: { field: "entityType", color: "tableau" },
+        state: {
+          selected: { lineWidth: 3, stroke: theme.foreground, halo: true, haloLineWidth: 0 },
+          active: { lineWidth: 2, stroke: theme.foreground },
+          inactive: { opacity: 0.18 },
+        },
       },
       edge: {
         style: {
-          stroke: "#cbd5e1",
-          lineWidth: 1,
+          stroke: theme.border,
+          lineWidth: 1.5,
           endArrow: true,
           labelText: (d: unknown) => (d as { relationType?: string }).relationType ?? "",
-          labelFill: "#94a3b8",
+          labelFill: theme.muted,
           labelFontSize: 9,
+          labelBackground: true,
+          labelBackgroundFill: theme.background,
+          labelBackgroundRadius: 2,
+          labelBackgroundPadding: [1, 2] as [number, number],
+        },
+        state: {
+          active: { stroke: theme.foreground, lineWidth: 2 },
+          inactive: { opacity: 0.08 },
         },
       },
-      layout: { type: "d3-force", manyBody: {}, x: {}, y: {} },
-      behaviors: ["drag-canvas", "zoom-canvas", "drag-element"],
+      layout: {
+        type: "d3-force",
+        collide: { radius: 40 },
+        link: { distance: 120 },
+        manyBody: { strength: -220 },
+      },
+      behaviors: ["drag-canvas", "zoom-canvas", "drag-element", "click-select", "hover-activate"],
+      plugins: [
+        {
+          type: "tooltip",
+          getContent: (_event: unknown, items: unknown[]) => {
+            const d = items?.[0] as Record<string, unknown> | undefined;
+            if (!d) {return "";}
+            if (typeof d.entityType === "string" && typeof d.label === "string") {
+              return `${metaForType(d.entityType).label} · ${d.label}`;
+            }
+            if (typeof d.relationType === "string") {return d.relationType;}
+            return "";
+          },
+        },
+      ],
     });
 
     graph.on(NodeEvent.CLICK, (event: unknown) => {
@@ -77,6 +118,7 @@ export function G6Canvas({ nodes, edges, onNodeClick }: G6CanvasProps) {
       graph.destroy();
       graphRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
