@@ -831,7 +831,7 @@ export function WorkspaceSidebar({
 				className="flex items-center gap-2 px-2 py-1 rounded-lg text-[11px]"
 				style={{ color: "var(--color-text-muted)" }}
 			>
-				sati{process.env.NEXT_PUBLIC_CRM_A_CONSOLE_VERSION ? ` v${process.env.NEXT_PUBLIC_CRM_A_CONSOLE_VERSION}` : ""}
+				crm-a sati{process.env.NEXT_PUBLIC_CRM_A_CONSOLE_VERSION ? ` v${process.env.NEXT_PUBLIC_CRM_A_CONSOLE_VERSION}` : ""}
 			</span>
 			<div className="flex items-center gap-0.5">
 				{onToggleHidden && (
