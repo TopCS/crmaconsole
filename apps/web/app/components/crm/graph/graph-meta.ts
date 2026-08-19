@@ -25,6 +25,8 @@ const TYPE_META: Record<string, GraphTypeMeta> = {
   segment: { icon: "🧩", color: "#14b8a6", label: "Segment" },
   campaign: { icon: "📣", color: "#f97316", label: "Campaign" },
   campaign_send: { icon: "📤", color: "#eab308", label: "Send" },
+  product: { icon: "📦", color: "#06b6d4", label: "Product" },
+  order: { icon: "🧾", color: "#8b5cf6", label: "Order" },
 };
 
 const DEFAULT_META: GraphTypeMeta = { icon: "●", color: "#94a3b8", label: "Entity" };

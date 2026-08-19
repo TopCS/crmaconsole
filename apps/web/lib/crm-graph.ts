@@ -37,6 +37,8 @@ export const KNOWN_OBJECT_TYPES = [
   "segment",
   "campaign",
   "campaign_send",
+  "product",
+  "order",
 ] as const;
 
 export type CrmObjectType = (typeof KNOWN_OBJECT_TYPES)[number];
@@ -185,6 +187,17 @@ function resolveFocusNodeId(
   if (byLabel) {return byLabel.id;}
   const bySubstring = nodes.find((n) => n.label.toLowerCase().includes(lower));
   if (bySubstring) {return bySubstring.id;}
+
+  // Word-order-independent match: all focus tokens must appear in the label
+  // (e.g. "galaxy samsung" → "Samsung Galaxy S26").
+  const tokens = lower.split(/\s+/).filter((t) => t.length > 2);
+  if (tokens.length > 1) {
+    const byTokens = nodes.find((n) => {
+      const l = n.label.toLowerCase();
+      return tokens.every((t) => l.includes(t));
+    });
+    if (byTokens) {return byTokens.id;}
+  }
 
   return null;
 }
