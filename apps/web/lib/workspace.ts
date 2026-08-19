@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from 
 import { access, readdir as readdirAsync } from "node:fs/promises";
 import { execSync, execFile, execFileSync, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { join, resolve, normalize, relative, isAbsolute as isNodeAbsolute } from "node:path";
+import { join, resolve, normalize, relative } from "node:path";
 import { homedir } from "node:os";
 import YAML from "yaml";
 import { normalizeFilterGroup, type SavedView, type ViewTypeSettings } from "./object-filters";
@@ -1083,6 +1083,68 @@ export function duckdbExecOnFile(dbFilePath: string, sql: string): boolean {
   } catch {
     return false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Parameterized queries (SQL-injection safe)
+// ---------------------------------------------------------------------------
+// String interpolation (sqlEscape / sqlString) is fragile and duplicated. These
+// helpers build a DuckDB `PREPARE`/`EXECUTE` statement instead: the SQL is a
+// fixed template with `?` placeholders and the values are bound by DuckDB
+// itself, so user input can never alter the query structure.
+
+export type DuckDBParam = string | number | boolean | null;
+
+function serializeDuckDBParam(p: DuckDBParam): string {
+  if (p === null) {return "NULL";}
+  if (typeof p === "number") {return Number.isFinite(p) ? String(p) : "NULL";}
+  if (typeof p === "boolean") {return p ? "TRUE" : "FALSE";}
+  return `E'${String(p)
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "''")
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t")
+  }'`;
+}
+
+/** Build `PREPARE __q AS <sql>; EXECUTE __q(<args>);` from a `?`-template. */
+export function buildParameterizedSql(sql: string, params: DuckDBParam[]): string {
+  const trimmed = sql.trim().replace(/;+\s*$/, "");
+  const args = params.map(serializeDuckDBParam).join(", ");
+  return `PREPARE __q AS ${trimmed}; EXECUTE __q(${args});`;
+}
+
+export function duckdbQueryParams<T = Record<string, unknown>>(sql: string, params: DuckDBParam[] = []): T[] {
+  return duckdbQuery<T>(buildParameterizedSql(sql, params));
+}
+
+export async function duckdbQueryParamsAsync<T = Record<string, unknown>>(sql: string, params: DuckDBParam[] = []): Promise<T[]> {
+  return duckdbQueryAsync<T>(buildParameterizedSql(sql, params));
+}
+
+export function duckdbExecParams(sql: string, params: DuckDBParam[] = []): boolean {
+  return duckdbExec(buildParameterizedSql(sql, params));
+}
+
+export async function duckdbExecParamsAsync(sql: string, params: DuckDBParam[] = []): Promise<boolean> {
+  return duckdbExecAsync(buildParameterizedSql(sql, params));
+}
+
+export function duckdbQueryOnFileParams<T = Record<string, unknown>>(dbFilePath: string, sql: string, params: DuckDBParam[] = []): T[] {
+  return duckdbQueryOnFile<T>(dbFilePath, buildParameterizedSql(sql, params));
+}
+
+export async function duckdbQueryOnFileParamsAsync<T = Record<string, unknown>>(dbFilePath: string, sql: string, params: DuckDBParam[] = []): Promise<T[]> {
+  return duckdbQueryOnFileAsync<T>(dbFilePath, buildParameterizedSql(sql, params));
+}
+
+export function duckdbExecOnFileParams(dbFilePath: string, sql: string, params: DuckDBParam[] = []): boolean {
+  return duckdbExecOnFile(dbFilePath, buildParameterizedSql(sql, params));
+}
+
+export async function duckdbExecOnFileParamsAsync(dbFilePath: string, sql: string, params: DuckDBParam[] = []): Promise<boolean> {
+  return duckdbExecOnFileAsync(dbFilePath, buildParameterizedSql(sql, params));
 }
 
 type DuckdbExecAttemptResult = {

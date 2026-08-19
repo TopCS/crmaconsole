@@ -1,4 +1,4 @@
-import { duckdbExecOnFile, duckdbQueryOnFile, findDuckDBForObject } from "@/lib/workspace";
+import { duckdbExecOnFile, duckdbExecOnFileParams, duckdbQueryOnFile, findDuckDBForObject } from "@/lib/workspace";
 import { trackServer } from "@/lib/telemetry";
 
 export const dynamic = "force-dynamic";
@@ -6,16 +6,6 @@ export const runtime = "nodejs";
 
 function sqlEscape(s: string): string {
 	return s.replace(/'/g, "''");
-}
-
-function escapeStringValue(s: string): string {
-	return `E'${s
-		.replace(/\\/g, "\\\\")
-		.replace(/'/g, "''")
-		.replace(/\n/g, "\\n")
-		.replace(/\r/g, "\\r")
-		.replace(/\t/g, "\\t")
-	}'`;
 }
 
 /**
@@ -98,8 +88,9 @@ export async function POST(
 		for (const [fieldName, value] of Object.entries(body.fields)) {
 			const fieldId = fieldMap.get(fieldName);
 			if (!fieldId || value == null) {continue;}
-			duckdbExecOnFile(dbFile,
-				`INSERT INTO entry_fields (entry_id, field_id, value) VALUES ('${sqlEscape(entryId)}', '${sqlEscape(fieldId)}', ${escapeStringValue(String(value))})`,
+			duckdbExecOnFileParams(dbFile,
+				`INSERT INTO entry_fields (entry_id, field_id, value) VALUES (?, ?, ?)`,
+				[entryId, fieldId, String(value)],
 			);
 		}
 	}
