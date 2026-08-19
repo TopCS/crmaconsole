@@ -1115,6 +1115,24 @@ export function buildParameterizedSql(sql: string, params: DuckDBParam[]): strin
   return `PREPARE __q AS ${trimmed}; EXECUTE __q(${args});`;
 }
 
+export type ParameterizedStatement = { sql: string; params: DuckDBParam[] };
+
+/** Build a parameterized batch — one PREPARE/EXECUTE pair per statement. */
+export function buildParameterizedBatchSql(statements: ParameterizedStatement[]): string {
+  return statements
+    .map((stmt, i) => {
+      const trimmed = stmt.sql.trim().replace(/;+\s*$/, "");
+      const args = stmt.params.map(serializeDuckDBParam).join(", ");
+      return `PREPARE __q${i} AS ${trimmed}; EXECUTE __q${i}(${args});`;
+    })
+    .join("\n");
+}
+
+export async function duckdbExecOnFileParamsBatchAsync(dbFilePath: string, statements: ParameterizedStatement[]): Promise<boolean> {
+  if (statements.length === 0) {return true;}
+  return duckdbExecOnFileAsync(dbFilePath, buildParameterizedBatchSql(statements));
+}
+
 export function duckdbQueryParams<T = Record<string, unknown>>(sql: string, params: DuckDBParam[] = []): T[] {
   return duckdbQuery<T>(buildParameterizedSql(sql, params));
 }
