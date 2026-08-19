@@ -760,7 +760,7 @@ function groupToolSteps(tools: ToolPart[]): VisualItem[] {
 /* ─── Main component ─── */
 
 export function ChainOfThought({ parts, isStreaming }: { parts: ChainPart[]; isStreaming?: boolean }) {
-	const [isOpen, setIsOpen] = useState(!!isStreaming);
+	const [isOpen, setIsOpen] = useState(false);
 
 	const isActive = parts.some(
 		(p) =>
@@ -825,10 +825,20 @@ export function ChainOfThought({ parts, isStreaming }: { parts: ChainPart[]; isS
 	);
 	const visualItems = groupToolSteps(tools);
 
+	// One-line live summary: surface the current running step, or a generic
+	// "Thinking…" while reasoning is streaming.
+	const runningTool = tools.find((t) => t.status === "running");
+	const activityLabel = runningTool
+		? buildStepLabel(
+				classifyTool(runningTool.toolName, runningTool.args, runningTool.output),
+				runningTool.toolName,
+				runningTool.args,
+				runningTool.output,
+			)
+		: null;
+
 	const headerLabel = isActive
-		? elapsed > 0
-			? `Thinking for ${formatDuration(elapsed)}`
-			: "Thinking..."
+		? activityLabel ?? (elapsed > 0 ? `Thinking for ${formatDuration(elapsed)}` : "Thinking...")
 		: elapsed > 0
 			? `Thought for ${formatDuration(elapsed)}`
 			: "Thought";
@@ -843,7 +853,7 @@ export function ChainOfThought({ parts, isStreaming }: { parts: ChainPart[]; isS
 				style={{ color: "var(--color-text-muted)" }}
 			>
 				<ThinkingIcon className="w-4 h-4 flex-shrink-0 opacity-60" />
-				<span className="font-medium">
+				<span className="font-medium min-w-0 truncate">
 					{headerLabel}
 				</span>
 				<ChevronIcon
