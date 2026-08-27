@@ -34,10 +34,12 @@ describe("crm-graph (integration, against seed)", () => {
     }
   });
 
-  it("exposes the 10 known object types", () => {
-    expect(KNOWN_OBJECT_TYPES).toHaveLength(10);
+  it("exposes the 12 known object types", () => {
+    expect(KNOWN_OBJECT_TYPES).toHaveLength(12);
     expect(KNOWN_OBJECT_TYPES).toContain("people");
     expect(KNOWN_OBJECT_TYPES).toContain("campaign_send");
+    expect(KNOWN_OBJECT_TYPES).toContain("product");
+    expect(KNOWN_OBJECT_TYPES).toContain("order");
   });
 
   it("returns all seed nodes and edges", async () => {

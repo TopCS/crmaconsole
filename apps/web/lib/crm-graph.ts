@@ -25,7 +25,7 @@ import { duckdbQueryAsync } from "./workspace";
 // Types
 // ---------------------------------------------------------------------------
 
-/** The 10 CRM object names that may appear as vertex types. */
+/** The CRM object names that may appear as vertex types. */
 export const KNOWN_OBJECT_TYPES = [
   "people",
   "company",
