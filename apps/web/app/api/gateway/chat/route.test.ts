@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/active-runs", () => ({
 	startSubscribeRun: vi.fn(() => ({ status: "completed" })),
-	getActiveRun: vi.fn(),
+	reconcileSubscribeRun: vi.fn(),
 	subscribeToRun: vi.fn(() => () => {}),
 	reactivateSubscribeRun: vi.fn(() => true),
 }));
@@ -22,9 +22,9 @@ vi.mock("node:fs", () => ({
 describe("POST /api/gateway/chat", () => {
 	beforeEach(async () => {
 		vi.resetModules();
-		const { getActiveRun, subscribeToRun, startSubscribeRun, reactivateSubscribeRun } = await import("@/lib/active-runs");
-		vi.mocked(getActiveRun).mockReset();
-		vi.mocked(getActiveRun).mockReturnValue(undefined);
+		const { reconcileSubscribeRun, subscribeToRun, startSubscribeRun, reactivateSubscribeRun } = await import("@/lib/active-runs");
+		vi.mocked(reconcileSubscribeRun).mockReset();
+		vi.mocked(reconcileSubscribeRun).mockReturnValue(undefined);
 		vi.mocked(subscribeToRun).mockReset();
 		vi.mocked(subscribeToRun).mockReturnValue(() => {});
 		vi.mocked(startSubscribeRun).mockReset();
@@ -46,8 +46,8 @@ describe("POST /api/gateway/chat", () => {
 	});
 
 	it("hydrates attached images before reactivating the gateway run", async () => {
-		const { getActiveRun, reactivateSubscribeRun } = await import("@/lib/active-runs");
-		vi.mocked(getActiveRun).mockReturnValue({ status: "completed" } as never);
+		const { reconcileSubscribeRun, reactivateSubscribeRun } = await import("@/lib/active-runs");
+		vi.mocked(reconcileSubscribeRun).mockReturnValue({ status: "completed" } as never);
 
 		const { existsSync, readFileSync } = await import("node:fs");
 		vi.mocked(existsSync).mockReturnValue(true);

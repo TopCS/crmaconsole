@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/workspace", () => ({
   duckdbQueryAsync: vi.fn(),
   duckdbExecOnFileAsync: vi.fn(async () => true),
+  duckdbExecOnFileParamsBatchAsync: vi.fn(async () => true),
   duckdbPathAsync: vi.fn(async () => "/tmp/workspace.duckdb"),
 }));
 vi.mock("@/lib/crm-queries", () => ({
@@ -18,9 +19,10 @@ const {
   findProductIdBySku,
   updatePersonFields,
 } = await import("./events");
-const { duckdbQueryAsync, duckdbExecOnFileAsync } = await import("@/lib/workspace");
+const { duckdbQueryAsync, duckdbExecOnFileAsync, duckdbExecOnFileParamsBatchAsync } = await import("@/lib/workspace");
 const mockedQuery = vi.mocked(duckdbQueryAsync);
 const mockedExec = vi.mocked(duckdbExecOnFileAsync);
+const mockedBatchExec = vi.mocked(duckdbExecOnFileParamsBatchAsync);
 const { loadCrmFieldMaps } = await import("@/lib/crm-queries");
 const mockedFieldMaps = vi.mocked(loadCrmFieldMaps);
 
@@ -113,13 +115,18 @@ describe("commerce helpers (createProduct/createOrder/findProductIdBySku)", () =
       deliveryStatus: "Consegna prevista domani",
     });
     expect(id).toBeTruthy();
-    const sql = mockedExec.mock.calls.map((call) => String(call[1])).join("\n");
-    expect(sql).toContain("fldo_customer");
-    expect(sql).toContain("person-1");
-    expect(sql).toContain("fldo_product");
-    expect(sql).toContain("prod-9");
-    expect(sql).toContain("GLS");
-    expect(sql).toContain("Consegna prevista domani");
+    const statements = mockedBatchExec.mock.calls.map((call) => call[1]).flat();
+    // Parameterized statements carry the field ids and values in `params`,
+    // so inspect SQL template + params together.
+    const blob = statements
+      .map((s) => String(s.sql) + " " + JSON.stringify(s.params))
+      .join("\n");
+    expect(blob).toContain("fldo_customer");
+    expect(blob).toContain("person-1");
+    expect(blob).toContain("fldo_product");
+    expect(blob).toContain("prod-9");
+    expect(blob).toContain("GLS");
+    expect(blob).toContain("Consegna prevista domani");
   });
 
   it("updatePersonFields skips fields with no mapped id", async () => {

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { duckdbExecOnFileAsync, duckdbPathAsync, duckdbQueryAsync } from "./workspace";
+import { duckdbExecOnFileAsync, duckdbExecOnFileParamsBatchAsync, duckdbPathAsync, duckdbQueryAsync } from "./workspace";
+import type { ParameterizedStatement } from "./workspace";
 import { loadCrmFieldMaps, sqlString } from "./crm-queries";
 import { ONBOARDING_OBJECT_IDS } from "./workspace-schema-migrations";
 import { roundScore, scoreEventInteraction } from "./strength-score";
@@ -171,17 +172,17 @@ export async function createOrder(params: {
   if (params.deliveryStatus) {values.push(["Delivery Status", params.deliveryStatus]);}
   if (params.trackingUrl) {values.push(["Tracking URL", params.trackingUrl]);}
 
-  const statements = [
-    `INSERT INTO entries (id, object_id, created_at, updated_at) VALUES (${sqlString(orderId)}, ${sqlString(ONBOARDING_OBJECT_IDS.order)}, ${sqlString(now)}, ${sqlString(now)});`,
+  const statements: ParameterizedStatement[] = [
+    { sql: `INSERT INTO entries (id, object_id, created_at, updated_at) VALUES (?, ?, ?, ?)`, params: [orderId, ONBOARDING_OBJECT_IDS.order, now, now] },
   ];
   for (const [fieldName, value] of values) {
     const fieldId = fieldMaps.order[fieldName];
     if (!fieldId) {continue;}
     statements.push(
-      `INSERT INTO entry_fields (entry_id, field_id, value) VALUES (${sqlString(orderId)}, ${sqlString(fieldId)}, ${sqlString(value)});`,
+      { sql: `INSERT INTO entry_fields (entry_id, field_id, value) VALUES (?, ?, ?)`, params: [orderId, fieldId, value] },
     );
   }
-  const ok = await duckdbExecOnFileAsync(dbPath, statements.join("\n"));
+  const ok = await duckdbExecOnFileParamsBatchAsync(dbPath, statements);
   return ok ? orderId : null;
 }
 

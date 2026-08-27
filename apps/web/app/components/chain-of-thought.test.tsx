@@ -19,6 +19,8 @@ describe("ChainOfThought image steps", () => {
 
 		render(<ChainOfThought parts={parts} isStreaming />);
 
+		fireEvent.click(screen.getByRole("button", { name: /thought/i }));
+
 		expect(screen.getByText("Read 1 image")).toBeTruthy();
 		expect(screen.getByRole("img", { name: "photo.png" })).toBeTruthy();
 		expect(screen.queryByText(/Generating image/i)).toBeNull();

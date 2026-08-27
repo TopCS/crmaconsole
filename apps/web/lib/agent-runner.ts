@@ -1018,7 +1018,57 @@ class GatewayProcessHandle
 				cachedAgentSubscribeSupport = "supported";
 			}
 		}
+		await this.catchUpCompletedRun(sessionKey);
 		this.sessionStarted = true;
+	}
+
+	/**
+	 * OpenClaw broadcasts agent/chat events to all connected clients (each
+	 * filters by sessionKey) — there is no `agent.subscribe` RPC. A client
+	 * that reconnects after the run finished misses the terminal `chat` final
+	 * event (already broadcast while it was away), which leaves the web-app
+	 * run stuck in "running". Catch up by checking chat.history: if the
+	 * session already produced an assistant reply, synthesize the terminal
+	 * event ourselves so the parent finalizes the run.
+	 */
+	private async catchUpCompletedRun(sessionKey: string): Promise<void> {
+		const client = this.client;
+		if (!client) {return;}
+		try {
+			const res = await client.request("chat.history", { sessionKey, limit: 5 });
+			if (!res.ok) {return;}
+			const payload = asRecord(res.payload);
+			const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+			const lastAssistant = messages.toReversed().find((m) => {
+				const rec = asRecord(m);
+				return rec?.role === "assistant";
+			});
+			if (!lastAssistant) {return;}
+			const rec = asRecord(lastAssistant);
+			const content = rec?.content;
+			let text = "";
+			if (typeof content === "string") {text = content;}
+			else if (Array.isArray(content)) {
+				text = content
+					.map((c) => {
+						const r = asRecord(c);
+						return typeof r?.text === "string" ? r.text : "";
+					})
+					.join("");
+			}
+			const event = {
+				event: "chat",
+				data: {
+					sessionKey,
+					state: "final",
+					message: { role: "assistant", content: text },
+				},
+				sessionKey,
+			};
+			(this.stdout as PassThrough).write(`${JSON.stringify(event)}\n`);
+		} catch {
+			// Best effort — never break the subscribe flow on a catch-up failure.
+		}
 	}
 
 	private async reconnectAfterDrop(): Promise<void> {

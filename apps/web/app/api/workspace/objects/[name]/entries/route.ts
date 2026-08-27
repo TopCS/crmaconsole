@@ -1,4 +1,4 @@
-import { duckdbExecOnFile, duckdbQueryOnFile, findDuckDBForObject } from "@/lib/workspace";
+import { duckdbExecOnFile, duckdbExecOnFileParams, duckdbQueryOnFile, findDuckDBForObject } from "@/lib/workspace";
 import { trackServer } from "@/lib/telemetry";
 
 export const dynamic = "force-dynamic";
@@ -88,8 +88,9 @@ export async function POST(
 		for (const [fieldName, value] of Object.entries(body.fields)) {
 			const fieldId = fieldMap.get(fieldName);
 			if (!fieldId || value == null) {continue;}
-			duckdbExecOnFile(dbFile,
-				`INSERT INTO entry_fields (entry_id, field_id, value) VALUES ('${sqlEscape(entryId)}', '${sqlEscape(fieldId)}', '${sqlEscape(String(value))}')`,
+			duckdbExecOnFileParams(dbFile,
+				`INSERT INTO entry_fields (entry_id, field_id, value) VALUES (?, ?, ?)`,
+				[entryId, fieldId, String(value)],
 			);
 		}
 	}

@@ -49,6 +49,8 @@ const TYPE_KEYWORDS: Array<{ type: CrmObjectType; words: string[] }> = [
   { type: "segment", words: ["segment", "segments", "segmento", "segmenti"] },
   { type: "campaign", words: ["campaign", "campaigns", "campagna", "campagne"] },
   { type: "campaign_send", words: ["send", "sends", "invio", "invii", "campaign send"] },
+  { type: "product", words: ["product", "products", "prodotto", "prodotti"] },
+  { type: "order", words: ["order", "orders", "ordine", "ordini"] },
 ];
 
 /** Normalize/validate an arbitrary object into a safe GraphFilter. */
@@ -115,9 +117,16 @@ export function heuristicGraphFilter(query: string): GraphFilter {
     if (Number.isFinite(d)) {out.depth = Math.max(1, Math.min(3, d));}
   }
 
+  // 3a) "who bought/ordered X" → focus the product + a couple of hops.
+  const boughtMatch = text.match(/(?:acquistat\w*|comprat\w*|bought|ordered|purchase\w*)\s+(?:un |una |a |an )?([A-Za-z0-9À-ÿ .'’&+-]{2,60})/i);
+  if (boughtMatch) {
+    out.focusLabel = boughtMatch[1].trim().replace(/[.]+$/, "").trim();
+    out.depth = out.depth ?? 2;
+  }
+
   // 3) focus phrase ("collegate ad Acme", "connected to Sarah", "intorno a X")
   const focusMatch = text.match(/(?:collegat[oei]?\s*(?:ad?|con|a)|connected\s+to|neighbors?\s+of|around|near|intorno\s+a|vicino\s+a|da\s+)\s+([A-Za-z0-9À-ÿ .'’&+-]{2,60})/i);
-  if (focusMatch) {
+  if (focusMatch && !out.focusLabel) {
     out.focusLabel = focusMatch[1]
       .trim()
       .replace(/[.]+$/, "")

@@ -1,6 +1,7 @@
 import {
 	duckdbQueryOnFile,
 	duckdbExecOnFile,
+	duckdbExecOnFileParams,
 	findDuckDBForObject,
 	discoverDuckDBPaths,
 	parseRelationValue,
@@ -362,8 +363,7 @@ export async function PATCH(
 		const fieldId = fieldMap.get(fieldName);
 		if (!fieldId) {continue;}
 
-		const escapedValue =
-			value == null ? "NULL" : `'${sqlEscape(String(value))}'`;
+		const valueParam = value == null ? null : String(value);
 
 		// Try update first, then insert if no rows affected
 		const existingRows = q<{ cnt: number }>(dbFile,
@@ -371,12 +371,14 @@ export async function PATCH(
 		);
 
 		if (existingRows[0]?.cnt > 0) {
-			duckdbExecOnFile(dbFile,
-				`UPDATE entry_fields SET value = ${escapedValue} WHERE entry_id = '${sqlEscape(id)}' AND field_id = '${sqlEscape(fieldId)}'`,
+			duckdbExecOnFileParams(dbFile,
+				`UPDATE entry_fields SET value = ? WHERE entry_id = ? AND field_id = ?`,
+				[valueParam, id, fieldId],
 			);
 		} else {
-			duckdbExecOnFile(dbFile,
-				`INSERT INTO entry_fields (entry_id, field_id, value) VALUES ('${sqlEscape(id)}', '${sqlEscape(fieldId)}', ${escapedValue})`,
+			duckdbExecOnFileParams(dbFile,
+				`INSERT INTO entry_fields (entry_id, field_id, value) VALUES (?, ?, ?)`,
+				[id, fieldId, valueParam],
 			);
 		}
 		updatedCount++;

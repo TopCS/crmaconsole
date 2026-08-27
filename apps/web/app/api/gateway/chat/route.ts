@@ -1,6 +1,6 @@
 import {
 	startSubscribeRun,
-	getActiveRun,
+	reconcileSubscribeRun,
 	subscribeToRun,
 	reactivateSubscribeRun,
 	type SseEvent,
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
 		? imageHydration.attachments
 		: undefined;
 
-	let run = getActiveRun(sessionKey);
+	let run = reconcileSubscribeRun(sessionKey);
 	if (run?.status === "running") {
 		return new Response("Active run already in progress for this session", { status: 409 });
 	}

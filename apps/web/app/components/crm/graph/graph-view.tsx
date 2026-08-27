@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
 import { GraphDetailPanel, type NodeDetail } from "./graph-detail-panel";
+import { metaForType, orderedTypeMeta, resolveThemeColors } from "./graph-meta";
 
 const G6Canvas = dynamic(() => import("./g6-canvas").then((m) => m.G6Canvas), {
   ssr: false,
@@ -24,17 +25,18 @@ type GraphFilter = {
   depth: number | null;
 };
 
-const OBJECT_TYPES: Array<{ value: string; label: string }> = [
-  { value: "people", label: "People" },
-  { value: "company", label: "Companies" },
-  { value: "task", label: "Tasks" },
-  { value: "email_thread", label: "Threads" },
-  { value: "email_message", label: "Emails" },
-  { value: "calendar_event", label: "Events" },
-  { value: "interaction", label: "Interactions" },
-  { value: "segment", label: "Segments" },
-  { value: "campaign", label: "Campaigns" },
-  { value: "campaign_send", label: "Sends" },
+/** Baseline entity types; new types discovered in the data are appended. */
+const KNOWN_TYPES = [
+  "people",
+  "company",
+  "task",
+  "email_thread",
+  "email_message",
+  "calendar_event",
+  "interaction",
+  "segment",
+  "campaign",
+  "campaign_send",
 ];
 
 export function GraphView() {
@@ -42,6 +44,7 @@ export function GraphView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [seenTypes, setSeenTypes] = useState<string[]>(KNOWN_TYPES);
   const [types, setTypes] = useState<string[]>([]);
   const [focus, setFocus] = useState<string | null>(null);
   const [depth, setDepth] = useState<number | null>(null);
@@ -55,6 +58,8 @@ export function GraphView() {
   const [detail, setDetail] = useState<NodeDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  const theme = useMemo(() => resolveThemeColors(), []);
+
   const loadGraph = useCallback(
     async (opts: { types: string[]; focus: string | null; depth: number | null }) => {
       setLoading(true);
@@ -67,7 +72,14 @@ export function GraphView() {
         const qs = params.toString();
         const res = await fetch(`/api/crm/graph${qs ? `?${qs}` : ""}`, { cache: "no-store" });
         if (!res.ok) {throw new Error(`graph fetch failed (${res.status})`);}
-        setData((await res.json()) as GraphData);
+        const graphData = (await res.json()) as GraphData;
+        setData(graphData);
+        // Accumulate any entity types we haven't seen yet so they get a chip + legend entry.
+        setSeenTypes((prev) => {
+          const merged = new Set(prev);
+          for (const n of graphData.nodes) {merged.add(n.type);}
+          return Array.from(merged);
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load graph");
       } finally {
@@ -99,7 +111,6 @@ export function GraphView() {
       setTypes(filter.types ?? []);
       setSearch(filter.labelSearch);
       setDepth(filter.depth ?? null);
-      // The server resolves the focus label against the full node list.
       setFocus(filter.focusLabel ?? null);
       setNlSource(body.source ?? null);
     } finally {
@@ -144,6 +155,11 @@ export function GraphView() {
     };
   }, [data, search]);
 
+  const legend = useMemo(() => {
+    const set = new Set(displayed.nodes.map((n) => n.type));
+    return orderedTypeMeta(set);
+  }, [displayed.nodes]);
+
   const toggleType = (value: string) => {
     setTypes((prev) => (prev.includes(value) ? prev.filter((t) => t !== value) : [...prev, value]));
   };
@@ -158,7 +174,7 @@ export function GraphView() {
           <div>
             <h2 className="text-sm font-semibold">Relationship graph</h2>
             <p className="text-xs text-muted-foreground">
-              Click a node for details · drag to pan · scroll to zoom
+              Click a node for details · hover to highlight · drag to pan · scroll to zoom
             </p>
           </div>
           <form onSubmit={handleNlSubmit} className="flex w-full max-w-md items-center gap-2">
@@ -180,21 +196,27 @@ export function GraphView() {
 
         {/* Type filter chips */}
         <div className="flex flex-wrap items-center gap-1.5">
-          {OBJECT_TYPES.map((t) => {
-            const active = types.includes(t.value);
+          {seenTypes.map((t) => {
+            const meta = metaForType(t);
+            const active = types.includes(t);
             return (
               <button
-                key={t.value}
+                key={t}
                 type="button"
-                onClick={() => toggleType(t.value)}
+                onClick={() => toggleType(t)}
                 className={cn(
-                  "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
                   active
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-input bg-background text-muted-foreground hover:bg-accent",
                 )}
               >
-                {t.label}
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: meta.color }}
+                  aria-hidden
+                />
+                {meta.label}
               </button>
             );
           })}
@@ -212,7 +234,7 @@ export function GraphView() {
 
       {/* Canvas + detail panel */}
       <div className="flex min-h-0 flex-1">
-        <div className="relative min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1 overflow-hidden">
           {loading ? (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
               Loading graph…
@@ -224,16 +246,26 @@ export function GraphView() {
               No entities match the current filter.
             </div>
           ) : (
-            <G6Canvas nodes={displayed.nodes} edges={displayed.edges} onNodeClick={handleNodeClick} />
+            <G6Canvas nodes={displayed.nodes} edges={displayed.edges} theme={theme} onNodeClick={handleNodeClick} />
           )}
 
-          {/* status footer */}
-          <div className="pointer-events-none absolute bottom-2 left-3 flex items-center gap-2 text-xs text-muted-foreground">
-            <span>
+          {/* status footer + legend */}
+          <div className="pointer-events-none absolute bottom-2 left-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span className="whitespace-nowrap">
               {displayed.nodes.length} nodes · {displayed.edges.length} edges
             </span>
-            {displayed.truncated ? <span className="text-amber-600">(truncated)</span> : null}
-            {nlSource ? <span className="text-muted-foreground/70">· {nlSource}</span> : null}
+            {displayed.truncated ? <span className="whitespace-nowrap text-amber-600">(truncated)</span> : null}
+            {nlSource ? <span className="whitespace-nowrap text-muted-foreground/70">· {nlSource}</span> : null}
+            {legend.length > 0 ? (
+              <span className="pointer-events-auto flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                {legend.map(({ type, meta }) => (
+                  <span key={type} className="inline-flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: meta.color }} aria-hidden />
+                    {meta.label}
+                  </span>
+                ))}
+              </span>
+            ) : null}
           </div>
         </div>
 

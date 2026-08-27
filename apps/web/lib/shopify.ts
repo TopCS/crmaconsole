@@ -19,7 +19,8 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { duckdbExecOnFileAsync, duckdbPathAsync, duckdbQueryAsync } from "./workspace";
+import { duckdbExecOnFileAsync, duckdbExecOnFileParamsBatchAsync, duckdbPathAsync, duckdbQueryAsync } from "./workspace";
+import type { ParameterizedStatement } from "./workspace";
 import { loadCrmFieldMaps, sqlString } from "./crm-queries";
 import {
   createOrder,
@@ -530,15 +531,15 @@ async function updateOrderFields(orderId: string, values: Array<[string, string]
   const dbPath = await duckdbPathAsync();
   if (!dbPath) {return false;}
   const fieldMaps = await loadCrmFieldMaps();
-  const statements: string[] = [];
+  const statements: ParameterizedStatement[] = [];
   for (const [fieldName, value] of values) {
     const fieldId = fieldMaps.order[fieldName];
     if (!fieldId) {continue;}
     statements.push(
-      `DELETE FROM entry_fields WHERE entry_id = ${sqlString(orderId)} AND field_id = ${sqlString(fieldId)};`,
-      `INSERT INTO entry_fields (entry_id, field_id, value) VALUES (${sqlString(orderId)}, ${sqlString(fieldId)}, ${sqlString(value)});`,
+      { sql: `DELETE FROM entry_fields WHERE entry_id = ? AND field_id = ?`, params: [orderId, fieldId] },
+      { sql: `INSERT INTO entry_fields (entry_id, field_id, value) VALUES (?, ?, ?)`, params: [orderId, fieldId, value] },
     );
   }
   if (statements.length === 0) {return true;}
-  return duckdbExecOnFileAsync(dbPath, statements.join("\n"));
+  return duckdbExecOnFileParamsBatchAsync(dbPath, statements);
 }

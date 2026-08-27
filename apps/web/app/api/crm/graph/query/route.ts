@@ -28,6 +28,7 @@ function buildPrompt(query: string): string {
     '- "labelSearch": a short substring to match against node names, or null.',
     '- "focusLabel": the name of a single entity the user wants to center on, or null.',
     '- "depth": integer 1-3 for hop distance when focusing, otherwise null.',
+    '- For "who bought/ordered X" or "persone che hanno acquistato X": set focusLabel to X (e.g. "Samsung Galaxy") and depth to 2, leave types [] and labelSearch null.',
     "",
     `Query: ${query}`,
   ].join("\n");
