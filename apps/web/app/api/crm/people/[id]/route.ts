@@ -37,6 +37,8 @@ type Person = {
   linkedin_url: string | null;
   avatar_url: string | null;
   notes: string | null;
+  marketing_opt_in: boolean | null;
+  preferred_channel: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -118,6 +120,8 @@ export async function GET(
       { name: "LinkedIn URL", alias: "linkedin_url" },
       { name: "Avatar URL", alias: "avatar_url" },
       { name: "Notes", alias: "notes" },
+      { name: "Marketing Opt-in", alias: "marketing_opt_in" },
+      { name: "Preferred Contact Channel", alias: "preferred_channel" },
     ],
     whereSql: `e.id = ${sqlString(personId)}`,
   });
@@ -175,6 +179,13 @@ export async function GET(
     linkedin_url: personRaw.linkedin_url,
     avatar_url: personRaw.avatar_url,
     notes: personRaw.notes,
+    marketing_opt_in:
+      personRaw.marketing_opt_in === "true"
+        ? true
+        : personRaw.marketing_opt_in === "false"
+          ? false
+          : null,
+    preferred_channel: personRaw.preferred_channel,
     created_at: personRaw.created_at,
     updated_at: personRaw.updated_at,
   };

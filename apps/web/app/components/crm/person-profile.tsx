@@ -7,7 +7,6 @@ import { CompanyFavicon } from "./company-favicon";
 import { ConnectionStrengthChip } from "./connection-strength-chip";
 import { CrmEmptyState, CrmLoadingState } from "./crm-list-shell";
 import { formatDayLabel, formatRelativeDate } from "./format-relative-date";
-import { EnrichButton } from "./enrich-button";
 import { ProfileThreadList } from "./inbox/profile-thread-list";
 import { EventListItem } from "./event-list-item";
 import { ActivityTimeline } from "./activity-timeline";
@@ -34,6 +33,8 @@ type PersonResponse = {
     linkedin_url: string | null;
     avatar_url: string | null;
     notes: string | null;
+    marketing_opt_in: boolean | null;
+    preferred_channel: string | null;
     created_at: string | null;
     updated_at: string | null;
   };
@@ -529,6 +530,19 @@ function OverviewTab({
           <Field label="Job title" value={person.job_title} />
           <Field label="Status" value={person.status} />
           <Field label="Source" value={person.source} />
+        </div>
+      </section>
+
+      <section>
+        <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-muted)" }}>
+          Consent
+        </h3>
+        <div className="space-y-2.5 rounded-2xl border p-4" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+          <Field
+            label="Marketing opt-in"
+            value={person.marketing_opt_in == null ? "—" : person.marketing_opt_in ? "Granted" : "Not granted"}
+          />
+          <Field label="Preferred channel" value={person.preferred_channel} />
         </div>
       </section>
 
