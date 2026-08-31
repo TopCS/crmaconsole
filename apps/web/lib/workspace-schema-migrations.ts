@@ -1098,16 +1098,22 @@ const VIEW_NAMES: Array<{ object: string; objectId: string; viewName: string }> 
  * dropped (or whose yaml already has icons) is a no-op.
  */
 async function migrateIconsFromDuckdbToYaml(dbPath: string): Promise<void> {
-  let rows: Array<{ name: string; icon: string | null }> = [];
-  try {
-    rows = await duckdbQueryOnFileAsync<{ name: string; icon: string | null }>(
-      dbPath,
-      "SELECT name, icon FROM objects WHERE icon IS NOT NULL",
-    );
-  } catch {
-    // Column already dropped (or table missing on a brand-new DB) — done.
-    return;
+  // Column-existence probe instead of try/catch-on-error: on workspaces
+  // where the column was already retired this migration previously logged
+  // a binder + exec failure at every startup while doing nothing.
+  const hasIconColumn = await duckdbQueryOnFileAsync<{ n: number }>(
+    dbPath,
+    `SELECT count(*) AS n FROM information_schema.columns
+     WHERE table_name = 'objects' AND column_name = 'icon'`,
+  );
+  if ((hasIconColumn[0]?.n ?? 0) === 0) {
+    return; // Column already dropped (or table missing on a brand-new DB) — done.
   }
+
+  const rows = await duckdbQueryOnFileAsync<{ name: string; icon: string | null }>(
+    dbPath,
+    "SELECT name, icon FROM objects WHERE icon IS NOT NULL",
+  );
 
   for (const row of rows) {
     if (!row.icon || typeof row.icon !== "string") {continue;}
