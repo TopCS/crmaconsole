@@ -272,10 +272,10 @@ La Console deve essere raggiungibile da NLPearl (callback) **e** da Shopify (web
 ```bash
 # Sul host (già fatto — verificare con:)
 tailscale funnel status
-# → https://top-mgm-00.taileb6b.ts.net/ → proxy http://127.0.0.1:3100
+# → https://top-mgm-00-2.taileb6b.ts.net/ → proxy http://127.0.0.1:3100
 ```
 
-Origin pubblica attuale: **`https://top-mgm-00.taileb6b.ts.net`** (già impostata come
+Origin pubblica attuale: **`https://top-mgm-00-2.taileb6b.ts.net`** (già impostata come
 `CRM_A_CONSOLE_PUBLIC_URL` in `.env`).
 
 *Alternativa nel container* (non usata ora): l'entrypoint Docker si unisce al tailnet e pubblica
@@ -289,7 +289,7 @@ Origin pubblica attuale: **`https://top-mgm-00.taileb6b.ts.net`** (già impostat
 
 - [ ] `pnpm build:crm-a-plugins` + `docker compose up -d --build --force-recreate`
 - [ ] `.env`: `CRM_A_PHONE_WEBHOOK_SECRET`, `NLPEARL_ACCOUNT_ID`, `NLPEARL_SECRET_KEY`, `TAILSCALE_AUTHKEY` (+ `TAILSCALE_HOSTNAME`), `SHOPIFY_API_SECRET`, `SHOPIFY_STORE_DOMAIN`
-- [ ] Funnel attivo: `https://top-mgm-00.taileb6b.ts.net/api/integrations` → 200
+- [ ] Funnel attivo: `https://top-mgm-00-2.taileb6b.ts.net/api/integrations` → 200
 - [ ] **Shopify**: dev store + prodotto SAM-S26 + app custom con webhook `orders/create` e `order/fulfilled` → URL Console (vedi `SHOPIFY-SETUP.md`)
 - [ ] **Seed + reset**: `bash scripts/demo-seed.sh` → crea catalogo (SAM-S27/S26/S25) + 4 contatti + ordine Lorenzo + segmento "Lancio Samsung Galaxy", poi **rimuove Lorenzo** (persona+ordine). Verifica finale: 3 prodotti, 3 contatti (senza Lorenzo), 1 segmento.
 - [ ] Numero inbound **verificato** (`686fd112a91849a9e59a5353`); numero outbound **verificato**; chiamata outbound **collaudata** (mai la prima volta sul palco)

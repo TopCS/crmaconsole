@@ -13,7 +13,7 @@ simulatore `scripts/shopify-demo-simulate.sh`. Questo documento prepara il **liv
 
 - **Account Shopify Partners** (gratuito) per aprire un dev store. Serve per creare un'app custom.
 - Console raggiungibile: **Tailscale funnel** attivo (vedi `DEMO-PRESENTATION-SCRIPT.md` →
-  "Raggiungibilità"). Origin pubblica attuale: `https://top-mgm-00.taileb6b.ts.net`.
+  "Raggiungibilità"). Origin pubblica attuale: `https://top-mgm-00-2.taileb6b.ts.net`.
 - `CRM_A_PHONE_WEBHOOK_SECRET` già valorizzato (il webhook accetta anche `?token=`).
 
 ## 1. Dev store + prodotto
@@ -36,7 +36,7 @@ via Shopify CLI (`~/shopify/crm-a-touchpoint/`) e la configurazione **già rilas
 (`crm-a-touchpoint-3`, attiva) con:
 
 - scopes: `read_products, write_products, read_orders, write_orders`;
-- webhook `orders/create` e `order/fulfilled` → `https://top-mgm-00.taileb6b.ts.net/api/webhooks/shopify`;
+- webhook `orders/create` e `order/fulfilled` → `https://top-mgm-00-2.taileb6b.ts.net/api/webhooks/shopify`;
 - `application_url` e redirect sul funnel.
 
 **Resta da fare (manuale, richiede il login Shopify):**
@@ -64,11 +64,11 @@ Prima della demo verificare il percorso completo con il simulatore:
 
 ```bash
 # 1) acquisto → crea il record
-./scripts/shopify-demo-simulate.sh --webhook https://top-mgm-00.taileb6b.ts.net/api/webhooks/shopify
+./scripts/shopify-demo-simulate.sh --webhook https://top-mgm-00-2.taileb6b.ts.net/api/webhooks/shopify
 # → { ok:true, personId, matched:"created", eventId, orderId }
 
 # 2) spedizione → aggiorna corriere + consegna sull'ordine
-./scripts/shopify-demo-simulate.sh --webhook https://top-mgm-00.taileb6b.ts.net/api/webhooks/shopify --fulfilled
+./scripts/shopify-demo-simulate.sh --webhook https://top-mgm-00-2.taileb6b.ts.net/api/webhooks/shopify --fulfilled
 ```
 
 Se `SHOPIFY_API_SECRET` è nell'ambiente, il simulatore firma con HMAC (come farebbe Shopify);
