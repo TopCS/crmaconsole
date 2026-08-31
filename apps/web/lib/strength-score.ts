@@ -16,10 +16,21 @@
 
 import {
   duckdbExecOnFileAsync,
+  duckdbExecOnFileParamsBatchAsync,
   duckdbPathAsync,
   duckdbQueryAsync,
+  duckdbQueryParamsAsync,
+  type ParameterizedStatement,
 } from "./workspace";
 import { ONBOARDING_OBJECT_IDS } from "./workspace-schema-migrations";
+
+// Stable seeded field ids used by the Strength Score aggregation. Module-level
+// so both the global recompute and the single-person recompute share them.
+const INTERACTION_PERSON_REL = "seed_fld_inter_person_000000000";
+const INTERACTION_COMPANY_REL = "seed_fld_inter_company_00000000";
+const INTERACTION_SCORE_FLD = "seed_fld_inter_score_0000000000";
+const PEOPLE_STRENGTH_FLD = "seed_fld_people_strength_000000";
+const COMPANY_STRENGTH_FLD = "seed_fld_company_strength_00000";
 
 // ---------------------------------------------------------------------------
 // Constants — tweak here.
@@ -178,14 +189,16 @@ export async function recomputeAllScores(): Promise<{
   if (!dbPath) {
     return { peopleUpdated: 0, companiesUpdated: 0 };
   }
+  const interactionPersonRel = INTERACTION_PERSON_REL;
+  const interactionCompanyRel = INTERACTION_COMPANY_REL;
+  const interactionScoreFld = INTERACTION_SCORE_FLD;
+  const peopleStrengthFld = PEOPLE_STRENGTH_FLD;
+  const companyStrengthFld = COMPANY_STRENGTH_FLD;
 
-  const interactionPersonRel = "seed_fld_inter_person_000000000";
-  const interactionCompanyRel = "seed_fld_inter_company_00000000";
-  const interactionScoreFld = "seed_fld_inter_score_0000000000";
-  const peopleStrengthFld = "seed_fld_people_strength_000000";
-  const companyStrengthFld = "seed_fld_company_strength_00000";
-
-  // 1) Sum interaction.Score Contribution per person
+  // 1) Sum interaction.Score Contribution per person. Only people that still
+  // exist in `entries` — orphaned references (deleted people whose
+  // interactions remain) would violate the entry_fields FK and kill the
+  // whole batch write below, leaving everyone Cold.
   const peopleRows = await duckdbQueryAsync<{ person_id: string; score: number }>(
     `
 WITH person_scores AS (
@@ -198,6 +211,7 @@ WITH person_scores AS (
     ON score_ef.entry_id = i.id AND score_ef.field_id = '${interactionScoreFld}'
   WHERE i.object_id = '${ONBOARDING_OBJECT_IDS.interaction}'
     AND person_ef.value IS NOT NULL AND person_ef.value <> ''
+    AND EXISTS (SELECT 1 FROM entries pe WHERE pe.id = person_ef.value)
   GROUP BY person_ef.value
 )
 SELECT person_id, score FROM person_scores;`,
@@ -218,6 +232,7 @@ WITH company_scores AS (
     ON score_ef.entry_id = i.id AND score_ef.field_id = '${interactionScoreFld}'
   WHERE i.object_id = '${ONBOARDING_OBJECT_IDS.interaction}'
     AND company_ef.value IS NOT NULL AND company_ef.value <> ''
+    AND EXISTS (SELECT 1 FROM entries ce WHERE ce.id = company_ef.value)
   GROUP BY company_ef.value
 )
 SELECT company_id, score FROM company_scores;`,
@@ -262,6 +277,41 @@ ${insertValues ? `INSERT INTO entry_fields (id, entry_id, field_id, value) VALUE
   }
 
   return { peopleUpdated: peopleRows.length, companiesUpdated: companyRows.length };
+}
+
+/**
+ * Re-aggregate the Strength Score of a SINGLE person from their
+ * interactions' Score Contribution and write it back.
+ *
+ * Unlike recomputeAllScores (a batch over every person — designed for the
+ * sync-runner), this touches one row and is safe to run inline after an
+ * ingestion webhook: it can't hit the FK violation that orphans in the
+ * batch cause, and its lock window is minimal.
+ * Returns the score written (0 when nothing could be written).
+ */
+export async function recomputePersonScore(personId: string): Promise<number> {
+  const dbPath = await duckdbPathAsync();
+  if (!dbPath) {return 0;}
+
+  const rows = await duckdbQueryParamsAsync<{ score: number }>(
+    `
+    SELECT COALESCE(SUM(TRY_CAST(score_ef.value AS DOUBLE)), 0) AS score
+    FROM entries i
+    JOIN entry_fields person_ef
+      ON person_ef.entry_id = i.id AND person_ef.field_id = ?
+    LEFT JOIN entry_fields score_ef
+      ON score_ef.entry_id = i.id AND score_ef.field_id = ?
+    WHERE i.object_id = ? AND person_ef.value = ?`,
+    [INTERACTION_PERSON_REL, INTERACTION_SCORE_FLD, ONBOARDING_OBJECT_IDS.interaction, personId],
+  );
+
+  const score = roundScore(rows[0]?.score ?? 0);
+  const statements: ParameterizedStatement[] = [
+    { sql: `DELETE FROM entry_fields WHERE field_id = ? AND entry_id = ?`, params: [PEOPLE_STRENGTH_FLD, personId] },
+    { sql: `INSERT INTO entry_fields (id, entry_id, field_id, value) VALUES (?, ?, ?, ?)`, params: [randomEntryFieldId(), personId, PEOPLE_STRENGTH_FLD, String(score)] },
+  ];
+  const ok = await duckdbExecOnFileParamsBatchAsync(dbPath, statements);
+  return ok ? score : 0;
 }
 
 // ---------------------------------------------------------------------------

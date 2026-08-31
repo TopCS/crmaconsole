@@ -19,7 +19,7 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { duckdbExecOnFileAsync, duckdbExecOnFileParamsBatchAsync, duckdbPathAsync, duckdbQueryAsync } from "./workspace";
+import { duckdbExecOnFileParamsBatchAsync, duckdbPathAsync, duckdbQueryAsync } from "./workspace";
 import type { ParameterizedStatement } from "./workspace";
 import { loadCrmFieldMaps, sqlString } from "./crm-queries";
 import {
@@ -36,6 +36,7 @@ import {
   updatePersonFields,
 } from "./events";
 import { loadLastOrder, loadPhonePerson } from "./phone-webhook";
+import { recomputePersonScore } from "./strength-score";
 
 // ---------------------------------------------------------------------------
 // Pure mapping (unit-testable without DB)
@@ -472,6 +473,18 @@ export async function ingestShopifyOrder(data: ShopifyOrderData): Promise<Shopif
   if (!orderId) {throw new Error("Failed to create order.");}
 
   await updatePersonFields(resolved.personId, [["Last Interaction At", data.createdAt]]);
+
+  // Refresh Strength Score immediately: the Purchase interaction carries a
+  // Score Contribution (25 → Active), but the aggregate on the person is
+  // recomputed only by the sync-runner tick. Single-person recompute — the
+  // global batch dies on FK violations from orphaned people.
+  try {
+    const score = await recomputePersonScore(resolved.personId);
+    await updatePersonFields(resolved.personId, [["Strength Score", String(score)]]);
+    console.log(`[shopify] strength recompute: person ${resolved.personId} → ${score}`);
+  } catch (err) {
+    console.error("[shopify] strength recompute failed:", err);
+  }
 
   return {
     personId: resolved.personId,

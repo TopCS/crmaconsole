@@ -18,9 +18,12 @@
 #   ./scripts/shopify-fetch-admin-token.sh            # usa i valori in .env
 #   ./scripts/shopify-fetch-admin-token.sh --dry-run  # grant senza scrivere .env
 #
+# ⚠️  OGNI chiamata a questo script (dry-run incluso) emette un NUOVO token e
+# INVALIDA il precedente: se in .env c'è già un token salvato, dopo la chiamata
+# non è più valido. Dopo il run che salva il token, NON rilanciare la grant.
+#
 # Le variabili in .env hanno precedenza sulle flag CLI solo se non passate
 # esplicitamente; le flag CLI sovrascrivono sempre.
-
 set -euo pipefail
 
 ENV_FILE="${ENV_FILE:-.env}"

@@ -100,7 +100,7 @@ JSON
 
 if [[ "${MODE}" == "fulfilled" ]]; then
   PAYLOAD="${fulfilled_payload}"
-  TOPIC="order/fulfilled"
+  TOPIC="orders/fulfilled"  # real Shopify topic (X-Shopify-Topic header)
 else
   PAYLOAD="${order_payload}"
   TOPIC="orders/create"

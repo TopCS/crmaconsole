@@ -33,6 +33,9 @@ export const runtime = "nodejs";
 const TOPICS: Record<string, true> = {
   "orders/create": true,
   "orders/paid": true,
+  // Shopify sends the fulfillment webhook as `orders/fulfilled` (plural);
+  // `order/fulfilled` is kept for the demo simulator's historical topic.
+  "orders/fulfilled": true,
   "order/fulfilled": true,
 };
 
@@ -90,7 +93,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    if (topic === "order/fulfilled") {
+    if (topic === "orders/fulfilled" || topic === "order/fulfilled") {
       const result = await applyShopifyFulfillment(data);
       return Response.json({ ok: true, ...result });
     }
