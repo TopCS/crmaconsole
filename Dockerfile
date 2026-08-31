@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
-
 # ---------------------------------------------------------------------------
 # Build stage: install deps and produce the CLI bundle + Next.js standalone
 # web build (the same artifacts `pnpm prepack` creates for the npm package).
 # ---------------------------------------------------------------------------
 FROM node:22-bookworm AS build
 WORKDIR /app
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NEXT_SKIP_VALIDATION=1
 RUN corepack enable
 
 # build:seed-duckdb shells out to the DuckDB CLI (not published via apt/npm).
@@ -23,11 +23,16 @@ RUN apt-get update \
 # Install dependencies first for better layer caching.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/web/package.json apps/web/package.json
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
 # Full prepack chain: seed duckdb, plugin env, plugins, CLI bundle, web build.
 COPY . .
-RUN pnpm prepack
+# The Next.js compile cache persists across builds (BuildKit cache mount), so
+# a code-change rebuild only recompiles changed modules instead of the whole
+# app — the dominant cost of the edit-rebuild loop.
+RUN --mount=type=cache,target=/app/apps/web/.next/cache \
+    pnpm prepack
 
 # ---------------------------------------------------------------------------
 # Runtime stage: daemonless mode — no systemd/launchd inside the container.

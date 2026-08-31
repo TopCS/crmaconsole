@@ -37,6 +37,16 @@ const nextConfig: NextConfig = {
   // next build required at runtime.
   output: "standalone",
 
+  // Container image builds skip the in-build lint/type check (~18s of the
+  // ~2min rebuild): the Dockerfile sets NEXT_SKIP_VALIDATION=1 and the CLI
+  // `pnpm check` gate still runs both locally and in CI. Keep the check ON
+  // for the npm-package path (pnpm prepack without the flag).
+  ...(process.env.NEXT_SKIP_VALIDATION === "1"
+    ? {
+        eslint: { ignoreDuringBuilds: true },
+        typescript: { ignoreBuildErrors: true },
+      }
+    : {}),
   // Required for pnpm monorepos: trace dependencies from the workspace
   // root so the standalone build bundles its own node_modules correctly
   // instead of resolving through pnpm's virtual store symlinks.
