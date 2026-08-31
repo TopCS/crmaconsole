@@ -112,8 +112,8 @@ export async function POST(req: Request) {
       }
       case "send": {
         const result = criteria
-          ? await enqueuePhoneCampaign(campaignId, criteria)
-          : await enqueuePhoneCampaign(campaignId);
+          ? await enqueuePhoneCampaign(campaignId, criteria, origin)
+          : await enqueuePhoneCampaign(campaignId, undefined, origin);
         return Response.json({ ok: true, ...result });
       }
       case "pause": {

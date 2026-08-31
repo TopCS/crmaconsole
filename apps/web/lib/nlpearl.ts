@@ -235,6 +235,18 @@ export async function addLead(params: AddLeadParams): Promise<AddLeadResult> {
   });
 }
 
+/** Delete one or more outbound leads by their external ID (our campaign_send UUIDs). */
+export async function deleteNlpearlLeadsByExternal(
+  pearlId: string,
+  externalIds: string[],
+): Promise<boolean> {
+  return nlpearlRequest<boolean>(
+    "DELETE",
+    `/Outbound/${encodeURIComponent(pearlId)}/Leads/External`,
+    { leadExternalIds: externalIds },
+  );
+}
+
 export async function setPearlActive(pearlId: string, isActive: boolean): Promise<void> {
   await nlpearlRequest("PUT", `/Pearl/${encodeURIComponent(pearlId)}/Active`, { isActive });
 }

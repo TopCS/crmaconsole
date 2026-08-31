@@ -21,6 +21,7 @@ import {
   resolveVoiceId,
   addLead,
   setPearlActive,
+  deleteNlpearlLeadsByExternal,
   createVoicePearl,
 } from "./nlpearl";
 import { readPhoneWebhookSecret } from "./phone-webhook";
@@ -33,6 +34,8 @@ import { listSegmentMembers, type SegmentDefinition } from "./segments";
 export type CampaignPhoneConfig = {
   pearlId: string | null;
   phoneId: string;
+  name: string | null;
+  segmentId: string | null;
   windowStart: string | null;
   windowEnd: string | null;
   timezone: string | null;
@@ -61,7 +64,8 @@ export async function loadCampaignPhoneConfig(campaignId: string): Promise<Campa
       ${map["Calling Days"] ? `MAX(CASE WHEN ef.field_id = '${map["Calling Days"]}' THEN ef.value END) AS daysRaw` : "NULL AS daysRaw"},
       ${map["Max Attempts"] ? `MAX(CASE WHEN ef.field_id = '${map["Max Attempts"]}' THEN ef.value END) AS maxAttempts` : "NULL AS maxAttempts"},
       ${map["Nlpearl Retry Rate"] ? `MAX(CASE WHEN ef.field_id = '${map["Nlpearl Retry Rate"]}' THEN ef.value END) AS retryRate` : "NULL AS retryRate"},
-      ${map["Nlpearl Agent Count"] ? `MAX(CASE WHEN ef.field_id = '${map["Nlpearl Agent Count"]}' THEN ef.value END) AS agentCount` : "NULL AS agentCount"},
+      ${map["Name"] ? `MAX(CASE WHEN ef.field_id = '${map["Name"]}' THEN ef.value END) AS name` : "NULL AS name"},
+      ${map["Segment"] ? `MAX(CASE WHEN ef.field_id = '${map["Segment"]}' THEN ef.value END) AS segmentId` : "NULL AS segmentId"},
       ${map["Voice Brief"] ? `MAX(CASE WHEN ef.field_id = '${map["Voice Brief"]}' THEN ef.value END) AS brief` : "NULL AS brief"}
     FROM entries e
     LEFT JOIN entry_fields ef ON ef.entry_id = e.id
@@ -93,6 +97,8 @@ export async function loadCampaignPhoneConfig(campaignId: string): Promise<Campa
   return {
     pearlId: r.pearlId ?? null,
     phoneId: r.phoneId ?? "",
+    name: r.name ?? null,
+    segmentId: r.segmentId ?? null,
     windowStart: r.windowStart ?? null,
     windowEnd: r.windowEnd ?? null,
     timezone: r.timezone ?? null,
@@ -120,7 +126,27 @@ export type PhoneCampaignUpsertInput = {
   retryRate?: number;
   agentCount?: number;
   brief?: string;
+  /** Segment NAME spoken by the operator (e.g. "Lancio Samsung Galaxy") —
+   * resolved to the segment entry id and linked on the campaign card. */
+  segmentName?: string;
 };
+
+/** Resolve a segment by its Name field → segment entry id (null when absent). */
+export async function resolveSegmentIdByName(name: string): Promise<string | null> {
+  const dbPath = await duckdbPathAsync();
+  const fieldMaps = await loadCrmFieldMaps();
+  const nameFld = fieldMaps.segment["Name"];
+  if (!dbPath || !nameFld) {return null;}
+  const rows = await duckdbQueryAsync<{ entry_id: string }>(
+    `SELECT ef.entry_id FROM entries e
+     JOIN entry_fields ef ON ef.entry_id = e.id
+     WHERE e.object_id = '${ONBOARDING_OBJECT_IDS.segment}'
+       AND ef.field_id = ${sqlString(nameFld)}
+       AND LOWER(ef.value) = ${sqlString(name.toLowerCase())}
+     LIMIT 1;`,
+  );
+  return rows[0]?.entry_id ?? null;
+}
 
 /**
  * Create/update a campaign card + its phone config (insert-or-ignore the
@@ -150,9 +176,14 @@ export async function upsertPhoneCampaign(input: PhoneCampaignUpsertInput): Prom
   writeField("Calling Window End", input.windowEnd);
   writeField("Calling Timezone", input.timezone);
   writeField("Calling Days", input.days ? JSON.stringify(input.days) : undefined);
-  writeField("Max Attempts", input.maxAttempts);
-  writeField("Nlpearl Retry Rate", input.retryRate);
-  writeField("Nlpearl Agent Count", input.agentCount);
+  writeField("Voice Brief", input.brief);
+  const segmentId = input.segmentName?.trim()
+    ? await resolveSegmentIdByName(input.segmentName.trim())
+    : undefined;
+  if (input.segmentName?.trim() && !segmentId) {
+    throw new Error(`Segment "${input.segmentName.trim()}" not found — create it first or check the name.`);
+  }
+  writeField("Segment", segmentId);
   writeField("Voice Brief", input.brief);
   statements.push(`UPDATE entries SET updated_at = ${sqlString(now)} WHERE id = ${sqlString(campaignId)};`);
   await duckdbExecOnFileAsync(dbPath, statements.join("\n"));
@@ -205,7 +236,6 @@ export async function createPhonePearlForCampaign(
   const cfg = await loadCampaignPhoneConfig(campaignId);
   if (!cfg) {throw new Error("Campaign not found.");}
   if (!cfg.phoneId) {throw new Error("Campaign missing Nlpearl Phone ID.");}
-  if (!isNlpearlConfigured()) {throw new Error("NLPearl not configured.");}
   if (cfg.pearlId) {return cfg.pearlId;}
 
   const voiceId = await resolveVoiceId();
@@ -220,7 +250,8 @@ export async function createPhonePearlForCampaign(
   const urls = buildNlpearlCallbackUrls(requestOrigin, token);
 
   const payload = {
-    name: `Campaign ${campaignId.slice(0, 8)}`,
+    // Name the Pearl after the campaign so it's recognizable on NLPearl.
+    name: cfg.name ?? `Campaign ${campaignId.slice(0, 8)}`,
     pearl: {
       companyName: "Crm-A",
       companyDescription: "Campagna chiamante gestita da Crm-A Console.",
@@ -306,12 +337,19 @@ function windowsTimeZone(iana: string | null): string {
 export async function enqueuePhoneCampaign(
   campaignId: string,
   criteria?: PhoneAudienceCriteria,
+  requestOrigin?: string,
 ): Promise<PhoneCampaignEnqueueResult> {
-  const cfg = await loadCampaignPhoneConfig(campaignId);
+  let cfg = await loadCampaignPhoneConfig(campaignId);
   if (!cfg) {throw new Error("Campaign not found.");}
-  if (!cfg.pearlId) {throw new Error("Campaign has no NLPearl Pearl ID — run createPhonePearlForCampaign first.");}
-  if (!isNlpearlConfigured()) {throw new Error("NLPearl not configured.");}
-
+  // The Pearl is a prerequisite of the lead enqueue: auto-create it (paused)
+  // when the campaign card doesn't have one yet, so "send" is always enough.
+  if (!cfg.pearlId) {
+    if (!requestOrigin) {throw new Error("Campaign has no NLPearl Pearl ID and no request origin to auto-create one.");}
+    const pearlId = await createPhonePearlForCampaign(campaignId, requestOrigin);
+    cfg = await loadCampaignPhoneConfig(campaignId) ?? cfg;
+    void pearlId;
+  }
+  if (!cfg.pearlId) {throw new Error("Campaign has no NLPearl Pearl ID after auto-create.");}
   const dbPath = await duckdbPathAsync();
   if (!dbPath) {throw new Error("DuckDB not found.");}
   const fieldMaps = await loadCrmFieldMaps();
@@ -342,7 +380,7 @@ export async function enqueuePhoneCampaign(
 
     try {
       await addLead({
-        pearlId: cfg.pearlId,
+        pearlId: cfg.pearlId as string,
         phoneNumber: member.phone ?? "",
         externalId: sendId,
         callData: { firstName: member.name ?? "Cliente", email: member.email },
@@ -461,4 +499,52 @@ export async function setCampaignPearlPaused(campaignId: string, paused: boolean
   const cfg = await loadCampaignPhoneConfig(campaignId);
   if (!cfg?.pearlId) {return;}
   await setPearlActive(cfg.pearlId, !paused);
+}
+
+/**
+ * Best-effort NLPearl teardown when a linked campaign is deleted from the
+ * CRM. NLPearl's API has no Pearl DELETE — the equivalent cleanup is:
+ * pause the Pearl (nothing dials) and remove its queued leads (the ones we
+ * enqueued, identified by their externalId = campaign_send entry id), so an
+ * orphaned Pearl can never be activated into calling someone.
+ */
+export async function teardownPhoneCampaignPearl(campaignId: string): Promise<{
+  pearlId: string | null;
+  paused: boolean;
+  leadsDeleted: boolean;
+}> {
+  const cfg = await loadCampaignPhoneConfig(campaignId);
+  if (!cfg?.pearlId) {return { pearlId: null, paused: false, leadsDeleted: false };}
+  const pearlId = cfg.pearlId;
+
+  // The Pearl ID field on the card is about to disappear with the entry —
+  // collect the send externalIds (send entry ids) BEFORE the campaign row
+  // goes, while the link is still readable.
+  const extField = (await loadCrmFieldMaps()).campaign_send["External ID"];
+  const sendRows = extField
+    ? await duckdbQueryAsync<{ entry_id: string }>(
+        `SELECT DISTINCT ef.entry_id FROM entries e
+         JOIN entry_fields ef ON ef.entry_id = e.id
+         WHERE e.object_id = '${ONBOARDING_OBJECT_IDS.campaign_send}'
+           AND ef.field_id = ${sqlString((await loadCrmFieldMaps()).campaign_send["Campaign"] ?? "")}
+           AND ef.value = ${sqlString(campaignId)};`,
+      )
+    : [];
+  const externalIds = sendRows.map((r) => r.entry_id).filter(Boolean);
+  let paused = false;
+  let leadsDeleted = false;
+  try {
+    await setPearlActive(pearlId, false);
+    paused = true;
+  } catch (err) {
+    console.error(`[campaigns] Pearl ${pearlId} pause failed:`, err);
+  }
+  try {
+    leadsDeleted = externalIds.length > 0
+      ? await deleteNlpearlLeadsByExternal(pearlId, externalIds)
+      : true;
+  } catch (err) {
+    console.error(`[campaigns] Pearl ${pearlId} lead delete failed:`, err);
+  }
+  return { pearlId, paused, leadsDeleted };
 }

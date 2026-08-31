@@ -119,11 +119,13 @@ A Pearl flow is a **directed graph** of nodes connected by transitions.
 
 The `crm-a-nlpearl-outbound` extension registers one agent tool for the outbound campaign flow. Actions:
 
-- `upsert` — create/update the campaign card (Name, Nlpearl Phone ID, calling window/TZ/days, Max Attempts, Retry Rate, Agent Count, **Voice Brief** → the offer the Pearl should speak).
-- `create` — build the NLPearl Voice Pearl on NLPearl (**paused**, nothing dialed). Passes the Voice Brief as the node instructions.
-- `send` — enqueue the phone-compliant audience (opt-in + preferred channel) as leads; optional `criteria { segmentId?, count? }`; **requires `confirm: true`**.
+- `upsert` — create/update the campaign card (Name, Nlpearl Phone ID, calling window/TZ/days, Max Attempts, Retry Rate, Agent Count, **Voice Brief** → the offer the Pearl should speak). Pass `segmentName` when the operator names a segment (e.g. "Lancio Samsung Galaxy") — it is resolved by name and linked on the card; the send audience then scopes to it automatically.
+- `create` — build the NLPearl Voice Pearl on NLPearl (**paused**, nothing dialed). The Pearl is NAMED after the campaign title (recognizable on the NLPearl dashboard). Passes the Voice Brief (condensed ≤ 250 chars — NLPearl's node instruction cap) as the node instructions.
+- `send` — enqueue the phone-compliant audience (opt-in + preferred channel) as leads; optional `criteria { segmentId?, count? }`; **requires `confirm: true`**. If the campaign has no Pearl yet, send **auto-creates one (paused)** — Pearl ID is never missing at send time.
 - `pause` / `resume` — toggle Pearl activity; `resume` **requires `confirm: true`** (starts dialing → credits).
 
+
+**Campaign deletion:** when a phone campaign is deleted from the CRM, its Pearl is **paused** and the enqueued leads are removed via `DELETE /Outbound/{pearlId}/Leads/External` (NLPearl's API has **no Pearl DELETE**) — an orphaned Pearl can never be activated into calling anyone.
 **Safety rule (non-negotiable):** `send` and `resume` must ALWAYS be gated behind the operator's explicit confirmation (`confirm: true`). Never auto-send or auto-activate. Prefer small `count` (3–5) in demos — `addLead` is serial and the tool call times out at 60s for large audiences.
 
 ## Console tool — `crm_a_inbound_care`
