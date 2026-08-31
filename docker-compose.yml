@@ -57,6 +57,12 @@ services:
     env_file:
       - .env
     environment:
+      # next dev with NODE_ENV=production is pathologically slower server-side;
+      # the image ENV sets production — force development for the dev instance.
+      - NODE_ENV=development
+      # The instrumentation terminal WS server defaults to :3101, which the
+      # prod container's tailscaled holds in the shared network namespace.
+      - TERMINAL_WS_PORT=3103
       - CRM_A_CONSOLE_DAEMONLESS=1
     restart: unless-stopped
     entrypoint: ["bash", "-c"]
