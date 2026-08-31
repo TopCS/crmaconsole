@@ -147,7 +147,7 @@ curl -s -X POST https://api.nlpearl.ai/v2/Pearl/Voice \
           "transitions": [{ "name": "ok", "toNodeId": "speak" }] },
         { "nodeId": "speak", "name": "Offerta", "nodeType": 10,
           "script": "Vorremmo presentarle una nuova offerta.",
-          "instructions": "Contenuto offerta da comunicare: [VOICE BRIEF: prodotto, differenze vs modello precedente, vantaggi, limiti, promo lancio, link acquisto]",
+          "instructions": "Contenuto offerta da comunicare: [VOICE BRIEF ≤ 250 CARATTERI TOTALI: NLPearl limita le istruzioni del nodo — la Console condensa il brief su confine di frase; il confronto completo resta nel campo Body della campagna]",
           "transitions": [{ "name": "end", "toNodeId": "end" }] },
         { "nodeId": "end", "name": "Fine", "nodeType": 100, "transitions": [] }
       ]
@@ -157,7 +157,7 @@ curl -s -X POST https://api.nlpearl.ai/v2/Pearl/Voice \
       "phoneNumberId": "{{OUTBOUND_PHONE_ID}}",
       "totalAgents": 1,
       "maximumCallAttempts": 3,
-      "minimumRetryIntervalHours": 24,
+      "minimumRetryIntervalHours": 2,
       "callingHours": [
         { "day": 1, "start": "09:00", "end": "18:00" },
         { "day": 2, "start": "09:00", "end": "18:00" },

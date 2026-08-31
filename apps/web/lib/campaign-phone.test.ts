@@ -41,6 +41,7 @@ vi.mock("./phone-webhook", () => ({
 }));
 
 import {
+  buildOfferInstruction,
   createPhonePearlForCampaign,
   loadCampaignPhoneConfig,
   resolveAudienceForCampaign,
@@ -74,6 +75,30 @@ function campaignMap(overrides: Record<string, string> = {}) {
     },
   };
 }
+
+describe("buildOfferInstruction", () => {
+  const PREFIX = "Offerta da comunicare:\n";
+
+  it("keeps a short brief verbatim", () => {
+    expect(buildOfferInstruction("Offerta semplice.")).toBe(PREFIX + "Offerta semplice.");
+  });
+
+  it("caps long briefs at the NLPearl 250-char limit on a sentence boundary", () => {
+    const long = "Prima frase della presentazione. ".repeat(12); // ~408 chars
+    const out = buildOfferInstruction(long);
+    expect(out.length).toBeLessThanOrEqual(250);
+    expect(out.startsWith(PREFIX)).toBe(true);
+    expect(out.trimEnd().endsWith(".")).toBe(true);
+    expect(out).not.toContain("…");
+  });
+
+  it("falls back to a hard cut when no sentence boundary fits", () => {
+    const noStops = "x".repeat(400);
+    const out = buildOfferInstruction(noStops);
+    expect(out.length).toBeLessThanOrEqual(250);
+    expect(out.endsWith("…")).toBe(true);
+  });
+});
 
 describe("upsertPhoneCampaign", () => {
   beforeEach(() => {

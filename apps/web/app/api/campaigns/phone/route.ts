@@ -69,7 +69,11 @@ export async function POST(req: Request) {
     return jsonError(`Unknown action '${String(action)}'.`, 400);
   }
   const campaignId = asString(body.campaignId) ?? "";
-  const origin = resolveAppPublicOrigin(req);
+  // NLPearl's cloud must REACH these webhook URLs, so the origin is always
+  // the public one (env first). resolveAppPublicOrigin would trust
+  // x-forwarded-host — e.g. the gateway's localhost host header — which
+  // NLPearl rejects ("Invalid Webhook URL").
+  const origin = process.env.CRM_A_CONSOLE_PUBLIC_URL?.trim() || resolveAppPublicOrigin(req);
   const brief = asString(body.brief);
   const criteria = parseAudienceCriteria(body.criteria);
 

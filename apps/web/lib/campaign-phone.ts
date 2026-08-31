@@ -76,8 +76,19 @@ export async function loadCampaignPhoneConfig(campaignId: string): Promise<Campa
       const parsed = JSON.parse(r.daysRaw);
       if (Array.isArray(parsed)) {days = parsed.filter((v) => typeof v === "number");}
     } catch {
-      days = r.daysRaw.split(",").map(Number).filter((v) => !Number.isNaN(v));
+      // Human formats the agent may write: "1-5" (range) or "1,2,3".
+      const range = /^(\d+)\s*-\s*(\d+)$/.exec(r.daysRaw.trim());
+      if (range) {
+        const lo = Number(range[1]);
+        const hi = Number(range[2]);
+        days = hi >= lo && hi - lo < 20
+          ? Array.from({ length: hi - lo + 1 }, (_, i) => lo + i)
+          : [];
+      } else {
+        days = r.daysRaw.split(",").map(Number).filter((v) => !Number.isNaN(v));
+      }
     }
+    if (days && days.length === 0) {days = null;}
   }
   return {
     pearlId: r.pearlId ?? null,
@@ -155,6 +166,34 @@ export type PhoneCampaignEnqueueResult = {
 };
 
 /**
+ * NLPearl caps node `instructions` at 250 characters. The operator's Voice
+ * Brief is usually longer, so condense it into the budget: whole sentences
+ * when possible, hard cut + ellipsis otherwise. The full brief stays on the
+ * campaign card (Body field); only what the Pearl node can hold shrinks.
+ */
+export const NLPEARL_MAX_INSTRUCTION_CHARS = 250;
+const OFFER_INSTRUCTION_PREFIX = "Offerta da comunicare:\n";
+
+export function buildOfferInstruction(briefContent: string): string {
+  const text = briefContent.trim();
+  if (text.length + OFFER_INSTRUCTION_PREFIX.length <= NLPEARL_MAX_INSTRUCTION_CHARS) {
+    return OFFER_INSTRUCTION_PREFIX + text;
+  }
+  const budget = NLPEARL_MAX_INSTRUCTION_CHARS - OFFER_INSTRUCTION_PREFIX.length;
+  const cut = text.slice(0, budget);
+  const lastStop = Math.max(
+    cut.lastIndexOf(". "),
+    cut.lastIndexOf(".\n"),
+    cut.lastIndexOf("! "),
+    cut.lastIndexOf("? "),
+    cut.lastIndexOf("; "),
+  );
+  if (lastStop > budget / 2) {
+    return OFFER_INSTRUCTION_PREFIX + cut.slice(0, lastStop + 1);
+  }
+  return OFFER_INSTRUCTION_PREFIX + cut.slice(0, budget - 1).trimEnd() + "…";
+}
+/**
  * Create/update the NLPearl Outbound Pearl for this campaign (idempotent:
  * if the campaign already has a Pearl ID, re-using it). Returns the Pearl ID.
  */
@@ -172,7 +211,8 @@ export async function createPhonePearlForCampaign(
   const voiceId = await resolveVoiceId();
   if (!voiceId) {throw new Error("No NLPearl voice configured. Set NLPEARL_VOICE_ID or provision a voice.");}
 
-  const days = cfg.days ?? [1, 2, 3, 4, 5];
+  // An empty parsed days array is NOT a valid fallback — treat it as unset.
+  const days = cfg.days && cfg.days.length > 0 ? cfg.days : [1, 2, 3, 4, 5];
   const start = cfg.windowStart ?? "09:00";
   const end = cfg.windowEnd ?? "18:00";
   const briefContent = brief ?? cfg.brief ?? undefined;
@@ -194,7 +234,7 @@ export async function createPhonePearlForCampaign(
           transitions: [{ name: "ok", toNodeId: "speak" }] },
         { nodeId: "speak", name: "Offerta", nodeType: 10,
           script: "Vorremmo presentarle una nuova offerta.",
-          instructions: briefContent ? `Contenuto offerta da comunicare:\n${briefContent.trim().slice(0, 8000)}` : undefined,
+          instructions: briefContent ? buildOfferInstruction(briefContent) : undefined,
           transitions: [{ name: "end", toNodeId: "end" }] },
         { nodeId: "end", name: "Fine", nodeType: 100,
           transitions: [] },
@@ -203,9 +243,9 @@ export async function createPhonePearlForCampaign(
     variables: [{ id: "customerNote", name: "Nota", group: 2 }],
     outbound: {
       phoneNumberId: cfg.phoneId,
-      totalAgents: cfg.agentCount,
+      totalAgents: cfg.agentCount ?? 1,
       maximumCallAttempts: Math.min(cfg.maxAttempts, 5),
-      minimumRetryIntervalHours: cfg.retryRate,
+      minimumRetryIntervalHours: retryIntervalEnum(cfg.retryRate),
       callingHours: days.map((day) => ({ day, start, end })),
       timeZone: windowsTimeZone(cfg.timezone),
       callWebhookUrl: urls.callWebhookUrl,
@@ -213,7 +253,13 @@ export async function createPhonePearlForCampaign(
     },
   };
 
+  // Observability: NLPearl's validation errors are opaque ("Invalid Webhook
+  // URL") without the exact payload. Redact the webhook token before logging.
+  const redactToken = (_key: string, value: unknown) =>
+    typeof value === "string" ? value.replace(/token=[^&"\\]+/g, "token=[redacted]") : value;
+  console.log(`[nlpearl] Pearl/Voice create payload: ${JSON.stringify(payload, redactToken)}`);
   const pearlId = await createVoicePearl(payload as unknown as Record<string, unknown>);
+
 
   const dbPath = await duckdbPathAsync();
   const fieldMaps = await loadCrmFieldMaps();
@@ -225,6 +271,19 @@ export async function createPhonePearlForCampaign(
     ].join("\n"));
   }
   return pearlId;
+}
+
+/** Retry interval → NLPearl enum (contract: 1=Every6Hours, 2=OnceADay,
+ * 3=OnceEvery3Days, 4=OnceAWeek, 5=OnceAMonth, 6=Every3Hours). The campaign
+ * stores raw hours; unset defaults to OnceADay (the previous 24h default). */
+function retryIntervalEnum(hours: number | null | undefined): number {
+  if (hours == null) {return 2;}
+  if (hours >= 720) {return 5;}
+  if (hours >= 168) {return 4;}
+  if (hours >= 72) {return 3;}
+  if (hours >= 24) {return 2;}
+  if (hours >= 6) {return 1;}
+  return 6;
 }
 
 /** IANA → Windows time-zone mapping (demo subset). */
