@@ -5,6 +5,10 @@ services:
     container_name: crm-a-console
     ports:
       - "3100:3100"
+      # Dev web (profilo "dev", next dev hot-reload). Bind su 127.0.0.1:
+      # iterazione dell'operatore, mai pubblico. Il servizio di produzione
+      # resta su 3100/funnel — il profilo dev è additivo e off di default.
+      - "127.0.0.1:3102:3102"
     volumes:
       - crm-a-data:/root/.openclaw-crm-a
     restart: unless-stopped
@@ -30,6 +34,34 @@ services:
       # E-commerce touchpoint (Shopify): API secret verifies the webhook HMAC.
       - SHOPIFY_API_SECRET=${SHOPIFY_API_SECRET:-}
       - SHOPIFY_STORE_DOMAIN=${SHOPIFY_STORE_DOMAIN:-}
+
+  # ── Profilo DEV: hot-reload per l'iterazione su UI/API ──────────────────
+  # `docker compose --profile dev up -d crm-a-console-dev`
+  # → next dev (turbopack) su http://127.0.0.1:3102 con lo STESSO stato e
+  # gateway del container di produzione (network namespace condiviso).
+  # Il funnel su :3100 continua a servire la build di produzione: webhook
+  # NLPearl/Shopify e demo non vengono toccati. Spegni con
+  # `docker compose --profile dev stop crm-a-console-dev`.
+  # Prima build di next dev compila on-demand: la prima pagina è lenta,
+  # poi hot-reload in secondi.
+  crm-a-console-dev:
+    image: crm-a-console:latest
+    container_name: crm-a-console-dev
+    profiles: ["dev"]
+    depends_on:
+      - crm-a-console
+    network_mode: "service:crm-a-console"
+    volumes:
+      - crm-a-data:/root/.openclaw-crm-a
+      - .:/work
+    env_file:
+      - .env
+    environment:
+      - CRM_A_CONSOLE_DAEMONLESS=1
+    restart: unless-stopped
+    entrypoint: ["bash", "-c"]
+    command:
+      - cd /work/apps/web && exec node_modules/.bin/next dev --turbo --port 3102 --hostname 0.0.0.0
 
 volumes:
   crm-a-data:
