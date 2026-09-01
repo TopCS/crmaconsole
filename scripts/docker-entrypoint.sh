@@ -26,6 +26,12 @@ if [ ! -f "$STATE_DIR/openclaw.json" ]; then
     --no-open || true
 fi
 
+# Re-sync Crm-A owned bundled plugins into the state dir on EVERY boot: the
+# full plugin sync runs only in bootstrap (first install), so plugins added
+# to the image later never reach an existing state volume and the chat agent
+# silently loses its tools (crm_a_phone_campaign, shopify_admin, …).
+node /app/scripts/sync-crm-plugins.mjs || true
+
 # Apply the operator's default model at every boot (idempotent). Makes the
 # selection deterministic regardless of a crm-a-cloud/manual reset or a freshly
 # recreated state volume. Configure via CRM_A_DEFAULT_MODEL in docker-compose /
