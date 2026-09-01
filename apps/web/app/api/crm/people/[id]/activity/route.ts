@@ -83,15 +83,16 @@ export async function GET(
   const orderMap = new Map<number, string>();
   if (orderCustomerFld && orderAtFld) {
     const orderRows = await safeQuery<{ entry_id: string; ordered_at: string | null }>(`
-      SELECT o.entry_id,
-        MAX(CASE WHEN o.field_id = '${orderAtFld.replace(/'/g, "''")}' THEN o.value END) AS ordered_at
-      FROM entry_fields o
-      JOIN entries e ON e.id = o.entry_id
-      WHERE e.object_id = '${String(ONBOARDING_OBJECT_IDS.order).replace(/'/g, "''")}'
-        AND o.field_id = '${orderCustomerFld.replace(/'/g, "''")}'
-        AND o.value = '${safePerson}'
-      GROUP BY o.entry_id;
-    `);
+    SELECT o.entry_id,
+      MAX(CASE WHEN o.field_id = '${orderAtFld.replace(/'/g, "''")}' THEN o.value END) AS ordered_at
+    FROM entry_fields o
+    WHERE o.entry_id IN (
+      SELECT entry_id FROM entry_fields
+      WHERE field_id = '${orderCustomerFld.replace(/'/g, "''")}'
+        AND value = '${safePerson}'
+    )
+    GROUP BY o.entry_id;
+  `);
     for (const row of orderRows) {
       const ts = row.ordered_at ? Date.parse(row.ordered_at) : NaN;
       if (Number.isFinite(ts)) {orderMap.set(ts, row.entry_id);}
