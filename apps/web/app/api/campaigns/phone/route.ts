@@ -75,6 +75,10 @@ export async function POST(req: Request) {
   // NLPearl rejects ("Invalid Webhook URL").
   const origin = process.env.CRM_A_CONSOLE_PUBLIC_URL?.trim() || resolveAppPublicOrigin(req);
   const brief = asString(body.brief);
+  const brandName = asString(body.brandName);
+  const greetingScript = asString(body.greetingScript);
+  const knowledgeBase = asString(body.knowledgeBase);
+  const segmentName = asString(body.segmentName);
   const criteria = parseAudienceCriteria(body.criteria);
 
   if (action === "upsert") {
