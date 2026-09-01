@@ -22,6 +22,7 @@ import {
   addLead,
   setPearlActive,
   deleteNlpearlLeadsByExternal,
+  getPearl,
   createVoicePearl,
 } from "./nlpearl";
 import { readPhoneWebhookSecret } from "./phone-webhook";
@@ -105,7 +106,8 @@ export async function loadCampaignPhoneConfig(campaignId: string): Promise<Campa
     days,
     maxAttempts: r.maxAttempts ? Number(r.maxAttempts) : 3,
     retryRate: r.retryRate ? Number(r.retryRate) : 1,
-    agentCount: r.agentCount ? Number(r.agentCount) : 5,
+    // Default: UN agent (ogni agente genera costi). Di più via comando: upsert agentCount.
+    agentCount: r.agentCount ? Number(r.agentCount) : 1,
     brief: r.brief ?? null,
   };
 }
@@ -236,7 +238,13 @@ export async function createPhonePearlForCampaign(
   const cfg = await loadCampaignPhoneConfig(campaignId);
   if (!cfg) {throw new Error("Campaign not found.");}
   if (!cfg.phoneId) {throw new Error("Campaign missing Nlpearl Phone ID.");}
-  if (cfg.pearlId) {return cfg.pearlId;}
+  if (cfg.pearlId) {
+    // The stored Pearl ID can be stale (the Pearl may have been deleted from
+    // the NLPearl dashboard out-of-band): validate before reusing, else the
+    // send would target a dead Pearl forever.
+    const existing = await getPearl(cfg.pearlId);
+    if (existing) {return cfg.pearlId;}
+  }
 
   const voiceId = await resolveVoiceId();
   if (!voiceId) {throw new Error("No NLPearl voice configured. Set NLPEARL_VOICE_ID or provision a voice.");}

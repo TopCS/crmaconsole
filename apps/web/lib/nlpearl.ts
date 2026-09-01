@@ -247,6 +247,23 @@ export async function deleteNlpearlLeadsByExternal(
   );
 }
 
+/**
+ * Fetch a Pearl by ID, or `null` when it does not exist (e.g. deleted from
+ * the NLPearl dashboard out-of-band). Used to keep the CRM's stored Pearl ID
+ * honest: a dead ID must trigger a fresh creation, not a doomed send.
+ */
+export async function getPearl(pearlId: string): Promise<NlpearlPearlSummary | null> {
+  try {
+    return await nlpearlRequest<NlpearlPearlSummary>(
+      "GET",
+      `/Pearl/${encodeURIComponent(pearlId)}`,
+    );
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("Pearl not found")) {return null;}
+    throw err;
+  }
+}
+
 export async function setPearlActive(pearlId: string, isActive: boolean): Promise<void> {
   await nlpearlRequest("PUT", `/Pearl/${encodeURIComponent(pearlId)}/Active`, { isActive });
 }
