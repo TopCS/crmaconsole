@@ -37,6 +37,10 @@ export type CampaignPhoneConfig = {
   phoneId: string;
   name: string | null;
   segmentId: string | null;
+  brandName: string | null;
+  greetingScript: string | null;
+  knowledgeBase: string | null;
+  body: string | null;
   windowStart: string | null;
   windowEnd: string | null;
   timezone: string | null;
@@ -67,6 +71,10 @@ export async function loadCampaignPhoneConfig(campaignId: string): Promise<Campa
       ${map["Nlpearl Retry Rate"] ? `MAX(CASE WHEN ef.field_id = '${map["Nlpearl Retry Rate"]}' THEN ef.value END) AS retryRate` : "NULL AS retryRate"},
       ${map["Name"] ? `MAX(CASE WHEN ef.field_id = '${map["Name"]}' THEN ef.value END) AS name` : "NULL AS name"},
       ${map["Segment"] ? `MAX(CASE WHEN ef.field_id = '${map["Segment"]}' THEN ef.value END) AS segmentId` : "NULL AS segmentId"},
+      ${map["Brand Name"] ? `MAX(CASE WHEN ef.field_id = '${map["Brand Name"]}' THEN ef.value END) AS brandName` : "NULL AS brandName"},
+      ${map["Greeting Script"] ? `MAX(CASE WHEN ef.field_id = '${map["Greeting Script"]}' THEN ef.value END) AS greetingScript` : "NULL AS greetingScript"},
+      ${map["Knowledge Base"] ? `MAX(CASE WHEN ef.field_id = '${map["Knowledge Base"]}' THEN ef.value END) AS knowledgeBase` : "NULL AS knowledgeBase"},
+      ${map["Body"] ? `MAX(CASE WHEN ef.field_id = '${map["Body"]}' THEN ef.value END) AS body` : "NULL AS body"},
       ${map["Voice Brief"] ? `MAX(CASE WHEN ef.field_id = '${map["Voice Brief"]}' THEN ef.value END) AS brief` : "NULL AS brief"}
     FROM entries e
     LEFT JOIN entry_fields ef ON ef.entry_id = e.id
@@ -100,6 +108,10 @@ export async function loadCampaignPhoneConfig(campaignId: string): Promise<Campa
     phoneId: r.phoneId ?? "",
     name: r.name ?? null,
     segmentId: r.segmentId ?? null,
+    brandName: r.brandName ?? null,
+    greetingScript: r.greetingScript ?? null,
+    knowledgeBase: r.knowledgeBase ?? null,
+    body: r.body ?? null,
     windowStart: r.windowStart ?? null,
     windowEnd: r.windowEnd ?? null,
     timezone: r.timezone ?? null,
@@ -131,6 +143,12 @@ export type PhoneCampaignUpsertInput = {
   /** Segment NAME spoken by the operator (e.g. "Lancio Samsung Galaxy") —
    * resolved to the segment entry id and linked on the campaign card. */
   segmentName?: string;
+  /** Marchio pronunciato nel saluto (default "Crm-A Console"). */
+  brandName?: string;
+  /** Override del saluto d'apertura ({firstName} e {brand} disponibili). */
+  greetingScript?: string;
+  /** Dossier di ricerca → knowledge base della Pearl (max 20k). */
+  knowledgeBase?: string;
 };
 
 /** Resolve a segment by its Name field → segment entry id (null when absent). */
@@ -179,6 +197,9 @@ export async function upsertPhoneCampaign(input: PhoneCampaignUpsertInput): Prom
   writeField("Calling Timezone", input.timezone);
   writeField("Calling Days", input.days ? JSON.stringify(input.days) : undefined);
   writeField("Voice Brief", input.brief);
+  writeField("Brand Name", input.brandName);
+  writeField("Greeting Script", input.greetingScript);
+  writeField("Knowledge Base", input.knowledgeBase);
   const segmentId = input.segmentName?.trim()
     ? await resolveSegmentIdByName(input.segmentName.trim())
     : undefined;
@@ -205,15 +226,15 @@ export type PhoneCampaignEnqueueResult = {
  * campaign card (Body field); only what the Pearl node can hold shrinks.
  */
 export const NLPEARL_MAX_INSTRUCTION_CHARS = 250;
-const OFFER_INSTRUCTION_PREFIX = "Offerta da comunicare:\n";
 
-export function buildOfferInstruction(briefContent: string): string {
-  const text = briefContent.trim();
-  if (text.length + OFFER_INSTRUCTION_PREFIX.length <= NLPEARL_MAX_INSTRUCTION_CHARS) {
-    return OFFER_INSTRUCTION_PREFIX + text;
-  }
-  const budget = NLPEARL_MAX_INSTRUCTION_CHARS - OFFER_INSTRUCTION_PREFIX.length;
-  const cut = text.slice(0, budget);
+/**
+ * NLPearl caps node instructions at 250 characters. Condense the text into
+ * the budget: whole sentences when possible, hard cut + ellipsis otherwise.
+ */
+export function capInstruction(text: string, maxChars = NLPEARL_MAX_INSTRUCTION_CHARS): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxChars) {return trimmed;}
+  const cut = trimmed.slice(0, maxChars);
   const lastStop = Math.max(
     cut.lastIndexOf(". "),
     cut.lastIndexOf(".\n"),
@@ -221,19 +242,114 @@ export function buildOfferInstruction(briefContent: string): string {
     cut.lastIndexOf("? "),
     cut.lastIndexOf("; "),
   );
-  if (lastStop > budget / 2) {
-    return OFFER_INSTRUCTION_PREFIX + cut.slice(0, lastStop + 1);
+  if (lastStop > maxChars / 2) {
+    return cut.slice(0, lastStop + 1);
   }
-  return OFFER_INSTRUCTION_PREFIX + cut.slice(0, budget - 1).trimEnd() + "…";
+  return cut.slice(0, maxChars - 1).trimEnd() + "…";
+}
+
+/** Back-compat alias. */
+export function buildOfferInstruction(briefContent: string): string {
+  return capInstruction(briefContent);
+}
+
+/** NLPearl caps the Pearl knowledge base at 20,000 characters. */
+export function capKnowledgeBase(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.length <= 20_000 ? trimmed : trimmed.slice(0, 19_999).trimEnd() + "…";
 }
 /**
  * Create/update the NLPearl Outbound Pearl for this campaign (idempotent:
  * if the campaign already has a Pearl ID, re-using it). Returns the Pearl ID.
  */
+export type CreatePearlOverrides = {
+  brief?: string;
+  brandName?: string;
+  greetingScript?: string;
+  knowledgeBase?: string;
+};
+
+const DEFAULT_BRAND = "Crm-A Console";
+const DEFAULT_GREETING =
+  "Buongiorno {firstName}, sono una consulente di {brand}. Le rubo un minuto per presentarle in anteprima una novità riservata ai clienti come lei: le va?";
+
+/**
+ * Structured product-proposal call flow: saluto configurabile → presentazione
+ * offerta → approfondimento → come acquistare → consenso esplicito, con
+ * diramazioni per non-interesse e richiamo. Ogni nodo Dialogue istruisce la
+ * Pearl su cosa raccogliere nella nota cliente (customerNote).
+ */
+export function buildCampaignFlowNodes(opts: {
+  brand: string;
+  greetingScript?: string;
+  offerInstruction?: string;
+}): Array<Record<string, unknown>> {
+  const brand = opts.brand;
+  const greeting = (opts.greetingScript?.trim() || DEFAULT_GREETING)
+    .replaceAll("{firstName}", "{firstName}")
+    .replaceAll("{brand}", brand);
+  const cap = (t: string) => capInstruction(t);
+  return [
+    { nodeId: "open", name: "Saluto", nodeType: 2,
+      script: greeting,
+      transitions: [
+        { name: "Disponibile ad ascoltare la proposta", toNodeId: "offer" },
+        { name: "Non è un buon momento, richiede un contatto successivo", toNodeId: "callback" },
+        { name: "Non è interessata e vuole chiudere", toNodeId: "close_no" },
+      ] },
+    { nodeId: "offer", name: "Presentazione offerta", nodeType: 10,
+      script: "Grazie per il tempo. Le anticipo la novità e poi approfondiamo insieme quello che le interessa.",
+      instructions: opts.offerInstruction
+        ? cap(`Presenta questa offerta in modo chiaro ed entusiasta: ${opts.offerInstruction}`)
+        : undefined,
+      transitions: [
+        { name: "Interessata: vuole approfondire o ha domande", toNodeId: "deep" },
+        { name: "Pronta per l'acquisto o chiede come procedere", toNodeId: "convert" },
+        { name: "Non è interessata alla proposta", toNodeId: "close_no" },
+      ] },
+    { nodeId: "deep", name: "Approfondimento e obiezioni", nodeType: 10,
+      script: "Ottima domanda.",
+      instructions: cap("Rispondi alle domande usando la knowledge base: confronto col modello precedente, fotocamera, batteria, prestazioni, promo permuta. Risposte brevi, concrete e oneste; se non sai qualcosa, dillo e proponi un follow-up."),
+      transitions: [
+        { name: "Convincente: vuole procedere con l'acquisto", toNodeId: "convert" },
+        { name: "Ha tutte le informazioni che servivano", toNodeId: "consent" },
+        { name: "Non è convinta e preferisce fermarsi", toNodeId: "close_no" },
+      ] },
+    { nodeId: "convert", name: "Come acquistare", nodeType: 10,
+      script: "Le arriva tutto quello che le serve: posso indicarle sia l'acquisto online sia la promo in negozio.",
+      instructions: cap("Spieghi i due modi: ordine online con consegna a casa (link nella nota cliente) oppure negozio con promo permuta sul modello precedente. Chieda la preferenza e la annoti nella nota cliente."),
+      transitions: [
+        { name: "Ha tutte le informazioni e vuole concludere", toNodeId: "consent" },
+        { name: "Preferisce un richiamo per finalizzare", toNodeId: "callback" },
+      ] },
+    { nodeId: "consent", name: "Consenso marketing", nodeType: 10,
+      script: "Prima di concludere: le posso inviare aggiornamenti sulle nostre offerte e novità? Preferisce il telefono o l'email?",
+      instructions: cap("Raccoglie il consenso marketing in modo ESPLICITO (sì/no) e la preferenza di canale (telefono o email). Annota entrambe le risposte nella nota cliente. Non deve mai presumere il consenso."),
+      transitions: [
+        { name: "Dà il consenso al marketing", toNodeId: "end" },
+        { name: "Rifiuta il consenso al marketing", toNodeId: "end" },
+      ] },
+    { nodeId: "callback", name: "Richiamo", nodeType: 10,
+      script: "Capisco, nessun problema. Quando preferisce essere ricontattata?",
+      instructions: cap("Annota giorno e orario preferiti nella nota cliente, conferma il richiamo e ringrazia con gentilezza."),
+      transitions: [
+        { name: "Ha indicato quando essere ricontattata", toNodeId: "end" },
+      ] },
+    { nodeId: "close_no", name: "Chiusura senza interesse", nodeType: 10,
+      script: "La ringrazio del tempo e scusi per il disturbo. Una buona giornata!",
+      instructions: cap("Chiuda con gentilezza senza insistere. Non propose di nuovo l'offerta."),
+      transitions: [
+        { name: "Chiude la chiamata", toNodeId: "end" },
+      ] },
+    { nodeId: "end", name: "Fine", nodeType: 100,
+      transitions: [] },
+  ];
+}
+
 export async function createPhonePearlForCampaign(
   campaignId: string,
   requestOrigin: string,
-  brief?: string,
+  overrides?: CreatePearlOverrides,
 ): Promise<string> {
   const cfg = await loadCampaignPhoneConfig(campaignId);
   if (!cfg) {throw new Error("Campaign not found.");}
@@ -253,7 +369,10 @@ export async function createPhonePearlForCampaign(
   const days = cfg.days && cfg.days.length > 0 ? cfg.days : [1, 2, 3, 4, 5];
   const start = cfg.windowStart ?? "09:00";
   const end = cfg.windowEnd ?? "18:00";
-  const briefContent = brief ?? cfg.brief ?? undefined;
+  const briefContent = overrides?.brief ?? cfg.brief ?? undefined;
+  const brand = overrides?.brandName ?? cfg.brandName ?? DEFAULT_BRAND;
+  const greetingScript = overrides?.greetingScript ?? cfg.greetingScript ?? undefined;
+  const knowledgeBase = overrides?.knowledgeBase ?? cfg.knowledgeBase ?? cfg.body ?? undefined;
   const token = readPhoneWebhookSecret() ?? undefined;
   const urls = buildNlpearlCallbackUrls(requestOrigin, token);
 
@@ -261,23 +380,18 @@ export async function createPhonePearlForCampaign(
     // Name the Pearl after the campaign so it's recognizable on NLPearl.
     name: cfg.name ?? `Campaign ${campaignId.slice(0, 8)}`,
     pearl: {
-      companyName: "Crm-A",
+      companyName: brand,
       companyDescription: "Campagna chiamante gestita da Crm-A Console.",
-      agentPersonality: "Professional and warm",
+      agentPersonality: "Operatore telefonico esperto e cordiale: ascolta, non insiste, risponde con precisione.",
       modelType: 3,
       agents: [{ name: "Agent", voiceId }],
       timeZone: windowsTimeZone(cfg.timezone),
-      nodes: [
-        { nodeId: "open", name: "Saluto", nodeType: 2,
-          script: "Buongiorno {firstName}, una chiamata per conto di Crm-A Console.",
-          transitions: [{ name: "ok", toNodeId: "speak" }] },
-        { nodeId: "speak", name: "Offerta", nodeType: 10,
-          script: "Vorremmo presentarle una nuova offerta.",
-          instructions: briefContent ? buildOfferInstruction(briefContent) : undefined,
-          transitions: [{ name: "end", toNodeId: "end" }] },
-        { nodeId: "end", name: "Fine", nodeType: 100,
-          transitions: [] },
-      ],
+      ...(knowledgeBase ? { knowledgeBase: capKnowledgeBase(knowledgeBase) } : {}),
+      nodes: buildCampaignFlowNodes({
+        brand,
+        greetingScript,
+        offerInstruction: briefContent ? buildOfferInstruction(briefContent) : undefined,
+      }),
     },
     variables: [{ id: "customerNote", name: "Nota", group: 2 }],
     outbound: {

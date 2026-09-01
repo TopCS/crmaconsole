@@ -91,6 +91,10 @@ export async function POST(req: Request) {
         retryRate: asNumber(body.retryRate),
         agentCount: asNumber(body.agentCount),
         brief,
+        brandName,
+        greetingScript,
+        knowledgeBase,
+        segmentName,
       });
       return Response.json({ ok: true, campaignId: result });
     } catch (err) {
@@ -105,9 +109,12 @@ export async function POST(req: Request) {
   try {
     switch (action) {
       case "create": {
-        const pearlId = brief
-          ? await createPhonePearlForCampaign(campaignId, origin, brief)
-          : await createPhonePearlForCampaign(campaignId, origin);
+        const pearlId = await createPhonePearlForCampaign(campaignId, origin, {
+          brief,
+          brandName,
+          greetingScript,
+          knowledgeBase,
+        });
         return Response.json({ ok: true, pearlId });
       }
       case "send": {

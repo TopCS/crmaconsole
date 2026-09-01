@@ -42,6 +42,7 @@ vi.mock("./phone-webhook", () => ({
 
 import {
   buildOfferInstruction,
+  capInstruction,
   createPhonePearlForCampaign,
   loadCampaignPhoneConfig,
   resolveAudienceForCampaign,
@@ -77,24 +78,22 @@ function campaignMap(overrides: Record<string, string> = {}) {
 }
 
 describe("buildOfferInstruction", () => {
-  const PREFIX = "Offerta da comunicare:\n";
 
   it("keeps a short brief verbatim", () => {
-    expect(buildOfferInstruction("Offerta semplice.")).toBe(PREFIX + "Offerta semplice.");
+    expect(capInstruction("Offerta semplice.")).toBe("Offerta semplice.");
   });
 
   it("caps long briefs at the NLPearl 250-char limit on a sentence boundary", () => {
     const long = "Prima frase della presentazione. ".repeat(12); // ~408 chars
-    const out = buildOfferInstruction(long);
+    const out = capInstruction(long);
     expect(out.length).toBeLessThanOrEqual(250);
-    expect(out.startsWith(PREFIX)).toBe(true);
     expect(out.trimEnd().endsWith(".")).toBe(true);
     expect(out).not.toContain("…");
   });
 
   it("falls back to a hard cut when no sentence boundary fits", () => {
     const noStops = "x".repeat(400);
-    const out = buildOfferInstruction(noStops);
+    const out = capInstruction(noStops);
     expect(out.length).toBeLessThanOrEqual(250);
     expect(out.endsWith("…")).toBe(true);
   });
@@ -210,6 +209,12 @@ describe("createPhonePearlForCampaign", () => {
       {
         pearlId: null,
         phoneId: "686fd112a91849a9e59a5353",
+        name: "Campagna Test",
+        segmentId: null,
+        brandName: null,
+        greetingScript: null,
+        knowledgeBase: null,
+        body: null,
         brief: "Ciao prodotto",
         windowStart: null,
         windowEnd: null,
@@ -226,7 +231,7 @@ describe("createPhonePearlForCampaign", () => {
     const payload = createVoicePearlMock.mock.calls[0][0] as {
       pearl?: { nodes?: Array<{ nodeId: string; instructions?: string }> };
     };
-    const speak = payload.pearl?.nodes?.find((n) => n.nodeId === "speak");
-    expect(speak?.instructions).toContain("Ciao prodotto");
+    const offer = payload.pearl?.nodes?.find((n) => n.nodeId === "offer");
+    expect(offer?.instructions).toContain("Ciao prodotto");
   });
 });

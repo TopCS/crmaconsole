@@ -331,6 +331,24 @@ export const CAMPAIGN_NEW_FIELDS: FieldDef[] = [
     type: "text",
     sortOrder: 19,
   },
+  {
+    id: "seed_fld_campaign_brand_000000",
+    name: "Brand Name",
+    type: "text",
+    sortOrder: 20,
+  },
+  {
+    id: "seed_fld_campaign_greeting_000",
+    name: "Greeting Script",
+    type: "text",
+    sortOrder: 21,
+  },
+  {
+    id: "seed_fld_campaign_kbase_000000",
+    name: "Knowledge Base",
+    type: "text",
+    sortOrder: 22,
+  },
 ];
 
 /**
