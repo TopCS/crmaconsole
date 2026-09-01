@@ -382,7 +382,7 @@ export async function createPhonePearlForCampaign(
     pearl: {
       companyName: brand,
       companyDescription: "Campagna chiamante gestita da Crm-A Console.",
-      agentPersonality: "Operatore telefonico esperto e cordiale: ascolta, non insiste, risponde con precisione.",
+      agentPersonality: "Consulente cordiale e preciso.",
       modelType: 3,
       agents: [{ name: "Agent", voiceId }],
       timeZone: windowsTimeZone(cfg.timezone),
