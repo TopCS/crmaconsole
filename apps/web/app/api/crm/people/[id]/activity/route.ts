@@ -75,9 +75,33 @@ export async function GET(
   const countRows = await safeQuery<{ total: number | string | null }>(countSql);
   const total = countRows[0]?.total ? Number(countRows[0].total) : 0;
 
-  if (total === 0) {
-    return Response.json({ activities: [], total: 0, has_more: false });
+  // Purchase interactions carry the person's ORDER: match the interaction's
+  // Occurred At against the order's Ordered At (both derive from the Shopify
+  // created_at) so the timeline row can click through to the order card.
+  const orderCustomerFld = fieldMaps.order["Customer"];
+  const orderAtFld = fieldMaps.order["Ordered At"];
+  const orderMap = new Map<number, string>();
+  if (orderCustomerFld && orderAtFld) {
+    const orderRows = await safeQuery<{ entry_id: string; ordered_at: string | null }>(`
+      SELECT o.entry_id,
+        MAX(CASE WHEN o.field_id = '${orderAtFld.replace(/'/g, "''")}' THEN o.value END) AS ordered_at
+      FROM entry_fields o
+      JOIN entries e ON e.id = o.entry_id
+      WHERE e.object_id = '${String(ONBOARDING_OBJECT_IDS.order).replace(/'/g, "''")}'
+        AND o.field_id = '${orderCustomerFld.replace(/'/g, "''")}'
+        AND o.value = '${safePerson}'
+      GROUP BY o.entry_id;
+    `);
+    for (const row of orderRows) {
+      const ts = row.ordered_at ? Date.parse(row.ordered_at) : NaN;
+      if (Number.isFinite(ts)) {orderMap.set(ts, row.entry_id);}
+    }
   }
+
+  const orderAtFor = (occurredAt: string | null): string | null => {
+    const ts = occurredAt ? Date.parse(occurredAt) : NaN;
+    return Number.isFinite(ts) ? orderMap.get(ts) ?? null : null;
+  };
 
   // Pivot the requested page of interactions for this person.
   const pivotSelectParts: string[] = [
@@ -199,6 +223,9 @@ export async function GET(
     } | null;
     /** Parsed `Properties` JSON for CDP events (Purchase/Call/Custom/…). */
     properties: Record<string, unknown> | null;
+    /** Order entry linked to this Purchase (matched on Ordered At) — for the
+     * timeline's click-through to the order detail card. */
+    order_id: string | null;
   };
 
   const activities: Activity[] = interactionRows.map((row) => {
@@ -261,6 +288,7 @@ export async function GET(
       email,
       event,
       properties,
+      order_id: type === "Purchase" ? orderAtFor(row.occurred_at) : null,
     };
   });
 

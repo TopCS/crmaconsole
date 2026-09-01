@@ -106,6 +106,7 @@ export function PersonProfile({
   activeTab,
   onOpenPerson,
   onOpenCompany,
+  onOpenEntry,
   onBackToList,
   onTabChange,
 }: {
@@ -113,6 +114,7 @@ export function PersonProfile({
   activeTab?: string;
   onOpenPerson?: (id: string) => void;
   onOpenCompany?: (id: string) => void;
+  onOpenEntry?: (objectName: string, entryId: string) => void;
   onBackToList?: () => void;
   onTabChange?: (tab: PersonProfileTab) => void;
 }) {
@@ -288,6 +290,7 @@ export function PersonProfile({
               data={data}
               onOpenPerson={onOpenPerson}
               onOpenCompany={onOpenCompany}
+              onOpenEntry={onOpenEntry}
             />
           )}
           {tab === "notes" && <NotesTab data={data} onSave={handleSaveNotes} />}
@@ -671,10 +674,12 @@ function ActivityTab({
   data,
   onOpenPerson,
   onOpenCompany,
+  onOpenEntry,
 }: {
   data: PersonResponse;
   onOpenPerson?: (id: string) => void;
   onOpenCompany?: (id: string) => void;
+  onOpenEntry?: (objectName: string, entryId: string) => void;
 }) {
   const summary = data.interactions_summary;
   if (summary.total === 0) {
@@ -731,6 +736,7 @@ function ActivityTab({
           personId={data.person.id}
           onOpenPerson={onOpenPerson}
           onOpenCompany={onOpenCompany}
+          onOpenOrder={(orderId) => onOpenEntry?.("order", orderId)}
         />
       </section>
     </div>
@@ -745,8 +751,6 @@ function ActivityTab({
 // the user to the workspace detail panel to type one, we render an
 // always-visible auto-growing textarea right here. The affordance IS the
 // editor — there's no click-to-edit step, no modal.
-//
-// Save model:
 //   - Autosave on blur, but skip the PATCH if the value is unchanged.
 //   - Cmd/Ctrl+Enter saves without losing focus (so the user can keep typing).
 //   - Escape reverts the draft to the last persisted value.

@@ -3140,6 +3140,7 @@ function ContentRenderer({
           activeTab={content.profileTab}
           onOpenPerson={(id) => onOpenEntry("people", id)}
           onOpenCompany={(id) => onOpenEntry("company", id)}
+          onOpenEntry={(objectName, entryId) => onOpenEntry(objectName, entryId)}
           onBackToList={() => onNavigateToObject("people")}
           onTabChange={onProfileTabChange}
         />

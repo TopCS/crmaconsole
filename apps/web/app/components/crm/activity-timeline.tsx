@@ -41,6 +41,8 @@ export type ActivityRow = {
     meeting_type: string | null;
   } | null;
   properties: Record<string, unknown> | null;
+  /** Order entry linked to this Purchase — click-through to the order card. */
+  order_id: string | null;
 };
 
 type ActivityResponse = {
@@ -202,10 +204,13 @@ export function ActivityTimeline({
   personId,
   onOpenPerson,
   onOpenCompany,
+  onOpenOrder,
 }: {
   personId: string;
   onOpenPerson?: (id: string) => void;
   onOpenCompany?: (id: string) => void;
+  /** Purchase rows linked to an order: row click opens the order card. */
+  onOpenOrder?: (orderId: string) => void;
 }) {
   const [items, setItems] = useState<ActivityRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -280,7 +285,7 @@ export function ActivityTimeline({
       buckets.get(key)!.push(item);
     }
     return Array.from(buckets.entries())
-      .sort(([a], [b]) => compareBuckets(a, b));
+      .toSorted(([a], [b]) => compareBuckets(a, b));
   }, [items]);
 
   if (loading && items.length === 0) {
@@ -327,6 +332,7 @@ export function ActivityTimeline({
                 }
                 onOpenPerson={onOpenPerson}
                 onOpenCompany={onOpenCompany}
+                onOpenOrder={onOpenOrder}
               />
             ))}
           </ul>
@@ -376,12 +382,15 @@ function ActivityRowItem({
   onToggle,
   onOpenPerson,
   onOpenCompany,
+  onOpenOrder,
 }: {
   row: ActivityRow;
   expanded: boolean;
   onToggle: () => void;
   onOpenPerson?: (id: string) => void;
   onOpenCompany?: (id: string) => void;
+  /** Purchase rows linked to an order: clicking the row opens the order card. */
+  onOpenOrder?: (orderId: string) => void;
 }) {
   const dirStyle = row.direction ? DIRECTION_STYLE[row.direction] : null;
   const tintBg = dirStyle ? `${dirStyle.color}1a` : "var(--color-surface-hover)";
@@ -389,11 +398,16 @@ function ActivityRowItem({
 
   const title = activityTitle(row);
 
+  // Purchase rows linked to an order navigate to the order card instead of
+  // expanding the inline properties.
+  const openableOrder =
+    row.type === "Purchase" && row.order_id != null && row.order_id !== "" && Boolean(onOpenOrder);
+
   return (
     <li
       className="rounded-xl border overflow-hidden"
       style={{
-        borderColor: expanded ? "var(--color-accent)" : "var(--color-border)",
+        borderColor: expanded && !openableOrder ? "var(--color-accent)" : "var(--color-border)",
         background: "var(--color-surface)",
         transition: "border-color 120ms ease",
       }}
@@ -401,15 +415,17 @@ function ActivityRowItem({
       <div
         role="button"
         tabIndex={0}
-        aria-expanded={expanded}
-        onClick={onToggle}
+        aria-expanded={openableOrder ? undefined : expanded}
+        onClick={openableOrder ? () => onOpenOrder?.(row.order_id as string) : onToggle}
         onKeyDown={(e) => {
           if (e.target !== e.currentTarget) {return;}
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            onToggle();
+            if (openableOrder) {onOpenOrder?.(row.order_id as string);}
+            else {onToggle();}
           }
         }}
+        title={openableOrder ? "Apri la scheda ordine" : undefined}
         className="grid w-full items-start gap-3 px-4 py-3 text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] transition-colors"
         style={{ gridTemplateColumns: "auto minmax(0, 1fr) auto" }}
         onMouseEnter={(e) => {
@@ -465,6 +481,14 @@ function ActivityRowItem({
             )}
           </div>
           <ContextLine row={row} />
+          {openableOrder && (
+            <span
+              className="mt-1 inline-block text-[11px]"
+              style={{ color: "var(--color-accent)" }}
+            >
+              Clicca per aprire la scheda ordine ↗
+            </span>
+          )}
         </div>
 
         {/* Time */}
