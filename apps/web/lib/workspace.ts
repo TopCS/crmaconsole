@@ -814,6 +814,24 @@ export function resolveDuckdbBin(): string | null {
 }
 
 /**
+ * SQL verbs that never mutate the database. DuckDB allows any number of
+ * concurrent read-only processes on the same file, while a read-write open
+ * takes an exclusive lock that collides with every other CLI invocation.
+ * Read queries therefore open with `-readonly` to avoid lock conflicts
+ * between the web app and agent `exec` calls.
+ */
+const READ_ONLY_SQL_RE = /^\s*(SELECT|WITH|SHOW|DESCRIBE|EXPLAIN|SUMMARIZE|FROM)\b/i;
+
+export function isReadOnlySql(sql: string): boolean {
+	return READ_ONLY_SQL_RE.test(sql);
+}
+
+/** CLI args for a `-json` query; adds `-readonly` for non-mutating SQL. */
+function duckdbQueryArgs(sql: string, dbPath: string): string[] {
+	return ["-json", ...(isReadOnlySql(sql) ? ["-readonly"] : []), dbPath, sql];
+}
+
+/**
  * Execute a DuckDB query and return parsed JSON rows.
  * Uses the duckdb CLI with -json output format.
  *
@@ -830,7 +848,7 @@ export function duckdbQuery<T = Record<string, unknown>>(
   if (!bin) {return [];}
 
   try {
-    const result = execFileSync(bin, ["-json", db, sql], {
+    const result = execFileSync(bin, duckdbQueryArgs(sql, db), {
       encoding: "utf-8",
       timeout: 10_000,
       maxBuffer: 10 * 1024 * 1024, // 10 MB
@@ -868,7 +886,7 @@ export async function duckdbQueryAsync<T = Record<string, unknown>>(
   let lastErr = "";
   while (attempt < MAX_RETRIES) {
     try {
-      const { stdout } = await execFileAsync(bin, ["-json", db, sql], {
+      const { stdout } = await execFileAsync(bin, duckdbQueryArgs(sql, db), {
         encoding: "utf-8",
         timeout: 30_000,
         maxBuffer: 10 * 1024 * 1024,
@@ -924,7 +942,7 @@ export function duckdbQueryAll<T = Record<string, unknown>>(
 
   for (const db of dbPaths) {
     try {
-      const result = execFileSync(bin, ["-json", db, sql], {
+      const result = execFileSync(bin, duckdbQueryArgs(sql, db), {
         encoding: "utf-8",
         timeout: 10_000,
         maxBuffer: 10 * 1024 * 1024,
@@ -966,7 +984,7 @@ export async function duckdbQueryAllAsync<T = Record<string, unknown>>(
 
   for (const db of dbPaths) {
     try {
-      const { stdout } = await execFileAsync(bin, ["-json", db, sql], {
+      const { stdout } = await execFileAsync(bin, duckdbQueryArgs(sql, db), {
         encoding: "utf-8",
         timeout: 10_000,
         maxBuffer: 10 * 1024 * 1024,
@@ -1007,7 +1025,7 @@ export function findDuckDBForObject(objectName: string): string | null {
 
   for (const db of dbPaths) {
     try {
-      const result = execFileSync(bin, ["-json", db, sql], {
+      const result = execFileSync(bin, duckdbQueryArgs(sql, db), {
         encoding: "utf-8",
         timeout: 5_000,
         maxBuffer: 1024 * 1024,
@@ -1034,7 +1052,7 @@ export async function findDuckDBForObjectAsync(objectName: string): Promise<stri
 
   for (const db of dbPaths) {
     try {
-      const { stdout } = await execFileAsync(bin, ["-json", db, sql], {
+      const { stdout } = await execFileAsync(bin, duckdbQueryArgs(sql, db), {
         encoding: "utf-8",
         timeout: 5_000,
         maxBuffer: 1024 * 1024,
@@ -1318,7 +1336,7 @@ export function duckdbQueryOnFile<T = Record<string, unknown>>(
   if (!bin) {return [];}
 
   try {
-    const result = execFileSync(bin, ["-json", dbFilePath, sql], {
+    const result = execFileSync(bin, duckdbQueryArgs(sql, dbFilePath), {
       encoding: "utf-8",
       timeout: 15_000,
       maxBuffer: 10 * 1024 * 1024,
@@ -1351,7 +1369,7 @@ async function runDuckdbReadOnce<T>(
   timeoutMs: number,
 ): Promise<DuckdbReadAttemptResult<T>> {
   try {
-    const { stdout } = await execFileAsync(bin, ["-json", dbFilePath, sql], {
+    const { stdout } = await execFileAsync(bin, duckdbQueryArgs(sql, dbFilePath), {
       encoding: "utf-8",
       timeout: timeoutMs,
       maxBuffer: 10 * 1024 * 1024,

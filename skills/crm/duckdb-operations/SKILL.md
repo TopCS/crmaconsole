@@ -247,6 +247,22 @@ For `many_to_many`, store a JSON array of entry IDs: `'["id1","id2","id3"]'`.
 
 ## SQL Operations Reference
 
+Reads and writes use different open modes — DuckDB allows many concurrent
+read-only processes but only ONE read-write process on the same file, and the
+web app queries the same database constantly:
+
+- **Reads (SELECT/WITH/SHOW/DESCRIBE): always use `-readonly`.** It avoids
+  lock conflicts entirely and can run while the web UI is querying.
+  `duckdb -readonly {{WORKSPACE_PATH}}/workspace.duckdb "SELECT ..."`
+- **Writes (INSERT/UPDATE/DELETE/DDL): plain open (no `-readonly`)**, batched
+  in a single exec call inside a transaction, exactly as shown below.
+- **If you see `IO Error: Could not set lock ... Conflicting lock`**: a writer
+  holds the file. Wait 1-2 seconds and rerun the exact same command — do not
+  rewrite the query or try a different approach. Lock conflicts are transient
+  by design (the web app's own writes last milliseconds).
+- Never open a long-running interactive `duckdb` session on workspace.duckdb;
+  each `exec` call must exit immediately or it blocks everything else.
+
 All operations use `exec` with `duckdb {{WORKSPACE_PATH}}/workspace.duckdb`. Batch related SQL in a single exec call with transactions.
 
 ### Create Object
@@ -366,11 +382,11 @@ COMMIT;
 **Alternative (cleaner for multiple entries)**: Query the object_id and field_ids first, then use literal IDs:
 
 ```bash
-OBJ_ID=$(duckdb {{WORKSPACE_PATH}}/workspace.duckdb -noheader -list "SELECT id FROM objects WHERE name = 'lead'")
-FLD_NAME=$(duckdb {{WORKSPACE_PATH}}/workspace.duckdb -noheader -list "SELECT id FROM fields WHERE object_id = '$OBJ_ID' AND name = 'Full Name'")
-FLD_EMAIL=$(duckdb {{WORKSPACE_PATH}}/workspace.duckdb -noheader -list "SELECT id FROM fields WHERE object_id = '$OBJ_ID' AND name = 'Email Address'")
-FLD_STATUS=$(duckdb {{WORKSPACE_PATH}}/workspace.duckdb -noheader -list "SELECT id FROM fields WHERE object_id = '$OBJ_ID' AND name = 'Status'")
-ENTRY_ID=$(duckdb {{WORKSPACE_PATH}}/workspace.duckdb -noheader -list "SELECT gen_random_uuid()::VARCHAR")
+OBJ_ID=$(duckdb -readonly {{WORKSPACE_PATH}}/workspace.duckdb -noheader -list "SELECT id FROM objects WHERE name = 'lead'")
+FLD_NAME=$(duckdb -readonly {{WORKSPACE_PATH}}/workspace.duckdb -noheader -list "SELECT id FROM fields WHERE object_id = '$OBJ_ID' AND name = 'Full Name'")
+FLD_EMAIL=$(duckdb -readonly {{WORKSPACE_PATH}}/workspace.duckdb -noheader -list "SELECT id FROM fields WHERE object_id = '$OBJ_ID' AND name = 'Email Address'")
+FLD_STATUS=$(duckdb -readonly {{WORKSPACE_PATH}}/workspace.duckdb -noheader -list "SELECT id FROM fields WHERE object_id = '$OBJ_ID' AND name = 'Status'")
+ENTRY_ID=$(duckdb -readonly {{WORKSPACE_PATH}}/workspace.duckdb -noheader -list "SELECT gen_random_uuid()::VARCHAR")
 
 duckdb {{WORKSPACE_PATH}}/workspace.duckdb "
 BEGIN TRANSACTION;
@@ -443,11 +459,11 @@ CREATE TEMP TABLE staging AS SELECT * FROM read_csv_auto('{{WORKSPACE_PATH}}/exp
 For bulk import, prefer a shell script that reads the CSV row by row:
 
 ```bash
-OBJ_ID=$(duckdb {{WORKSPACE_PATH}}/workspace.duckdb -noheader -list "SELECT id FROM objects WHERE name = 'lead'")
+OBJ_ID=$(duckdb -readonly {{WORKSPACE_PATH}}/workspace.duckdb -noheader -list "SELECT id FROM objects WHERE name = 'lead'")
 
 # Read CSV and insert each row
 tail -n +2 {{WORKSPACE_PATH}}/exports/import.csv | while IFS=',' read -r name email status; do
-  ENTRY_ID=$(duckdb {{WORKSPACE_PATH}}/workspace.duckdb -noheader -list "SELECT gen_random_uuid()::VARCHAR")
+  ENTRY_ID=$(duckdb -readonly {{WORKSPACE_PATH}}/workspace.duckdb -noheader -list "SELECT gen_random_uuid()::VARCHAR")
   duckdb {{WORKSPACE_PATH}}/workspace.duckdb "
     BEGIN TRANSACTION;
     INSERT INTO entries (id, object_id) VALUES ('$ENTRY_ID', '$OBJ_ID');
@@ -535,10 +551,10 @@ When running SQL via the `duckdb` CLI, single quotes in SQL conflict with shell 
 
 ```bash
 # WRONG: shell interprets the inner single quotes
-duckdb workspace.duckdb 'SELECT * FROM v_lead WHERE "Status" = 'New''
+duckdb -readonly workspace.duckdb 'SELECT * FROM v_lead WHERE "Status" = 'New''
 
 # CORRECT: use double-quote wrapper
-duckdb workspace.duckdb "SELECT * FROM v_lead WHERE \"Status\" = 'New'"
+duckdb -readonly workspace.duckdb "SELECT * FROM v_lead WHERE \"Status\" = 'New'"
 ```
 
 ### 8. DuckDB may be locked by another process

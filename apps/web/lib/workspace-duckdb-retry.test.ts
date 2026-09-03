@@ -62,7 +62,11 @@ vi.mock("node:os", () => ({
   homedir: vi.fn(() => "/home/testuser"),
 }));
 
-import { duckdbQueryOnFileAsync, duckdbQueryOnFileAsyncStrict } from "./workspace";
+import {
+	duckdbQueryOnFileAsync,
+	duckdbQueryOnFileAsyncStrict,
+	isReadOnlySql,
+} from "./workspace";
 
 type ExecFileCb = (
   err: NodeJS.ErrnoException | null,
@@ -228,5 +232,30 @@ describe("duckdbQueryOnFileAsyncStrict — lock-conflict retry", () => {
       duckdbQueryOnFileAsyncStrict("/tmp/test.duckdb", 'SELECT * FROM "v_company"'),
     ).rejects.toThrow();
     expect(execFileMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("isReadOnlySql / -readonly arg selection", () => {
+  it.each([
+    ["SELECT * FROM v_people", true],
+    ["  with cte AS (SELECT 1) SELECT * FROM cte", true],
+    ["FROM v_people LIMIT 5", true],
+    ["SHOW TABLES", true],
+    ["DESCRIBE v_people", true],
+    ["EXPLAIN SELECT 1", true],
+    ["SUMMARIZE SELECT 1", true],
+    ["INSERT INTO people VALUES (1)", false],
+    ["UPDATE people SET x = 1", false],
+    ["DELETE FROM people", false],
+    ["CREATE TABLE t (id INT)", false],
+    ["CHECKPOINT", false],
+    ["PRAGMA database_size", false],
+  ])("%s → readonly=%s", (sql, expected) => {
+    expect(isReadOnlySql(sql)).toBe(expected);
+  });
+
+  it("keeps write SQL off the readonly path (mutating statements stay RW)", () => {
+    expect(isReadOnlySql("CREATE TEMP TABLE t AS SELECT 1")).toBe(false);
+    expect(isReadOnlySql("INSERT INTO logs SELECT * FROM src")).toBe(false);
   });
 });
