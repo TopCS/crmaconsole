@@ -481,17 +481,32 @@ function createCrmASearchIntegrationsTool(api) {
         const toolsJson = toolsRes.ok ? await toolsRes.json() : null;
         const connJson = connRes.ok ? await connRes.json() : null;
         const connectedToolkitsDirect = /* @__PURE__ */ new Set();
+        const connectedAccountsByToolkit = {};
         for (const item of asRecordArray(connJson?.items) ?? []) {
-          const slug = readString(
-            asRecord(item)?.toolkit && asRecord(asRecord(item)?.toolkit)?.slug
-          );
-          if (slug) {
-            connectedToolkitsDirect.add(slug);
+          const rec = asRecord(item);
+          if (!rec) {
+            continue;
           }
+          const slug = readString(asRecord(rec.toolkit)?.slug);
+          if (!slug) {
+            continue;
+          }
+          connectedToolkitsDirect.add(slug);
+          const entry = asRecord(connectedAccountsByToolkit[slug]) ?? {};
+          const accounts = Array.isArray(entry.accounts) ? entry.accounts : [];
+          accounts.push({
+            id: readString(rec.id) ?? "",
+            ...readString(rec.alias) ? { alias: readString(rec.alias) } : {}
+          });
+          connectedAccountsByToolkit[slug] = {
+            count: accounts.length,
+            accounts
+          };
         }
         gatewayResult = toolsJson ? {
           items: asRecordArray(toolsJson.items) ?? [],
-          connected_toolkits: [...connectedToolkitsDirect]
+          connected_toolkits: [...connectedToolkitsDirect],
+          connected_accounts_by_toolkit: connectedAccountsByToolkit
         } : null;
       } else {
         gatewayResult = await postComposioGatewayJson({
@@ -560,9 +575,12 @@ function createCrmASearchIntegrationsTool(api) {
           }) : normalizedToolkit ? `No ${humanizeResolverApp(normalizedToolkit)} integration tools matched. Refine the query or try a broader search.` : "No integration tools matched. Refine the query or specify a toolkit."
         });
       }
+      const directAccountsByToolkit = asRecord(gatewayResult.connected_accounts_by_toolkit);
       const results = items.map((item) => {
         const toolkitRec = asRecord(item.toolkit);
         const connStatus = asRecord(item.connection_status);
+        const directEntry = directAccountsByToolkit ? asRecord(directAccountsByToolkit[readString(toolkitRec?.slug) ?? ""]) : void 0;
+        const directCount = directEntry && typeof directEntry.count === "number" ? directEntry.count : 0;
         return {
           tool_slug: readString(item.slug),
           name: readString(item.name),
@@ -572,9 +590,9 @@ function createCrmASearchIntegrationsTool(api) {
             name: readString(toolkitRec?.name)
           },
           input_schema: item.input_parameters ?? item.input_schema,
-          is_connected: connStatus?.is_connected === true,
-          account_count: typeof connStatus?.account_count === "number" ? connStatus.account_count : 0,
-          accounts: Array.isArray(connStatus?.accounts) ? connStatus.accounts : []
+          is_connected: connStatus?.is_connected === true || directCount > 0,
+          account_count: typeof connStatus?.account_count === "number" ? connStatus.account_count : directCount,
+          accounts: Array.isArray(connStatus?.accounts) ? connStatus.accounts : Array.isArray(directEntry?.accounts) ? directEntry.accounts : []
         };
       });
       const hasMultiAccountToolkit = results.some((r) => r.account_count > 1);

@@ -67,6 +67,9 @@ function resolveGatewayBaseUrl(api, fallbackGatewayUrl) {
   const configuredUrl = readString(gwConfig?.gatewayUrl);
   return (configuredUrl ?? fallbackGatewayUrl).replace(/\/$/, "");
 }
+function resolveComposioUserId() {
+  return process.env.COMPOSIO_USER_ID?.trim() || "crm-a-console";
+}
 function resolveApiKey() {
   return readCrmAAuthProfileKey() ?? void 0;
 }
@@ -99,11 +102,11 @@ function createCrmAExecuteIntegrationsTool(params) {
               },
               body: JSON.stringify({
                 arguments: toolArgs,
-                ...connectedAccountId ? { connected_account_id: connectedAccountId } : (
-                  // Without an explicit account, Composio resolves it from
-                  // the user id used at connect time.
-                  { user_id: "crm-a-console" }
-                )
+                // Composio v3.1 requires user_id even when an explicit
+                // connected_account_id is provided ("User ID is required
+                // with connected account") — always send the connect-time id.
+                user_id: resolveComposioUserId(),
+                ...connectedAccountId ? { connected_account_id: connectedAccountId } : {}
               })
             }
           );
@@ -120,8 +123,16 @@ function createCrmAExecuteIntegrationsTool(params) {
             });
           }
           if (parsed2?.successful === false || readString(parsed2?.error)) {
+            const upstreamError = readString(parsed2?.error) ?? "unknown error";
+            if (readString(asRecord(parsed2?.error)?.slug) === "ActionExecute_ConnectedAccountEntityIdMismatch") {
+              return jsonResult({
+                error: `Composio ${toolSlug} failed: the connected account belongs to a different Composio user.`,
+                guidance: "Ask the user to reconnect this integration (the new connection will bind to the current user), or unset COMPOSIO_USER_ID to use the legacy user. Then retry.",
+                not_connected: true
+              });
+            }
             return jsonResult({
-              error: `Composio ${toolSlug} failed: ${readString(parsed2?.error) ?? "unknown error"}`
+              error: `Composio ${toolSlug} failed: ${upstreamError}`
             });
           }
           return jsonResult(parsed2?.data ?? parsed2 ?? {});

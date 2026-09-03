@@ -770,4 +770,74 @@ describe("register", () => {
 
     rmSync(tmp, { recursive: true, force: true });
   });
+
+  it("derives per-tool connection status in direct composio mode", async () => {
+    const tmp = path.join(
+      os.tmpdir(),
+      `crm-a-identity-direct-search-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    mkdirSync(tmp, { recursive: true });
+    process.env.COMPOSIO_API_KEY = "composio-test-key";
+    process.env.CRM_A_GATEWAY_URL = "https://gateway.example.com";
+
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.startsWith("https://backend.composio.dev/api/v3.1/tools")) {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                slug: "RESEND_SEND_EMAIL",
+                name: "Send email",
+                description: "Send an email with Resend.",
+                toolkit: { slug: "resend", name: "Resend" },
+                input_parameters: { type: "object", properties: {} },
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.startsWith("https://backend.composio.dev/api/v3.1/connected_accounts")) {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: "ca_123",
+                alias: "primary",
+                status: "ACTIVE",
+                toolkit: { slug: "resend", name: "Resend" },
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    const api = {
+      config: { plugins: { entries: {} }, agents: { defaults: { workspace: tmp } } },
+      on: vi.fn(),
+      registerTool: vi.fn(),
+    };
+
+    register(api as any);
+
+    const searchTool = getRegisteredTool(api as any, "crm_a_search_integrations");
+    const result = await executeTool(searchTool, {
+      toolkit: "resend",
+      query: "send email",
+    });
+    const payload = JSON.parse(result.content[0].text);
+
+    expect(payload.connected_toolkits).toContain("resend");
+    expect(payload.results[0].tool_slug).toBe("RESEND_SEND_EMAIL");
+    expect(payload.results[0].is_connected).toBe(true);
+    expect(payload.results[0].account_count).toBe(1);
+    expect(payload.results[0].accounts[0].id).toBe("ca_123");
+
+    delete process.env.COMPOSIO_API_KEY;
+    rmSync(tmp, { recursive: true, force: true });
+  });
 });

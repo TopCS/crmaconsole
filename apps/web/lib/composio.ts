@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { resolveOpenClawStateDir } from "@/lib/workspace";
 import { normalizeComposioToolkitSlug } from "@/lib/composio-normalization";
 import { readConfiguredCrmACloudSettings } from "../../../src/cli/crm-a-cloud";
-import { directComposioFetch, directInitiateConnect, resolveDirectComposioApiKey } from "./composio-direct";
+import { directComposioFetch, directInitiateConnect, resolveComposioUserId, resolveDirectComposioApiKey } from "./composio-direct";
 
 const DEFAULT_GATEWAY_URL = "https://gateway.merseoriginals.com";
 
@@ -518,7 +518,7 @@ export async function initiateComposioConnect(
     return directInitiateConnect({
       toolkit,
       callbackUrl,
-      userId: "crm-a-console",
+      userId: resolveComposioUserId(),
     });
   }
   const res = await gatewayFetch(gatewayUrl, apiKey, "/v1/composio/connect", {

@@ -26,7 +26,7 @@ import {
   resolveComposioApiKey,
   resolveComposioGatewayUrl,
 } from "./composio";
-import { directComposioFetch, resolveDirectComposioApiKey } from "./composio-direct";
+import { directComposioFetch, resolveComposioUserId, resolveDirectComposioApiKey } from "./composio-direct";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -225,7 +225,7 @@ export async function executeComposioTool<T = unknown>(
                 connected_account_id: opts.connectedAccountId,
                 // Without an explicit account, Composio resolves it from the
                 // user id used at connect time.
-                user_id: "crm-a-console",
+                user_id: resolveComposioUserId(),
                 arguments: opts.arguments,
               }),
             },

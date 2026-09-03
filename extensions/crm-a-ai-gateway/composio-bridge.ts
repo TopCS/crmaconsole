@@ -56,6 +56,16 @@ function resolveGatewayBaseUrl(api: any, fallbackGatewayUrl: string): string {
   return (configuredUrl ?? fallbackGatewayUrl).replace(/\/$/, "");
 }
 
+/**
+ * Composio user that owns the workspace's connected accounts. All
+ * connect + execute flows must use the SAME user — Composio rejects
+ * execution when the user_id does not match the account's owner
+ * (code 1812 ConnectedAccountUserIdMismatch).
+ */
+function resolveComposioUserId(): string {
+  return process.env.COMPOSIO_USER_ID?.trim() || "crm-a-console";
+}
+
 function resolveApiKey(): string | undefined {
   return readCrmAAuthProfileKey() ?? undefined;
 }
@@ -98,11 +108,13 @@ function createCrmAExecuteIntegrationsTool(params: {
               },
               body: JSON.stringify({
                 arguments: toolArgs,
+                // Composio v3.1 requires user_id even when an explicit
+                // connected_account_id is provided ("User ID is required
+                // with connected account") — always send the connect-time id.
+                user_id: resolveComposioUserId(),
                 ...(connectedAccountId
                   ? { connected_account_id: connectedAccountId }
-                  : // Without an explicit account, Composio resolves it from
-                    // the user id used at connect time.
-                    { user_id: "crm-a-console" }),
+                  : {}),
               }),
             },
           );
@@ -119,8 +131,20 @@ function createCrmAExecuteIntegrationsTool(params: {
             });
           }
           if (parsed?.successful === false || readString(parsed?.error)) {
+            const upstreamError = readString(parsed?.error) ?? "unknown error";
+            // Composio code 1812: the connected account belongs to a
+            // different user than the one we authenticated with. Happens
+            // when COMPOSIO_USER_ID changes after tools were connected.
+            if (readString(asRecord(parsed?.error)?.slug) === "ActionExecute_ConnectedAccountEntityIdMismatch") {
+              return jsonResult({
+                error: `Composio ${toolSlug} failed: the connected account belongs to a different Composio user.`,
+                guidance:
+                  "Ask the user to reconnect this integration (the new connection will bind to the current user), or unset COMPOSIO_USER_ID to use the legacy user. Then retry.",
+                not_connected: true,
+              });
+            }
             return jsonResult({
-              error: `Composio ${toolSlug} failed: ${readString(parsed?.error) ?? "unknown error"}`,
+              error: `Composio ${toolSlug} failed: ${upstreamError}`,
             });
           }
           return jsonResult(parsed?.data ?? parsed ?? {});
