@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
 import { GraphDetailPanel, type NodeDetail } from "./graph-detail-panel";
@@ -130,6 +130,7 @@ export function GraphView() {
     }
   }, []);
 
+
   const clearFilters = () => {
     setTypes([]);
     setFocus(null);
@@ -154,6 +155,38 @@ export function GraphView() {
       truncated: data.truncated,
     };
   }, [data, search]);
+
+  // When a search narrows the graph to exactly one entity, open its detail
+  // panel automatically so its relations are visible at a glance. A ref
+  // guards against re-opening after the user explicitly closes the panel.
+  const lastAutoOpenedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!search) {return;}
+    if (displayed.nodes.length !== 1) {
+      lastAutoOpenedRef.current = null;
+      return;
+    }
+    const only = displayed.nodes[0];
+    const key = `${search}:${only.id}`;
+    if (lastAutoOpenedRef.current === key) {return;}
+    lastAutoOpenedRef.current = key;
+    void handleNodeClick(only.id);
+  }, [displayed, search, handleNodeClick]);
+
+  // A focused NL query ("Lorenzo Lorato") centers the graph on one entity:
+  // open its detail panel automatically so its relations are listed.
+  const lastFocusOpenedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focus || displayed.nodes.length === 0) {return;}
+    const target = displayed.nodes.find(
+      (n) => n.label.toLowerCase() === focus.toLowerCase(),
+    );
+    if (!target) {return;}
+    const key = `${focus}:${target.id}`;
+    if (lastFocusOpenedRef.current === key) {return;}
+    lastFocusOpenedRef.current = key;
+    void handleNodeClick(target.id);
+  }, [focus, displayed, handleNodeClick]);
 
   const legend = useMemo(() => {
     const set = new Set(displayed.nodes.map((n) => n.type));
@@ -277,6 +310,7 @@ export function GraphView() {
               setSelectedId(null);
               setDetail(null);
             }}
+            onSelectNode={handleNodeClick}
           />
         ) : null}
       </div>

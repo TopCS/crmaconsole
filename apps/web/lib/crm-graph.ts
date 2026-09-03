@@ -69,18 +69,27 @@ export type CrmGraph = {
   truncated: boolean;
 };
 
+export type GraphRelation = {
+  /** Related entry id. */
+  id: string;
+  /** Related node human label. */
+  label: string;
+  /** Related node object type (people, interaction, …). */
+  type: string;
+  /** Relation field name (e.g. "Company", "Participants"). */
+  edgeType: string;
+  /** `out` when this entry owns the relation field, `in` when referenced. */
+  direction: "out" | "in";
+};
+
 export type GraphNodeDetail = {
   id: string;
   type: string;
   label: string;
   fields: Array<{ name: string; type: string; value: string | null }>;
+  /** Direct graph neighbors, any direction. */
+  relations: GraphRelation[];
 };
-
-// ---------------------------------------------------------------------------
-// SQL (read-only)
-// ---------------------------------------------------------------------------
-
-const MAX_NODES = 2000;
 
 /**
  * Human label, derived from the entry's most specific "name-ish" field in
@@ -88,6 +97,8 @@ const MAX_NODES = 2000;
  * non-null (highest-priority) field; a plain `MAX(CASE WHEN name IN (...))`
  * would wrongly select the alphabetically-largest *value* (e.g. an email
  * address over a person's name), so we keep one aggregate per field.
+ * Nameless entities (interaction, order, …) fall back to a readable
+ * "Type · date" combination, then the type + short id.
  */
 const LABEL_SQL = `
   COALESCE(
@@ -98,8 +109,26 @@ const LABEL_SQL = `
     MAX(CASE WHEN f.name = 'Subject' THEN ef.value END),
     MAX(CASE WHEN f.name = 'Email' THEN ef.value END),
     MAX(CASE WHEN f.name = 'Email Address' THEN ef.value END),
+    NULLIF(
+      CONCAT_WS(
+        ' · ',
+        NULLIF(MAX(CASE WHEN f.name = 'Type' THEN ef.value END), ''),
+        NULLIF(
+          MAX(
+            CASE
+              WHEN f.name IN ('Occurred At', 'Ordered At', 'Sent At')
+              THEN strftime(try_cast(ef.value AS TIMESTAMP), '%d %b %Y %H:%M')
+            END
+          ),
+          ''
+        )
+      ),
+      ''
+    ),
     o.name || ' #' || left(e.id, 6)
   )`;
+
+const MAX_NODES = 2000;
 
 const NODES_SQL = `
   SELECT
@@ -269,15 +298,27 @@ export async function fetchCrmGraph(opts: CrmGraphOptions = {}): Promise<CrmGrap
     }
   }
 
-  // Type filter (server-side, caps payload). The focus node is always
-  // retained so a focused subgraph stays anchored even when its own type
-  // isn't in the requested type list (e.g. "people connected to Acme").
+  // Type filter (server-side, caps payload). When a focus is set, the focus
+  // node AND its direct neighbors are always retained — the neighbors ARE
+  // the relationships the user asked to see ("interactions of X at a
+  // glance"). Deeper hops stay subject to the type filter.
   const types = (opts.types ?? []).filter((t): t is string => KNOWN_OBJECT_TYPES.includes(t as CrmObjectType));
   if (types.length > 0) {
     const allowed = new Set(types);
+    const directNeighbors = new Set<string>();
+    if (focusId !== null) {
+      for (const e of edges) {
+        if (e.source === focusId) {directNeighbors.add(e.target);}
+        if (e.target === focusId) {directNeighbors.add(e.source);}
+      }
+    }
     const keptIds = new Set(
       nodes
-        .filter((n) => allowed.has(n.type) || (focusId !== null && n.id === focusId))
+        .filter(
+          (n) =>
+            allowed.has(n.type)
+            || (focusId !== null && (n.id === focusId || directNeighbors.has(n.id))),
+        )
         .map((n) => n.id),
     );
     nodes = nodes.filter((n) => keptIds.has(n.id));
@@ -312,6 +353,7 @@ export async function fetchGraphNodeDetail(entryId: string): Promise<GraphNodeDe
   `);
   if (base.length === 0) {return null;}
 
+
   const fields = await duckdbQueryAsync<{ name: string; type: string; value: string | null }>(`
     SELECT f.name AS name, f.type AS type, ef.value AS value
     FROM entry_fields ef
@@ -319,11 +361,65 @@ export async function fetchGraphNodeDetail(entryId: string): Promise<GraphNodeDe
     WHERE ef.entry_id = '${safeId}'
     ORDER BY f.sort_order, f.name
   `);
+  // Direct neighbors in both directions (relation fields owned by this
+  // entry and relation fields pointing at it), with the neighbor's label.
+  const relations = await duckdbQueryAsync<GraphRelation>(`
+    WITH edges AS (
+      SELECT
+        ef.entry_id AS source,
+        ef.value AS target,
+        f.name AS type
+      FROM entry_fields ef
+      JOIN fields f ON f.id = ef.field_id
+      WHERE f.type = 'relation'
+        AND f.relationship_type = 'many_to_one'
+        AND ef.value IS NOT NULL
+        AND ef.value <> ''
+        AND ef.value IN (SELECT id FROM entries)
+
+      UNION ALL
+
+      SELECT
+        ef.entry_id AS source,
+        u.v AS target,
+        f.name AS type
+      FROM entry_fields ef
+      JOIN fields f ON f.id = ef.field_id,
+           unnest(from_json(ef.value, '["VARCHAR"]')) AS u(v)
+      WHERE f.type = 'relation'
+        AND f.relationship_type = 'many_to_many'
+        AND ef.value IS NOT NULL
+        AND ef.value <> ''
+        AND json_valid(ef.value)
+        AND u.v IN (SELECT id FROM entries)
+    ),
+    related AS (
+      SELECT source AS other_id, type AS edge_type, 'out' AS direction
+      FROM edges WHERE target = '${safeId}'
+      UNION ALL
+      SELECT target AS other_id, type AS edge_type, 'in' AS direction
+      FROM edges WHERE source = '${safeId}'
+    )
+    SELECT
+      r.other_id AS id,
+      o.name AS type,
+      ${LABEL_SQL} AS label,
+      r.edge_type AS edgeType,
+      r.direction AS direction
+    FROM related r
+    JOIN entries e ON e.id = r.other_id
+    JOIN objects o ON o.id = e.object_id
+    LEFT JOIN entry_fields ef ON ef.entry_id = e.id
+    LEFT JOIN fields f ON f.id = ef.field_id
+    GROUP BY r.other_id, e.id, o.id, o.name, r.edge_type, r.direction
+    ORDER BY o.name, label
+  `);
 
   return {
     id: entryId,
     type: base[0].type,
     label: base[0].label,
     fields,
+    relations,
   };
 }
