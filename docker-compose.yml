@@ -17,6 +17,9 @@ services:
     environment:
       # Secrets come from .env (gitignored) or the shell environment.
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      # Web search provider (openclaw bundled Gemini provider). Optional:
+      # when set, the agent's web_search tool auto-detects it.
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       # Direct Composio mode: app connections + agent integration tools talk
       # straight to Composio's Platform API, no Crm-A Cloud key needed.
       - COMPOSIO_API_KEY=${COMPOSIO_API_KEY:-}
