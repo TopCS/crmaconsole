@@ -23,6 +23,8 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { resolveWebChatDir, resolveOpenClawStateDir, resolveActiveAgentId } from "./workspace";
+import { readConfiguredChatThinkingLevel } from "./chat-thinking";
+import { readCurrentPrimaryModel } from "./agent-model";
 import {
 	type AgentProcessHandle,
 	type AgentEvent,
@@ -754,7 +756,8 @@ export function startSubscribeRun(params: {
 		"sessions.patch",
 		{
 			key: sessionKey,
-			thinkingLevel: "high",
+			thinkingLevel: readConfiguredChatThinkingLevel(),
+			model: readCurrentPrimaryModel() ?? undefined,
 			verboseLevel: "full",
 			reasoningLevel: "on",
 		},

@@ -6,6 +6,10 @@ vi.mock("./workspace", () => ({
 	resolveOpenClawStateDir: () => "/tmp/__agent_runner_test_state",
 }));
 
+vi.mock("./agent-model", () => ({
+	readCurrentPrimaryModel: () => "openrouter/deepseek/deepseek-v4-pro",
+}));
+
 // Valid client IDs the Gateway accepts (from ui/src/ui/contracts/gateway-client-info.ts).
 // Hardcoded here so the test breaks if our code drifts from the Gateway's enum.
 const VALID_GATEWAY_CLIENT_IDS = new Set([
@@ -288,6 +292,26 @@ describe("agent-runner", () => {
 			proc.kill("SIGTERM");
 		});
 
+
+		it("patches the session model to the configured primary even without an override", async () => {
+			const MockWs = installMockWsModule();
+			const { spawnAgentProcess } = await import("./agent-runner.js");
+
+			const proc = spawnAgentProcess("hello", "sess-primary");
+			await waitFor(() => MockWs.instances[0]?.methods.includes("chat.send"));
+
+			const ws = MockWs.instances[0];
+			const patchFrame = ws.requestFrames.find(
+				(frame) => frame.method === "sessions.patch",
+			);
+
+			expect(patchFrame?.params).toMatchObject({
+				key: "agent:main:web:sess-primary",
+				model: "openrouter/deepseek/deepseek-v4-pro",
+			});
+
+			proc.kill("SIGTERM");
+		});
 		it("connects to wss: URL for TLS gateways", async () => {
 			const MockWs = installMockWsModule();
 			process.env.OPENCLAW_GATEWAY_URL = "wss://gateway.example.com:443";

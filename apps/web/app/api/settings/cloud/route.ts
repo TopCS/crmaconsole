@@ -4,7 +4,11 @@ import {
   saveApiKey,
   saveVoiceId,
   selectModel,
+  setChatThinkingLevel,
 } from "@/lib/crm-a-cloud-settings";
+import { setPrimaryModel, isValidPrimaryModel } from "@/lib/agent-model";
+import { refreshIntegrationsRuntime } from "@/lib/integrations";
+import { isChatThinkingLevel, type ChatThinkingLevel } from "@/lib/chat-thinking";
 import type { CrmAIntegrationId, CrmAIntegrationToggleDraft } from "@/lib/integrations";
 
 export const dynamic = "force-dynamic";
@@ -21,12 +25,13 @@ export async function GET() {
     );
   }
 }
-
 type PostBody = {
-  action: "save_key" | "select_model" | "save_voice" | "save_active_settings";
+  action: "save_key" | "select_model" | "save_voice" | "save_active_settings" | "set_thinking" | "set_primary_model";
   apiKey?: string;
   stableId?: string;
   voiceId?: string | null;
+  thinkingLevel?: string;
+  model?: string;
   integrations?: CrmAIntegrationToggleDraft;
 };
 
@@ -131,9 +136,21 @@ export async function POST(request: Request) {
         integrations[id] = enabled;
       }
 
+      if (body.thinkingLevel !== undefined && body.thinkingLevel !== null && !isChatThinkingLevel(body.thinkingLevel)) {
+        return Response.json(
+          { error: "Field 'thinkingLevel' must be one of 'off', 'minimal', 'low', 'medium', 'high', 'xhigh'." },
+          { status: 400 },
+        );
+      }
+      const validatedThinkingLevel: ChatThinkingLevel | null | undefined =
+        body.thinkingLevel === undefined
+          ? undefined
+          : body.thinkingLevel ?? null;
+
       const result = await saveActiveCloudSettings({
         stableId,
         voiceId,
+        thinkingLevel: validatedThinkingLevel,
         integrations,
       });
       if (result.error) {
@@ -148,8 +165,48 @@ export async function POST(request: Request) {
     }
   }
 
+  if (body.action === "set_primary_model") {
+    const model = typeof body.model === "string" ? body.model.trim() : "";
+    if (!model || !isValidPrimaryModel(model)) {
+      return Response.json(
+        { error: "Field 'model' must be a provider-prefixed model id such as 'openrouter/deepseek/deepseek-v4-pro'." },
+        { status: 400 },
+      );
+    }
+    try {
+      const result = setPrimaryModel(model);
+      const refresh = result.changed
+        ? await refreshIntegrationsRuntime()
+        : { attempted: false, restarted: false, error: null, profile: "default" as const };
+      return Response.json({ ok: true, changed: result.changed, model: result.model, refresh });
+    } catch (err) {
+      return Response.json(
+        { error: err instanceof Error ? err.message : "Failed to set primary model." },
+        { status: 500 },
+      );
+    }
+  }
+
+  if (body.action === "set_thinking") {
+    if (!isChatThinkingLevel(body.thinkingLevel)) {
+      return Response.json(
+        { error: "Field 'thinkingLevel' must be one of 'off', 'minimal', 'low', 'medium', 'high', 'xhigh'." },
+        { status: 400 },
+      );
+    }
+    try {
+      const result = await setChatThinkingLevel(body.thinkingLevel);
+      return Response.json({ ok: true, ...result });
+    } catch (err) {
+      return Response.json(
+        { error: err instanceof Error ? err.message : "Failed to set thinking level." },
+        { status: 500 },
+      );
+    }
+  }
+
   return Response.json(
-    { error: "Unknown action. Use 'save_key', 'select_model', 'save_voice', or 'save_active_settings'." },
+    { error: "Unknown action. Use 'save_key', 'select_model', 'save_voice', 'save_active_settings', 'set_thinking', or 'set_primary_model'." },
     { status: 400 },
   );
 }

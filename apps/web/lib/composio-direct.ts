@@ -12,6 +12,16 @@ import { resolveOpenClawStateDir } from "./workspace";
 
 const DIRECT_API_BASE = "https://backend.composio.dev";
 
+/**
+ * Composio user that owns the workspace's connected accounts. Connect and
+ * execute flows must use the SAME user — Composio rejects execution when
+ * user_id and the account's owner differ (code 1812
+ * ConnectedAccountUserIdMismatch). Override with `COMPOSIO_USER_ID`.
+ */
+export function resolveComposioUserId(): string {
+  return process.env.COMPOSIO_USER_ID?.trim() || "crm-a-console";
+}
+
 export type DirectComposioConfig = {
   apiKey: string;
 };

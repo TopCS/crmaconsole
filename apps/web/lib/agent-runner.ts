@@ -5,6 +5,10 @@ import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import NodeWebSocket from "ws";
 import {
+	readConfiguredChatThinkingLevel,
+} from "./chat-thinking";
+import { readCurrentPrimaryModel } from "./agent-model";
+import {
 	resolveActiveAgentId,
 	resolveOpenClawStateDir,
 } from "./workspace";
@@ -1131,11 +1135,16 @@ class GatewayProcessHandle
 
 		const patchParams: Record<string, string> = {
 			key: sessionKey,
-			thinkingLevel: "high",
+			thinkingLevel: readConfiguredChatThinkingLevel(),
 			verboseLevel: "full",
 			reasoningLevel: "on",
 		};
-		const normalizedModelOverride = normalizeModelOverride(modelOverride);
+		// Enforce the configured primary model on EVERY send. The gateway
+		// pins the model inside each session entry at first use, so existing
+		// sessions would otherwise keep a stale model after the user picks
+		// a new one in the header. An explicit per-request override wins.
+		const normalizedModelOverride =
+			normalizeModelOverride(modelOverride) ?? readCurrentPrimaryModel() ?? undefined;
 		if (normalizedModelOverride) {
 			patchParams.model = normalizedModelOverride;
 		}

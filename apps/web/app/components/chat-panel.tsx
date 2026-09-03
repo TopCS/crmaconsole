@@ -20,6 +20,8 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
 	DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import type {
@@ -37,6 +39,13 @@ import {
 	hasAssistantText,
 	hasAssistantToolActivity,
 } from "./chat-stream-status";
+import {
+	CHAT_THINKING_LEVELS,
+	CHAT_THINKING_LEVEL_HINTS,
+	CHAT_THINKING_LEVEL_LABELS,
+	isChatThinkingLevel,
+	type ChatThinkingLevel,
+} from "@/lib/chat-models";
 import type { ComposioChatAction } from "@/lib/composio-chat-actions";
 import type { ChatModelOption } from "@/lib/chat-models";
 import { prepareFilesForChatUpload } from "@/lib/chat-image-preparation";
@@ -60,7 +69,25 @@ type ChatCloudState = {
 	isCrmAPrimary: boolean;
 	elevenLabsEnabled: boolean;
 	selectedCrmAModel: string | null;
+	selectedThinkingLevel: ChatThinkingLevel | null;
 	models: ChatModelOption[];
+};
+
+type ModelCatalogOption = {
+	/** Full config value for agents.defaults.model.primary, e.g. "openrouter/deepseek/deepseek-v4-pro". */
+	configValue: string;
+	displayName: string;
+	provider: string;
+	reasoning: boolean;
+};
+
+type ModelCatalogState = {
+	primaryModel: string | null;
+	thinkingLevel: ChatThinkingLevel;
+	providers: {
+		openrouter: { available: boolean; models: ModelCatalogOption[] };
+		crmACloud: { available: boolean; models: ModelCatalogOption[] };
+	};
 };
 
 const CHAT_BOTTOM_THRESHOLD_PX = 80;
@@ -155,6 +182,9 @@ function normalizeChatCloudState(value: unknown): ChatCloudState | null {
 			record.selectedCrmAModel.trim()
 				? record.selectedCrmAModel.trim()
 				: null,
+		selectedThinkingLevel: isChatThinkingLevel(record.selectedThinkingLevel)
+			? record.selectedThinkingLevel
+			: null,
 		models,
 	};
 }
@@ -1048,6 +1078,8 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 		const isStreamingRef = useRef(false);
 		const [rawView, _setRawView] = useState(false);
 		const [cloudState, setCloudState] = useState<ChatCloudState | null>(null);
+		const [inlineSwitching, setInlineSwitching] = useState<"model" | "thinking" | null>(null);
+		const [modelFilter, setModelFilter] = useState("");
 		// ── Hero state (new chat screen) ──
 		const greeting = "What can I help with?";
 
@@ -1171,6 +1203,97 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 				controller.abort();
 			};
 		}, [status, messages.length, currentSessionId]);
+
+
+		// Inline model/thinking pickers in the header. The model picker lists
+		// every provider the install can use (OpenRouter, Crm-A Cloud when
+		// keyed) via /api/settings/models; selecting persists the primary
+		// agent model. Thinking persists agents.defaults.thinkingDefault.
+		const [modelCatalog, setModelCatalog] = useState<ModelCatalogState | null>(null);
+
+		const refreshModelCatalog = useCallback(async () => {
+			try {
+				const res = await fetch("/api/settings/models", { cache: "no-store" });
+				if (!res.ok) {
+					return;
+				}
+				setModelCatalog(await res.json() as ModelCatalogState);
+			} catch {
+				// Best-effort only.
+			}
+		}, []);
+
+		useEffect(() => {
+			if (status !== "ready") {
+				return;
+			}
+			void refreshModelCatalog();
+		}, [status, currentSessionId, refreshModelCatalog]);
+
+		const refreshCloudState = useCallback(async () => {
+			try {
+				const res = await fetch("/api/settings/cloud", { cache: "no-store" });
+				if (!res.ok) {
+					return;
+				}
+				const next = normalizeChatCloudState(await res.json());
+				if (next) {
+					setCloudState(next);
+				}
+			} catch {
+				// Best-effort only.
+			}
+		}, []);
+
+		const handleInlineModelSelect = useCallback(async (configValue: string) => {
+			// Optimistic: flip the label immediately (the POST includes a
+			// gateway restart, which takes seconds), then revert on failure.
+			const previous = modelCatalog?.primaryModel ?? null;
+			if (previous === configValue) {return;}
+			setInlineSwitching("model");
+			setModelCatalog((current) =>
+				current ? { ...current, primaryModel: configValue } : current,
+			);
+			try {
+				const res = await fetch("/api/settings/cloud", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ action: "set_primary_model", model: configValue }),
+				});
+				if (!res.ok) {
+					setModelCatalog((current) =>
+						current ? { ...current, primaryModel: previous } : current,
+					);
+				}
+			} catch {
+				setModelCatalog((current) =>
+					current ? { ...current, primaryModel: previous } : current,
+				);
+			} finally {
+				setInlineSwitching(null);
+			}
+		}, [modelCatalog?.primaryModel]);
+
+		const handleInlineThinkingSelect = useCallback(async (level: ChatThinkingLevel) => {
+			setInlineSwitching("thinking");
+			try {
+				const res = await fetch("/api/settings/cloud", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ action: "set_thinking", thinkingLevel: level }),
+				});
+				if (res.ok) {
+					await refreshCloudState();
+					setModelCatalog((current) =>
+						current ? { ...current, thinkingLevel: level } : current,
+					);
+				}
+			} catch {
+				// Best-effort; state stays unchanged on failure.
+			} finally {
+				setInlineSwitching(null);
+			}
+		}, [refreshCloudState]);
 
 		const preferServerVoiceInput = Boolean(
 			cloudState?.status === "valid" && cloudState.elevenLabsEnabled,
@@ -2625,6 +2748,20 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 		};
 
 		// ── Render ──
+		const catalogModels = modelCatalog
+			? [
+				...modelCatalog.providers.crmACloud.models,
+				...modelCatalog.providers.openrouter.models,
+			]
+			: [];
+		const currentModelLabel = (() => {
+			const primary = modelCatalog?.primaryModel ?? null;
+			if (!primary) {
+				return "Model…";
+			}
+			return catalogModels.find((m) => m.configValue === primary)?.displayName
+				?? primary.replace(/^[a-z0-9._-]+\//i, "");
+		})();
 
 		return (
 			<div
@@ -2676,6 +2813,123 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
 					</div>
 					{!hideHeaderActions && (
 					<div className="flex items-center gap-1 shrink-0">
+						{!isSubagentMode && modelCatalog && (modelCatalog.providers.openrouter.available || modelCatalog.providers.crmACloud.available) && (
+							<div className="flex items-center gap-0.5 mr-1">
+								<DropdownMenu>
+									<DropdownMenuTrigger
+										className="inline-flex items-center gap-1 rounded-lg px-2 h-7 text-xs font-medium transition-colors cursor-pointer outline-none"
+										style={{ color: "var(--color-text-muted)" }}
+										aria-label="Select chat model"
+										title="Model"
+										disabled={inlineSwitching !== null}
+										onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--color-surface-hover)"; }}
+										onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+									>
+										{inlineSwitching === "model" && (
+											<svg className="animate-spin" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-9-9" /></svg>
+										)}
+										<span className="max-w-[160px] truncate">
+											{currentModelLabel}
+										</span>
+										{inlineSwitching !== "model" && (
+											<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+										)}
+									</DropdownMenuTrigger>
+									<DropdownMenuContent align="end" side="bottom" className="w-72 p-1.5">
+										<div className="p-1">
+											<input
+												value={modelFilter}
+												onChange={(e) => setModelFilter(e.target.value)}
+												onKeyDown={(e) => {
+													// Base UI Menu runs a typeahead on the popup that
+													// swallows printable keys — stop them from
+													// bubbling so the input stays typable. Escape
+													// still bubbles so the menu closes normally.
+													if (e.key === "Escape") {return;}
+													e.stopPropagation();
+												}}
+												placeholder="Search model..."
+												aria-label="Search models"
+												autoFocus
+												className="w-full h-7 rounded-md border-0 px-2 text-xs outline-none"
+												style={{ background: "var(--color-surface-hover)", color: "var(--color-text)" }}
+											/>
+										</div>
+										<div className="max-h-72 overflow-y-auto">
+											{catalogModels
+												.filter((m) =>
+													!modelFilter.trim()
+													|| `${m.displayName} ${m.configValue}`.toLowerCase().includes(modelFilter.trim().toLowerCase()))
+												.slice(0, 60)
+												.map((m) => (
+													<DropdownMenuItem
+														key={m.configValue}
+														onSelect={() => {
+															setModelFilter("");
+															void handleInlineModelSelect(m.configValue);
+														}}
+														className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left cursor-pointer data-highlighted:bg-[var(--color-surface-hover)]"
+														style={m.configValue === modelCatalog.primaryModel
+															? { background: "var(--color-surface-hover)" }
+															: undefined}
+													>
+														<span className="w-full min-w-0">
+															<span className="block text-xs font-medium truncate" style={{ color: "var(--color-text)" }}>
+																{m.displayName}
+															</span>
+															<span className="block text-[10px] truncate" style={{ color: "var(--color-text-muted)" }}>
+																{m.configValue}
+															</span>
+														</span>
+													</DropdownMenuItem>
+												))}
+											{catalogModels.filter((m) =>
+												!modelFilter.trim()
+												|| `${m.displayName} ${m.configValue}`.toLowerCase().includes(modelFilter.trim().toLowerCase())).length === 0 && (
+												<div className="px-2 py-3 text-xs text-center" style={{ color: "var(--color-text-muted)" }}>
+													No models match
+												</div>
+											)}
+										</div>
+									</DropdownMenuContent>
+								</DropdownMenu>
+								<DropdownMenu>
+									<DropdownMenuTrigger
+										className="inline-flex items-center gap-1 rounded-lg px-2 h-7 text-xs font-medium transition-colors cursor-pointer outline-none"
+										style={{ color: "var(--color-text-muted)" }}
+										aria-label="Select thinking level"
+										title="Thinking level"
+										disabled={inlineSwitching !== null}
+										onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--color-surface-hover)"; }}
+										onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+									>
+										{CHAT_THINKING_LEVEL_LABELS[modelCatalog.thinkingLevel]}
+										<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+									</DropdownMenuTrigger>
+									<DropdownMenuContent align="end" side="bottom" className="min-w-[15rem] p-1.5">
+										<DropdownMenuRadioGroup
+											value={modelCatalog.thinkingLevel}
+											onValueChange={(value) => {
+												if (isChatThinkingLevel(value)) {
+													void handleInlineThinkingSelect(value);
+												}
+											}}
+										>
+											{CHAT_THINKING_LEVELS.map((level) => (
+												<DropdownMenuRadioItem key={level} value={level}>
+													<span className="flex flex-col">
+														<span className="text-sm">{CHAT_THINKING_LEVEL_LABELS[level]}</span>
+														<span className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>
+															{CHAT_THINKING_LEVEL_HINTS[level]}
+														</span>
+													</span>
+												</DropdownMenuRadioItem>
+											))}
+										</DropdownMenuRadioGroup>
+									</DropdownMenuContent>
+								</DropdownMenu>
+							</div>
+						)}
 						{onOpenTemplates && (
 							<ChatPanelTemplatesButton onOpenTemplates={onOpenTemplates} />
 						)}
