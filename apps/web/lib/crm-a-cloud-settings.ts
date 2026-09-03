@@ -24,6 +24,13 @@ import {
   type IntegrationsState,
   writeIntegrationsMetadata,
 } from "./integrations";
+import {
+  DEFAULT_CHAT_THINKING_LEVEL,
+  isChatThinkingLevel,
+  type ChatThinkingLevel,
+} from "./chat-thinking";
+
+export { fetchCrmACloudCatalog, readConfiguredCrmACloudSettings } from "../../../src/cli/crm-a-cloud";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -117,6 +124,7 @@ function buildInvalidKeySettingsState(
     primaryModel,
     isCrmAPrimary,
     selectedCrmAModel: null,
+    selectedThinkingLevel: readSelectedThinkingLevel(config),
     selectedVoiceId: readSelectedVoiceId(config),
     elevenLabsEnabled: isElevenLabsEnabled(config),
     models: [],
@@ -306,6 +314,16 @@ function setSelectedVoiceId(config: UnknownRecord, voiceId: string | null): void
   }
 }
 
+function readSelectedThinkingLevel(config: UnknownRecord): ChatThinkingLevel {
+  const level = asRecord(asRecord(config.agents)?.defaults)?.thinkingDefault;
+  return isChatThinkingLevel(level) ? level : DEFAULT_CHAT_THINKING_LEVEL;
+}
+
+function setSelectedThinkingLevel(config: UnknownRecord, level: ChatThinkingLevel): void {
+  const defaults = ensureRecord(ensureRecord(config, "agents"), "defaults");
+  defaults.thinkingDefault = level;
+}
+
 export type CloudSettingsStatus = "no_key" | "invalid_key" | "valid";
 
 export type CloudVoiceState = {
@@ -325,6 +343,7 @@ export type CloudSettingsState = {
   primaryModel: string | null;
   isCrmAPrimary: boolean;
   selectedCrmAModel: string | null;
+  selectedThinkingLevel: ChatThinkingLevel;
   selectedVoiceId: string | null;
   elevenLabsEnabled: boolean;
   models: CrmACloudCatalogModel[];
@@ -343,6 +362,8 @@ export type CloudSettingsUpdateResult = {
 export type SaveActiveCloudSettingsInput = {
   stableId: string | null;
   voiceId: string | null;
+  /** When provided, persists the chat thinking level (agents.defaults.thinkingDefault). */
+  thinkingLevel?: ChatThinkingLevel | null;
   integrations: CrmAIntegrationToggleDraft;
 };
 
@@ -408,8 +429,9 @@ export async function getCloudSettingsState(): Promise<CloudSettingsState> {
       primaryModel,
       isCrmAPrimary,
       selectedCrmAModel: null,
-      selectedVoiceId: voiceState.selectedVoiceId,
+      selectedThinkingLevel: readSelectedThinkingLevel(config),
       elevenLabsEnabled: voiceState.elevenLabsEnabled,
+      selectedVoiceId: voiceState.selectedVoiceId,
       models: [],
       recommendedModelId: RECOMMENDED_CRM_A_CLOUD_MODEL_ID,
     };
@@ -423,8 +445,9 @@ export async function getCloudSettingsState(): Promise<CloudSettingsState> {
       primaryModel,
       isCrmAPrimary,
       selectedCrmAModel: null,
-      selectedVoiceId: voiceState.selectedVoiceId,
+      selectedThinkingLevel: readSelectedThinkingLevel(config),
       elevenLabsEnabled: voiceState.elevenLabsEnabled,
+      selectedVoiceId: voiceState.selectedVoiceId,
       models: [],
       recommendedModelId: RECOMMENDED_CRM_A_CLOUD_MODEL_ID,
       validationError: voiceState.validationError,
@@ -440,6 +463,7 @@ export async function getCloudSettingsState(): Promise<CloudSettingsState> {
     primaryModel,
     isCrmAPrimary,
     selectedCrmAModel: settings.selectedModel ?? null,
+    selectedThinkingLevel: readSelectedThinkingLevel(config),
     selectedVoiceId: voiceState.selectedVoiceId,
     elevenLabsEnabled: voiceState.elevenLabsEnabled,
     models: catalog.models,
@@ -598,6 +622,7 @@ export async function saveVoiceId(voiceId: string | null): Promise<CloudSettings
     };
   }
 
+
   setSelectedVoiceId(config, nextVoiceId);
   writeConfig(config);
 
@@ -606,6 +631,23 @@ export async function saveVoiceId(voiceId: string | null): Promise<CloudSettings
     changed: true,
     refresh,
   };
+}
+
+/**
+ * Persist the chat thinking level only (agents.defaults.thinkingDefault).
+ * Used by the inline chat header picker; no gateway refresh is needed
+ * because the send paths read the value per message.
+ */
+export async function setChatThinkingLevel(
+  level: ChatThinkingLevel,
+): Promise<{ changed: boolean }> {
+  const config = readConfig();
+  if (readSelectedThinkingLevel(config) === level) {
+    return { changed: false };
+  }
+  setSelectedThinkingLevel(config, level);
+  writeConfig(config);
+  return { changed: true };
 }
 
 export async function saveActiveCloudSettings(
@@ -618,6 +660,7 @@ export async function saveActiveCloudSettings(
   const nextVoiceId = input.voiceId?.trim() || null;
   const metadata = readIntegrationsMetadata();
   let nextMetadata = metadata;
+  const currentThinkingLevel = readSelectedThinkingLevel(config);
   let changed = false;
   let requiresRefresh = false;
 
@@ -684,6 +727,11 @@ export async function saveActiveCloudSettings(
 
   if (currentVoiceId !== nextVoiceId) {
     setSelectedVoiceId(config, nextVoiceId);
+    changed = true;
+  }
+
+  if (input.thinkingLevel != null && input.thinkingLevel !== currentThinkingLevel) {
+    setSelectedThinkingLevel(config, input.thinkingLevel);
     changed = true;
   }
 

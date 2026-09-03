@@ -1,3 +1,45 @@
+export const CHAT_THINKING_LEVELS = [
+	"off",
+	"minimal",
+	"low",
+	"medium",
+	"high",
+	"xhigh",
+] as const;
+
+export type ChatThinkingLevel = (typeof CHAT_THINKING_LEVELS)[number];
+
+/**
+ * Default for chat sessions. Kept identical to the historical hardcoded
+ * value so existing behavior is unchanged until the user picks a level.
+ */
+export const DEFAULT_CHAT_THINKING_LEVEL: ChatThinkingLevel = "high";
+
+export function isChatThinkingLevel(value: unknown): value is ChatThinkingLevel {
+	return (
+		typeof value === "string"
+		&& (CHAT_THINKING_LEVELS as readonly string[]).includes(value)
+	);
+}
+
+export const CHAT_THINKING_LEVEL_LABELS: Record<ChatThinkingLevel, string> = {
+	off: "Off",
+	minimal: "Minimal",
+	low: "Low",
+	medium: "Medium",
+	high: "High",
+	xhigh: "Extra High",
+};
+
+export const CHAT_THINKING_LEVEL_HINTS: Record<ChatThinkingLevel, string> = {
+	off: "Fastest — no reasoning before replies",
+	minimal: "Very brief reasoning",
+	low: "Light reasoning",
+	medium: "Balanced speed and quality",
+	high: "Deep reasoning, slower replies (default)",
+	xhigh: "Deepest reasoning, slowest",
+};
+
 export type ChatModelOption = {
 	stableId: string;
 	/** Gateway catalog `id` when it differs from `stableId` (session rows may use either). */

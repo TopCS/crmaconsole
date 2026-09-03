@@ -7,6 +7,7 @@ vi.mock("@/lib/crm-a-cloud-settings", () => ({
   saveApiKey: vi.fn(),
   saveVoiceId: vi.fn(),
   selectModel: vi.fn(),
+  setChatThinkingLevel: vi.fn(),
 }));
 
 const {
@@ -15,6 +16,7 @@ const {
   saveApiKey,
   saveVoiceId,
   selectModel,
+  setChatThinkingLevel,
 } = await import("@/lib/crm-a-cloud-settings");
 
 const mockedGet = vi.mocked(getCloudSettingsState);
@@ -22,6 +24,7 @@ const mockedSaveActive = vi.mocked(saveActiveCloudSettings);
 const mockedSaveKey = vi.mocked(saveApiKey);
 const mockedSaveVoice = vi.mocked(saveVoiceId);
 const mockedSelectModel = vi.mocked(selectModel);
+const mockedSetThinking = vi.mocked(setChatThinkingLevel);
 
 const validState = {
   status: "valid" as const,
@@ -30,6 +33,7 @@ const validState = {
   primaryModel: "crm-a-cloud/anthropic.claude-opus-4-6-v1",
   isCrmAPrimary: true,
   selectedCrmAModel: "anthropic.claude-opus-4-6-v1",
+  selectedThinkingLevel: "high" as const,
   selectedVoiceId: "voice_123",
   elevenLabsEnabled: true,
   models: [
@@ -238,6 +242,31 @@ describe("cloud settings API", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(400);
+  });
+
+  it("POST set_thinking persists the level", async () => {
+    mockedSetThinking.mockResolvedValueOnce({ changed: true });
+    const req = new Request("http://localhost/api/settings/cloud", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set_thinking", thinkingLevel: "low" }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ ok: true, changed: true });
+    expect(mockedSetThinking).toHaveBeenCalledWith("low");
+  });
+
+  it("POST set_thinking rejects invalid levels", async () => {
+    const req = new Request("http://localhost/api/settings/cloud", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set_thinking", thinkingLevel: "turbo" }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    expect(mockedSetThinking).not.toHaveBeenCalled();
   });
 
   it("POST rejects unknown actions", async () => {

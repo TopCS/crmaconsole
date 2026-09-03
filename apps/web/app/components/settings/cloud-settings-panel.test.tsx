@@ -42,6 +42,7 @@ const baseState = {
   primaryModel: null,
   isCrmAPrimary: false,
   selectedCrmAModel: null,
+  selectedThinkingLevel: "high" as const,
   selectedVoiceId: null,
   elevenLabsEnabled: true,
   models: [
@@ -225,6 +226,7 @@ describe("CloudSettingsPanel", () => {
           action: "save_active_settings",
           stableId: "anthropic.claude-opus-4-6-v1",
           voiceId: "voice_123",
+          thinkingLevel: "low",
           integrations: {
             exa: true,
             apollo: false,
@@ -280,6 +282,8 @@ describe("CloudSettingsPanel", () => {
     });
     await user.click(voiceTrigger);
     await user.click(await screen.findByRole("menuitemradio", { name: /Rachel/ }));
+    await user.click(screen.getByRole("button", { name: "Select thinking level" }));
+    await user.click(await screen.findByRole("menuitemradio", { name: /^Low/ }));
     await user.click(screen.getByRole("button", { name: "Exa:off:open" }));
 
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();

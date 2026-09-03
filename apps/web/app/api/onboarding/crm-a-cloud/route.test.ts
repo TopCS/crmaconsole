@@ -50,6 +50,7 @@ const cloudState = {
   primaryModel: null,
   isCrmAPrimary: false,
   selectedCrmAModel: null,
+  selectedThinkingLevel: "high" as const,
   selectedVoiceId: null,
   elevenLabsEnabled: false,
   models: [

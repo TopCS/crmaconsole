@@ -194,6 +194,7 @@ import {
   saveApiKey,
   saveVoiceId,
   selectModel,
+  setChatThinkingLevel,
 } from "./crm-a-cloud-settings";
 import {
   readIntegrationsMetadata,
@@ -433,6 +434,62 @@ describe("crm-a cloud settings", () => {
 
     const written = JSON.parse(mocks.state.configText);
     expect(written.messages.tts.providers.elevenlabs.voiceId).toBe("voice_456");
+  });
+
+  it("persists the selected thinking level without restarting the gateway", async () => {
+    const result = await saveActiveCloudSettings({
+      stableId: null,
+      voiceId: null,
+      thinkingLevel: "low",
+      integrations: {},
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.state.selectedThinkingLevel).toBe("low");
+    expect(result.refresh).toEqual({
+      attempted: false,
+      restarted: false,
+      error: null,
+      profile: "default",
+    });
+
+    const written = JSON.parse(mocks.state.configText);
+    expect(written.agents.defaults.thinkingDefault).toBe("low");
+  });
+
+  it("reports the configured thinking level in the settings state", async () => {
+    mocks.state.configText = JSON.stringify({
+      agents: { defaults: { thinkingDefault: "off" } },
+    });
+
+    const state = await getCloudSettingsState();
+    expect(state.selectedThinkingLevel).toBe("off");
+  });
+
+  it("falls back to the default thinking level when the config value is invalid", async () => {
+    mocks.state.configText = JSON.stringify({
+      agents: { defaults: { thinkingDefault: "turbo" } },
+    });
+
+    const state = await getCloudSettingsState();
+    expect(state.selectedThinkingLevel).toBe("high");
+  });
+
+  it("persists only the thinking level via setChatThinkingLevel", async () => {
+    mocks.state.configText = JSON.stringify({
+      agents: { defaults: { thinkingDefault: "high" } },
+      messages: { tts: { providers: { elevenlabs: { voiceId: "voice_123" } } } },
+    });
+
+    const result = await setChatThinkingLevel("low");
+    expect(result.changed).toBe(true);
+    const written = JSON.parse(mocks.state.configText);
+    expect(written.agents.defaults.thinkingDefault).toBe("low");
+    // No side effects on unrelated settings.
+    expect(written.messages.tts.providers.elevenlabs.voiceId).toBe("voice_123");
+
+    const unchanged = await setChatThinkingLevel("low");
+    expect(unchanged.changed).toBe(false);
   });
 
   it("strips legacy enrichment max-mode metadata when saving active settings", async () => {

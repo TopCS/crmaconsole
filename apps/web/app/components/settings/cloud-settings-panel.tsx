@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { ChatModelSelector, type ChatModelSelectorOption } from "../chat-model-selector";
+import {
+	CHAT_THINKING_LEVELS,
+	CHAT_THINKING_LEVEL_HINTS,
+	CHAT_THINKING_LEVEL_LABELS,
+	DEFAULT_CHAT_THINKING_LEVEL,
+	type ChatThinkingLevel,
+} from "@/lib/chat-models";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
 import { CrmAIntegrationsSection } from "../integrations/crm-a-integrations-section";
@@ -16,7 +23,6 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 
-type CloudStatus = "no_key" | "invalid_key" | "valid";
 
 type CatalogModel = {
   id: string;
@@ -35,13 +41,17 @@ type VoiceOption = {
   labels: string[];
 };
 
+type CloudStatus = "no_key" | "invalid_key" | "valid";
+
 type CloudState = {
+
   status: CloudStatus;
   apiKeySource: "config" | "env" | "missing";
   gatewayUrl: string;
   primaryModel: string | null;
   isCrmAPrimary: boolean;
   selectedCrmAModel: string | null;
+  selectedThinkingLevel: ChatThinkingLevel;
   selectedVoiceId: string | null;
   elevenLabsEnabled: boolean;
   models: CatalogModel[];
@@ -364,11 +374,13 @@ function ApiKeyEntry({
 function ModelSelector({
   models,
   selectedModel,
+  selectedThinkingLevel,
   selectedVoiceId,
   elevenLabsEnabled,
   isCrmAPrimary,
   recommendedModelId,
   onSelect,
+  onSelectThinkingLevel,
   onSelectVoice,
   selecting,
   savingVoice,
@@ -377,11 +389,13 @@ function ModelSelector({
 }: {
   models: CatalogModel[];
   selectedModel: string | null;
+  selectedThinkingLevel: ChatThinkingLevel;
   selectedVoiceId: string | null;
   elevenLabsEnabled: boolean;
   isCrmAPrimary: boolean;
   recommendedModelId: string;
   onSelect: (stableId: string) => void;
+  onSelectThinkingLevel: (level: ChatThinkingLevel) => void;
   onSelectVoice: (voiceId: string | null) => void;
   selecting: boolean;
   savingVoice: boolean;
@@ -465,6 +479,45 @@ function ModelSelector({
             ariaLabel="Select primary model"
             triggerClassName={SUBTLE_PICKER_TRIGGER_CLASS}
           />
+        </div>
+      </div>
+
+      <div>
+        <label
+          className="block text-xs font-medium mb-2"
+          style={{ color: "var(--color-text-muted)" }}
+        >
+          Thinking Level
+        </label>
+        <div className="max-w-[420px]">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className={`inline-flex items-center gap-1.5 text-sm font-medium transition-opacity disabled:cursor-default disabled:opacity-60 cursor-pointer outline-none ring-0 ${SUBTLE_PICKER_TRIGGER_CLASS}`}
+              style={{ color: "var(--color-text-secondary)", opacity: 0.9 }}
+              aria-label="Select thinking level"
+              disabled={selecting}
+            >
+              <span>{CHAT_THINKING_LEVEL_LABELS[selectedThinkingLevel]}</span>
+              <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[220px]">
+              <DropdownMenuRadioGroup
+                value={selectedThinkingLevel}
+                onValueChange={(value) => onSelectThinkingLevel(value as ChatThinkingLevel)}
+              >
+                {CHAT_THINKING_LEVELS.map((level) => (
+                  <DropdownMenuRadioItem key={level} value={level}>
+                    <span className="flex flex-col">
+                      <span className="text-sm">{CHAT_THINKING_LEVEL_LABELS[level]}</span>
+                      <span className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>
+                        {CHAT_THINKING_LEVEL_HINTS[level]}
+                      </span>
+                    </span>
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -575,6 +628,7 @@ export function CloudSettingsPanel() {
     apollo: false,
     elevenlabs: false,
   });
+  const [draftThinkingLevel, setDraftThinkingLevel] = useState<ChatThinkingLevel>(DEFAULT_CHAT_THINKING_LEVEL);
   const [draftResetKey, setDraftResetKey] = useState(0);
 
   const fetchState = useCallback(async () => {
@@ -673,12 +727,14 @@ export function CloudSettingsPanel() {
     }
     setDraftModel(data.isCrmAPrimary ? data.selectedCrmAModel : null);
     setDraftVoiceId(data.selectedVoiceId);
+    setDraftThinkingLevel(data.selectedThinkingLevel);
     setDraftIntegrations(buildIntegrationDraft(integrationsDataRef.current));
   }, [
     data?.status,
     data?.isCrmAPrimary,
     data?.selectedCrmAModel,
     data?.selectedVoiceId,
+    data?.selectedThinkingLevel,
     draftResetKey,
   ]);
 
@@ -737,6 +793,11 @@ export function CloudSettingsPanel() {
     setDraftVoiceId(voiceId);
   }, []);
 
+  const handleDraftThinkingLevelChange = useCallback((level: ChatThinkingLevel) => {
+    setNotice(null);
+    setDraftThinkingLevel(level);
+  }, []);
+
   const handleDraftIntegrationToggle = useCallback((integration: CrmAIntegrationState, enabled: boolean) => {
     setNotice(null);
     setDraftIntegrations((current) => ({
@@ -752,11 +813,13 @@ export function CloudSettingsPanel() {
     setNotice(null);
     setDraftModel(data.isCrmAPrimary ? data.selectedCrmAModel : null);
     setDraftVoiceId(data.selectedVoiceId);
+    setDraftThinkingLevel(data.selectedThinkingLevel);
     setDraftIntegrations(buildIntegrationDraft(integrationsData));
   }, [data, integrationsData]);
 
   const baselineModel = data?.status === "valid" && data.isCrmAPrimary ? data.selectedCrmAModel : null;
   const baselineVoiceId = data?.status === "valid" ? data.selectedVoiceId : null;
+  const baselineThinkingLevel = data?.status === "valid" ? data.selectedThinkingLevel : null;
   const baselineIntegrations = useMemo(
     () => buildIntegrationDraft(integrationsData),
     [integrationsData],
@@ -764,6 +827,7 @@ export function CloudSettingsPanel() {
   const hasUnsavedChanges = Boolean(data?.status === "valid" && (
     draftModel !== baselineModel
     || draftVoiceId !== baselineVoiceId
+    || draftThinkingLevel !== baselineThinkingLevel
     || draftIntegrations.exa !== baselineIntegrations.exa
     || draftIntegrations.apollo !== baselineIntegrations.apollo
     || draftIntegrations.elevenlabs !== baselineIntegrations.elevenlabs
@@ -787,6 +851,7 @@ export function CloudSettingsPanel() {
           action: "save_active_settings",
           stableId: draftModel,
           voiceId: draftVoiceId,
+          thinkingLevel: draftThinkingLevel,
           integrations: draftIntegrations,
         }),
       });
@@ -832,7 +897,7 @@ export function CloudSettingsPanel() {
     } finally {
       setSavingActive(false);
     }
-  }, [draftIntegrations, draftModel, draftVoiceId, fetchIntegrations]);
+  }, [draftIntegrations, draftModel, draftThinkingLevel, draftVoiceId, fetchIntegrations]);
 
   const handleRepairIntegrations = useCallback(async () => {
     setRepairingIntegrations(true);
@@ -930,11 +995,13 @@ export function CloudSettingsPanel() {
       <ModelSelector
         models={data.models}
         selectedModel={draftModel}
-        selectedVoiceId={draftVoiceId}
-        elevenLabsEnabled={draftIntegrations.elevenlabs}
         isCrmAPrimary={draftIsCrmAPrimary}
         recommendedModelId={data.recommendedModelId}
+        selectedThinkingLevel={draftThinkingLevel}
+        selectedVoiceId={draftVoiceId}
+        elevenLabsEnabled={draftIntegrations.elevenlabs}
         onSelect={handleDraftModelChange}
+        onSelectThinkingLevel={handleDraftThinkingLevelChange}
         onSelectVoice={handleDraftVoiceChange}
         selecting={savingActive}
         savingVoice={savingActive}
