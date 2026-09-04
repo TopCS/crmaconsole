@@ -63,7 +63,7 @@ RUN apt-get update \
   && unzip -o /tmp/duckdb.zip -d /usr/local/bin \
   && rm /tmp/duckdb.zip \
   && duckdb --version \
-  && npm install -g openclaw@latest
+  && npm install -g openclaw@2026.9.1
 
 COPY --from=build /app /app
 
