@@ -3,6 +3,11 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Config writers resolve the owning OpenClaw version by probing the CLI; pin
+// it to a missing binary so each fixture's `meta.lastTouchedVersion` decides
+// the TTS root instead of whatever OpenClaw is installed on the host.
+process.env.OPENCLAW_BIN = "/nonexistent/openclaw-for-tests";
+
 const requireFs = createRequire(import.meta.url);
 const realFs = requireFs("node:fs") as typeof import("node:fs");
 
@@ -460,12 +465,9 @@ describe("integrations state", () => {
     expect(writtenConfig.plugins.load.paths).toEqual([
       "/home/testuser/.openclaw-crm-a/extensions/exa-search",
     ]);
-    expect(writtenConfig.plugins.installs["exa-search"]).toEqual({
-      source: "path",
-      installPath: "/home/testuser/.openclaw-crm-a/extensions/exa-search",
-      sourcePath: expect.any(String),
-      installedAt: expect.any(String),
-    });
+    // OpenClaw >= 2026.9.1 rejects `plugins.installs`; registration now lives
+    // entirely in allow + load.paths + entries.
+    expect(writtenConfig.plugins.installs).toBeUndefined();
     expect(writtenConfig.tools.deny).toEqual(["web_search"]);
     expect(writtenConfig.tools.web.search).toEqual({ enabled: false });
   });
@@ -619,12 +621,78 @@ describe("integrations state", () => {
     expect(writtenConfig.plugins.load.paths).toEqual([
       "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment",
     ]);
-    expect(writtenConfig.plugins.installs["apollo-enrichment"]).toEqual({
-      source: "path",
-      installPath: "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment",
-      sourcePath: expect.any(String),
-      installedAt: expect.any(String),
+    expect(writtenConfig.plugins.installs).toBeUndefined();
+  });
+
+  it("migrates the TTS override to top-level tts for OpenClaw >= 2026.9.1", async () => {
+    const { existsSync, readFileSync, writeFileSync } = await import("node:fs");
+    const mockExists = vi.mocked(existsSync);
+    const mockRead = vi.mocked(readFileSync);
+    const mockWrite = vi.mocked(writeFileSync);
+    let openClawJson = JSON.stringify({
+      meta: { lastTouchedVersion: "2026.9.1" },
+      agents: {
+        defaults: {
+          model: {
+            primary: "crm-a-cloud/claude-sonnet-4.6",
+          },
+        },
+      },
+      models: {
+        providers: {
+          "crm-a-cloud": {
+            apiKey: "crm-a-key",
+          },
+        },
+      },
+      // Legacy location carried over from an older OpenClaw volume.
+      messages: {
+        tts: {
+          provider: "elevenlabs",
+          providers: {
+            elevenlabs: {
+              voiceId: "voice_123",
+            },
+          },
+        },
+      },
+      plugins: {
+        entries: {
+          "crm-a-ai-gateway": {
+            enabled: true,
+            config: {
+              gatewayUrl: "https://gateway.merseoriginals.com",
+            },
+          },
+        },
+      },
     });
+
+    mockExists.mockImplementation((path) => String(path).endsWith("openclaw.json"));
+    mockRead.mockImplementation((path) => {
+      if (String(path).endsWith("openclaw.json")) {
+        return openClawJson as never;
+      }
+      return "" as never;
+    });
+    mockWrite.mockImplementation((path, data) => {
+      if (String(path).endsWith("openclaw.json")) {
+        openClawJson = String(data);
+      }
+    });
+
+    const { setElevenLabsIntegrationEnabled } = await import("./integrations.js");
+    expect(setElevenLabsIntegrationEnabled(true).changed).toBe(true);
+
+    const writtenConfig = JSON.parse(openClawJson);
+    expect(writtenConfig.tts.provider).toBe("elevenlabs");
+    expect(writtenConfig.tts.providers.elevenlabs).toEqual({
+      voiceId: "voice_123",
+      baseUrl: "https://gateway.merseoriginals.com",
+      apiKey: "crm-a-key",
+    });
+    // The retired `messages.tts` root makes the config invalid for 2026.9.1.
+    expect(writtenConfig.messages?.tts).toBeUndefined();
   });
 
   it("removes and restores the Crm-A ElevenLabs override", async () => {
@@ -912,8 +980,19 @@ describe("integrations state", () => {
       bundledSharedSource,
     ]);
     let openClawJson = JSON.stringify({
+      // 2026.9.1 volume: retired shapes must be normalized on repair.
+      meta: { lastTouchedVersion: "2026.9.1" },
       plugins: {
         entries: {},
+        // Retired record map carried over from an older OpenClaw state volume.
+        installs: {
+          "exa-search": {
+            source: "path",
+            sourcePath: bundledExaSource,
+            installPath: "/home/testuser/.openclaw-crm-a/extensions/exa-search",
+            installedAt: "2026-01-01T00:00:00.000Z",
+          },
+        },
       },
     });
 
@@ -993,33 +1072,25 @@ describe("integrations state", () => {
         gatewayUrl: "https://gateway.merseoriginals.com",
       },
     });
-    expect(writtenConfig.plugins.entries["crm-a-identity"]).toEqual({ enabled: true });
+    // The identity plugin mutates the system prompt; 2026.9.1 blocks that for
+    // non-bundled plugins unless the entry opts in.
+    expect(writtenConfig.plugins.entries["crm-a-identity"]).toEqual({
+      enabled: true,
+      hooks: { allowPromptInjection: true, allowConversationAccess: true },
+    });
     expect(writtenConfig.plugins.entries["apollo-enrichment"]).toEqual({ enabled: true });
     expect(writtenConfig.plugins.entries["exa-search"]).toEqual({ enabled: true });
-    expect(writtenConfig.plugins.installs["crm-a-ai-gateway"]).toEqual({
-      source: "path",
-      installPath: "/home/testuser/.openclaw-crm-a/extensions/crm-a-ai-gateway",
-      sourcePath: bundledGatewaySource,
-      installedAt: expect.any(String),
-    });
-    expect(writtenConfig.plugins.installs["crm-a-identity"]).toEqual({
-      source: "path",
-      installPath: "/home/testuser/.openclaw-crm-a/extensions/crm-a-identity",
-      sourcePath: bundledIdentitySource,
-      installedAt: expect.any(String),
-    });
-    expect(writtenConfig.plugins.installs["exa-search"]).toEqual({
-      source: "path",
-      installPath: "/home/testuser/.openclaw-crm-a/extensions/exa-search",
-      sourcePath: bundledExaSource,
-      installedAt: expect.any(String),
-    });
-    expect(writtenConfig.plugins.installs["apollo-enrichment"]).toEqual({
-      source: "path",
-      installPath: "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment",
-      sourcePath: bundledApolloSource,
-      installedAt: expect.any(String),
-    });
+    // The retired `plugins.installs` map from the older volume is dropped:
+    // OpenClaw >= 2026.9.1 refuses to boot with it present.
+    expect(writtenConfig.plugins.installs).toBeUndefined();
+    expect(writtenConfig.plugins.load.paths).toEqual(
+      expect.arrayContaining([
+        "/home/testuser/.openclaw-crm-a/extensions/crm-a-ai-gateway",
+        "/home/testuser/.openclaw-crm-a/extensions/crm-a-identity",
+        "/home/testuser/.openclaw-crm-a/extensions/exa-search",
+        "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment",
+      ]),
+    );
   });
 
   it("does not rewrite an already repaired managed plugin profile", async () => {
@@ -1049,32 +1120,6 @@ describe("integrations state", () => {
           "crm-a-identity": { enabled: true },
           "apollo-enrichment": { enabled: true },
           "exa-search": { enabled: true },
-        },
-        installs: {
-          "crm-a-ai-gateway": {
-            source: "path",
-            sourcePath: resolveBundledExtensionSourcePath("crm-a-ai-gateway"),
-            installPath: "/home/testuser/.openclaw-crm-a/extensions/crm-a-ai-gateway",
-            installedAt: "2026-01-01T00:00:00.000Z",
-          },
-          "crm-a-identity": {
-            source: "path",
-            sourcePath: resolveBundledExtensionSourcePath("crm-a-identity"),
-            installPath: "/home/testuser/.openclaw-crm-a/extensions/crm-a-identity",
-            installedAt: "2026-01-01T00:00:00.000Z",
-          },
-          "apollo-enrichment": {
-            source: "path",
-            sourcePath: resolveBundledExtensionSourcePath("apollo-enrichment"),
-            installPath: "/home/testuser/.openclaw-crm-a/extensions/apollo-enrichment",
-            installedAt: "2026-01-01T00:00:00.000Z",
-          },
-          "exa-search": {
-            source: "path",
-            sourcePath: resolveBundledExtensionSourcePath("exa-search"),
-            installPath: "/home/testuser/.openclaw-crm-a/extensions/exa-search",
-            installedAt: "2026-01-01T00:00:00.000Z",
-          },
         },
       },
     });

@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// Config writers resolve the owning OpenClaw version by probing the CLI; pin
+// it to a missing binary so each fixture's `meta.lastTouchedVersion` decides
+// the TTS root instead of whatever OpenClaw is installed on the host.
+process.env.OPENCLAW_BIN = "/nonexistent/openclaw-for-tests";
+
 const mocks = vi.hoisted(() => {
   const state = {
     configText: "{}\n",
@@ -162,7 +167,8 @@ vi.mock("../../../src/cli/crm-a-cloud", () => ({
   RECOMMENDED_CRM_A_CLOUD_MODEL_ID: "claude-sonnet-4.6",
 }));
 
-vi.mock("./integrations", () => ({
+vi.mock("./integrations", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./integrations")>()),
   applyCrmAIntegrationToggleDraft: vi.fn(() => ({
     changed: false,
     error: null,

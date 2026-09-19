@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -201,6 +201,14 @@ type ManagedBundledPluginSpec = {
   required: boolean;
   defaultEnabled: boolean;
   stripConfigKeys?: string[];
+  /**
+   * Typed-hook opt-in written to `plugins.entries.<id>.hooks` (OpenClaw >=
+   * 2026.9.1). `crm-a-identity` mutates the system prompt through
+   * `before_prompt_build`, which the Gateway blocks for non-bundled plugins
+   * unless the entry opts in — blocking it leaves the chat agent without the
+   * Crm-A Console prompt (no CRM skill, no DuckDB workflow).
+   */
+  hooks?: Record<string, boolean>;
 };
 
 const CRM_A_MANAGED_BUNDLED_PLUGINS: ManagedBundledPluginSpec[] = [
@@ -219,6 +227,7 @@ const CRM_A_MANAGED_BUNDLED_PLUGINS: ManagedBundledPluginSpec[] = [
     label: "Crm-A Identity",
     required: true,
     defaultEnabled: true,
+    hooks: { allowPromptInjection: true, allowConversationAccess: true },
   },
   {
     id: "apollo",
@@ -245,6 +254,7 @@ const CRM_A_MANAGED_BUNDLED_PLUGINS: ManagedBundledPluginSpec[] = [
     label: "PostHog Analytics",
     required: false,
     defaultEnabled: false,
+    hooks: { allowPromptInjection: true, allowConversationAccess: true },
   },
 ];
 
@@ -302,12 +312,35 @@ export function readOpenClawConfigForIntegrations(): OpenClawConfig {
   return asRecord(raw) ?? {};
 }
 
+/**
+ * OpenClaw >= 2026.9.1 rejects `plugins.installs` outright and moved TTS to
+ * the top-level `tts` root. Both retired shapes leave a config the Gateway
+ * refuses to boot (and the CLI refuses to write), so they are normalized on
+ * every config write. Bundled plugins load from plugins.allow +
+ * plugins.load.paths + plugins.entries, which is everything the record map
+ * contributed at runtime.
+ */
+export function stripRetiredConfigKeys(config: OpenClawConfig): boolean {
+  const plugins = asRecord(config.plugins);
+  let changed = false;
+  if (plugins && Object.prototype.hasOwnProperty.call(plugins, "installs")) {
+    delete plugins.installs;
+    changed = true;
+  }
+
+  if (migrateLegacyTtsRoot(config)) {
+    changed = true;
+  }
+  return changed;
+}
+
 export function writeOpenClawConfigForIntegrations(config: OpenClawConfig): void {
   const configPath = openClawConfigPath();
   const dirPath = resolveOpenClawStateDir();
   if (!existsSync(dirPath)) {
     mkdirSync(dirPath, { recursive: true });
   }
+  stripRetiredConfigKeys(config);
   writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
 }
 
@@ -357,6 +390,54 @@ function ensureRecord(parent: UnknownRecord, key: string): UnknownRecord {
   const fresh: UnknownRecord = {};
   parent[key] = fresh;
   return fresh;
+}
+
+let cachedProbedOpenClawVersion: string | null | undefined;
+
+/**
+ * The 2026.9.1 release retires a batch of config shapes the console writes:
+ * the top-level `tts` root, `plugins.installs`, and — for non-bundled plugins —
+ * typed prompt hooks that need an explicit `hooks` opt-in on the entry.
+ * Earlier releases do not understand those shapes.
+ */
+function isOpenClaw2026_9_1OrNewer(version: string | null | undefined): boolean {
+  const match = version?.match(/\b(\d{4})\.(\d+)\.(\d+)\b/u);
+  if (!match) {
+    return false;
+  }
+  const [major, minor, patch] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  return major > 2026 || (major === 2026 && (minor > 9 || (minor === 9 && patch >= 1)));
+}
+
+/**
+ * Version of the OpenClaw install that owns this config. The CLI probe is
+ * cached once per process; `meta.lastTouchedVersion` is the per-config
+ * fallback when the binary is not on PATH (OpenClaw rewrites it on every
+ * config write, so it tracks the owning version).
+ */
+function resolveInstalledOpenClawVersion(config: OpenClawConfig): string | null {
+  if (cachedProbedOpenClawVersion === undefined) {
+    try {
+      cachedProbedOpenClawVersion =
+        execFileSync(process.env.OPENCLAW_BIN?.trim() || "openclaw", ["--version"], {
+          cwd: safeChildCwd(),
+          encoding: "utf-8",
+          timeout: 5_000,
+        }).trim() || null;
+    } catch {
+      cachedProbedOpenClawVersion = null;
+    }
+  }
+  return (
+    cachedProbedOpenClawVersion ??
+    readString(asRecord(config.meta)?.lastTouchedVersion) ??
+    null
+  );
+}
+
+/** Reads the TTS record wherever the owning OpenClaw keeps it. */
+export function readTtsRecord(config: OpenClawConfig): UnknownRecord | undefined {
+  return asRecord(config.tts) ?? asRecord(asRecord(config.messages)?.tts);
 }
 
 function ensurePluginsConfig(config: OpenClawConfig): UnknownRecord {
@@ -447,6 +528,34 @@ function ensureCrmAAiGatewayConfig(config: OpenClawConfig, entry: UnknownRecord)
   return true;
 }
 
+/**
+ * Writes the spec's typed-hook opt-in onto the plugin entry. OpenClaw >=
+ * 2026.9.1 blocks `before_prompt_build` for non-bundled plugins without it,
+ * which would strip the Crm-A Console prompt from every chat run.
+ */
+function ensureManagedPluginHooks(
+  config: OpenClawConfig,
+  entry: UnknownRecord,
+  spec: ManagedBundledPluginSpec,
+): boolean {
+  if (
+    !spec.hooks ||
+    Object.keys(spec.hooks).length === 0 ||
+    !isOpenClaw2026_9_1OrNewer(resolveInstalledOpenClawVersion(config))
+  ) {
+    return false;
+  }
+  const hooks = ensureRecord(entry, "hooks");
+  let changed = false;
+  for (const [key, value] of Object.entries(spec.hooks)) {
+    if (hooks[key] !== value) {
+      hooks[key] = value;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 function stripManagedPluginConfigKeys(entry: UnknownRecord, keys: string[] | undefined): boolean {
   if (!keys || keys.length === 0) {
     return false;
@@ -483,7 +592,6 @@ function ensureManagedBundledPlugin(
   const loadPaths = ensureStringList(load.paths);
   load.paths = loadPaths;
   const entries = ensureRecord(plugins, "entries");
-  const installs = ensureRecord(plugins, "installs");
 
   const { spec } = params;
   const { installPath, sourcePath } = resolveBundledPluginPaths(spec.sourceDirName);
@@ -522,29 +630,6 @@ function ensureManagedBundledPlugin(
   if (installExists) {
     changed = addUnique(allow, spec.pluginId) || changed;
     changed = addUnique(loadPaths, installPath) || changed;
-    const install = asRecord(installs[spec.pluginId]);
-    if (!install) {
-      installs[spec.pluginId] = {
-        source: "path",
-        sourcePath,
-        installPath,
-        installedAt: new Date().toISOString(),
-      };
-      changed = true;
-    } else {
-      if (install.source !== "path") {
-        install.source = "path";
-        changed = true;
-      }
-      if (install.installPath !== installPath) {
-        install.installPath = installPath;
-        changed = true;
-      }
-      if (install.sourcePath !== sourcePath) {
-        install.sourcePath = sourcePath;
-        changed = true;
-      }
-    }
     changed = ensureSharedExtensionCopied() || changed;
   } else {
     issues.push("install_path_missing");
@@ -552,6 +637,7 @@ function ensureManagedBundledPlugin(
 
   const entry = asRecord(entries[spec.pluginId]);
   if (entry) {
+    changed = ensureManagedPluginHooks(config, entry, spec) || changed;
     changed = stripManagedPluginConfigKeys(entry, spec.stripConfigKeys) || changed;
     if (spec.pluginId === CRM_A_AI_GATEWAY_PLUGIN_ID) {
       changed = ensureCrmAAiGatewayConfig(config, entry) || changed;
@@ -702,13 +788,46 @@ function getLockErrorMessage(lockReason: CrmAIntegrationLockReason | null): stri
   }
 }
 
-function ensureTtsConfig(config: OpenClawConfig): UnknownRecord {
-  const messages = ensureRecord(config, "messages");
-  return ensureRecord(messages, "tts");
+export function ensureTtsConfig(config: OpenClawConfig): UnknownRecord {
+  // OpenClaw >= 2026.9.1 keeps TTS at top-level `tts`; older versions nest it
+  // under `messages.tts`. Writing the retired location leaves the config
+  // invalid, which blocks device pairing and every `openclaw config` write.
+  migrateLegacyTtsRoot(config);
+  return isOpenClaw2026_9_1OrNewer(resolveInstalledOpenClawVersion(config))
+    ? ensureRecord(config, "tts")
+    : ensureRecord(ensureRecord(config, "messages"), "tts");
+}
+
+function mergeRecords(
+  base: UnknownRecord,
+  override: UnknownRecord,
+): UnknownRecord {
+  const merged: UnknownRecord = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    const baseValue = asRecord(merged[key]);
+    const overrideValue = asRecord(value);
+    merged[key] = baseValue && overrideValue ? mergeRecords(baseValue, overrideValue) : value;
+  }
+  return merged;
+}
+
+/**
+ * Moves a legacy `messages.tts` record onto the top-level `tts` root once the
+ * owning OpenClaw expects it there. Returns true when it changed the config.
+ */
+export function migrateLegacyTtsRoot(config: OpenClawConfig): boolean {
+  const messages = asRecord(config.messages);
+  const legacyTts = asRecord(messages?.tts);
+  if (!messages || !legacyTts || !isOpenClaw2026_9_1OrNewer(resolveInstalledOpenClawVersion(config))) {
+    return false;
+  }
+  config.tts = mergeRecords(legacyTts, asRecord(config.tts) ?? {});
+  delete messages.tts;
+  return true;
 }
 
 function readTtsElevenLabsConfig(config: OpenClawConfig): UnknownRecord | undefined {
-  const tts = asRecord(asRecord(config.messages)?.tts);
+  const tts = readTtsRecord(config);
   return asRecord(tts?.elevenlabs) ?? asRecord(asRecord(tts?.providers)?.elevenlabs);
 }
 
@@ -759,14 +878,14 @@ function ensureTtsElevenLabsConfig(
 function readPluginState(config: OpenClawConfig, pluginId: string): IntegrationPluginState {
   const plugins = asRecord(config.plugins);
   const entries = asRecord(plugins?.entries);
-  const installs = asRecord(plugins?.installs);
   const allow = readStringList(plugins?.allow);
   const load = asRecord(plugins?.load);
   const loadPaths = readStringList(load?.paths);
   const entry = asRecord(entries?.[pluginId]);
-  const install = asRecord(installs?.[pluginId]);
-  const installPath = readString(install?.installPath) ?? null;
-  const sourcePath = readString(install?.sourcePath) ?? null;
+  // OpenClaw >= 2026.9.1 rejects `plugins.installs`, so the installed copy is
+  // located from the bundled spec instead of a config install record.
+  const { installPath, sourcePath } = resolveBundledPluginPaths(pluginId);
+  const installPathExists = existsSync(installPath);
 
   return {
     pluginId,
@@ -774,9 +893,9 @@ function readPluginState(config: OpenClawConfig, pluginId: string): IntegrationP
     enabled: entry?.enabled !== false && Boolean(entry),
     allowlisted: allow.includes(pluginId),
     loadPathConfigured: loadPaths.some((path) => path === installPath),
-    installRecorded: Boolean(install),
+    installRecorded: installPathExists,
     installPath,
-    installPathExists: installPath ? existsSync(installPath) : false,
+    installPathExists,
     sourcePath,
   };
 }
@@ -1038,8 +1157,7 @@ function buildElevenLabsState(
   auth: IntegrationAuthSummary,
   eligibility: CrmACloudEligibility,
 ): CrmAIntegrationState {
-  const messages = asRecord(config.messages);
-  const tts = asRecord(messages?.tts);
+  const tts = readTtsRecord(config);
   const elevenlabs = readTtsElevenLabsConfig(config);
   const overrideBaseUrl = readString(elevenlabs?.baseUrl) ?? null;
   const overrideApiKey = readString(elevenlabs?.apiKey) ?? null;
@@ -1364,7 +1482,8 @@ export function ensureDefaultManagedPluginsInstalled(): IntegrationsRepairResult
       enabled: true,
     })
   );
-  const changed = repairs.some((repair) => repair.changed);
+  const changed =
+    stripRetiredConfigKeys(config) || repairs.some((repair) => repair.changed);
 
   if (changed) {
     writeOpenClawConfigForIntegrations(config);

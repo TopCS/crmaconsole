@@ -16,6 +16,7 @@
  */
 
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 
 const stateDir = process.env.OPENCLAW_STATE_DIR || path.join(process.env.HOME || "/root", ".openclaw-crm-a");
@@ -24,7 +25,35 @@ const extensionsSrc = path.join(packageRoot, "extensions");
 
 // The Crm-A owned plugins that must ALWAYS be present and enabled. (Cloud-
 // gated ones like apollo/exa stay under bootstrap's richer handling.)
-const CRM_OWNED_PLUGINS = ["crm-a-nlpearl-outbound", "crm-a-shopify-admin"];
+// crm-a-identity carries the agent's system prompt, so its copy must track the
+// image on every boot — an existing volume never re-runs bootstrap.
+const CRM_OWNED_PLUGINS = ["crm-a-identity", "crm-a-nlpearl-outbound", "crm-a-shopify-admin"];
+
+/**
+ * Typed-hook opt-ins (OpenClaw >= 2026.9.1). `crm-a-identity` mutates the
+ * system prompt through `before_prompt_build`; the Gateway blocks that for
+ * non-bundled plugins unless the entry opts in, which strips the Crm-A Console
+ * prompt (CRM skill, DuckDB workflow) from every chat run. An existing state
+ * volume never re-runs bootstrap, so it is reconciled on every boot.
+ */
+const PROMPT_HOOK_OPT_INS = {
+  "crm-a-identity": { allowPromptInjection: true, allowConversationAccess: true },
+};
+
+/** `openclaw --version` is unavailable on non-container runs; stay legacy then. */
+function openClawIsAtLeast2026_9_1() {
+  try {
+    const output = execFileSync("openclaw", ["--version"], { encoding: "utf-8", timeout: 5000 });
+    const match = output.match(/\b(\d{4})\.(\d+)\.(\d+)\b/u);
+    if (!match) {
+      return false;
+    }
+    const [major, minor, patch] = [Number(match[1]), Number(match[2]), Number(match[3])];
+    return major > 2026 || (major === 2026 && (minor > 9 || (minor === 9 && patch >= 1)));
+  } catch {
+    return false;
+  }
+}
 
 const configPath = path.join(stateDir, "openclaw.json");
 if (!existsSync(configPath)) {
@@ -56,6 +85,20 @@ for (const id of CRM_OWNED_PLUGINS) {
   };
   if (!Array.isArray(cfg.plugins.load.paths)) { cfg.plugins.load.paths = []; }
   if (!cfg.plugins.load.paths.includes(dest)) { cfg.plugins.load.paths.push(dest); }
+}
+
+// Typed-hook opt-ins: an existing volume never re-runs bootstrap, so the
+// prompt-mutating plugins are reconciled here on every boot.
+if (openClawIsAtLeast2026_9_1()) {
+  for (const [pluginId, hooks] of Object.entries(PROMPT_HOOK_OPT_INS)) {
+    if (!existsSync(path.join(stateDir, "extensions", pluginId))) {
+      continue;
+    }
+    if (!cfg.plugins.allow.includes(pluginId)) { cfg.plugins.allow.push(pluginId); }
+    const entry = cfg.plugins.entries[pluginId] ?? { enabled: true };
+    entry.hooks = { ...(entry.hooks ?? {}), ...hooks };
+    cfg.plugins.entries[pluginId] = entry;
+  }
 }
 
 // The shared helpers dir backs the CRM plugins — refresh it too.

@@ -813,17 +813,14 @@ describe("bootstrapCommand always-onboard behavior", () => {
         }),
       }),
     );
-    expect(updatedConfig.plugins.installs["posthog-analytics"]).toEqual(
-      expect.objectContaining({
-        source: "path",
-        installPath: expect.stringContaining(path.join("extensions", "posthog-analytics")),
-      }),
-    );
-    expect(updatedConfig.plugins.installs["crm-a-ai-gateway"]).toEqual(
-      expect.objectContaining({
-        source: "path",
-        installPath: expect.stringContaining(path.join("extensions", "crm-a-ai-gateway")),
-      }),
+    // OpenClaw >= 2026.9.1 rejects `plugins.installs`; the bundled plugins are
+    // registered through allow + load.paths + entries instead.
+    expect(updatedConfig.plugins.installs).toBeUndefined();
+    expect(updatedConfig.plugins.load.paths).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(path.join("extensions", "posthog-analytics")),
+        expect.stringContaining(path.join("extensions", "crm-a-ai-gateway")),
+      ]),
     );
     expect(updatedConfig.plugins.entries["exa-search"]).toEqual(
       expect.objectContaining({ enabled: true }),
@@ -2182,6 +2179,8 @@ describe("bootstrapCommand always-onboard behavior", () => {
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
     expect(config.tools?.exec?.security).toBe("full");
     expect(config.tools?.exec?.ask).toBe("off");
+    // Pre-2026.9.1 CLIs do not understand the plugin hooks opt-in.
+    expect(config.plugins?.entries?.["crm-a-identity"]?.hooks).toBeUndefined();
     expect(config.tools?.elevated?.enabled).toBe(true);
     expect(config.tools?.elevated?.allowFrom?.webchat).toEqual(["*"]);
     expect(config.commands?.bash).toBe(true);
@@ -2264,6 +2263,63 @@ describe("bootstrapCommand always-onboard behavior", () => {
         expect.arrayContaining(["--profile", "crm-a", "config", "set", key, value]),
       );
     }
+  });
+
+  it("writes the mode-first tools.exec policy for OpenClaw >= 2026.9.1 (rejects the legacy security/ask pair)", async () => {
+    openClawVersionOutput = "2026.9.1\n";
+    const runtime: RuntimeEnv = {
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: vi.fn(),
+    };
+
+    await bootstrapCommand(
+      {
+        nonInteractive: true,
+        noOpen: true,
+        skipUpdate: true,
+      },
+      runtime,
+    );
+
+    const configPath = path.join(stateDir, "openclaw.json");
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    expect(config.tools?.exec?.mode).toBe("full");
+    expect(config.tools?.exec?.security).toBeUndefined();
+    expect(config.tools?.exec?.ask).toBeUndefined();
+    // TTS moved to top level on 2026.9.1; the legacy location makes the CLI
+    // treat the config as invalid and refuse device pairing.
+    expect(config.tts).toBeDefined();
+    expect(config.messages?.tts).toBeUndefined();
+
+    // Non-bundled plugins must opt in to typed prompt hooks on 2026.9.1: without
+    // it the Gateway blocks `before_prompt_build`, dropping the Crm-A Console
+    // prompt from every chat run.
+    expect(config.plugins?.entries?.["crm-a-identity"]?.hooks).toEqual({
+      allowPromptInjection: true,
+      allowConversationAccess: true,
+    });
+
+    // The legacy pair must never be applied through the CLI either: setting it
+    // alongside the mode produces the combination OpenClaw refuses to boot.
+    const legacyExecSetCall = spawnCalls.find(
+      (call) =>
+        call.command === "openclaw" &&
+        call.args.includes("config") &&
+        call.args.includes("set") &&
+        (call.args.includes("tools.exec.security") || call.args.includes("tools.exec.ask")),
+    );
+    expect(legacyExecSetCall).toBeUndefined();
+
+    const execPatchCall = spawnCalls.find(
+      (call) =>
+        call.command === "openclaw" &&
+        call.args.includes("config") &&
+        call.args.includes("patch"),
+    );
+    expect(execPatchCall?.args).toEqual(
+      expect.arrayContaining(["--profile", "crm-a", "config", "patch", "--file"]),
+    );
   });
 
   it("reapplies elevated commands on repeated bootstrap runs (idempotent safety)", async () => {

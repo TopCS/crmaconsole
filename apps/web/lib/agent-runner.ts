@@ -228,7 +228,103 @@ function signDevicePayload(privateKeyPem: string, payload: string): string {
 	return base64UrlEncode(sign(null, Buffer.from(payload, "utf8"), key) as unknown as Buffer);
 }
 
-function loadDeviceIdentity(stateDir: string): DeviceIdentity | null {
+/**
+ * OpenClaw >= 2026.9.1 migrates the client device keypair and its operator
+ * token out of `<stateDir>/identity/*.json` into the state SQLite database
+ * and deletes the legacy files.  Without the device block the Gateway refuses
+ * operator scopes, so every run fails with "missing scope: operator.write".
+ * Read the migrated store first; pre-2026.9.1 state dirs (and tests) still
+ * resolve through the legacy JSON files.
+ */
+const STATE_SQLITE_RELATIVE_PATH = ["state", "openclaw.sqlite"];
+const PRIMARY_DEVICE_IDENTITY_KEY = "primary";
+const OPERATOR_DEVICE_ROLE = "operator";
+
+async function queryStateStoreFirstRow(
+	stateDir: string,
+	sql: string,
+	params: string[],
+): Promise<Record<string, unknown> | null> {
+	const databasePath = join(stateDir, ...STATE_SQLITE_RELATIVE_PATH);
+	if (!existsSync(databasePath)) {
+		return null;
+	}
+	try {
+		// Static import is impossible here: `node:sqlite` is absent before
+		// Node 22.5 and flag-gated on some 22.x patch releases, so importing
+		// it at module scope would break those runtimes at load time.
+		const { DatabaseSync } = await import("node:sqlite");
+		const database = new DatabaseSync(databasePath, { readOnly: true });
+		try {
+			const row = database.prepare(sql).get(...params);
+			return asRecord(row);
+		} finally {
+			database.close();
+		}
+	} catch {
+		// Runtime without `node:sqlite`, or a locked/incompatible store:
+		// fall through to the legacy identity files.
+		return null;
+	}
+}
+
+async function loadStoredDeviceIdentity(
+	stateDir: string,
+): Promise<DeviceIdentity | null> {
+	const row = await queryStateStoreFirstRow(
+		stateDir,
+		"SELECT device_id, public_key_pem, private_key_pem FROM device_identities WHERE identity_key = ?",
+		[PRIMARY_DEVICE_IDENTITY_KEY],
+	);
+	if (
+		row &&
+		typeof row.device_id === "string" &&
+		typeof row.public_key_pem === "string" &&
+		typeof row.private_key_pem === "string"
+	) {
+		return {
+			deviceId: row.device_id,
+			publicKeyPem: row.public_key_pem,
+			privateKeyPem: row.private_key_pem,
+		};
+	}
+	return null;
+}
+
+async function loadStoredDeviceAuth(stateDir: string): Promise<DeviceAuth | null> {
+	const row = await queryStateStoreFirstRow(
+		stateDir,
+		`SELECT tokens.device_id AS device_id, tokens.token AS token, tokens.scopes_json AS scopes_json
+		   FROM device_auth_tokens AS tokens
+		   JOIN device_identities AS identities ON identities.device_id = tokens.device_id
+		  WHERE identities.identity_key = ? AND tokens.role = ?`,
+		[PRIMARY_DEVICE_IDENTITY_KEY, OPERATOR_DEVICE_ROLE],
+	);
+	if (row && typeof row.device_id === "string" && typeof row.token === "string") {
+		return {
+			deviceId: row.device_id,
+			token: row.token,
+			scopes: parseStoredScopes(row.scopes_json),
+		};
+	}
+	return null;
+}
+
+function parseStoredScopes(raw: unknown): string[] {
+	if (typeof raw !== "string") {
+		return [];
+	}
+	try {
+		const parsed = JSON.parse(raw) as unknown;
+		return Array.isArray(parsed)
+			? parsed.filter((scope): scope is string => typeof scope === "string")
+			: [];
+	} catch {
+		return [];
+	}
+}
+
+function loadLegacyDeviceIdentity(stateDir: string): DeviceIdentity | null {
 	const filePath = join(stateDir, "identity", "device.json");
 	if (!existsSync(filePath)) {
 		return null;
@@ -251,7 +347,7 @@ function loadDeviceIdentity(stateDir: string): DeviceIdentity | null {
 	return null;
 }
 
-function loadDeviceAuth(stateDir: string): DeviceAuth | null {
+function loadLegacyDeviceAuth(stateDir: string): DeviceAuth | null {
 	const filePath = join(stateDir, "identity", "device-auth.json");
 	if (!existsSync(filePath)) {
 		return null;
@@ -272,6 +368,14 @@ function loadDeviceAuth(stateDir: string): DeviceAuth | null {
 		}
 	} catch { /* ignore */ }
 	return null;
+}
+
+async function loadDeviceIdentity(stateDir: string): Promise<DeviceIdentity | null> {
+	return (await loadStoredDeviceIdentity(stateDir)) ?? loadLegacyDeviceIdentity(stateDir);
+}
+
+async function loadDeviceAuth(stateDir: string): Promise<DeviceAuth | null> {
+	return (await loadStoredDeviceAuth(stateDir)) ?? loadLegacyDeviceAuth(stateDir);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -897,8 +1001,8 @@ class GatewayProcessHandle
 		this.client = client;
 		try {
 			const stateDir = resolveOpenClawStateDir();
-			const deviceIdentity = loadDeviceIdentity(stateDir);
-			const deviceAuth = loadDeviceAuth(stateDir);
+			const deviceIdentity = await loadDeviceIdentity(stateDir);
+			const deviceAuth = await loadDeviceAuth(stateDir);
 
 			let nonce: string | undefined;
 			if (deviceIdentity) {
@@ -1556,8 +1660,8 @@ async function callGatewayRpcOnce(
 	);
 	try {
 		const stateDir = resolveOpenClawStateDir();
-		const deviceIdentity = loadDeviceIdentity(stateDir);
-		const deviceAuth = loadDeviceAuth(stateDir);
+		const deviceIdentity = await loadDeviceIdentity(stateDir);
+		const deviceAuth = await loadDeviceAuth(stateDir);
 
 		let nonce: string | undefined;
 		if (deviceIdentity) {

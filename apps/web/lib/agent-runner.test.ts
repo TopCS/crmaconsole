@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { mkdirSync, rmSync } from "node:fs";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("./workspace", () => ({
@@ -1028,6 +1029,111 @@ describe("agent-runner", () => {
 			await waitFor(() => errorEmitted, { attempts: 80, delayMs: 10 });
 			expect(stderr).toContain("unauthorized: bad token");
 			expect(stderr).not.toContain("npx crm-a-console bootstrap");
+			proc.kill("SIGTERM");
+		});
+	});
+
+	// ── device identity store (OpenClaw >= 2026.9.1) ──────────────────
+
+	describe("device identity from the state sqlite store", () => {
+		const stateDir = "/tmp/__agent_runner_test_state";
+		const sqlitePath = `${stateDir}/state/openclaw.sqlite`;
+
+		async function writeStateStore(params: {
+			deviceId: string;
+			publicKeyPem: string;
+			privateKeyPem: string;
+			token: string;
+		}) {
+			mkdirSync(`${stateDir}/state`, { recursive: true });
+			const { DatabaseSync } = await import("node:sqlite");
+			const db = new DatabaseSync(sqlitePath);
+			db.exec(`
+				CREATE TABLE device_identities (
+					identity_key TEXT NOT NULL PRIMARY KEY,
+					device_id TEXT NOT NULL,
+					public_key_pem TEXT NOT NULL,
+					private_key_pem TEXT NOT NULL,
+					created_at_ms INTEGER NOT NULL,
+					updated_at_ms INTEGER NOT NULL
+				) STRICT;
+				CREATE TABLE device_auth_tokens (
+					device_id TEXT NOT NULL,
+					role TEXT NOT NULL,
+					token TEXT NOT NULL,
+					scopes_json TEXT NOT NULL,
+					updated_at_ms INTEGER NOT NULL,
+					PRIMARY KEY (device_id, role)
+				) STRICT;
+			`);
+			db.prepare(
+				"INSERT INTO device_identities VALUES (?, ?, ?, ?, ?, ?)",
+			).run(
+				"primary",
+				params.deviceId,
+				params.publicKeyPem,
+				params.privateKeyPem,
+				1,
+				1,
+			);
+			db.prepare("INSERT INTO device_auth_tokens VALUES (?, ?, ?, ?, ?)").run(
+				params.deviceId,
+				"operator",
+				params.token,
+				'["operator.admin","operator.write"]',
+				1,
+			);
+			db.close();
+		}
+
+		afterEach(() => {
+			rmSync(`${stateDir}/state`, { recursive: true, force: true });
+		});
+
+		it("signs the connect frame with the stored device identity and operator token", async () => {
+			const { generateKeyPairSync } = await import("node:crypto");
+			const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+			const deviceId = "b".repeat(64);
+			await writeStateStore({
+				deviceId,
+				publicKeyPem: publicKey.export({ type: "spki", format: "pem" }).toString(),
+				privateKeyPem: privateKey
+					.export({ type: "pkcs8", format: "pem" })
+					.toString(),
+				token: "device-token-from-store",
+			});
+
+			const MockWs = installMockWsModule();
+			const { spawnAgentProcess } = await import("./agent-runner.js");
+			const proc = spawnAgentProcess("hello", "sess-device-store");
+
+			// The client only answers a challenge it receives after opening, so
+			// emit it once the socket exists and keep re-emitting until the
+			// signed `connect` frame lands.
+			const connectParams = await vi.waitFor(() => {
+				const socket = MockWs.instances[0];
+				socket?.emitJson({
+					type: "event",
+					event: "connect.challenge",
+					payload: { nonce: "nonce-from-store-test" },
+				});
+				const frame = socket?.requestFrames.find(
+					(entry) => entry.method === "connect",
+				);
+				if (!frame) {
+					throw new Error("connect frame not sent yet");
+				}
+				return frame.params;
+			}) as {
+				auth?: { deviceToken?: string };
+				device?: { id?: string; signature?: string; nonce?: string };
+			};
+
+			expect(connectParams.auth?.deviceToken).toBe("device-token-from-store");
+			expect(connectParams.device?.id).toBe(deviceId);
+			expect(connectParams.device?.nonce).toBe("nonce-from-store-test");
+			expect(connectParams.device?.signature).toMatch(/^[A-Za-z0-9_-]+$/);
+
 			proc.kill("SIGTERM");
 		});
 	});

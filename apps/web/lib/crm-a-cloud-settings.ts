@@ -15,9 +15,12 @@ import {
 import {
   applyCrmAIntegrationToggleDraft,
   ensureDefaultManagedPluginsInstalled,
+  ensureTtsConfig,
   getIntegrationsState,
   readIntegrationsMetadata,
+  readTtsRecord,
   refreshIntegrationsRuntime,
+  stripRetiredConfigKeys,
   type CrmAIntegrationId,
   type CrmAIntegrationToggleDraft,
   type IntegrationRuntimeRefresh,
@@ -71,6 +74,9 @@ function writeConfig(config: UnknownRecord): void {
   if (!existsSync(dirPath)) {
     mkdirSync(dirPath, { recursive: true });
   }
+  // Normalizes the retired config shapes (legacy `messages.tts` root,
+  // `plugins.installs`) that make OpenClaw >= 2026.9.1 refuse the config.
+  stripRetiredConfigKeys(config);
   writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
 }
 
@@ -211,7 +217,7 @@ function syncToolProviderPolicies(config: UnknownRecord, patchTools: UnknownReco
 }
 
 function readElevenLabsProvider(config: UnknownRecord): UnknownRecord | undefined {
-  const tts = asRecord(asRecord(config.messages)?.tts);
+  const tts = readTtsRecord(config);
   return asRecord(tts?.elevenlabs) ?? asRecord(asRecord(tts?.providers)?.elevenlabs);
 }
 
@@ -263,7 +269,7 @@ function readSelectedVoiceId(config: UnknownRecord): string | null {
 }
 
 function isElevenLabsEnabled(config: UnknownRecord): boolean {
-  const tts = asRecord(asRecord(config.messages)?.tts);
+  const tts = readTtsRecord(config);
   const elevenlabs = readElevenLabsProvider(config);
   return readString(tts?.provider) === "elevenlabs"
     && Boolean(readString(elevenlabs?.baseUrl))
@@ -274,8 +280,7 @@ function syncEnabledElevenLabsCredentials(
   config: UnknownRecord,
   params: { gatewayUrl: string; apiKey: string },
 ): void {
-  const messages = ensureRecord(config, "messages");
-  const tts = ensureRecord(messages, "tts");
+  const tts = ensureTtsConfig(config);
   const hasExistingConfig = Boolean(readElevenLabsProvider(config));
   if (tts.provider !== "elevenlabs") {
     if (hasExistingConfig) {
@@ -290,8 +295,7 @@ function syncEnabledElevenLabsCredentials(
 }
 
 function setSelectedVoiceId(config: UnknownRecord, voiceId: string | null): void {
-  const messages = ensureRecord(config, "messages");
-  const tts = ensureRecord(messages, "tts");
+  const tts = ensureTtsConfig(config);
   const shape = resolveElevenLabsProviderShape(tts);
   const elevenlabs = ensureElevenLabsProvider(tts, shape);
   if (voiceId) {

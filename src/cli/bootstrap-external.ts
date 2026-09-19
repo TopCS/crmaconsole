@@ -219,6 +219,14 @@ type BundledPluginSpec = {
   sourceDirName: string;
   enabled?: boolean;
   config?: Record<string, string | boolean>;
+  /**
+   * Typed-hook opt-in written to `plugins.entries.<id>.hooks` (OpenClaw >=
+   * 2026.9.1). `crm-a-identity` mutates the system prompt through
+   * `before_prompt_build`, which the Gateway blocks for non-bundled plugins
+   * unless the entry opts in — a blocked hook leaves the chat agent with none
+   * of the Crm-A Console prompt (no CRM skill, no DuckDB workflow).
+   */
+  hooks?: Record<string, boolean>;
 };
 
 type BundledPluginSyncResult = {
@@ -471,6 +479,50 @@ function preferredTtsConfigShapeForOpenClaw(
   return compareOpenClawCalendarVersions(parsed, [2026, 3, 28]) >= 0 ? "providers" : "flat";
 }
 
+/**
+ * The 2026.9.1 release retires a batch of config shapes the console writes:
+ * `tools.exec.security`/`ask` collapse into `tools.exec.mode`, TTS moves from
+ * `messages.tts` to the top-level `tts`, and non-bundled plugins must opt in
+ * to typed prompt hooks via `plugins.entries.<id>.hooks`. Older CLIs reject or
+ * ignore those shapes, so every writer below is version-gated on this.
+ */
+function isOpenClaw2026_9_1OrNewer(openClawVersion: string | undefined): boolean {
+  const parsed = parseOpenClawCalendarVersion(openClawVersion);
+  return Boolean(parsed && compareOpenClawCalendarVersions(parsed, [2026, 9, 1]) >= 0);
+}
+
+/**
+ * OpenClaw >= 2026.9.1 moved the TTS config from `messages.tts` to top-level
+ * `tts`. Writing the legacy location leaves a config the CLI refuses to touch —
+ * device pairing and `config set` both bail out with "config is invalid".
+ */
+function ttsIsTopLevelForOpenClaw(openClawVersion: string | undefined): boolean {
+  return isOpenClaw2026_9_1OrNewer(openClawVersion);
+}
+
+function readTtsConfigRecord(
+  config: Record<string, unknown>,
+  topLevel: boolean,
+): Record<string, unknown> {
+  const source = topLevel ? config.tts : asRecord(config.messages)?.tts;
+  return { ...(asRecord(source) ?? {}) };
+}
+
+function writeTtsConfigRecord(
+  config: Record<string, unknown>,
+  topLevel: boolean,
+  tts: Record<string, unknown>,
+): void {
+  if (topLevel) {
+    config.tts = tts;
+    return;
+  }
+  config.messages = {
+    ...(asRecord(config.messages) ?? {}),
+    tts,
+  };
+}
+
 function firstNonEmptyLine(...values: Array<string | undefined>): string | undefined {
   for (const value of values) {
     const first = value
@@ -573,23 +625,6 @@ function normalizeFilesystemPath(value: string): string {
     return realpathSync.native(value);
   } catch {
     return path.resolve(value);
-  }
-}
-
-function readBundledPluginVersion(pluginDir: string): string | undefined {
-  const packageJsonPath = path.join(pluginDir, "package.json");
-  if (!existsSync(packageJsonPath)) {
-    return undefined;
-  }
-  try {
-    const raw = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as {
-      version?: unknown;
-    };
-    return typeof raw.version === "string" && raw.version.trim().length > 0
-      ? raw.version.trim()
-      : undefined;
-  } catch {
-    return undefined;
   }
 }
 
@@ -750,6 +785,7 @@ function applyCrmAManagedIntegrationDefaults(params: {
   gatewayUrl?: string;
   apiKey?: string;
   ttsConfigShape: ElevenLabsTtsConfigShape;
+  openClawVersion?: string;
 }): void {
   const rawConfig = readBootstrapConfig(params.stateDir) ?? {};
   const nextConfig = { ...rawConfig };
@@ -781,8 +817,8 @@ function applyCrmAManagedIntegrationDefaults(params: {
     : deny.filter((value) => value !== "web_search");
   nextConfig.tools = tools;
 
-  const messages = { ...(asRecord(nextConfig.messages) ?? {}) };
-  const tts = { ...(asRecord(messages.tts) ?? {}) };
+  const topLevelTts = ttsIsTopLevelForOpenClaw(params.openClawVersion);
+  const tts = readTtsConfigRecord(nextConfig, topLevelTts);
   if (params.crmAEnabled && params.gatewayUrl && params.apiKey) {
     const elevenlabs = ensureTtsElevenLabsConfig(tts, params.ttsConfigShape);
     tts.provider = "elevenlabs";
@@ -791,8 +827,7 @@ function applyCrmAManagedIntegrationDefaults(params: {
   } else {
     disableCrmAElevenLabsOverride(tts, params.ttsConfigShape, params.gatewayUrl, params.apiKey);
   }
-  messages.tts = tts;
-  nextConfig.messages = messages;
+  writeTtsConfigRecord(nextConfig, topLevelTts, tts);
 
   writeFileSync(
     path.join(params.stateDir, "openclaw.json"),
@@ -869,6 +904,7 @@ async function syncBundledPlugins(params: {
   profile: string;
   stateDir: string;
   plugins: BundledPluginSpec[];
+  openClawVersion?: string;
 }): Promise<BundledPluginSyncResult> {
   try {
     const packageRoot = resolveCliPackageRoot();
@@ -922,7 +958,6 @@ async function syncBundledPlugins(params: {
       mkdirSync(path.dirname(pluginDest), { recursive: true });
       cpSync(pluginSrc, pluginDest, { recursive: true, force: true });
       stripTypeScriptPluginEntry(pluginDest);
-      const normalizedPluginSrc = normalizeFilesystemPath(pluginSrc);
       const normalizedPluginDest = normalizeFilesystemPath(pluginDest);
       nextAllow.push(plugin.pluginId);
       nextLoadPaths.push(normalizedPluginDest);
@@ -933,6 +968,16 @@ async function syncBundledPlugins(params: {
       };
       if (plugin.enabled !== undefined) {
         existingEntry.enabled = plugin.enabled;
+      }
+      if (
+        plugin.hooks &&
+        Object.keys(plugin.hooks).length > 0 &&
+        isOpenClaw2026_9_1OrNewer(params.openClawVersion)
+      ) {
+        existingEntry.hooks = {
+          ...asRecord(existingEntry.hooks),
+          ...plugin.hooks,
+        };
       }
       if (plugin.config && Object.keys(plugin.config).length > 0) {
         existingEntry.config = {
@@ -950,18 +995,6 @@ async function syncBundledPlugins(params: {
       if (Object.keys(existingEntry).length > 0) {
         entries[plugin.pluginId] = existingEntry;
       }
-
-      const installRecord: Record<string, unknown> = {
-        source: "path",
-        sourcePath: normalizedPluginSrc,
-        installPath: normalizedPluginDest,
-        installedAt: new Date().toISOString(),
-      };
-      const version = readBundledPluginVersion(pluginSrc);
-      if (version) {
-        installRecord.version = version;
-      }
-      installs[plugin.pluginId] = installRecord;
     }
 
     const sharedSrc = path.join(packageRoot, "extensions", "shared");
@@ -974,7 +1007,9 @@ async function syncBundledPlugins(params: {
     loadConfig.paths = uniqueStrings(nextLoadPaths);
     pluginsConfig.load = loadConfig;
     pluginsConfig.entries = entries;
-    pluginsConfig.installs = installs;
+    // OpenClaw >= 2026.9.1 rejects `plugins.installs`, which makes the Gateway
+    // refuse to start; bundled plugins load from allow + load.paths + entries.
+    delete pluginsConfig.installs;
     nextConfig.plugins = pluginsConfig;
     writeFileSync(
       path.join(params.stateDir, "openclaw.json"),
@@ -1056,6 +1091,7 @@ function stagePreOnboardConfig(
     workspaceDir: string;
     gatewayMode: string;
     gatewayPort: number;
+    openClawVersion?: string;
   },
 ): void {
   const raw = readBootstrapConfig(stateDir) ?? {};
@@ -1073,8 +1109,15 @@ function stagePreOnboardConfig(
 
   const tools = { ...(asRecord(raw.tools) ?? {}) };
   const exec = { ...(asRecord(tools.exec) ?? {}) };
-  exec.security = "full";
-  exec.ask = "off";
+  delete exec.mode;
+  delete exec.security;
+  delete exec.ask;
+  if (isOpenClaw2026_9_1OrNewer(params.openClawVersion)) {
+    exec.mode = "full";
+  } else {
+    exec.security = "full";
+    exec.ask = "off";
+  }
   tools.exec = exec;
   const elevated = { ...(asRecord(tools.elevated) ?? {}) };
   elevated.enabled = true;
@@ -1095,7 +1138,14 @@ function stagePreOnboardConfig(
   writeFileSync(path.join(stateDir, "openclaw.json"), `${JSON.stringify(raw, null, 2)}\n`);
 }
 
-async function ensureAgentDefaults(openclawCommand: string, profile: string): Promise<void> {
+async function ensureAgentDefaults(
+  openclawCommand: string,
+  profile: string,
+  openClawVersion: string | undefined,
+): Promise<void> {
+  if (isOpenClaw2026_9_1OrNewer(openClawVersion)) {
+    await applyModeFirstExecPolicy(openclawCommand, profile);
+  }
   const settings: Array<[string, string]> = [
     // Set agent timeout to 24 hours to prevent long-running agent runs from
     // being terminated prematurely.  OpenClaw's default is 600s (10 min) which
@@ -1110,8 +1160,12 @@ async function ensureAgentDefaults(openclawCommand: string, profile: string): Pr
     ["agents.defaults.subagents.archiveAfterMinutes", "180"],
     ["agents.defaults.subagents.runTimeoutSeconds", "0"],
     ["tools.subagents.tools.deny", "[]"],
-    ["tools.exec.security", "full"],
-    ["tools.exec.ask", "off"],
+    ...(isOpenClaw2026_9_1OrNewer(openClawVersion)
+      ? ([] as Array<[string, string]>)
+      : ([
+          ["tools.exec.security", "full"],
+          ["tools.exec.ask", "off"],
+        ] as Array<[string, string]>)),
     ["tools.elevated.enabled", "true"],
     ["tools.elevated.allowFrom.webchat", '["*"]'],
     ["agents.defaults.elevatedDefault", "on"],
@@ -1129,6 +1183,32 @@ async function ensureAgentDefaults(openclawCommand: string, profile: string): Pr
       timeoutMs: 10_000,
       errorMessage: `Failed to set ${key}=${value}.`,
     });
+  }
+}
+
+/**
+ * Retire the legacy `tools.exec.security`/`ask` spellings and set
+ * `tools.exec.mode` in a single validated write. Setting the mode first would
+ * leave the config in the combination OpenClaw refuses to boot.
+ */
+async function applyModeFirstExecPolicy(
+  openclawCommand: string,
+  profile: string,
+): Promise<void> {
+  const patchPath = path.join(os.tmpdir(), `crm-a-exec-policy-${process.pid}.json5`);
+  writeFileSync(
+    patchPath,
+    `${JSON.stringify({ tools: { exec: { security: null, ask: null, mode: "full" } } }, null, 2)}\n`,
+  );
+  try {
+    await runOpenClawOrThrow({
+      openclawCommand,
+      args: ["--profile", profile, "config", "patch", "--file", patchPath],
+      timeoutMs: 10_000,
+      errorMessage: "Failed to apply the tools.exec mode-first policy.",
+    });
+  } finally {
+    rmSync(patchPath, { force: true });
   }
 }
 
@@ -2891,17 +2971,16 @@ function rewriteCrmACloudTtsConfigFile(params: {
   gatewayUrl: string;
   apiKey: string;
   shape: ElevenLabsTtsConfigShape;
+  topLevel: boolean;
 }): void {
   const rawConfig = readBootstrapConfig(params.stateDir) ?? {};
   const nextConfig = { ...rawConfig };
-  const messages = { ...(asRecord(nextConfig.messages) ?? {}) };
-  const tts = { ...(asRecord(messages.tts) ?? {}) };
+  const tts = readTtsConfigRecord(nextConfig, params.topLevel);
   const elevenlabs = ensureTtsElevenLabsConfig(tts, params.shape);
   tts.provider = "elevenlabs";
   elevenlabs.baseUrl = params.gatewayUrl;
   elevenlabs.apiKey = params.apiKey;
-  messages.tts = tts;
-  nextConfig.messages = messages;
+  writeTtsConfigRecord(nextConfig, params.topLevel, tts);
   writeFileSync(
     path.join(params.stateDir, "openclaw.json"),
     `${JSON.stringify(nextConfig, null, 2)}\n`,
@@ -2914,9 +2993,9 @@ function isExpectedTtsShapeValidationError(
 ): boolean {
   const message = error instanceof Error ? error.message : String(error);
   if (attemptedShape === "flat") {
-    return /messages\.tts.*legacy; use messages\.tts\.providers/i.test(message);
+    return /tts.*legacy; use .*tts\.providers/i.test(message);
   }
-  return /messages\.tts.*unrecognized key:\s*"providers"/iu.test(message);
+  return /tts.*unrecognized key:\s*"providers"/iu.test(message);
 }
 
 async function applyCrmACloudTtsConfig(params: {
@@ -2926,7 +3005,11 @@ async function applyCrmACloudTtsConfig(params: {
   gatewayUrl: string;
   apiKey: string;
   preferredShape: ElevenLabsTtsConfigShape;
+  openClawVersion?: string;
 }): Promise<ElevenLabsTtsConfigShape> {
+  const ttsKeyPrefix = ttsIsTopLevelForOpenClaw(params.openClawVersion)
+    ? "tts"
+    : "messages.tts";
   const attempt = async (shape: ElevenLabsTtsConfigShape): Promise<void> => {
     const ttsConfig = buildCrmACloudElevenLabsTtsConfig({
       gatewayUrl: params.gatewayUrl,
@@ -2938,18 +3021,21 @@ async function applyCrmACloudTtsConfig(params: {
       gatewayUrl: params.gatewayUrl,
       apiKey: params.apiKey,
       shape,
+      topLevel: ttsKeyPrefix === "tts",
     });
     await setOpenClawConfigJson({
       openclawCommand: params.openclawCommand,
       profile: params.profile,
-      key: "messages.tts.provider",
+      key: `${ttsKeyPrefix}.provider`,
       value: ttsConfig.provider,
       errorMessage: "Failed to set ElevenLabs as TTS provider.",
     });
     await setOpenClawConfigJson({
       openclawCommand: params.openclawCommand,
       profile: params.profile,
-      key: shape === "providers" ? "messages.tts.providers.elevenlabs" : "messages.tts.elevenlabs",
+      key: shape === "providers"
+        ? `${ttsKeyPrefix}.providers.elevenlabs`
+        : `${ttsKeyPrefix}.elevenlabs`,
       value:
         shape === "providers"
           ? asRecord(asRecord(ttsConfig.providers)?.elevenlabs)
@@ -3049,6 +3135,7 @@ async function applyCrmACloudBootstrapConfig(params: {
     gatewayUrl: params.gatewayUrl,
     apiKey: params.apiKey,
     preferredShape: preferredTtsShape,
+    openClawVersion: params.openClawVersion,
   });
 
   const nextAlsoAllow = mergeAllowedTools(
@@ -3411,6 +3498,7 @@ export async function bootstrapCommand(
     workspaceDir,
     gatewayMode: "local",
     gatewayPort,
+    openClawVersion: installResult.version,
   });
 
   preCloudSpinner?.stop("Gateway ready.");
@@ -3435,6 +3523,7 @@ export async function bootstrapCommand(
             },
           }
         : {}),
+      hooks: { allowPromptInjection: true, allowConversationAccess: true },
     },
     {
       pluginId: "crm-a-ai-gateway",
@@ -3452,6 +3541,7 @@ export async function bootstrapCommand(
       pluginId: "crm-a-identity",
       sourceDirName: "crm-a-identity",
       enabled: true,
+      hooks: { allowPromptInjection: true, allowConversationAccess: true },
     },
     {
       pluginId: "apollo-enrichment",
@@ -3624,10 +3714,11 @@ export async function bootstrapCommand(
     profile,
     stateDir,
     plugins: managedBundledPlugins,
+    openClawVersion: installResult.version,
   });
 
   postOnboardSpinner?.message("Configuring agent defaults…");
-  await ensureAgentDefaults(openclawCommand, profile);
+  await ensureAgentDefaults(openclawCommand, profile, installResult.version);
 
   postOnboardSpinner?.message("Applying Crm-A integration defaults…");
   applyCrmAManagedIntegrationDefaults({
@@ -3636,6 +3727,7 @@ export async function bootstrapCommand(
     gatewayUrl: crmACloudSelection.gatewayUrl,
     apiKey: crmACloudSelection.apiKey,
     ttsConfigShape: appliedTtsConfigShape,
+    openClawVersion: installResult.version,
   });
 
   // ── Gateway daemon restart + readiness verification ──
