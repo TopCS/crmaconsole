@@ -57,7 +57,12 @@ export async function POST(req: Request) {
   }
 
   const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : "Customer Care";
-  const phoneId = typeof body.phoneId === "string" ? body.phoneId.trim() : undefined;
+  const phoneId =
+    typeof body.phoneId === "string" && body.phoneId.trim()
+      ? body.phoneId.trim()
+      : typeof body.phoneNumber === "string" && body.phoneNumber.trim()
+        ? body.phoneNumber.trim()
+        : undefined;
   const brief = typeof body.brief === "string" && body.brief.trim() ? body.brief.trim() : undefined;
 
   try {

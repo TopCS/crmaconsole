@@ -7,7 +7,8 @@
  * from the marketing brief when provided.
  */
 
-import { createVoicePearl, resolveVoiceId } from "./nlpearl";
+import { createVoicePearl, INBOUND_PHONE_DIRECTIONS, resolveVoiceId } from "./nlpearl";
+import { resolveConfiguredPhoneId } from "./campaign-phone";
 import { readPhoneWebhookSecret } from "./phone-webhook";
 
 export type InboundPearlParams = {
@@ -115,7 +116,11 @@ export function buildInboundPearlPayload(params: InboundPearlParams & {
  * Create the inbound customer-care Pearl. Returns the NLPearl Pearl ID.
  */
 export async function createInboundPearl(params: InboundPearlParams): Promise<string> {
-  const voiceId = params.phoneId ? await resolveVoiceId() : await resolveVoiceId();
+  // Accept the inbound number as well as the NLPearl Phone ID.
+  const phoneId = params.phoneId
+    ? await resolveConfiguredPhoneId(params.phoneId, INBOUND_PHONE_DIRECTIONS)
+    : undefined;
+  const voiceId = await resolveVoiceId();
   if (!voiceId) {
     throw new Error("No NLPearl voice configured. Set NLPEARL_VOICE_ID or provision a voice.");
   }
@@ -124,6 +129,7 @@ export async function createInboundPearl(params: InboundPearlParams): Promise<st
   const q = token ? `?token=${encodeURIComponent(token)}` : "";
   const payload = buildInboundPearlPayload({
     ...params,
+    phoneId,
     voiceId,
     precallUrl: `${base}/api/nlpearl/precall${q}&phone={phoneNumber}`.replace("&&", "&"),
     callWebhookUrl: `${base}/api/nlpearl/webhook/call${q}`,

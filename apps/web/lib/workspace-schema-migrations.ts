@@ -349,6 +349,14 @@ export const CAMPAIGN_NEW_FIELDS: FieldDef[] = [
     type: "text",
     sortOrder: 22,
   },
+  {
+    id: "seed_fld_campaign_channel_0000",
+    name: "Channel",
+    type: "enum",
+    enumValues: '["Email","Phone"]',
+    enumColors: '["#6366f1","#22c55e"]',
+    sortOrder: 9,
+  },
 ];
 
 /**
@@ -698,7 +706,7 @@ const NEW_OBJECTS: ObjectDef[] = [
   {
     id: CAMPAIGN_OBJECT_ID,
     name: "campaign",
-    description: "Email marketing campaign to a people segment (CDP)",
+    description: "Marketing campaign to a people segment (CDP) — email or phone",
     icon: "mail",
     defaultView: "table",
     immutable: true,

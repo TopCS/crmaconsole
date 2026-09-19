@@ -63,6 +63,10 @@ var PHONE_CAMPAIGN_PARAMETERS = {
     },
     name: { type: "string", description: "Campaign name." },
     phoneId: { type: "string", description: "NLPearl outbound-authorized Phone ID." },
+    phoneNumber: {
+      type: "string",
+      description: "Outbound number the campaign dials from (e.g. +3939065457620). The console resolves it to the NLPearl Phone ID automatically \u2014 prefer this when the operator gives a number instead of an id."
+    },
     windowStart: { type: "string", description: "Calling window start (HH:MM)." },
     windowEnd: { type: "string", description: "Calling window end (HH:MM)." },
     timezone: { type: "string", description: "IANA timezone (e.g. Europe/Rome)." },
@@ -71,6 +75,13 @@ var PHONE_CAMPAIGN_PARAMETERS = {
     retryRate: { type: "number", description: "Minimum retry interval hours." },
     agentCount: { type: "number", description: "Concurrent agents." },
     brief: { type: "string", description: "Voice Brief: the offer the Pearl should communicate (product + comparisons)." },
+    segmentName: {
+      type: "string",
+      description: 'Audience segment name (e.g. "Lancio Samsung Galaxy"). Resolved to the segment entry and linked on the campaign card; send() scopes the audience to it.'
+    },
+    brandName: { type: "string", description: "Brand name the Pearl introduces itself with." },
+    greetingScript: { type: "string", description: "Opening line the Pearl says." },
+    knowledgeBase: { type: "string", description: "Knowledge Base / dossier text the Pearl may quote on the call." },
     criteria: {
       type: "object",
       additionalProperties: false,
@@ -133,6 +144,10 @@ var INBOUND_CARE_PARAMETERS = {
     },
     name: { type: "string", description: "Inbound Pearl name (create)." },
     phoneId: { type: "string", description: "NLPearl phone number ID assigned to the inbound number (create)." },
+    phoneNumber: {
+      type: "string",
+      description: "Inbound number as dialed by customers (e.g. +3939065457620). The console resolves it to the NLPearl Phone ID automatically \u2014 prefer this when the operator gives a number."
+    },
     brief: { type: "string", description: "Marketing Message MD the agent should speak (create)." },
     pearlId: { type: "string", description: "Inbound Pearl ID (activate/pause)." },
     confirm: { type: "boolean", description: "MUST be true to run activate; anything else refuses the action." }
@@ -187,7 +202,7 @@ function createInboundCareTool(webBaseUrl, secret) {
       }
       const body = { action };
       if (action === "create") {
-        for (const k of ["name", "phoneId", "brief"]) {
+        for (const k of ["name", "phoneId", "phoneNumber", "brief"]) {
           const v = readString(input[k]);
           if (v) {
             body[k] = v;
@@ -241,7 +256,19 @@ function createPhoneCampaignTool(webBaseUrl, secret) {
         if (readString(input.campaignId)) {
           body.campaignId = readString(input.campaignId);
         }
-        for (const k of ["name", "phoneId", "windowStart", "windowEnd", "timezone", "brief"]) {
+        for (const k of [
+          "name",
+          "phoneId",
+          "phoneNumber",
+          "windowStart",
+          "windowEnd",
+          "timezone",
+          "brief",
+          "segmentName",
+          "brandName",
+          "greetingScript",
+          "knowledgeBase"
+        ]) {
           const v = readString(input[k]);
           if (v) {
             body[k] = v;
@@ -257,8 +284,13 @@ function createPhoneCampaignTool(webBaseUrl, secret) {
           }
         }
       }
-      if (action === "create" && readString(input.brief)) {
-        body.brief = readString(input.brief);
+      if (action === "create") {
+        for (const k of ["brief", "brandName", "greetingScript", "knowledgeBase"]) {
+          const v = readString(input[k]);
+          if (v) {
+            body[k] = v;
+          }
+        }
       }
       if (action === "send" && asRecord(input.criteria)) {
         const c = asRecord(input.criteria);

@@ -31,7 +31,12 @@ function quoteCol(name: string): string {
   return `"${name.replace(/"/g, '""')}"`;
 }
 
-/** People fields exposed to the segment builder (demographics). */
+/**
+ * People fields exposed to the segment builder (demographics). Consent and
+ * preferred channel belong here: a phone campaign's segment has to be able to
+ * say "opt-in AND prefers phone", otherwise every rule on those fields is
+ * silently dropped and the segment matches the whole workspace.
+ */
 export const SEGMENT_PEOPLE_FIELDS: FieldMeta[] = [
   { name: "Full Name", type: "text" },
   { name: "Email Address", type: "email" },
@@ -43,6 +48,8 @@ export const SEGMENT_PEOPLE_FIELDS: FieldMeta[] = [
   { name: "Source", type: "enum" },
   { name: "Strength Score", type: "number" },
   { name: "Last Interaction At", type: "date" },
+  { name: "Marketing Opt-in", type: "boolean" },
+  { name: "Preferred Contact Channel", type: "enum" },
 ];
 
 function buildEventConditionSql(

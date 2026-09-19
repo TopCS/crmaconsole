@@ -24,10 +24,19 @@ vi.mock("./segments", () => ({
   buildSegmentWhereSql: vi.fn(),
 }));
 
+const listPhoneNumbersMock = vi.fn().mockResolvedValue([]);
+const resolvePhoneIdFromNumberMock = vi.fn().mockResolvedValue(null);
+
 vi.mock("./nlpearl", () => ({
   isNlpearlConfigured: () => true,
   createVoicePearl: (...a: unknown[]) => createVoicePearlMock(...a),
   resolveVoiceId: (...a: unknown[]) => resolveVoiceIdMock(...a),
+  listPhoneNumbers: (...a: unknown[]) => listPhoneNumbersMock(...a),
+  resolvePhoneIdFromNumber: (...a: unknown[]) => resolvePhoneIdFromNumberMock(...a),
+  OUTBOUND_PHONE_DIRECTIONS: [2, 3],
+  INBOUND_PHONE_DIRECTIONS: [1, 3],
+  phoneDirectionLabel: (direction?: number) =>
+    direction === 1 ? "inbound" : direction === 2 ? "outbound" : direction === 3 ? "inbound+outbound" : "unclassified",
   addLead: vi.fn(),
   setPearlActive: vi.fn(),
   buildNlpearlCallbackUrls: () => ({
@@ -104,6 +113,8 @@ describe("upsertPhoneCampaign", () => {
     execMock.mockClear();
     pathMock.mockClear();
     queryMock.mockClear();
+    listPhoneNumbersMock.mockReset().mockResolvedValue([]);
+    resolvePhoneIdFromNumberMock.mockReset().mockResolvedValue(null);
     fieldMapsMock.mockResolvedValue(campaignMap());
   });
 
@@ -121,6 +132,34 @@ describe("upsertPhoneCampaign", () => {
     expect(sql).toContain("Demo");
     expect(sql).toContain("fld_voice_brief");
     expect(sql).toContain("Ciao prodotto");
+  });
+
+  it("resolves a phone number to the NLPearl Phone ID before storing it", async () => {
+    resolvePhoneIdFromNumberMock.mockResolvedValueOnce("686fd112a91849a9e59a5353");
+    await upsertPhoneCampaign({ name: "Demo", phoneId: "390654547620" });
+    expect(resolvePhoneIdFromNumberMock).toHaveBeenCalledWith("390654547620", {
+      directions: [2, 3],
+    });
+    const sql = execMock.mock.calls[0][1] as string;
+    expect(sql).toContain("686fd112a91849a9e59a5353");
+    expect(sql).not.toContain("390654547620");
+  });
+
+  it("keeps an opaque Phone ID untouched", async () => {
+    await upsertPhoneCampaign({ name: "Demo", phoneId: "686fd112a91849a9e59a5353" });
+    expect(resolvePhoneIdFromNumberMock).not.toHaveBeenCalled();
+    expect(execMock.mock.calls[0][1]).toContain("686fd112a91849a9e59a5353");
+  });
+
+  it("rejects an unmatched number with the account's usable numbers", async () => {
+    resolvePhoneIdFromNumberMock.mockResolvedValueOnce(null);
+    listPhoneNumbersMock.mockResolvedValueOnce([
+      { id: "id-1", number: "+393331112222", direction: 2 },
+    ]);
+    await expect(
+      upsertPhoneCampaign({ name: "Demo", phoneId: "+3939065457620" }),
+    ).rejects.toThrow(/No outbound-capable NLPearl number matches.*\+393331112222.*id-1/su);
+    expect(execMock).not.toHaveBeenCalled();
   });
 
   it("reuses a provided campaignId", async () => {

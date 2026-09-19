@@ -60,7 +60,12 @@ describe("POST /api/campaigns/phone", () => {
     const payload = await res.json();
     expect(payload.ok).toBe(true);
     expect(payload.pearlId).toBe("pearl-1");
-    expect(mockedCreate).toHaveBeenCalledWith("c1", "https://crm.example.net");
+    expect(mockedCreate).toHaveBeenCalledWith("c1", "https://crm.example.net", {
+      brief: undefined,
+      brandName: undefined,
+      greetingScript: undefined,
+      knowledgeBase: undefined,
+    });
   });
 
   it("enqueues leads", async () => {
@@ -68,7 +73,7 @@ describe("POST /api/campaigns/phone", () => {
     expect(res.status).toBe(200);
     const payload = await res.json();
     expect(payload.leadsCreated).toBe(3);
-    expect(mockedEnqueue).toHaveBeenCalledWith("c1");
+    expect(mockedEnqueue).toHaveBeenCalledWith("c1", undefined, "https://crm.example.net");
   });
 
   it("pause and resume toggle the Pearl", async () => {
@@ -96,11 +101,16 @@ describe("POST /api/campaigns/phone", () => {
 
   it("create passes brief when provided", async () => {
     await POST(post({ action: "create", campaignId: "c1", brief: "ciao" }));
-    expect(mockedCreate).toHaveBeenCalledWith("c1", "https://crm.example.net", "ciao");
+    expect(mockedCreate).toHaveBeenCalledWith("c1", "https://crm.example.net", {
+      brief: "ciao",
+      brandName: undefined,
+      greetingScript: undefined,
+      knowledgeBase: undefined,
+    });
   });
 
   it("send passes criteria", async () => {
     await POST(post({ action: "send", campaignId: "c1", criteria: { segmentId: "S1", count: 5 } }));
-    expect(mockedEnqueue).toHaveBeenCalledWith("c1", { segmentId: "S1", count: 5 });
+    expect(mockedEnqueue).toHaveBeenCalledWith("c1", { segmentId: "S1", count: 5 }, "https://crm.example.net");
   });
 });

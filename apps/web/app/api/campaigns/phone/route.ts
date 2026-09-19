@@ -79,6 +79,8 @@ export async function POST(req: Request) {
   const greetingScript = asString(body.greetingScript);
   const knowledgeBase = asString(body.knowledgeBase);
   const segmentName = asString(body.segmentName);
+  // Operators hand over numbers; the lib resolves them to the NLPearl Phone ID.
+  const phoneId = asString(body.phoneId) ?? asString(body.phoneNumber);
   const criteria = parseAudienceCriteria(body.criteria);
 
   if (action === "upsert") {
@@ -86,7 +88,7 @@ export async function POST(req: Request) {
       const result = await upsertPhoneCampaign({
         campaignId: campaignId || undefined,
         name: asString(body.name),
-        phoneId: asString(body.phoneId),
+        phoneId,
         windowStart: asString(body.windowStart),
         windowEnd: asString(body.windowEnd),
         timezone: asString(body.timezone),

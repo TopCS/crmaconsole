@@ -7,6 +7,9 @@ import {
   listVoices,
   addLead,
   setPearlActive,
+  resolvePhoneIdFromNumber,
+  OUTBOUND_PHONE_DIRECTIONS,
+  INBOUND_PHONE_DIRECTIONS,
 } from "./nlpearl";
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -23,6 +26,63 @@ function lastCall(): { url: string; init: RequestInit | undefined } {
         : "";
   return { url, init: call?.[1] };
 }
+
+describe("resolvePhoneIdFromNumber", () => {
+  const phones = [
+    { id: "inbound-only", number: "+39654547159", direction: 1 },
+    { id: "outbound-a", number: "+390654547620", direction: 2 },
+    { id: "both-b", number: "+390654547621", direction: 3 },
+    { id: "unclassified", number: "+393331112222", direction: 10 },
+  ];
+
+  function stubPhones() {
+    // A fresh Response per call: a shared one has its body consumed on the first read.
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify(phones), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+  }
+
+  beforeEach(() => {
+    process.env.NLPEARL_ACCOUNT_ID = "ACC123";
+    process.env.NLPEARL_SECRET_KEY = "KEY456";
+    delete process.env.NLPEARL_BASE_URL;
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+    stubPhones();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.NLPEARL_ACCOUNT_ID;
+    delete process.env.NLPEARL_SECRET_KEY;
+  });
+
+  it("resolves a dialed number to the Phone ID for the requested direction", async () => {
+    expect(await resolvePhoneIdFromNumber("390654547620", { directions: OUTBOUND_PHONE_DIRECTIONS }))
+      .toBe("outbound-a");
+    expect(await resolvePhoneIdFromNumber("+390654547621", { directions: OUTBOUND_PHONE_DIRECTIONS }))
+      .toBe("both-b");
+  });
+
+  it("never hands an inbound-only line to an outbound campaign", async () => {
+    expect(await resolvePhoneIdFromNumber("+39654547159", { directions: OUTBOUND_PHONE_DIRECTIONS }))
+      .toBeNull();
+    expect(await resolvePhoneIdFromNumber("+39654547159", { directions: INBOUND_PHONE_DIRECTIONS }))
+      .toBe("inbound-only");
+  });
+
+  it("ignores unclassified lines and numbers too short to be a phone number", async () => {
+    expect(await resolvePhoneIdFromNumber("3331112222", { directions: OUTBOUND_PHONE_DIRECTIONS }))
+      .toBeNull();
+    expect(await resolvePhoneIdFromNumber("1234567", { directions: OUTBOUND_PHONE_DIRECTIONS }))
+      .toBeNull();
+  });
+});
 
 describe("nlpearl client", () => {
   beforeEach(() => {

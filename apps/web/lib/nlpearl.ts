@@ -296,11 +296,31 @@ export function buildNlpearlCallbackUrls(origin: string, token?: string): Nlpear
 // Account voices / phone numbers (needed for Pearl creation)
 // ---------------------------------------------------------------------------
 
+/**
+ * NLPearl `/Account/PhoneNumbers` entry. The number itself is `number` (the
+ * API has no `phoneNumber` field), and `direction` decides what the number can
+ * do: 1 = inbound, 2 = outbound, 3 = both (other values are unclassified).
+ */
 export type NlpearlPhoneNumber = {
   id: string;
-  phoneNumber?: string;
+  number?: string;
+  displayName?: string;
+  direction?: number;
   isActive?: boolean;
 };
+
+/** `direction` values that may place outbound calls / answer inbound calls. */
+export const OUTBOUND_PHONE_DIRECTIONS = [2, 3];
+export const INBOUND_PHONE_DIRECTIONS = [1, 3];
+
+export function phoneDirectionLabel(direction: number | undefined): string {
+  switch (direction) {
+    case 1: return "inbound";
+    case 2: return "outbound";
+    case 3: return "inbound+outbound";
+    default: return "unclassified";
+  }
+}
 
 export type NlpearlVoice = {
   id: string;
@@ -319,6 +339,50 @@ export type NlpearlVoiceGroup = {
 /** Get available phone numbers. */
 export async function listPhoneNumbers(): Promise<NlpearlPhoneNumber[]> {
   return nlpearlRequest<NlpearlPhoneNumber[]>("GET", "/Account/PhoneNumbers");
+}
+
+function digitsOnly(value: string): string {
+  return value.replace(/\D+/gu, "");
+}
+
+/**
+ * Resolve an NLPearl Phone ID from the operator-facing phone number.
+ *
+ * NLPearl takes the opaque Phone ID, but operators (and the chat agent) speak
+ * in numbers ("chiama dal 390654547620"), so the account's phone list is the
+ * lookup table. Matching is digit-based: an exact match wins, otherwise a
+ * single unambiguous suffix/prefix match is accepted (handles `+39` / `0039` /
+ * trunk-prefix variants). Ambiguous or unknown numbers return null so the
+ * caller can report the available numbers instead of dialing the wrong one.
+ */
+export async function resolvePhoneIdFromNumber(
+  rawNumber: string,
+  options?: { directions?: number[] },
+): Promise<string | null> {
+  const wanted = digitsOnly(rawNumber);
+  if (wanted.length < 8) {
+    return null;
+  }
+  const all = await listPhoneNumbers();
+  // A number that cannot dial the way the caller needs is not a match: an
+  // inbound-only line must never answer an outbound campaign.
+  const directions = options?.directions;
+  const phones = directions
+    ? all.filter((phone) => directions.includes(phone.direction ?? -1))
+    : all;
+  const matches = (phone: NlpearlPhoneNumber, exact: boolean): boolean => {
+    const digits = digitsOnly(phone.number ?? phone.displayName ?? "");
+    if (digits.length < 8) {
+      return false;
+    }
+    return exact ? digits === wanted : digits.endsWith(wanted) || wanted.endsWith(digits);
+  };
+  const exact = phones.find((phone) => matches(phone, true));
+  if (exact) {
+    return exact.id;
+  }
+  const partial = phones.filter((phone) => matches(phone, false));
+  return partial.length === 1 ? partial[0].id : null;
 }
 
 /** Get available voices, flattened from the per-language grouped shape. */

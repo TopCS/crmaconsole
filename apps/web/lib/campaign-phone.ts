@@ -27,6 +27,12 @@ import {
 } from "./nlpearl";
 import { readPhoneWebhookSecret } from "./phone-webhook";
 import { listSegmentMembers, type SegmentDefinition } from "./segments";
+import {
+  listPhoneNumbers,
+  OUTBOUND_PHONE_DIRECTIONS,
+  phoneDirectionLabel,
+  resolvePhoneIdFromNumber,
+} from "./nlpearl";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -173,6 +179,32 @@ export async function resolveSegmentIdByName(name: string): Promise<string | nul
  * entry, then delete+reinsert the phone/voice fields). Returns the campaignId
  * (a fresh UUID if input.campaignId was omitted).
  */
+/**
+ * The operator (or the chat agent) may hand over either the NLPearl Phone ID or
+ * the plain phone number. Ids are opaque tokens; anything that reads as a phone
+ * number is resolved against the account's numbers, and an unresolvable number
+ * is rejected with the list of usable ones instead of being stored as an id.
+ */
+export async function resolveConfiguredPhoneId(
+  raw: string,
+  directions: number[] = OUTBOUND_PHONE_DIRECTIONS,
+): Promise<string> {
+  const value = raw.trim();
+  if (!/^\+?[\d\s().-]{8,}$/u.test(value)) {
+    return value;
+  }
+  const resolved = await resolvePhoneIdFromNumber(value, { directions });
+  if (resolved) {
+    return resolved;
+  }
+  const available = (await listPhoneNumbers())
+    .map((phone) => `${phone.number ?? phone.displayName ?? "unknown"} (id ${phone.id}, ${phoneDirectionLabel(phone.direction)})`)
+    .join(", ");
+  throw new Error(
+    `No outbound-capable NLPearl number matches "${value}". Numbers on this account: ${available || "none"}.`,
+  );
+}
+
 export async function upsertPhoneCampaign(input: PhoneCampaignUpsertInput): Promise<string> {
   const dbPath = await duckdbPathAsync();
   if (!dbPath) {throw new Error("DuckDB not found.");}
@@ -191,7 +223,13 @@ export async function upsertPhoneCampaign(input: PhoneCampaignUpsertInput): Prom
     );
   };
   writeField("Name", input.name);
-  writeField("Nlpearl Phone ID", input.phoneId);
+  // The campaign object is shared with email campaigns: mark the channel so the
+  // card (and the operator) never reads a phone campaign as an email one.
+  writeField("Channel", "Phone");
+  writeField(
+    "Nlpearl Phone ID",
+    input.phoneId ? await resolveConfiguredPhoneId(input.phoneId) : undefined,
+  );
   writeField("Calling Window Start", input.windowStart);
   writeField("Calling Window End", input.windowEnd);
   writeField("Calling Timezone", input.timezone);
@@ -353,7 +391,11 @@ export async function createPhonePearlForCampaign(
 ): Promise<string> {
   const cfg = await loadCampaignPhoneConfig(campaignId);
   if (!cfg) {throw new Error("Campaign not found.");}
-  if (!cfg.phoneId) {throw new Error("Campaign missing Nlpearl Phone ID.");}
+  if (!cfg.phoneId) {
+    throw new Error(
+      "Campaign has no NLPearl Phone ID. Set it with crm_a_phone_campaign upsert { phoneId: <NLPearl outbound-authorized Phone ID> }; phone campaigns talk to NLPearl directly and never need an external provider connection.",
+    );
+  }
   if (cfg.pearlId) {
     // The stored Pearl ID can be stale (the Pearl may have been deleted from
     // the NLPearl dashboard out-of-band): validate before reusing, else the
@@ -544,7 +586,17 @@ async function resolveSegmentMemberIds(segmentId: string): Promise<Set<string>> 
   );
   if (rows.length === 0) { throw new Error("Segment not found."); }
   let def: SegmentDefinition = {};
-  if (rows[0]?.filter) { def = JSON.parse(rows[0].filter) as SegmentDefinition; }
+  if (rows[0]?.filter) {
+    try {
+      def = JSON.parse(rows[0].filter) as SegmentDefinition;
+    } catch {
+      // Hand-written (non-JSON) filters silently fall back to "everybody",
+      // which would dial people the operator never selected.
+      throw new Error(
+        "Segment filter is not a valid segment definition. Rebuild the segment in the console's segment builder instead of writing the filter by hand.",
+      );
+    }
+  }
   const { members } = await listSegmentMembers(def, { limit: 2000 });
   return new Set(members.map((m) => m.entry_id));
 }
