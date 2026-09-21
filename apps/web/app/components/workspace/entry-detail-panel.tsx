@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { RelationSelect } from "./relation-select";
 import { FormattedFieldValue } from "./formatted-field-value";
-import { formatWorkspaceFieldValue } from "@/lib/workspace-cell-format";
+import { formatWorkspaceFieldValue, isTruthyFieldValue } from "@/lib/workspace-cell-format";
 import { parseTagsValue } from "@/lib/parse-tags";
 import { displayObjectName, displayObjectNameSingular } from "@/lib/object-display-name";
 import { MarkdownEditor } from "./markdown-editor";
@@ -324,7 +324,7 @@ function FieldValue({
   switch (field.type) {
     case "enum": return <EnumBadge value={safeString(value)} enumValues={field.enum_values} enumColors={field.enum_colors} />;
     case "boolean": {
-      const isTrue = value === true || value === "true" || value === "1" || value === "yes";
+      const isTrue = isTruthyFieldValue(value);
       return <span style={{ color: isTrue ? "#22c55e" : "var(--color-text-muted)" }}>{isTrue ? "Yes" : "No"}</span>;
     }
     case "user": return <UserBadge value={value} members={members} />;

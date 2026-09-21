@@ -18,6 +18,19 @@ export type FormattedWorkspaceValue = {
 	isoDate?: string;
 };
 
+/**
+ * Boolean fields are stored as text in DuckDB. The UI writes "true", the seed
+ * writes "true", but an agent (or an import) may write "TRUE"/"Yes"/"1". All
+ * of those are the same consent flag, so read them alike — otherwise a record
+ * shows "No" in the UI while filters and segments see it as true.
+ */
+export function isTruthyFieldValue(value: unknown): boolean {
+	if (value === true) {return true;}
+	if (typeof value !== "string") {return false;}
+	const normalized = value.trim().toLowerCase();
+	return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const URL_RE = /^https?:\/\/\S+$/i;
 const PHONE_RE = /^\+?[0-9().\-\s]{7,}$/;

@@ -6,7 +6,7 @@ import type { SortRule } from "@/lib/object-filters";
 import { DataTable, type RowAction, type ColumnSizingState } from "./data-table";
 import { RelationSelect } from "./relation-select";
 import { FormattedFieldValue } from "./formatted-field-value";
-import { formatWorkspaceFieldValue } from "@/lib/workspace-cell-format";
+import { formatWorkspaceFieldValue, isTruthyFieldValue } from "@/lib/workspace-cell-format";
 import { parseTagsValue } from "@/lib/parse-tags";
 import { displayObjectName, displayObjectNameSingular } from "@/lib/object-display-name";
 import { ActionButton, useActionStates, type ActionConfig } from "./action-button";
@@ -216,7 +216,7 @@ function EnumBadge({ value, enumValues, enumColors }: { value: string; enumValue
 }
 
 function BooleanCell({ value }: { value: unknown }) {
-	const isTrue = value === true || value === "true" || value === "1" || value === "yes";
+	const isTrue = isTruthyFieldValue(value);
 	return (
 		<span style={{ color: isTrue ? "var(--color-success)" : "var(--color-text-muted)" }}>
 			{isTrue ? "Yes" : "No"}

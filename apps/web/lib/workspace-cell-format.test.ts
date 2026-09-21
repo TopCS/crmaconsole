@@ -3,6 +3,7 @@ import {
 	buildRawFileUrl,
 	detectFileMediaType,
 	formatWorkspaceFieldValue,
+	isTruthyFieldValue,
 } from "./workspace-cell-format";
 
 describe("formatWorkspaceFieldValue", () => {
@@ -137,5 +138,19 @@ describe("buildRawFileUrl", () => {
 		expect(buildRawFileUrl("https://cdn.example.com/image.png")).toBe(
 			"https://cdn.example.com/image.png",
 		);
+	});
+});
+
+describe("isTruthyFieldValue", () => {
+	it("reads every boolean spelling the same way (an agent may write TRUE)", () => {
+		for (const value of [true, "true", "TRUE", "True", "1", "yes", "YES"]) {
+			expect(isTruthyFieldValue(value), String(value)).toBe(true);
+		}
+	});
+
+	it("does not treat other values as consent", () => {
+		for (const value of [false, "false", "FALSE", "0", "no", "", "  ", null, undefined, 1, {}]) {
+			expect(isTruthyFieldValue(value), JSON.stringify(value)).toBe(false);
+		}
 	});
 });

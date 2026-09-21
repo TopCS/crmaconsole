@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { RelationSelect } from "./relation-select";
 import { FormattedFieldValue } from "./formatted-field-value";
-import { formatWorkspaceFieldValue } from "@/lib/workspace-cell-format";
+import { formatWorkspaceFieldValue, isTruthyFieldValue } from "@/lib/workspace-cell-format";
 import { parseTagsValue } from "@/lib/parse-tags";
 import { displayObjectName, displayObjectNameSingular } from "@/lib/object-display-name";
 import { UrlFavicon } from "./url-favicon";
@@ -445,7 +445,7 @@ function FieldValue({
         />
       );
     case "boolean": {
-      const isTrue = value === true || value === "true" || value === "1" || value === "yes";
+      const isTrue = isTruthyFieldValue(value);
       return <span style={{ color: isTrue ? "#22c55e" : "var(--color-text-muted)" }}>{isTrue ? "Yes" : "No"}</span>;
     }
     case "user":
