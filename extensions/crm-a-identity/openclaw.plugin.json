@@ -7,7 +7,7 @@
     "onStartup": true
   },
   "contracts": {
-    "tools": ["crm_a_search_integrations"]
+    "tools": ["crm_a_search_integrations", "crm_a_segment_upsert"]
   },
   "configSchema": {
     "type": "object",

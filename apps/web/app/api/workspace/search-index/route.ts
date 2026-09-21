@@ -277,11 +277,11 @@ async function buildEntryItems(): Promise<SearchIndexItem[]> {
  */
 const CRM_NAV_ITEMS: SearchIndexItem[] = [
   { id: "~crm/people", label: "People", sublabel: "CRM", kind: "file", path: "~crm/people", nodeType: "folder", icon: "users" },
-  { id: "~crm/companies", label: "Companies", sublabel: "CRM", kind: "file", path: "~crm/companies", nodeType: "folder", icon: "building" },
+  { id: "~crm/company", label: "Companies", sublabel: "CRM", kind: "file", path: "~crm/company", nodeType: "folder", icon: "building" },
   { id: "~crm/inbox", label: "Inbox", sublabel: "CRM", kind: "file", path: "~crm/inbox", nodeType: "folder", icon: "inbox" },
   { id: "~crm/calendar", label: "Calendar", sublabel: "CRM", kind: "file", path: "~crm/calendar", nodeType: "folder", icon: "calendar" },
-  { id: "~crm/segmentation", label: "Segmentations", sublabel: "CRM", kind: "file", path: "~crm/segmentation", nodeType: "folder", icon: "filter" },
-  { id: "~crm/campaigns", label: "Campaigns", sublabel: "CRM", kind: "file", path: "~crm/campaigns", nodeType: "folder", icon: "mail" },
+  { id: "~crm/segment", label: "Segmentations", sublabel: "CRM", kind: "file", path: "~crm/segment", nodeType: "folder", icon: "filter" },
+  { id: "~crm/campaign", label: "Campaigns", sublabel: "CRM", kind: "file", path: "~crm/campaign", nodeType: "folder", icon: "mail" },
 ];
 
 export async function GET() {

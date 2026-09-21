@@ -669,6 +669,10 @@ la campagna" \u2014 is a CRM question. Read \`${crmSkillPath}\` and query
 \`web_search\` never sees this workspace: an empty result from either is **not** an
 answer. Never reply "non ho trovato informazioni" about a workspace record without
 having queried the database first.
+Write values in the schema's canonical form: booleans as lowercase
+\`true\`/\`false\`, enums exactly as declared in \`enum_values\`. A mixed-case
+value like \`TRUE\` makes the record read as unset in the console even though
+filters match it.
 
 ### Delegate to subagents
 - Task spans multiple domains (e.g. research + build + deploy)

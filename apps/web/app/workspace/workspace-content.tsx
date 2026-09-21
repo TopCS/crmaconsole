@@ -388,8 +388,8 @@ function nodeToContentTabKind(nodeType: string, path: string): ContentTabKind {
   if (path === "~cloud") return "cloud";
   if (path === "~crm/inbox") return "crm-inbox";
   if (path === "~crm/calendar") return "crm-calendar";
-  if (path === "~crm/segmentation") return "crm-segmentation";
-  if (path === "~crm/campaigns") return "crm-campaigns";
+  if (path === "~crm/segment") return "crm-segmentation";
+  if (path === "~crm/campaign") return "crm-campaigns";
   if (path === "~crm/graph") return "crm-graph";
   switch (nodeType) {
     case "object": return "object";
@@ -1364,8 +1364,8 @@ function WorkspacePageInner() {
         cron: { path: "~cron", name: "Cron" },
         "crm-inbox": { path: "~crm/inbox", name: "Inbox" },
         "crm-calendar": { path: "~crm/calendar", name: "Calendar" },
-        "crm-segmentation": { path: "~crm/segmentation", name: "Segmentation" },
-        "crm-campaigns": { path: "~crm/campaigns", name: "Campagne" },
+        "crm-segmentation": { path: "~crm/segment", name: "Segmentation" },
+        "crm-campaigns": { path: "~crm/campaign", name: "Campagne" },
         "crm-graph": { path: "~crm/graph", name: "Graph" },
       }[target];
       openTabForNode({ path: config.path, name: config.name, type: "folder" }, { preview: false });

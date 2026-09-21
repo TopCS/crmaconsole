@@ -11,6 +11,7 @@ import {
 } from "@/lib/object-filters";
 import type { SegmentDefinition, SegmentEventCondition } from "@/lib/segments";
 import { CrmEmptyState, CrmListShell, CrmLoadingState } from "../crm-list-shell";
+import { SEGMENT_EVENT_TYPES, SEGMENT_PEOPLE_FIELDS } from "@/lib/segment-fields";
 
 /**
  * Segmentation section (CDP): list saved segments, build new ones with
@@ -36,20 +37,10 @@ type Member = {
   last_interaction_at: string | null;
 };
 
-const PEOPLE_FIELDS = [
-  { name: "Full Name", type: "text" },
-  { name: "Email Address", type: "email" },
-  { name: "Phone Number", type: "text" },
-  { name: "Job Title", type: "text" },
-  { name: "LinkedIn URL", type: "url" },
-  { name: "Company", type: "relation" },
-  { name: "Status", type: "enum" },
-  { name: "Source", type: "enum" },
-  { name: "Strength Score", type: "number" },
-  { name: "Last Interaction At", type: "date" },
-] as const;
+// Shared with the server-side SQL builder (single source of truth).
+const PEOPLE_FIELDS = SEGMENT_PEOPLE_FIELDS;
 
-const EVENT_TYPES = ["Email", "Meeting", "Page View", "Form Submit", "Purchase", "Custom"];
+const EVENT_TYPES = SEGMENT_EVENT_TYPES;
 
 const inputStyle = {
   background: "var(--color-surface)",

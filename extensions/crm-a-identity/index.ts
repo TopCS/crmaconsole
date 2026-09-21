@@ -5,6 +5,7 @@ import {
   signComposioSearchContext,
 } from "../shared/composio-search-context.js";
 import { readCrmAAuthProfileKey, resolveCrmAGatewayUrl } from "../shared/crm-a-auth.js";
+import { postConsoleJson } from "../shared/console-web.js";
 import { type ComposioManagedAccount, type ComposioToolIndexFile } from "./composio-cheat-sheet.js";
 import { type ComposioToolSearchResult } from "./composio-tool-search.js";
 
@@ -13,6 +14,7 @@ export const id = "crm-a-identity";
 type UnknownRecord = Record<string, unknown>;
 
 const CRM_A_SEARCH_INTEGRATIONS_NAME = "crm_a_search_integrations";
+const CRM_A_SEGMENT_TOOL_NAME = "crm_a_segment_upsert";
 const CRM_A_EXECUTE_INTEGRATIONS_NAME = "crm_a_execute_integrations";
 const CRM_A_INTEGRATIONS_DISPLAY_NAME = "Crm-A Integrations";
 const CRM_A_INTEGRATION_DISPLAY_NAME = "Crm-A Integration";
@@ -36,6 +38,65 @@ const CRM_A_SEARCH_INTEGRATIONS_PARAMETERS = {
     },
   },
   required: ["query"],
+} as const;
+
+const CRM_A_SEGMENT_PARAMETERS = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    name: {
+      type: "string",
+      description:
+        "Segment name (matched case-insensitively; created when it does not exist). Use the exact name the campaign card references.",
+    },
+    description: { type: "string", description: "Optional segment description." },
+    rules: {
+      type: "array",
+      description:
+        "Demographic filters on PEOPLE fields, combined with AND. A phone campaign wants [{field: \"Marketing Opt-in\", operator: \"is_true\"}, {field: \"Preferred Contact Channel\", operator: \"is\", value: \"phone\"}].",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          field: {
+            type: "string",
+            description:
+              "People field name, e.g. Full Name, Email Address, Phone Number, Status, Source, Strength Score, Last Interaction At, Marketing Opt-in, Preferred Contact Channel.",
+          },
+          operator: {
+            type: "string",
+            description:
+              "Filter operator for the field type (text: contains/equals/…; enum: is/is_not; boolean: is_true/is_false; number: eq/gt/lt/…; date: before/after/on/…). Defaults to the type's default operator.",
+          },
+          value: {
+            type: ["string", "number", "boolean"],
+            description:
+              "Rule value for operators that need one (not is_empty/is_not_empty/is_true/is_false). Enum values must match the schema exactly (e.g. phone).",
+          },
+        },
+        required: ["field"],
+      },
+    },
+    events: {
+      type: "array",
+      description: "Optional interaction conditions, e.g. [{type: \"Purchase\", operator: \"has\", withinDays: 30}].",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          type: {
+            type: "string",
+            description: "Interaction type: Email, Meeting, Page View, Form Submit, Purchase, Custom.",
+          },
+          operator: { type: "string", description: "has | has_not" },
+          withinDays: { type: "number", description: "Only count events within the last N days." },
+          minCount: { type: "number", description: "Minimum occurrences for \"has\"." },
+        },
+        required: ["type"],
+      },
+    },
+  },
+  required: ["name", "rules"],
 } as const;
 
 const APP_ALIASES: Record<string, string> = {
@@ -2148,6 +2209,10 @@ la campagna" — is a CRM question. Read \`${crmSkillPath}\` and query
 \`web_search\` never sees this workspace: an empty result from either is **not** an
 answer. Never reply "non ho trovato informazioni" about a workspace record without
 having queried the database first.
+Write values in the schema's canonical form: booleans as lowercase
+\`true\`/\`false\`, enums exactly as declared in \`enum_values\`. A mixed-case
+value like \`TRUE\` makes the record read as unset in the console even though
+filters match it.
 
 ### Delegate to subagents
 - Task spans multiple domains (e.g. research + build + deploy)
@@ -2263,11 +2328,11 @@ account through two built-in tools: \`crm_a_phone_campaign\`
   contact (\`Marketing Opt-in = true\` **and** the preferred channel is phone).
   Never leave a phone campaign pointing at a broader marketing-opt-in segment:
   the send-time audience filter is the safety net, not the definition.
-- Segments are stored as JSON segment definitions built by the console's
-  segment builder (\`{"filters":{"id":"root","conjunction":"and","rules":[{"id":"r1","field":"Marketing Opt-in","operator":"is_true","value":true}, …]}}\`).
-  Never hand-write a segment's \`Filter\` as free text ("… = true AND …"): the
-  audience resolver cannot read it and the send fails. Reuse an existing
-  segment, or ask the operator to build the segment in the console first.
+- Create or update a segment with the \`crm_a_segment_upsert\` tool (name +
+  rules on people fields), which validates the fields/operators and writes the
+  definition JSON for you. NEVER write the \`Filter\` field by hand in SQL: a
+  hand-escaped JSON gets truncated, the segment becomes unusable and every
+  send against it fails. Reuse an existing segment when one already matches.
 - \`create\` builds the Pearl (paused, nothing dials), \`send\` enqueues the
   phone-compliant audience as leads and — like \`resume\` — requires the
   operator's explicit confirmation (\`confirm: true\`). Never call them without
@@ -2289,6 +2354,37 @@ Use \`crm_a_console_resync_full\` only when the user explicitly asks for a full 
 export function resolveWorkspaceDir(api: any): string | undefined {
   const ws = api?.config?.agents?.defaults?.workspace;
   return typeof ws === "string" ? ws.trim() || undefined : undefined;
+}
+
+function createCrmASegmentTool(): AnyAgentTool {
+  return {
+    name: CRM_A_SEGMENT_TOOL_NAME,
+    label: "Crm-A segment builder",
+    description:
+      "Create or update a CDP segment with a validated filter definition. ALWAYS use this to define a segment: never write the segment's `Filter` field by hand in SQL — a hand-escaped JSON is truncated easily and leaves a segment that every campaign send refuses.",
+    parameters: CRM_A_SEGMENT_PARAMETERS,
+    async execute(_toolCallId: string, input: Record<string, unknown>) {
+      const payload = asRecord(input) ?? {};
+      const name = readString(payload.name);
+      if (!name) {
+        return jsonResult({ error: "name is required." });
+      }
+      const { status, body } = await postConsoleJson("/api/crm/segments", {
+        name,
+        description: readString(payload.description),
+        rules: Array.isArray(payload.rules) ? payload.rules : [],
+        events: Array.isArray(payload.events) ? payload.events : [],
+      });
+      if (status >= 400 || status === 0) {
+        return jsonResult({
+          error:
+            readString(body.error) ??
+            `Segment upsert failed (HTTP ${status}). Is the console web runtime running?`,
+        });
+      }
+      return jsonResult(body);
+    },
+  } as AnyAgentTool;
 }
 
 function shouldRegisterIntegrationTools(workspaceDir: string): boolean {
@@ -2314,6 +2410,11 @@ export default function register(api: any) {
     api.logger?.info?.(
       `[crm-a-identity] registered ${CRM_A_SEARCH_INTEGRATIONS_NAME} integration tool`,
     );
+    api.registerTool(createCrmASegmentTool(), {
+      name: CRM_A_SEGMENT_TOOL_NAME,
+      optional: true,
+    });
+    api.logger?.info?.(`[crm-a-identity] registered ${CRM_A_SEGMENT_TOOL_NAME} tool`);
   }
 
   api.on(

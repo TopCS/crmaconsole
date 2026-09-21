@@ -32,7 +32,7 @@ function resolveIconKind(tab: ContentTab): IconKind {
   if (tab.kind === "object" && (path === "people" || path === "~crm/people")) return "people";
   if (
     tab.kind === "object" &&
-    (path === "company" || path === "companies" || path === "~crm/companies")
+    (path === "company" || path === "companies" || path === "~crm/company")
   ) {
     return "company";
   }

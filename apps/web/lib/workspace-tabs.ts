@@ -351,8 +351,8 @@ export function inferContentTabKindFromPath(path: string): ContentTabKind {
   if (path === "~cloud") return "cloud";
   if (path === "~crm/inbox") return "crm-inbox";
   if (path === "~crm/calendar") return "crm-calendar";
-  if (path === "~crm/segmentation") return "crm-segmentation";
-  if (path === "~crm/campaigns") return "crm-campaigns";
+  if (path === "~crm/segment") return "crm-segmentation";
+  if (path === "~crm/campaign") return "crm-campaigns";
   if (path === "~crm/graph") return "crm-graph";
   return "file";
 }
@@ -367,8 +367,8 @@ export function inferContentTabTitle(path: string, fallback?: string): string {
   if (path === "~cloud") return "Cloud";
   if (path === "~crm/inbox") return "Inbox";
   if (path === "~crm/calendar") return "Calendar";
-  if (path === "~crm/segmentation") return "Segmentation";
-  if (path === "~crm/campaigns") return "Campagne";
+  if (path === "~crm/segment") return "Segmentation";
+  if (path === "~crm/campaign") return "Campagne";
   if (path === "~crm/graph") return "Graph";
   return path.split("/").pop() || path;
 }
@@ -986,7 +986,7 @@ export function contentTabFromUrl(
     if (url.crm === "segmentation") {
       return makeContentTab({
         kind: "crm-segmentation",
-        path: "~crm/segmentation",
+        path: "~crm/segment",
         title: "Segmentation",
         preview: false,
       });
@@ -994,7 +994,7 @@ export function contentTabFromUrl(
     if (url.crm === "campaigns") {
       return makeContentTab({
         kind: "crm-campaigns",
-        path: "~crm/campaigns",
+        path: "~crm/campaign",
         title: "Campagne",
         preview: false,
       });

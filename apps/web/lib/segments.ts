@@ -2,6 +2,7 @@ import { buildWhereClause, type FieldMeta, type FilterGroup } from "./object-fil
 import { duckdbExecOnFileParamsBatchAsync, duckdbPathAsync, duckdbQueryAsync } from "./workspace";
 import type { ParameterizedStatement } from "./workspace";
 import { loadCrmFieldMaps, sqlString } from "./crm-queries";
+import { SEGMENT_PEOPLE_FIELDS } from "./segment-fields";
 import { ONBOARDING_OBJECT_IDS } from "./workspace-schema-migrations";
 
 /**
@@ -32,25 +33,11 @@ function quoteCol(name: string): string {
 }
 
 /**
- * People fields exposed to the segment builder (demographics). Consent and
- * preferred channel belong here: a phone campaign's segment has to be able to
- * say "opt-in AND prefers phone", otherwise every rule on those fields is
- * silently dropped and the segment matches the whole workspace.
+ * People fields exposed to the segment builder. The list lives in
+ * `./segment-fields` (client-safe) so the builder UI and this SQL builder
+ * cannot drift apart — a divergent copy dropped consent rules silently.
  */
-export const SEGMENT_PEOPLE_FIELDS: FieldMeta[] = [
-  { name: "Full Name", type: "text" },
-  { name: "Email Address", type: "email" },
-  { name: "Phone Number", type: "text" },
-  { name: "Job Title", type: "text" },
-  { name: "LinkedIn URL", type: "url" },
-  { name: "Company", type: "relation" },
-  { name: "Status", type: "enum" },
-  { name: "Source", type: "enum" },
-  { name: "Strength Score", type: "number" },
-  { name: "Last Interaction At", type: "date" },
-  { name: "Marketing Opt-in", type: "boolean" },
-  { name: "Preferred Contact Channel", type: "enum" },
-];
+export { SEGMENT_PEOPLE_FIELDS } from "./segment-fields";
 
 function buildEventConditionSql(
   condition: SegmentEventCondition,

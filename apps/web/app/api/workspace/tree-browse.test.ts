@@ -484,11 +484,11 @@ describe("Workspace Tree & Browse API", () => {
       expect(json.items.every((it: { sublabel: string }) => it.sublabel === "CRM")).toBe(true);
       expect(json.items.map((it: { id: string }) => it.id)).toEqual([
         "~crm/people",
-        "~crm/companies",
+        "~crm/company",
         "~crm/inbox",
         "~crm/calendar",
-        "~crm/segmentation",
-        "~crm/campaigns",
+        "~crm/segment",
+        "~crm/campaign",
       ]);
     });
 
