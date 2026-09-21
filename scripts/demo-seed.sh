@@ -78,25 +78,39 @@ for e in data.get("entries", []):
 ' "$person_id"
 }
 
+# Purge totale di un contatto tramite l'endpoint dedicato: rimuove persona,
+# interazioni, ordini, invii campagna, i loro documenti (+ file .md) e qualsiasi
+# relazione che lo punta — niente residui/ghost/dangling come con i singoli DELETE.
+purge_contact() {
+  require_secret
+  local email="$1"
+  info "purge completo di $email (persona + interazioni + ordini + invii + documenti)…"
+  curl -fsS -X POST "$BASE/demo/purge-contact" -H "$AUTH" -H "Content-Type: application/json"     -d "$(python3 -c 'import json,sys; print(json.dumps({"email": sys.argv[1]}))' "$email")"     | python3 -m json.tool
+}
+
 remove_lorenzo() {
   require_secret
   info "cerco il contatto 'Lorenzo' del seed…"
-  local lorenzo
-  lorenzo="$(find_lorenzo_id)" || { ok "Lorenzo già assente — niente da rimuovere."; return 0; }
-  info "Lorenzo entry_id: $lorenzo"
-
-  # Rimuovi PRIMA gli ordini (il campo Customer dell'ordine punta a Lorenzo).
-  local order_id
-  while read -r order_id; do
-    [ -n "$order_id" ] || continue
-    info "rimuovo ordine seed di Lorenzo ($order_id)…"
-    curl -fsS -X DELETE "$BASE/workspace/objects/order/entries/$order_id" >/dev/null
-    ok "ordine rimosso"
-  done < <(find_lorenzo_order_ids "$lorenzo")
-
-  info "rimuovo il contatto Lorenzo…"
-  curl -fsS -X DELETE "$BASE/workspace/objects/people/entries/$lorenzo" >/dev/null
+  if ! find_lorenzo_id >/dev/null 2>&1; then
+    ok "Lorenzo già assente — niente da rimuovere."
+    return 0
+  fi
+  purge_contact "lorenzo@example.com"
   ok "Lorenzo rimosso — il primo record nascerà dal vivo in Atto 0"
+}
+
+# Pulizia workspace: ghost entry, relazioni "dangling" e documenti orfani (anche
+# i file .md orfani) — evita che fonti diverse (DB vs files vs log) divergano.
+purge_orphans() {
+  require_secret
+  info "pulizia residui di workspace (ghost entry, relazioni orfane, documenti orfani)…"
+  curl -fsS -X POST "$BASE/demo/purge-contact" -H "$AUTH" -H "Content-Type: application/json"     -d '{"purgeOrphans": true}'     | python3 -m json.tool
+}
+
+# Audit di residui: restituisce i conteggi di relazioni/documenti dangling e
+# ghost entry. Usato da verify() per fallire se la pulizia non è completa.
+audit_residues() {
+  curl -fsS -X POST "$BASE/demo/purge-contact" -H "$AUTH" -H "Content-Type: application/json"     -d '{"auditOnly": true}'
 }
 
 verify() {
@@ -130,14 +144,35 @@ for e in json.load(sys.stdin).get("entries", []):
     echo "✗ ATTENZIONE: Lorenzo risulta ancora presente — rilancia --remove-lorenzo."
     return 1
   fi
-  ok "Lorenzo assente: pronto per Atto 0 (primo record dal vivo)."
+  ok "Lorenzo assente."
+
+  echo "— residui di workspace (attesi tutti 0 — verificano che NON ci siano fonti/log divergenti):"
+  local residue
+  residue="$(audit_residues)" || { echo "✗ audit residui fallito"; return 1; }
+  echo "$residue" | python3 -m json.tool
+  if echo "$residue" | python3 -c '
+import sys, json
+j = json.load(sys.stdin)
+l = j.get("leftovers", {})
+if any(l.values()):
+    print("✗ residui presenti: %s" % l)
+    sys.exit(1)
+print("✓ nessun residuo: %s" % l)
+' ; then
+    ok "workspace pulito: pronto per Atto 0 (primo record dal vivo)."
+  else
+    echo "Hint: lancia --purge-orphans e rilancia --verify."
+    return 1
+  fi
 }
 
 # ── dispatch ────────────────────────────────────────────────────────────────
 case "${1:-}" in
   --seed) seed ;;
   --remove-lorenzo) remove_lorenzo ;;
+  --purge-orphans) purge_orphans ;;
+  --audit) audit_residues | python3 -m json.tool ;;
   --verify) verify ;;
-  "") seed; echo; remove_lorenzo; echo; verify ;;
-  *) echo "uso: $0 [--seed|--remove-lorenzo|--verify]" >&2; exit 1 ;;
+  "") seed; echo; remove_lorenzo; echo; purge_orphans; echo; verify ;;
+  *) echo "uso: $0 [--seed|--remove-lorenzo|--purge-orphans|--audit|--verify]" >&2; exit 1 ;;
 esac
