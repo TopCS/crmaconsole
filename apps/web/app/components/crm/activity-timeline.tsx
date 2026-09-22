@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button } from "../ui/button";
 import { CrmEmptyState, CrmLoadingState } from "./crm-list-shell";
 import { formatAbsoluteDate, formatRelativeDate } from "./format-relative-date";
@@ -721,7 +721,216 @@ function ExpandedBody({
       />
     );
   }
+  if (row.type === "Call") {
+    return <CallDetailBody row={row} />;
+  }
   return null;
+}
+
+type NlpearlTranscriptMessage = {
+  role: "Pearl" | "Client" | number | null;
+  content?: string | null;
+  startTime?: number | null;
+  endTime?: number | null;
+};
+
+type NlpearlCollectedInfo = {
+  id?: string | null;
+  name?: string | null;
+  value?: unknown;
+};
+
+function callTranscript(row: ActivityRow): NlpearlTranscriptMessage[] {
+  const raw = row.properties?.transcript;
+  if (!Array.isArray(raw)) {return [];}
+  return raw
+    .filter((m) => m && typeof m === "object")
+    .map((m) => m as Record<string, unknown>)
+    .map((m) => ({
+      role: m.role === "Pearl" || m.role === "Client" || typeof m.role === "number" ? m.role : null,
+      content: typeof m.content === "string" ? m.content : null,
+      startTime: typeof m.startTime === "number" ? m.startTime : null,
+      endTime: typeof m.endTime === "number" ? m.endTime : null,
+    }));
+}
+
+function callCollectedInfo(row: ActivityRow): NlpearlCollectedInfo[] {
+  const raw = row.properties?.collectedInfo;
+  if (!Array.isArray(raw)) {return [];}
+  return raw
+    .filter((i) => i && typeof i === "object")
+    .map((i) => i as Record<string, unknown>)
+    .map((i) => ({
+      id: typeof i.id === "string" ? i.id : null,
+      name: typeof i.name === "string" ? i.name : null,
+      value: i.value,
+    }));
+}
+
+function isPearl(role: NlpearlTranscriptMessage["role"]): boolean {
+  return role === "Pearl" || role === 2;
+}
+
+function formatTranscriptTime(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(seconds)) {return "";}
+  const s = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
+function CallDetailBody({ row }: { row: ActivityRow }) {
+  const p = row.properties;
+  const transcript = callTranscript(row);
+  const collected = callCollectedInfo(row);
+  const recording = toString(p?.recording);
+  const summary = toString(p?.summary);
+  const duration = toNumber(p?.duration);
+  const sentiment = toString(p?.sentiment);
+  const conversationStatus = toString(p?.conversationStatus);
+  const status = toString(p?.status);
+  const from = toString(p?.from);
+  const to = toString(p?.to);
+
+  const metaParts: Array<{ label: string; value: string }> = [];
+  if (duration != null && duration > 0) {
+    metaParts.push({ label: "Durata", value: `${Math.round(duration)}s` });
+  }
+  if (conversationStatus) {metaParts.push({ label: "Esito", value: conversationStatus });}
+  if (status) {metaParts.push({ label: "Stato", value: status });}
+  if (sentiment) {metaParts.push({ label: "Sentiment", value: sentiment });}
+
+  return (
+    <div
+      className="border-t px-4 py-4"
+      style={{
+        borderColor: "var(--color-border)",
+        background: "var(--color-background)",
+      }}
+    >
+      <div className="flex flex-col gap-2 text-[12px]">
+        {metaParts.length > 0 && (
+          <dl className="grid gap-x-4 gap-y-0.5 grid-cols-[auto_minmax(0,1fr)]">
+            {metaParts.map(({ label, value }) => (
+              <Fragment key={label}>
+                <dt className="text-[11px] uppercase tracking-[0.08em]" style={{ color: "var(--color-text-muted)" }}>
+                  {label}
+                </dt>
+                <dd style={{ color: "var(--color-text)" }}>{value}</dd>
+              </Fragment>
+            ))}
+          </dl>
+        )}
+        {from && to && (
+          <p style={{ color: "var(--color-text-muted)" }}>
+            <span style={{ color: "var(--color-text)" }}>{from}</span>
+            {" → "}
+            <span style={{ color: "var(--color-text)" }}>{to}</span>
+          </p>
+        )}
+        {recording && (
+          <p>
+            <a
+              href={recording}
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+              style={{ color: "var(--color-accent)" }}
+            >
+              Ascolta la registrazione ↗
+            </a>
+          </p>
+        )}
+      </div>
+
+      {summary && (
+        <p
+          className="mt-3 text-[13px] leading-relaxed"
+          style={{
+            color: "var(--color-text)",
+            fontFamily: '"Bookerly", Georgia, "Times New Roman", serif',
+          }}
+        >
+          {summary}
+        </p>
+      )}
+
+      {collected.length > 0 && (
+        <div className="mt-3">
+          <h4
+            className="text-[11px] font-semibold uppercase tracking-[0.1em]"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            Dati raccolti
+          </h4>
+          <dl className="grid gap-x-4 gap-y-0.5 grid-cols-[auto_minmax(0,1fr)] mt-1">
+            {collected.map((item) => (
+              <Fragment key={item.id ?? item.name ?? "ci"}>
+                <dt className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>
+                  {item.name ?? item.id ?? "—"}
+                </dt>
+                <dd style={{ color: "var(--color-text)" }}>
+                  {typeof item.value === "string" ? item.value : JSON.stringify(item.value)}
+                </dd>
+              </Fragment>
+            ))}
+          </dl>
+        </div>
+      )}
+
+      {transcript.length > 0 && (
+        <div className="mt-3">
+          <h4
+            className="text-[11px] font-semibold uppercase tracking-[0.1em]"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            Trascrizione
+          </h4>
+          <ul className="mt-2 space-y-2">
+            {transcript.map((m, i) => {
+              const pearl = isPearl(m.role);
+              const time = formatTranscriptTime(m.startTime);
+              return (
+                <li
+                  key={i}
+                  className="flex items-start gap-2 rounded-lg border px-2.5 py-2"
+                  style={{
+                    borderColor: "var(--color-border)",
+                    background: pearl ? "var(--color-surface)" : "var(--color-surface-hover)",
+                  }}
+                >
+                  <span
+                    className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold"
+                    style={{
+                      background: pearl ? "#22c55e1a" : "#3b82f61a",
+                      color: pearl ? "#22c55e" : "#3b82f6",
+                    }}
+                    aria-hidden
+                  >
+                    {pearl ? "P" : "C"}
+                  </span>
+                  <span className="min-w-0 flex-1 text-[12px] leading-snug" style={{ color: "var(--color-text)" }}>
+                    {m.content || "…"}
+                  </span>
+                  {time && (
+                    <span className="shrink-0 text-[10px] tabular-nums" style={{ color: "var(--color-text-muted)" }}>
+                      {time}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {transcript.length === 0 && !summary && !recording && !from && !to && (
+        <p className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+          Nessun dettaglio aggiuntivo per questa chiamata.
+        </p>
+      )}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------

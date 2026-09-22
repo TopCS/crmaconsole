@@ -8,12 +8,15 @@
  *
  * Body:
  *   { "segmentEntryId": "...", "subject": "…", "body": "…" }
+ *   { "segmentEntryId": "...", "subject": "…", "body": "…", "preview": true }
+ *     → dry-run: nothing is sent; returns the per-channel routing matrix.
  *
  * Auth: same Bearer secret as the phone webhook (CRM_A_PHONE_WEBHOOK_SECRET).
  * Closed when the secret is not configured.
  */
 
 import { sendCampaignMultichannel } from "@/lib/campaigns";
+import { resolveSegmentIdByName } from "@/lib/campaign-phone";
 import { isPhoneWebhookAuthorized } from "@/lib/phone-webhook";
 
 export const dynamic = "force-dynamic";
@@ -35,15 +38,33 @@ export async function POST(req: Request) {
     return jsonError("Invalid JSON body.", 400);
   }
 
-  const segmentEntryId = typeof body.segmentEntryId === "string" ? body.segmentEntryId.trim() : "";
   const subject = typeof body.subject === "string" ? body.subject.trim() : "";
   const message = typeof body.body === "string" ? body.body.trim() : "";
-  if (!segmentEntryId || !message) {
-    return jsonError("segmentEntryId and body are required.", 400);
+  if (!message) {
+    return jsonError("body is required.", 400);
+  }
+
+  let segmentEntryId = typeof body.segmentEntryId === "string" ? body.segmentEntryId.trim() : "";
+  const segmentName = typeof body.segmentName === "string" ? body.segmentName.trim() : "";
+  if (!segmentEntryId && segmentName) {
+    segmentEntryId = (await resolveSegmentIdByName(segmentName)) ?? "";
+  }
+  if (!segmentEntryId) {
+    return jsonError(
+      segmentName
+        ? `Segment "${segmentName}" not found.`
+        : "segmentEntryId or segmentName is required.",
+      400,
+    );
   }
 
   try {
-    const result = await sendCampaignMultichannel({ segmentEntryId, subject, body: message });
+    const result = await sendCampaignMultichannel({
+      segmentEntryId,
+      subject,
+      body: message,
+      preview: body.preview === true,
+    });
     return Response.json({ ok: true, ...result });
   } catch (err) {
     return jsonError(

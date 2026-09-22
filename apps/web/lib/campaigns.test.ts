@@ -291,6 +291,7 @@ describe("sendCampaignMultichannel", () => {
       subject: "Lancio Galaxy",
       body: "Disponibile dal 18 ottobre",
     });
+    if ("preview" in result) {throw new Error("expected real send");}
 
     expect(result.sent).toBe(2);
     expect(result.telegram).toBe(1);
@@ -312,8 +313,55 @@ describe("sendCampaignMultichannel", () => {
       .mockResolvedValueOnce(CHANNELS as never);
 
     const result = await sendCampaignMultichannel({ segmentEntryId: "seg-1", subject: "", body: "x" });
+    if ("preview" in result) {throw new Error("expected real send");}
     expect(result.failed.length).toBe(1);
-    expect(result.failed[0]).toContain("no phone");
+    expect(result.failed[0]).toContain("no telegram id or phone");
     expect(result.sent).toBe(2);
+  });
+
+  it("preview returns the per-channel routing matrix without delivering", async () => {
+    mockedQuery
+      .mockResolvedValueOnce(MEMBERS_VIEW as never)
+      .mockResolvedValueOnce(CHANNELS as never);
+
+    const result = await sendCampaignMultichannel({
+      segmentEntryId: "seg-1",
+      subject: "Lancio Galaxy",
+      body: "Disponibile dal 18 ottobre",
+      preview: true,
+    });
+
+    expect(result).toEqual({
+      preview: true,
+      telegram: [
+        { name: "Lorenzo", phone: "+393312345678", telegramUserId: null },
+        { name: "TeleNoPhone", phone: null, telegramUserId: null },
+      ],
+      email: [{ name: "Giulia", email: "giulia@example.com" }],
+    });
+    expect(mockedDeliver).not.toHaveBeenCalled();
+    expect(mockedSes).not.toHaveBeenCalled();
+  });
+
+  it("delivers on telegram:<id> when the person has a Telegram User ID", async () => {
+    mockedQuery
+      .mockResolvedValueOnce(MEMBERS_VIEW as never)
+      .mockResolvedValueOnce([
+        { person_id: "tg-1", pref: "telegram", phone: "+393312345678", telegram_id: "987654321" },
+        { person_id: "em-1", pref: "email", phone: null, telegram_id: null },
+      ] as never);
+
+    const result = await sendCampaignMultichannel({
+      segmentEntryId: "seg-1",
+      subject: "Lancio Galaxy",
+      body: "Disponibile dal 18 ottobre",
+    });
+    if ("preview" in result) {throw new Error("expected real send");}
+
+    expect(mockedDeliver).toHaveBeenCalledWith({
+      sessionKey: "telegram:987654321",
+      message: "Lancio Galaxy\n\nDisponibile dal 18 ottobre",
+    });
+    expect(result.telegram).toBe(1);
   });
 });

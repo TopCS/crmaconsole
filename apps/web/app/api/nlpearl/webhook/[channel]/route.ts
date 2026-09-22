@@ -11,7 +11,7 @@
  * Idempotent by call/lead id: duplicate deliveries are silently accepted.
  */
 
-import { duckdbQueryAsync } from "@/lib/workspace";
+import { duckdbExecOnFileAsync, duckdbPathAsync, duckdbQueryAsync } from "@/lib/workspace";
 import { loadCrmFieldMaps, sqlString } from "@/lib/crm-queries";
 import { updateCampaignSendByExternalId } from "@/lib/campaign-phone";
 import {
@@ -19,6 +19,7 @@ import {
   mapNlpearlLeadStatus,
 } from "@/lib/nlpearl-status";
 import type { NlpearlCallWebhook, NlpearlLeadWebhook } from "@/lib/nlpearl";
+import { getLead } from "@/lib/nlpearl";
 import {
   normalizePhone,
   recordEvent,
@@ -62,37 +63,102 @@ async function interactionExistsByProps(
   return rows[0]?.entry_id ?? null;
 }
 
-async function handleCallWebhook(payload: NlpearlCallWebhook) {
-  const duplicate = await interactionExistsByProps(payload.id, undefined);
-  if (duplicate) {
-    return Response.json({ ok: true, duplicate: true, interactionId: duplicate });
+/** Resolve the customer person for a call webhook.
+ *
+ *  Priority:
+ *  1. `leadId` → NLPearl lead phoneNumber (outbound campaign customer).
+ *  2. `to` — the customer's number (outbound `from` is the agent's line).
+ *  3. `from` — inbound caller, only when `to` is empty.
+ */
+async function resolveCallPerson(payload: NlpearlCallWebhook) {
+  if (payload.leadId) {
+    const lead = await getLead(payload.pearlId, payload.leadId);
+    const leadPhone = normalizePhone(lead?.phoneNumber);
+    if (leadPhone) {
+      const existing = await findPersonIdByPhone(leadPhone);
+      if (existing) {return existing;}
+      const created = await createPersonFromPhone(leadPhone, payload.name ?? undefined);
+      if (created) {return created;}
+    }
   }
-  const phone = normalizePhone(payload.from) || normalizePhone(payload.to);
-  const personId = phone
-    ? ((await findPersonIdByPhone(phone)) ?? (await createPersonFromPhone(phone, payload.name ?? undefined)))
-    : null;
+  const toPhone = normalizePhone(payload.to);
+  if (toPhone) {
+    const existing = await findPersonIdByPhone(toPhone);
+    if (existing) {return existing;}
+  }
+  const fromPhone = normalizePhone(payload.from);
+  if (fromPhone) {
+    const existing = await findPersonIdByPhone(fromPhone);
+    if (existing) {return existing;}
+  }
+  if (toPhone) {
+    const created = await createPersonFromPhone(toPhone, payload.name ?? undefined);
+    if (created) {return created;}
+  }
+  if (fromPhone) {
+    const created = await createPersonFromPhone(fromPhone, payload.name ?? undefined);
+    if (created) {return created;}
+  }
+  return null;
+}
+
+function callWebhookProperties(payload: NlpearlCallWebhook) {
+  const outcome = classifyCallConversationStatus(payload.conversationStatus);
+  return {
+    kind: "CallWebhook",
+    nlpearlCallId: payload.id,
+    pearlId: payload.pearlId,
+    from: payload.from,
+    to: payload.to,
+    conversationStatus: payload.conversationStatus,
+    status: payload.status,
+    duration: payload.duration,
+    summary: payload.summary ?? null,
+    sentiment: payload.overallSentiment ?? null,
+    outcome,
+    leadId: payload.leadId ?? null,
+    recording: payload.recording ?? null,
+    transcript: payload.transcript ?? null,
+    collectedInfo: payload.collectedInfo ?? null,
+  };
+}
+
+/** Overwrite an interaction's Properties JSON (used for idempotent call updates). */
+async function updateInteractionProperties(
+  interactionId: string,
+  propertiesJson: string,
+): Promise<boolean> {
+  const dbPath = await duckdbPathAsync();
+  if (!dbPath) {return false;}
+  const fieldMaps = await loadCrmFieldMaps();
+  const propsFieldId = fieldMaps.interaction["Properties"];
+  if (!propsFieldId) {return false;}
+  await duckdbExecOnFileAsync(dbPath, [
+    `DELETE FROM entry_fields WHERE entry_id = ${sqlString(interactionId)} AND field_id = ${sqlString(propsFieldId)};`,
+    `INSERT INTO entry_fields (entry_id, field_id, value) VALUES (${sqlString(interactionId)}, ${sqlString(propsFieldId)}, ${sqlString(propertiesJson)});`,
+  ].join("\n"));
+  return true;
+}
+
+async function handleCallWebhook(payload: NlpearlCallWebhook) {
+  const propertiesJson = JSON.stringify(callWebhookProperties(payload));
+  // NLPearl delivers the call webhook at the START and the END of the call:
+  // the end-of-call delivery carries the transcript/summary, so an existing
+  // interaction is an update (overwrite properties), not a duplicate to drop.
+  const existing = await interactionExistsByProps(payload.id, undefined);
+  if (existing) {
+    await updateInteractionProperties(existing, propertiesJson);
+    return Response.json({ ok: true, duplicate: true, interactionId: existing, updated: true });
+  }
+  const personId = await resolveCallPerson(payload);
   if (!personId) {
     return Response.json({ ok: true, warning: "no_phone" });
   }
 
-  const outcome = classifyCallConversationStatus(payload.conversationStatus);
   const event = await recordEvent({
     personId,
     type: "Call",
-    propertiesJson: JSON.stringify({
-      kind: "CallWebhook",
-      nlpearlCallId: payload.id,
-      pearlId: payload.pearlId,
-      from: payload.from,
-      to: payload.to,
-      conversationStatus: payload.conversationStatus,
-      status: payload.status,
-      duration: payload.duration,
-      summary: payload.summary ?? null,
-      sentiment: payload.overallSentiment ?? null,
-      outcome,
-      leadId: payload.leadId ?? null,
-    }),
+    propertiesJson,
   });
   if (!event) {return jsonError("Failed to record interaction.", 500);}
   await updatePersonFields(personId, [

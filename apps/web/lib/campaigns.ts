@@ -128,6 +128,7 @@ export async function resolveAudience(segmentEntryId: string): Promise<AudienceM
 export type ChannelAudienceMember = AudienceMember & {
   preferredContact: string | null;
   phone: string | null;
+  telegramUserId: string | null;
 };
 
 /** Load per-member channel preference + phone from the people rows. */
@@ -138,14 +139,16 @@ async function hydrateAudienceChannels(
   const fieldMaps = await loadCrmFieldMaps();
   const prefFieldId = fieldMaps.people["Preferred Contact Channel"];
   const phoneFieldId = fieldMaps.people["Phone Number"];
-  if (!prefFieldId && !phoneFieldId) {
-    return members.map((m) => ({ ...m, preferredContact: null, phone: null }));
+  const telegramFieldId = fieldMaps.people["Telegram User ID"];
+  if (!prefFieldId && !phoneFieldId && !telegramFieldId) {
+    return members.map((m) => ({ ...m, preferredContact: null, phone: null, telegramUserId: null }));
   }
   const inList = members.map((m) => `'${m.entry_id.replace(/'/g, "''")}'`).join(", ");
-  const rows = await duckdbQueryAsync<{ person_id: string; pref: string | null; phone: string | null }>(
+  const rows = await duckdbQueryAsync<{ person_id: string; pref: string | null; phone: string | null; telegram_id: string | null }>(
     `SELECT e.id AS person_id,
        ${prefFieldId ? `MAX(CASE WHEN ef.field_id = '${prefFieldId}' THEN ef.value END)` : "NULL"} AS pref,
-       ${phoneFieldId ? `MAX(CASE WHEN ef.field_id = '${phoneFieldId}' THEN ef.value END)` : "NULL"} AS phone
+       ${phoneFieldId ? `MAX(CASE WHEN ef.field_id = '${phoneFieldId}' THEN ef.value END)` : "NULL"} AS phone,
+       ${telegramFieldId ? `MAX(CASE WHEN ef.field_id = '${telegramFieldId}' THEN ef.value END)` : "NULL"} AS telegram_id
        FROM entries e
        LEFT JOIN entry_fields ef ON ef.entry_id = e.id
       WHERE e.object_id = '${ONBOARDING_OBJECT_IDS.people}' AND e.id IN (${inList})
@@ -158,6 +161,7 @@ async function hydrateAudienceChannels(
       ...m,
       preferredContact: row?.pref ?? null,
       phone: row?.phone ?? null,
+      telegramUserId: row?.telegram_id ?? null,
     };
   });
 }
@@ -169,32 +173,60 @@ export type MultichannelSendResult = {
   failed: string[];
 };
 
+export type MultichannelPreview = {
+  preview: true;
+  telegram: Array<{ name: string | null; phone: string | null; telegramUserId: string | null }>;
+  email: Array<{ name: string | null; email: string }>;
+};
+
 /**
  * Send a launch message to a segment audience, routing by the recipient's
  * `Preferred Contact Channel` (default email). Telegram goes through the
- * OpenClaw runtime on the per-contact session (`phone:<e164>`); email via SES.
+ * OpenClaw runtime on the per-contact session: `telegram:<id>` when the
+ * person's `Telegram User ID` is known, else `phone:<e164>`; email via SES.
  * Non-fatal per-recipient errors are collected in `failed`.
+ *
+ * With `preview: true` nothing is delivered: the per-channel routing matrix is
+ * returned instead (for the demo / dry-run), so the operator can show *who*
+ * lands on which channel without touching Telegram or SES.
  */
 export async function sendCampaignMultichannel(params: {
   segmentEntryId: string;
   subject: string;
   body: string;
-}): Promise<MultichannelSendResult> {
+  preview?: boolean;
+}): Promise<MultichannelSendResult | MultichannelPreview> {
   const audience = await resolveAudience(params.segmentEntryId);
   const members = await hydrateAudienceChannels(audience);
+
+  if (params.preview) {
+    const telegram = members
+      .filter((m) => m.preferredContact === "telegram")
+      .map((m) => ({
+        name: m.name,
+        phone: normalizePhone(m.phone) || null,
+        telegramUserId: m.telegramUserId || null,
+      }));
+    const email = members
+      .filter((m) => m.preferredContact !== "telegram")
+      .map((m) => ({ name: m.name, email: m.email }));
+    return { preview: true, telegram, email };
+  }
 
   const result: MultichannelSendResult = { sent: 0, telegram: 0, email: 0, failed: [] };
   for (const m of members) {
     const useTelegram = m.preferredContact === "telegram";
     try {
       if (useTelegram) {
+        const telegramId = m.telegramUserId?.trim() || null;
         const phone = normalizePhone(m.phone);
-        if (!phone) {
-          result.failed.push(`${m.entry_id}: telegram preferred but no phone`);
+        const sessionKey = telegramId ? `telegram:${telegramId}` : phone ? `phone:${phone}` : null;
+        if (!sessionKey) {
+          result.failed.push(`${m.entry_id}: telegram preferred but no telegram id or phone`);
           continue;
         }
         const res = await deliverToSession({
-          sessionKey: `phone:${phone}`,
+          sessionKey,
           message: `${params.subject}\n\n${params.body}`,
         });
         if (!res.ok) {

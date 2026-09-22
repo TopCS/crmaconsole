@@ -37,7 +37,13 @@
  */
 export function resolveAppPublicOrigin(request: Request): string {
   const forwardedHost = firstHeaderValue(request, "x-forwarded-host");
-  if (forwardedHost) {
+  // The web runtime's own reverse proxy (gateway → next-server) rewrites
+  // X-Forwarded-Host to the loopback address it listened on
+  // (`127.0.0.1:3100`). That's the *internal* socket, not the public URL
+  // the operator reached the app at — trusting it would make every webhook
+  // callback point at localhost and NLPearl reject it. So loopback/private
+  // forwarded hosts are ignored; the env var (or request.url) wins.
+  if (forwardedHost && !isLoopbackOrPrivateHost(forwardedHost)) {
     const forwardedProto = firstHeaderValue(request, "x-forwarded-proto");
     const proto = forwardedProto === "https" ? "https" : "http";
     return `${proto}://${forwardedHost}`;
@@ -54,6 +60,26 @@ export function resolveAppPublicOrigin(request: Request): string {
   }
 
   return new URL(request.url).origin;
+}
+
+/**
+ * True when a host header value is loopback or a private-network address —
+ * i.e. it cannot be the public origin NLPearl/Composio would call back.
+ * Handles `localhost`, `127.x`, `::1`, `10.x`, `192.168.x`, `172.16-31.x`.
+ */
+function isLoopbackOrPrivateHost(host: string): boolean {
+  const raw = host.trim();
+  if (raw === "") {return true;}
+  const hostname = raw.split(":")[0] ?? raw;
+  if (hostname === "localhost" || hostname === "::1") {return true;}
+  if (/^127\.\d{1,3}(\.\d{1,3}){2}$/.test(hostname)) {return true;}
+  const parts = hostname.split(".").map((n) => Number(n));
+  if (parts.length === 4 && parts.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) {
+    if (parts[0] === 10) {return true;}
+    if (parts[0] === 192 && parts[1] === 168) {return true;}
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) {return true;}
+  }
+  return false;
 }
 
 /**

@@ -1,5 +1,5 @@
 // extensions/crm-a-identity/index.ts
-import path2 from "node:path";
+import path3 from "node:path";
 
 // extensions/shared/crm-a-auth.ts
 import { existsSync, readFileSync } from "node:fs";
@@ -33,9 +33,93 @@ function resolveCrmAGatewayUrl(pluginConfig) {
   return process.env.CRM_A_GATEWAY_URL?.trim() || DEFAULT_GATEWAY_URL;
 }
 
+// extensions/shared/console-web.ts
+import { existsSync as existsSync2, readFileSync as readFileSync2 } from "node:fs";
+import path2 from "node:path";
+var DEFAULT_WEB_PORT = 3100;
+var PROCESS_JSON_REL = path2.join("web-runtime", "process.json");
+function asRecord(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function readNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function readString(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : void 0;
+}
+function resolveConsoleStateDir() {
+  const fromEnv = readString(process.env.OPENCLAW_STATE_DIR);
+  if (fromEnv) {
+    return fromEnv;
+  }
+  const home = readString(process.env.HOME) ?? "/root";
+  return path2.join(home, ".openclaw-crm-a");
+}
+function resolvePortFromProcessFile(stateDir) {
+  try {
+    const file = path2.join(stateDir, PROCESS_JSON_REL);
+    if (!existsSync2(file)) {
+      return void 0;
+    }
+    const parsed = asRecord(JSON.parse(readFileSync2(file, "utf-8")));
+    return readNumber(parsed?.port);
+  } catch {
+    return void 0;
+  }
+}
+function resolveConsoleWebBaseUrl() {
+  const fromEnv = readString(process.env.CRM_A_CONSOLE_WEB_BASE_URL);
+  if (fromEnv) {
+    return fromEnv.replace(/\/$/, "");
+  }
+  const port = resolvePortFromProcessFile(resolveConsoleStateDir()) ?? DEFAULT_WEB_PORT;
+  return `http://127.0.0.1:${port}`;
+}
+function readConsoleWebSecret() {
+  return readString(process.env.CRM_A_PHONE_WEBHOOK_SECRET);
+}
+async function postConsoleJson(pathName, body, timeoutMs = 3e4) {
+  const secret = readConsoleWebSecret();
+  if (!secret) {
+    return { status: 0, body: { error: "CRM_A_PHONE_WEBHOOK_SECRET not set; console API unavailable." } };
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${resolveConsoleWebBaseUrl()}${pathName}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        authorization: `Bearer ${secret}`
+      },
+      body: JSON.stringify(body ?? {}),
+      signal: controller.signal
+    });
+    const text = await res.text();
+    let parsed = {};
+    if (text.trim()) {
+      try {
+        parsed = asRecord(JSON.parse(text)) ?? { error: text.slice(0, 300) };
+      } catch {
+        parsed = { error: text.slice(0, 300) };
+      }
+    }
+    return { status: res.status, body: parsed };
+  } catch (err) {
+    return {
+      status: 0,
+      body: { error: err instanceof Error ? err.message : String(err) }
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // extensions/crm-a-identity/index.ts
 var id = "crm-a-identity";
 var CRM_A_SEARCH_INTEGRATIONS_NAME = "crm_a_search_integrations";
+var CRM_A_SEGMENT_TOOL_NAME = "crm_a_segment_upsert";
 var CRM_A_EXECUTE_INTEGRATIONS_NAME = "crm_a_execute_integrations";
 var CRM_A_INTEGRATIONS_DISPLAY_NAME = "Crm-A Integrations";
 var CRM_A_INTEGRATION_DISPLAY_NAME = "Crm-A Integration";
@@ -57,6 +141,59 @@ var CRM_A_SEARCH_INTEGRATIONS_PARAMETERS = {
     }
   },
   required: ["query"]
+};
+var CRM_A_SEGMENT_PARAMETERS = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    name: {
+      type: "string",
+      description: "Segment name (matched case-insensitively; created when it does not exist). Use the exact name the campaign card references."
+    },
+    description: { type: "string", description: "Optional segment description." },
+    rules: {
+      type: "array",
+      description: 'Demographic filters on PEOPLE fields, combined with AND. A phone campaign wants [{field: "Marketing Opt-in", operator: "is_true"}, {field: "Preferred Contact Channel", operator: "is", value: "phone"}].',
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          field: {
+            type: "string",
+            description: "People field name, e.g. Full Name, Email Address, Phone Number, Status, Source, Strength Score, Last Interaction At, Marketing Opt-in, Preferred Contact Channel."
+          },
+          operator: {
+            type: "string",
+            description: "Filter operator for the field type (text: contains/equals/\u2026; enum: is/is_not; boolean: is_true/is_false; number: eq/gt/lt/\u2026; date: before/after/on/\u2026). Defaults to the type's default operator."
+          },
+          value: {
+            type: ["string", "number", "boolean"],
+            description: "Rule value for operators that need one (not is_empty/is_not_empty/is_true/is_false). Enum values must match the schema exactly (e.g. phone)."
+          }
+        },
+        required: ["field"]
+      }
+    },
+    events: {
+      type: "array",
+      description: 'Optional interaction conditions, e.g. [{type: "Purchase", operator: "has", withinDays: 30}].',
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          type: {
+            type: "string",
+            description: "Interaction type: Email, Meeting, Page View, Form Submit, Purchase, Custom."
+          },
+          operator: { type: "string", description: "has | has_not" },
+          withinDays: { type: "number", description: "Only count events within the last N days." },
+          minCount: { type: "number", description: 'Minimum occurrences for "has".' }
+        },
+        required: ["type"]
+      }
+    }
+  },
+  required: ["name", "rules"]
 };
 var APP_ALIASES = {
   gmail: "gmail",
@@ -253,10 +390,10 @@ function jsonResult(payload) {
     details: payload
   };
 }
-function asRecord(value) {
+function asRecord2(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
-function readString(value) {
+function readString2(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : void 0;
 }
 function normalizeResolverApp(value) {
@@ -319,9 +456,9 @@ function scoreMatch(text, queryTokens) {
   return score;
 }
 function resolveGatewayUrlFromApi(api) {
-  const plugins = asRecord(asRecord(api?.config)?.plugins)?.entries;
-  const crmAGateway = asRecord(asRecord(plugins)?.["crm-a-ai-gateway"]);
-  const gwConfig = asRecord(crmAGateway?.config);
+  const plugins = asRecord2(asRecord2(api?.config)?.plugins)?.entries;
+  const crmAGateway = asRecord2(asRecord2(plugins)?.["crm-a-ai-gateway"]);
+  const gwConfig = asRecord2(crmAGateway?.config);
   return resolveCrmAGatewayUrl(gwConfig);
 }
 function resolveComposioApiKeyFromApi(_api) {
@@ -331,7 +468,7 @@ function asRecordArray(value) {
   if (!Array.isArray(value)) {
     return [];
   }
-  return value.map((item) => asRecord(item)).filter((item) => Boolean(item));
+  return value.map((item) => asRecord2(item)).filter((item) => Boolean(item));
 }
 async function postComposioGatewayJson(params) {
   const gatewayUrl = resolveGatewayUrlFromApi(params.api);
@@ -353,10 +490,10 @@ async function postComposioGatewayJson(params) {
     const parsed = text.trim().length > 0 ? JSON.parse(text) : {};
     if (!response.ok) {
       return {
-        error: readString(asRecord(parsed)?.error) ?? readString(asRecord(asRecord(parsed)?.error)?.message) ?? `Gateway request failed with HTTP ${response.status}.`
+        error: readString2(asRecord2(parsed)?.error) ?? readString2(asRecord2(asRecord2(parsed)?.error)?.message) ?? `Gateway request failed with HTTP ${response.status}.`
       };
     }
-    return asRecord(parsed) ?? {};
+    return asRecord2(parsed) ?? {};
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : String(error)
@@ -423,7 +560,7 @@ function buildStaticFallbackSearchResults(toolkitSlug, queryText) {
 function buildEmptyConnectedSearchInstruction(params) {
   if (params.fallbackResults.length > 0) {
     const top = params.fallbackResults[0] ?? {};
-    const slug = readString(top.tool_slug) ?? "the top fallback tool_slug";
+    const slug = readString2(top.tool_slug) ?? "the top fallback tool_slug";
     const suggested = top.suggested_arguments;
     const suggestedText = suggested && typeof suggested === "object" && Object.keys(suggested).length > 0 ? ` and suggested_arguments ${JSON.stringify(suggested)}` : "";
     return [
@@ -451,9 +588,9 @@ function createCrmASearchIntegrationsTool(api) {
       if (!workspaceDir) {
         return jsonResult({ error: "No workspace is configured for Crm-A Console." });
       }
-      const payload = asRecord(input) ?? {};
-      const query = readString(payload.query) ?? "";
-      const toolkit = readString(payload.toolkit);
+      const payload = asRecord2(input) ?? {};
+      const query = readString2(payload.query) ?? "";
+      const toolkit = readString2(payload.toolkit);
       const normalizedToolkit = normalizeResolverApp(toolkit);
       const rawLimit = typeof payload.limit === "number" ? payload.limit : Number(payload.limit);
       const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(Math.trunc(rawLimit), 100)) : 20;
@@ -483,20 +620,20 @@ function createCrmASearchIntegrationsTool(api) {
         const connectedToolkitsDirect = /* @__PURE__ */ new Set();
         const connectedAccountsByToolkit = {};
         for (const item of asRecordArray(connJson?.items) ?? []) {
-          const rec = asRecord(item);
+          const rec = asRecord2(item);
           if (!rec) {
             continue;
           }
-          const slug = readString(asRecord(rec.toolkit)?.slug);
+          const slug = readString2(asRecord2(rec.toolkit)?.slug);
           if (!slug) {
             continue;
           }
           connectedToolkitsDirect.add(slug);
-          const entry = asRecord(connectedAccountsByToolkit[slug]) ?? {};
+          const entry = asRecord2(connectedAccountsByToolkit[slug]) ?? {};
           const accounts = Array.isArray(entry.accounts) ? entry.accounts : [];
           accounts.push({
-            id: readString(rec.id) ?? "",
-            ...readString(rec.alias) ? { alias: readString(rec.alias) } : {}
+            id: readString2(rec.id) ?? "",
+            ...readString2(rec.alias) ? { alias: readString2(rec.alias) } : {}
           });
           connectedAccountsByToolkit[slug] = {
             count: accounts.length,
@@ -575,19 +712,19 @@ function createCrmASearchIntegrationsTool(api) {
           }) : normalizedToolkit ? `No ${humanizeResolverApp(normalizedToolkit)} integration tools matched. Refine the query or try a broader search.` : "No integration tools matched. Refine the query or specify a toolkit."
         });
       }
-      const directAccountsByToolkit = asRecord(gatewayResult.connected_accounts_by_toolkit);
+      const directAccountsByToolkit = asRecord2(gatewayResult.connected_accounts_by_toolkit);
       const results = items.map((item) => {
-        const toolkitRec = asRecord(item.toolkit);
-        const connStatus = asRecord(item.connection_status);
-        const directEntry = directAccountsByToolkit ? asRecord(directAccountsByToolkit[readString(toolkitRec?.slug) ?? ""]) : void 0;
+        const toolkitRec = asRecord2(item.toolkit);
+        const connStatus = asRecord2(item.connection_status);
+        const directEntry = directAccountsByToolkit ? asRecord2(directAccountsByToolkit[readString2(toolkitRec?.slug) ?? ""]) : void 0;
         const directCount = directEntry && typeof directEntry.count === "number" ? directEntry.count : 0;
         return {
-          tool_slug: readString(item.slug),
-          name: readString(item.name),
-          description: readString(item.description),
+          tool_slug: readString2(item.slug),
+          name: readString2(item.name),
+          description: readString2(item.description),
           toolkit: {
-            slug: readString(toolkitRec?.slug),
-            name: readString(toolkitRec?.name)
+            slug: readString2(toolkitRec?.slug),
+            name: readString2(toolkitRec?.name)
           },
           input_schema: item.input_parameters ?? item.input_schema,
           is_connected: connStatus?.is_connected === true || directCount > 0,
@@ -636,12 +773,12 @@ function buildComposioDefaultGuidance(composioAppsSkillPath) {
   ].join("\n");
 }
 function buildIdentityPrompt(workspaceDir) {
-  const skillsDir = path2.join(workspaceDir, "skills");
-  const crmSkillPath = path2.join(skillsDir, "crm", "SKILL.md");
-  const appBuilderSkillPath = path2.join(skillsDir, "app-builder", "SKILL.md");
-  const composioAppsSkillPath = path2.join(skillsDir, "crm-a-integrations", "SKILL.md");
-  const appsDir = path2.join(workspaceDir, "apps");
-  const dbPath = path2.join(workspaceDir, "workspace.duckdb");
+  const skillsDir = path3.join(workspaceDir, "skills");
+  const crmSkillPath = path3.join(skillsDir, "crm", "SKILL.md");
+  const appBuilderSkillPath = path3.join(skillsDir, "app-builder", "SKILL.md");
+  const composioAppsSkillPath = path3.join(skillsDir, "crm-a-integrations", "SKILL.md");
+  const appsDir = path3.join(workspaceDir, "apps");
+  const dbPath = path3.join(workspaceDir, "workspace.duckdb");
   const composioGuidance = buildComposioDefaultGuidance(composioAppsSkillPath);
   return `# Crm-A Console System Prompt
 
@@ -790,11 +927,11 @@ account through two built-in tools: \`crm_a_phone_campaign\`
   contact (\`Marketing Opt-in = true\` **and** the preferred channel is phone).
   Never leave a phone campaign pointing at a broader marketing-opt-in segment:
   the send-time audience filter is the safety net, not the definition.
-- Segments are stored as JSON segment definitions built by the console's
-  segment builder (\`{"filters":{"id":"root","conjunction":"and","rules":[{"id":"r1","field":"Marketing Opt-in","operator":"is_true","value":true}, \u2026]}}\`).
-  Never hand-write a segment's \`Filter\` as free text ("\u2026 = true AND \u2026"): the
-  audience resolver cannot read it and the send fails. Reuse an existing
-  segment, or ask the operator to build the segment in the console first.
+- Create or update a segment with the \`crm_a_segment_upsert\` tool (name +
+  rules on people fields), which validates the fields/operators and writes the
+  definition JSON for you. NEVER write the \`Filter\` field by hand in SQL: a
+  hand-escaped JSON gets truncated, the segment becomes unusable and every
+  send against it fails. Reuse an existing segment when one already matches.
 - \`create\` builds the Pearl (paused, nothing dials), \`send\` enqueues the
   phone-compliant audience as leads and \u2014 like \`resume\` \u2014 requires the
   operator's explicit confirmation (\`confirm: true\`). Never call them without
@@ -816,6 +953,33 @@ function resolveWorkspaceDir(api) {
   const ws = api?.config?.agents?.defaults?.workspace;
   return typeof ws === "string" ? ws.trim() || void 0 : void 0;
 }
+function createCrmASegmentTool() {
+  return {
+    name: CRM_A_SEGMENT_TOOL_NAME,
+    label: "Crm-A segment builder",
+    description: "Create or update a CDP segment with a validated filter definition. ALWAYS use this to define a segment: never write the segment's `Filter` field by hand in SQL \u2014 a hand-escaped JSON is truncated easily and leaves a segment that every campaign send refuses.",
+    parameters: CRM_A_SEGMENT_PARAMETERS,
+    async execute(_toolCallId, input) {
+      const payload = asRecord2(input) ?? {};
+      const name = readString2(payload.name);
+      if (!name) {
+        return jsonResult({ error: "name is required." });
+      }
+      const { status, body } = await postConsoleJson("/api/crm/segments", {
+        name,
+        description: readString2(payload.description),
+        rules: Array.isArray(payload.rules) ? payload.rules : [],
+        events: Array.isArray(payload.events) ? payload.events : []
+      });
+      if (status >= 400 || status === 0) {
+        return jsonResult({
+          error: readString2(body.error) ?? `Segment upsert failed (HTTP ${status}). Is the console web runtime running?`
+        });
+      }
+      return jsonResult(body);
+    }
+  };
+}
 function shouldRegisterIntegrationTools(workspaceDir) {
   return workspaceDir.trim().length > 0;
 }
@@ -833,6 +997,11 @@ function register(api) {
     api.logger?.info?.(
       `[crm-a-identity] registered ${CRM_A_SEARCH_INTEGRATIONS_NAME} integration tool`
     );
+    api.registerTool(createCrmASegmentTool(), {
+      name: CRM_A_SEGMENT_TOOL_NAME,
+      optional: true
+    });
+    api.logger?.info?.(`[crm-a-identity] registered ${CRM_A_SEGMENT_TOOL_NAME} tool`);
   }
   api.on(
     "before_prompt_build",

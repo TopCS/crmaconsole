@@ -8,6 +8,7 @@ import {
   addLead,
   setPearlActive,
   resolvePhoneIdFromNumber,
+  resolvePearlIdByName,
   OUTBOUND_PHONE_DIRECTIONS,
   INBOUND_PHONE_DIRECTIONS,
 } from "./nlpearl";
@@ -28,10 +29,12 @@ function lastCall(): { url: string; init: RequestInit | undefined } {
 }
 
 describe("resolvePhoneIdFromNumber", () => {
+  // Direction mapping per Get Phone Numbers docs:
+  // 1 = InboundOutbound, 2 = Inbound, 3 = Outbound, 10 = NotSet.
   const phones = [
-    { id: "inbound-only", number: "+39654547159", direction: 1 },
-    { id: "outbound-a", number: "+390654547620", direction: 2 },
-    { id: "both-b", number: "+390654547621", direction: 3 },
+    { id: "both-a", number: "+39654547159", direction: 1 },
+    { id: "inbound-only", number: "+390654547620", direction: 2 },
+    { id: "outbound-only", number: "+390654547621", direction: 3 },
     { id: "unclassified", number: "+393331112222", direction: 10 },
   ];
 
@@ -63,17 +66,21 @@ describe("resolvePhoneIdFromNumber", () => {
   });
 
   it("resolves a dialed number to the Phone ID for the requested direction", async () => {
-    expect(await resolvePhoneIdFromNumber("390654547620", { directions: OUTBOUND_PHONE_DIRECTIONS }))
-      .toBe("outbound-a");
+    expect(await resolvePhoneIdFromNumber("390654547620", { directions: INBOUND_PHONE_DIRECTIONS }))
+      .toBe("inbound-only");
     expect(await resolvePhoneIdFromNumber("+390654547621", { directions: OUTBOUND_PHONE_DIRECTIONS }))
-      .toBe("both-b");
+      .toBe("outbound-only");
   });
 
-  it("never hands an inbound-only line to an outbound campaign", async () => {
-    expect(await resolvePhoneIdFromNumber("+39654547159", { directions: OUTBOUND_PHONE_DIRECTIONS }))
+  it("never hands an outbound-only line to an inbound agent", async () => {
+    expect(await resolvePhoneIdFromNumber("+390654547621", { directions: INBOUND_PHONE_DIRECTIONS }))
       .toBeNull();
+    expect(await resolvePhoneIdFromNumber("+390654547621", { directions: OUTBOUND_PHONE_DIRECTIONS }))
+      .toBe("outbound-only");
     expect(await resolvePhoneIdFromNumber("+39654547159", { directions: INBOUND_PHONE_DIRECTIONS }))
-      .toBe("inbound-only");
+      .toBe("both-a");
+    expect(await resolvePhoneIdFromNumber("+39654547159", { directions: OUTBOUND_PHONE_DIRECTIONS }))
+      .toBe("both-a");
   });
 
   it("ignores unclassified lines and numbers too short to be a phone number", async () => {
@@ -207,5 +214,56 @@ describe("listVoices (grouped shape)", () => {
     expect(voices).toHaveLength(3);
     expect(voices[0]).toEqual({ id: "v1", name: "Tommaso", language: "Italian", tags: ["IT"] });
     expect(voices[2].language).toBe("English");
+  });
+});
+
+describe("resolvePearlIdByName", () => {
+  const pearls = [
+    { id: "pearl-inbound-1", name: "Customer Care", type: 1 },
+    { id: "pearl-outbound-1", name: "Campagna Galaxy S27", type: 2 },
+    { id: "pearl-outbound-2", name: "Lancio Accessori", type: 2 },
+  ];
+
+  function stubPearls() {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify(pearls), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+  }
+
+  beforeEach(() => {
+    process.env.NLPEARL_ACCOUNT_ID = "ACC123";
+    process.env.NLPEARL_SECRET_KEY = "KEY456";
+    delete process.env.NLPEARL_BASE_URL;
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockReset();
+  });
+
+  afterEach(() => {
+    delete process.env.NLPEARL_ACCOUNT_ID;
+    delete process.env.NLPEARL_SECRET_KEY;
+    vi.unstubAllGlobals();
+  });
+
+  it("resolves by exact name, case-insensitive", async () => {
+    stubPearls();
+    expect(await resolvePearlIdByName("campagna galaxy s27")).toBe("pearl-outbound-1");
+    expect(await resolvePearlIdByName("Customer Care")).toBe("pearl-inbound-1");
+  });
+
+  it("filters by kind so an outbound request never picks an inbound Pearl", async () => {
+    stubPearls();
+    expect(await resolvePearlIdByName("Lancio Accessori", { kind: "outbound" })).toBe("pearl-outbound-2");
+    await expect(resolvePearlIdByName("Customer Care", { kind: "outbound" }))
+      .rejects.toThrow(/no outbound.*customer care/i);
+  });
+
+  it("throws with the list of usable pearls when nothing matches", async () => {
+    stubPearls();
+    await expect(resolvePearlIdByName("Ghost", { kind: "inbound" })).rejects.toThrow(/available inbound pearls.*customer care/i);
   });
 });

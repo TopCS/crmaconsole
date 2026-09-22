@@ -14,6 +14,9 @@ vi.mock("@/lib/nlpearl-status", () => ({
     s === "Success" ? "success" : s === "NotSuccessful" ? "contacted" : "failed",
   mapNlpearlLeadStatus: (s: string) => (s === "Success" ? "Sent" : "Queued"),
 }));
+vi.mock("@/lib/nlpearl", () => ({
+  getLead: vi.fn(async () => null),
+}));
 vi.mock("@/lib/events", () => ({
   normalizePhone: (v: unknown) => (typeof v === "string" ? v.trim() : ""),
   recordEvent: vi.fn(),
@@ -33,6 +36,7 @@ const { duckdbQueryAsync } = await import("@/lib/workspace");
 const { loadCrmFieldMaps } = await import("@/lib/crm-queries");
 const { recordEvent, findPersonIdByPhone, createPersonFromPhone, updatePersonFields } = await import("@/lib/events");
 const { updateCampaignSendByExternalId } = await import("@/lib/campaign-phone");
+const { getLead } = await import("@/lib/nlpearl");
 
 const mockedQuery = vi.mocked(duckdbQueryAsync);
 const mockedFieldMaps = vi.mocked(loadCrmFieldMaps);
@@ -41,6 +45,7 @@ const mockedFindByPhone = vi.mocked(findPersonIdByPhone);
 const mockedCreatePhone = vi.mocked(createPersonFromPhone);
 const mockedUpdate = vi.mocked(updatePersonFields);
 const mockedCampaignUpdate = vi.mocked(updateCampaignSendByExternalId);
+const mockedGetLead = vi.mocked(getLead);
 
 function post(channel: string, body: unknown, token: string | null = "test-secret"): Request {
   const q = token ? `?token=${encodeURIComponent(token)}` : "";
@@ -88,19 +93,61 @@ describe("POST /api/nlpearl/webhook/:channel", () => {
     expect(mockedUpdate).toHaveBeenCalledWith("person-1", [["Last Interaction At", expect.any(String)]]);
   });
 
-  it("call → crea persona", async () => {
+  it("call → crea persona (usa `to`, outbound)", async () => {
     mockedFindByPhone.mockResolvedValue(null);
     mockedCreatePhone.mockResolvedValue("person-new");
     const r = await call("call", { ...CALCALL, name: "Lorenzo" });
     expect(r.status).toBe(200);
-    expect(mockedCreatePhone).toHaveBeenCalledWith("+393312345678", "Lorenzo");
+    expect(mockedCreatePhone).toHaveBeenCalledWith("+3902", "Lorenzo");
   });
 
-  it("call → idempotent", async () => {
+  it("call → leadId risolve il lead e aggancia alla persona del lead", async () => {
+    mockedGetLead.mockResolvedValue({ id: "lead-1", phoneNumber: "+3933999888777" });
+    const r = await call("call", { ...CALCALL, leadId: "lead-1" });
+    expect(r.status).toBe(200);
+    expect(mockedGetLead).toHaveBeenCalledWith("p1", "lead-1");
+    expect(mockedFindByPhone).toHaveBeenCalledWith("+3933999888777");
+  });
+
+  it("call → lead irraggiungibile, ripiega su `to`", async () => {
+    mockedGetLead.mockResolvedValue(null);
+    mockedFindByPhone.mockResolvedValue(null);
+    mockedCreatePhone.mockResolvedValue("person-new");
+    const r = await call("call", { ...CALCALL, leadId: "lead-1" });
+    expect(r.status).toBe(200);
+    expect(mockedCreatePhone).toHaveBeenCalledWith("+3902", "Lorenzo");
+  });
+
+  it("call → idempotente: aggiorna le properties invece di scartare", async () => {
     mockedQuery.mockResolvedValue([{ entry_id: "dup" }]);
-    const p = await (await call("call", CALCALL)).json();
-    expect(p.duplicate).toBe(true);
+    const p = await (await call("call", { ...CALCALL, transcript: [{ role: "Pearl", content: "ciao", startTime: 0, endTime: 1 }] })).json();
+    expect(p.ok).toBe(true);
+    expect(p.updated).toBe(true);
+    expect(p.interactionId).toBe("dup");
     expect(mockedRecordEvent).not.toHaveBeenCalled();
+    const { duckdbExecOnFileAsync } = await import("@/lib/workspace");
+    const execSql = vi.mocked(duckdbExecOnFileAsync).mock.calls
+      .map(([, sql]) => sql)
+      .join("\n");
+    expect(execSql).toContain("dup");
+    expect(execSql).toContain("transcript");
+  });
+
+  it("call → registra transcript e recording nelle properties", async () => {
+    const r = await call("call", {
+      ...CALCALL,
+      recording: "https://rec.example/x.mp3",
+      transcript: [
+        { role: "Pearl", content: "Buongiorno", startTime: 0, endTime: 2 },
+        { role: "Client", content: "Salve", startTime: 2, endTime: 4 },
+      ],
+      collectedInfo: [{ id: "v1", name: "Intento", value: "acquisto" }],
+    });
+    expect(r.status).toBe(200);
+    const props = JSON.parse(String(mockedRecordEvent.mock.calls[0][0].propertiesJson));
+    expect(props.recording).toBe("https://rec.example/x.mp3");
+    expect(props.transcript).toHaveLength(2);
+    expect(props.collectedInfo[0].name).toBe("Intento");
   });
 
   it("lead → interaction + campaign_send update", async () => {

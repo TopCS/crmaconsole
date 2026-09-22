@@ -32,6 +32,7 @@ import {
   loadLastOrder,
   loadPhonePerson,
   resolvePhonePerson,
+  resolvePersonFromTelegram,
   type PhoneContact,
   type PhonePerson,
 } from "@/lib/phone-webhook";
@@ -58,6 +59,7 @@ function personPayload(person: PhonePerson | null) {
     phone: person.phone,
     status: person.status,
     preferredContact: person.preferredContact,
+    telegramUserId: person.telegramUserId,
     lastOrder: person.lastOrder,
   };
 }
@@ -188,6 +190,9 @@ export async function POST(req: Request) {
     if (preferred === "telegram" || preferred === "email") {
       updates.push(["Preferred Contact Channel", preferred]);
     }
+    const telegramId =
+      typeof data.telegramUserId === "string" ? data.telegramUserId.trim() : "";
+    if (telegramId) {updates.push(["Telegram User ID", telegramId]);}
     if (data.marketingOptIn != null) {
       updates.push(["Marketing Opt-in", data.marketingOptIn === true ? "true" : "false"]);
     }
@@ -250,11 +255,33 @@ export async function POST(req: Request) {
     email:
       typeof contactChan.email === "string" ? (contactChan.email as string) : null,
   };
-  const resolution = await resolvePhonePerson(msgContact);
+  const telegramId =
+    typeof contactChan.telegramUserId === "string"
+      ? contactChan.telegramUserId.trim()
+      : typeof body.telegramUserId === "string"
+        ? body.telegramUserId.trim()
+        : "";
+
+  // Resolve the person: by phone when present, else by Telegram User ID
+  // (auto-mapping when it matches a phone-resolved person, or a Telegram-only
+  // contact keyed on the id). This powers the bot-channel loop without the
+  // provider's call flow.
+  const phone = typeof msgContact.phone === "string" ? msgContact.phone.trim() : "";
+  const byPhone = phone ? await resolvePhonePerson(msgContact) : null;
+  const resolution = byPhone ?? (await resolvePersonFromTelegram({
+    telegramUserId: telegramId || undefined,
+    phone,
+    name: msgContact.name,
+  }));
   if (!resolution) {
-    return jsonError("Missing contact phone for message event.", 400);
+    return jsonError("Missing contact phone or telegram user id for message event.", 400);
   }
   const person = await loadPersonWithOrder(resolution.personId);
+
+  // Bind the Telegram User ID when absent — auto-mapped from the conversation.
+  if (telegramId && person?.telegramUserId !== telegramId) {
+    await updatePersonFields(resolution.personId, [["Telegram User ID", telegramId]]);
+  }
 
   const messageText = typeof body.text === "string" ? body.text : "";
   await recordEvent({

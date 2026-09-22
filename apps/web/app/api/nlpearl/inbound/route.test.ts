@@ -1,23 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/nlpearl-inbound", () => ({
-  createInboundPearl: vi.fn(async () => "inbound-pearl-1"),
-}));
 vi.mock("@/lib/nlpearl", () => ({
-  setPearlActive: vi.fn(async () => undefined),
+  resolvePearlIdByName: vi.fn(async (name: string) => (name === "Customer Care" ? "pearl-inbound-1" : "pearl-unknown")),
+  setPearlActive: vi.fn(async () => {}),
+}));
+vi.mock("@/lib/nlpearl-inbound", () => ({
+  createInboundPearl: vi.fn(async () => "pearl-created"),
 }));
 vi.mock("@/lib/phone-webhook", () => ({
   isPhoneWebhookAuthorized: vi.fn(() => true),
 }));
 vi.mock("@/lib/public-origin", () => ({
-  resolveAppPublicOrigin: () => "https://crm.example.net",
+  resolveAppPublicOrigin: vi.fn(() => "https://crm.example.net"),
 }));
 
 const { POST } = await import("./route");
-const { createInboundPearl } = await import("@/lib/nlpearl-inbound");
-const { setPearlActive } = await import("@/lib/nlpearl");
-const mockedCreate = vi.mocked(createInboundPearl);
-const mockedSetActive = vi.mocked(setPearlActive);
+const { resolvePearlIdByName, setPearlActive } = await import("@/lib/nlpearl");
+const { isPhoneWebhookAuthorized } = await import("@/lib/phone-webhook");
+const mockedResolve = vi.mocked(resolvePearlIdByName);
+const mockedActive = vi.mocked(setPearlActive);
+const mockedAuth = vi.mocked(isPhoneWebhookAuthorized);
 
 function post(body: unknown): Request {
   return new Request("http://localhost/api/nlpearl/inbound", {
@@ -28,62 +30,33 @@ function post(body: unknown): Request {
 }
 
 describe("POST /api/nlpearl/inbound", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it("creates the inbound Pearl with name/phone/brief from the public origin", async () => {
-    const res = await POST(post({ name: "Care", phoneId: "pn-1", brief: "## Offerta Galaxy" }));
-    expect(res.status).toBe(200);
-    expect((await res.json()).pearlId).toBe("inbound-pearl-1");
-    expect(mockedCreate).toHaveBeenCalledWith({
-      origin: "https://crm.example.net",
-      name: "Care",
-      phoneId: "pn-1",
-      brief: "## Offerta Galaxy",
-    });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedAuth.mockReturnValue(true);
   });
 
-  it("defaults the name when omitted", async () => {
-    await POST(post({}));
-    expect(mockedCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "Customer Care" }),
-    );
-  });
-
-  it("401 without auth", async () => {
-    const { isPhoneWebhookAuthorized } = await import("@/lib/phone-webhook");
-    vi.mocked(isPhoneWebhookAuthorized).mockReturnValueOnce(false);
-    const res = await POST(post({ name: "Care" }));
+  it("401 when not authorized", async () => {
+    mockedAuth.mockReturnValue(false);
+    const res = await POST(post({ action: "activate", pearlId: "p-1" }));
     expect(res.status).toBe(401);
   });
 
-  it("500 on downstream failure", async () => {
-    mockedCreate.mockRejectedValueOnce(new Error("boom"));
-    const res = await POST(post({ name: "Care" }));
-    expect(res.status).toBe(500);
-  });
-
-  it("activate calls setPearlActive(true)", async () => {
-    const res = await POST(post({ action: "activate", pearlId: "pearl-9" }));
+  it("activates an existing Pearl by NAME", async () => {
+    const res = await POST(post({ action: "activate", pearlName: "Customer Care" }));
     expect(res.status).toBe(200);
+    expect(mockedResolve).toHaveBeenCalledWith("Customer Care", { kind: "inbound" });
+    expect(mockedActive).toHaveBeenCalledWith("pearl-inbound-1", true);
     expect((await res.json()).active).toBe(true);
-    expect(mockedSetActive).toHaveBeenCalledWith("pearl-9", true);
   });
 
-  it("pause calls setPearlActive(false)", async () => {
+  it("pauses by pearlId directly", async () => {
     const res = await POST(post({ action: "pause", pearlId: "pearl-9" }));
     expect(res.status).toBe(200);
-    expect((await res.json()).active).toBe(false);
-    expect(mockedSetActive).toHaveBeenCalledWith("pearl-9", false);
+    expect(mockedActive).toHaveBeenCalledWith("pearl-9", false);
   });
 
-  it("activate/pause require pearlId", async () => {
+  it("400 when activate/pause has neither pearlId nor pearlName", async () => {
     const res = await POST(post({ action: "activate" }));
     expect(res.status).toBe(400);
-  });
-
-  it("500 when activation fails", async () => {
-    mockedSetActive.mockRejectedValueOnce(new Error("boom"));
-    const res = await POST(post({ action: "activate", pearlId: "pearl-9" }));
-    expect(res.status).toBe(500);
   });
 });

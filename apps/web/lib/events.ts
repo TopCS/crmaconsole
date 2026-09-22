@@ -107,6 +107,19 @@ export async function findPersonIdByPhone(phone: string): Promise<string | null>
   return rows[0]?.entry_id ?? null;
 }
 
+/** Find a people entry id by exact Telegram User ID match. */
+export async function findPersonIdByTelegram(telegramUserId: string): Promise<string | null> {
+  const fieldMaps = await loadCrmFieldMaps();
+  const tgFieldId = fieldMaps.people["Telegram User ID"];
+  if (!tgFieldId) {return null;}
+  const rows = await duckdbQueryAsync<{ entry_id: string }>(
+    `SELECT entry_id FROM entry_fields
+     WHERE field_id = ${sqlString(tgFieldId)} AND value = ${sqlString(telegramUserId)}
+     LIMIT 1;`,
+  );
+  return rows[0]?.entry_id ?? null;
+}
+
 /** Create a real person (Source=Manual) from a phone number. */
 export async function createPersonFromPhone(
   phone: string,
@@ -250,7 +263,7 @@ export async function findPersonIdByAnonymousId(anonymousId: string): Promise<st
   return rows[0]?.entry_id ?? null;
 }
 
-async function insertPersonRow(params: {
+export async function insertPersonRow(params: {
   personId: string;
   values: Array<[string, string]>;
 }): Promise<boolean> {

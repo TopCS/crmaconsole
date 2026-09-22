@@ -214,8 +214,87 @@ export async function listPearls(): Promise<NlpearlPearlSummary[]> {
   return nlpearlRequest<NlpearlPearlSummary[]>("GET", "/Pearl");
 }
 
+/**
+ * Resolve an existing NLPearl Pearl by NAME (the demo asks for pearls already
+ * provisioned on the dashboard without touching them). Matches case-insensitive,
+ * preferring an exact name; optional `kind` filters by Pearl type so an inbound
+ * Pearl can never be wired into an outbound campaign (or vice versa). Throws
+ * with the list of usable pearls when nothing matches.
+ */
+export async function resolvePearlIdByName(
+  name: string,
+  opts?: { kind?: "inbound" | "outbound" },
+): Promise<string> {
+  const wanted = name.trim().toLowerCase();
+  if (!wanted) {throw new Error("Pearl name is required.");}
+  const pearls = await listPearls();
+  const exact = pearls.filter((p) => (p.name ?? "").trim().toLowerCase() === wanted);
+  const candidates = exact.length > 0 ? exact : pearls.filter((p) => (p.name ?? "").trim().toLowerCase().includes(wanted));
+  const usable = candidates.filter((p) => {
+    if (!opts?.kind) {return true;}
+    return opts.kind === "outbound" ? p.type !== 1 : p.type !== 2;
+  });
+  if (usable.length === 0) {
+    const kindLabel = opts?.kind ?? "";
+    const available = pearls
+      .filter((p) => (!opts?.kind ? true : opts.kind === "outbound" ? p.type !== 1 : p.type !== 2))
+      .map((p) => `"${p.name ?? p.id}" (${p.id})`)
+      .join(", ");
+    throw new Error(
+      `No ${kindLabel} NLPearl Pearl named "${name}". ${available ? `Available ${kindLabel} pearls: ${available}.` : "No pearls found on this account."}`,
+    );
+  }
+  const best = usable.find((p) => (p.name ?? "").trim().toLowerCase() === wanted);
+  const id = (best ?? usable[0]).id;
+  if (!id) {throw new Error(`Pearl "${name}" has no id.`);}
+  return id;
+}
+
+/** Validate an explicit Pearl ID exists and is usable for the given kind. */
+export async function assertPearlKind(
+  pearlId: string,
+  kind: "inbound" | "outbound",
+): Promise<void> {
+  const pearl = await getPearl(pearlId);
+  if (!pearl) {throw new Error(`NLPearl Pearl ${pearlId} not found.`);}
+  if (kind === "outbound" && pearl.type === 1) {
+    throw new Error(
+      `Pearl "${pearl.name ?? pearlId}" is inbound (type 1) — outbound campaigns need an outbound Pearl (type 2).`,
+    );
+  }
+  if (kind === "inbound" && pearl.type === 2) {
+    throw new Error(
+      `Pearl "${pearl.name ?? pearlId}" is outbound (type 2) — inbound customer care needs an inbound Pearl (type 1).`,
+    );
+  }
+}
+
 export async function getCall(callId: string): Promise<Record<string, unknown>> {
   return nlpearlRequest("GET", `/Call/${encodeURIComponent(callId)}`);
+}
+
+export type NlpearlLead = {
+  id?: string;
+  externalId?: string | null;
+  phoneNumber?: string;
+  timeZone?: string | null;
+  status?: number;
+  created?: string;
+  callsId?: string[];
+  callData?: Record<string, unknown>;
+  collectedData?: Record<string, unknown>;
+};
+
+/** Fetch an outbound lead by ID (resolves the customer phone from a call webhook's leadId). */
+export async function getLead(pearlId: string, leadId: string): Promise<NlpearlLead | null> {
+  try {
+    return await nlpearlRequest<NlpearlLead>(
+      "GET",
+      `/Outbound/${encodeURIComponent(pearlId)}/Lead/${encodeURIComponent(leadId)}`,
+    );
+  } catch {
+    return null;
+  }
 }
 
 export type AddLeadParams = {
@@ -299,7 +378,8 @@ export function buildNlpearlCallbackUrls(origin: string, token?: string): Nlpear
 /**
  * NLPearl `/Account/PhoneNumbers` entry. The number itself is `number` (the
  * API has no `phoneNumber` field), and `direction` decides what the number can
- * do: 1 = inbound, 2 = outbound, 3 = both (other values are unclassified).
+ * do (per Get Phone Numbers docs): 1 = InboundOutbound, 2 = Inbound,
+ * 3 = Outbound, 10 = NotSet (other values are unclassified).
  */
 export type NlpearlPhoneNumber = {
   id: string;
@@ -309,15 +389,17 @@ export type NlpearlPhoneNumber = {
   isActive?: boolean;
 };
 
-/** `direction` values that may place outbound calls / answer inbound calls. */
-export const OUTBOUND_PHONE_DIRECTIONS = [2, 3];
-export const INBOUND_PHONE_DIRECTIONS = [1, 3];
+/** `direction` values that may answer inbound calls (InboundOutbound + Inbound). */
+export const INBOUND_PHONE_DIRECTIONS = [1, 2];
+/** `direction` values that may place outbound calls (InboundOutbound + Outbound). */
+export const OUTBOUND_PHONE_DIRECTIONS = [1, 3];
 
 export function phoneDirectionLabel(direction: number | undefined): string {
   switch (direction) {
-    case 1: return "inbound";
-    case 2: return "outbound";
-    case 3: return "inbound+outbound";
+    case 1: return "inbound+outbound";
+    case 2: return "inbound";
+    case 3: return "outbound";
+    case 10: return "unset";
     default: return "unclassified";
   }
 }

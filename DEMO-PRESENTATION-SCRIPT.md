@@ -12,8 +12,9 @@
 >
 > **Premessa narrativa:** nessun contatto è pre-seeded. La demo parte **vuota**: il primo record
 > nasce dal vivo, da un acquisto sull'e-commerce. Il touchpoint crea il cliente; da lì il CRM ricorda.
-> Due servizi telefonici nascono **dal vivo in chat**: prima la campagna outbound (Atto 1), poi
-> l'agente inbound di customer care (Atto 5) — entrambi costruiti dall'agente, mai pre-creati.
+> I **servizi telefonici** (le Pearl NLPearl inbound e outbound) sono già **provisionati sul
+> dashboard NLPearl**: la demo li **riusa per nome dalla chat** (Atto 1 e Atto 5) — l'agente aggancia
+> la scheda e attiva la linea con una conferma, senza toccare la dashboard né creare nulla.
 
 ---
 
@@ -106,22 +107,22 @@ Webhook Shopify configurato (`SHOPIFY_API_SECRET`); funnel attivo.
 
 ## Atto 1 — La campagna nasce dalla chat (5 min) *(il motore della demo)*
 
-**Obiettivo:** mostrare il tool `crm_a_phone_campaign`: l'agente crea la scheda, pilota NLPearl e chiede conferma prima di ogni invio. Di qui parte la chiamata vera dell'Atto 2.
+**Obiettivo:** mostrare il tool `crm_a_phone_campaign`: l'agente aggancia la scheda alla **Pearl outbound già provisionata** (per nome, zero passi manuali su NLPearl), chiede conferma e parte la chiamata vera dell'Atto 2.
 
 **🖥️ Azione:** in chat:
 
-> "Crea una campagna outbound per il Galaxy 27, con una breve comparazione col modello precedente (S26), usando il numero outbound 686fd112a91849a9e59a5353, e chiama chi preferisce il telefono."
+> "Crea una campagna outbound per il Galaxy 27, con una breve comparazione col modello precedente (S26), usando il numero outbound 686fd112a91849a9e59a5353, e riusa la pearl outbound esistente 'Campagna Galaxy S27'. Chiama chi preferisce il telefono."
 
 **🎙️ Script (beat):**
-> *(`upsert`)* "L'agente crea la **scheda campagna**: prodotto, confronto col modello precedente, config telefonica (9–18, lun–ven, fuso Roma, 3 tentativi). Dietro le quinte, senza codice."
+> *(`upsert` con `pearlName`)* "L'agente crea la **scheda campagna**: prodotto, confronto col modello precedente, config telefonica (9–18, lun–ven, fuso Roma, 3 tentativi) — e la **aggancia alla Pearl outbound che abbiamo già**, per nome. Nessuna configurazione manuale su NLPearl, nessuna Pearl duplicata."
 >
-> *(`create`)* "Ora crea la **Pearl su NLPearl** — l'agente vocale. Parte **in pausa**: nessuna chiamata finché non la attivo io."
+> *(`send` → anteprima + conferma)* "Ora definisce *chi chiamare*: solo chi ha il consenso telefonico — qui **Lorenzo**. E **chiede a me la conferma** prima di mandare i lead." *(Confermare → `leadsCreated: 1`.)* "La campagna è pronta, la Pearl è ancora in pausa."
 >
-> *(`send` → anteprima + conferma)* "Ora definisce *chi chiamare*: solo chi ha il consenso telefonico — qui **Lorenzo**. E **chiede a me la conferma** prima di mandare i lead." *(Confermare → `leadsCreated: 1`.)* "La campagna è pronta, ancora in pausa."
+> *(`resume` → conferma)* "Ora la attivo: la Pearl esistente comincia a chiamare. Confermo." *(Confermare.)*
 
-**👀 Pubblico vede:** tool-call `upsert→create→send`; scheda con Voice Brief; Pearl `Paused`; gate di conferma; `leadsCreated: 1`.
+**👀 Pubblico vede:** tool-call `upsert (pearlName)→send→resume`; scheda agganciata alla Pearl esistente; gate di conferma; `leadsCreated: 1`.
 
-**Regole sul palco:** `send`/`resume` solo dietro conferma esplicita (`confirm: true`). Il numero outbound va sostituito con quello **verificato** per l'account (vedi Note NLPearl nel runbook).
+**Regole sul palco:** `send`/`resume` solo dietro conferma esplicita (`confirm: true`). Il numero outbound va sostituito con quello **verificato** per l'account; il nome della Pearl esistente con quello **già provisionato** (vedi Note NLPearl nel runbook).
 
 ---
 
@@ -182,43 +183,67 @@ preferito. Stessa meccanica "brief → invio", ma su un **prodotto diverso** dal
 > conoscenza che ha parlato al telefono nell'Atto 2, applicata a un'offerta nuova. Il CRM non è un
 > foglio S27: è una base viva che sa proporre il prodotto giusto al momento giusto."
 >
-> *(L'agente lancia l'invio multicanale e mostra il risultato.)* "Instradato **per canale preferito**:
-> chi ha scelto Telegram la riceve su Telegram, chi email su email. Ecco il risultato: `sent`, i
-> destinatari per canale, `failed: []`."
+> *(L'agente lancia l'invio multicanale in **preview** e mostra la matrice di routing.)* "Instradato
+> **per canale preferito**: chi ha scelto Telegram la riceve su Telegram, chi email su email. Ecco chi
+> finisce dove: `telegram: [Lorenzo, Marco]`, `email: [Giulia]`. Tutto in una schermata — nessun
+> cambio di app."
 
-**👀 Pubblico vede:** `brief-accessori-galaxy.md`; JSON `{ ok, sent, telegram:[…], email:[…], failed:[] }`.
+**👀 Pubblico vede:** `brief-accessori-galaxy.md`; JSON `{ ok, preview, telegram:[…], email:[…] }` — la
+matrice di routing per canale, senza cambiare schermata.
 
-**Nota onesta:** l'invio reale richiede i canali collegati. Se in prova qualche canale fallisce, narrarlo: "i canali live della demo sono il telefono — l'avete appena visto". Collaudare prima.
+**Nota demo:** si usa la **preview** (`preview: true`) — mostra il routing senza consegnare davvero.
+L'invio reale resta possibile (Telegram via runtime OpenClaw, email via SES) ed è da collaudare prima
+se si vuole mostrarlo dal vivo; se un canale fallisce in prova, narrarlo: "i canali live della demo
+sono il telefono — l'avete appena visto".
+
+**Beat opzionale — il loop Telegram in diretta (se il bot è in polling):**
+
+Dopo la preview, dimostrare che il canale Telegram è **bidirezionale** e che la Console riconosce il cliente:
+
+1. *(Da un altro dispositivo/helper) il cliente scrive al bot:* "Grazie, l'offerta mi interessa. Vale la pena?"
+2. Il **bridge inbound** (`message_received` → `POST /api/webhooks/phone` con `action: message`) risponde sul canale con il **contesto CRM**: "Cliente esistente: Lorenzo… ultimo acquisto: Samsung Galaxy S26… corriere GLS…". Lo stesso messaggio auto-mappa il `Telegram User ID` sul profilo.
+3. *(Opzionale) In chat:* "Manda un messaggio Telegram a Lorenzo" → tool `crm_a_telegram_person` → consegna su `telegram:<id>` (senza numero).
+
+**🎙️ Script:**
+> "E il cliente può rispondere anche su Telegram. Il messaggio entra nella Console: riconosce chi è,
+> gli risponde col contesto dell'ordine e in quel momento memorizza il suo Telegram User ID — così ora
+> so come raggiungerlo anche senza il numero. Il canale che la preview vi ha appena mostrato, adesso vivo."
+
+**👀 Pubblico vede:** lo scambio sul bot (domanda → risposta con contesto CRM); il campo
+`Telegram User ID` compilato nel profilo; l'invio singolo dal comando chat.
+
+**Nota demo:** richiede il bot Telegram in **polling** (`openclaw channels add telegram`). Se il bot
+non è disponibile, narrarlo con la preview: "i canali live della demo sono il telefono — l'avete appena visto".
 
 ---
 
 ## Atto 5 — La campagna inbound nasce dalla chat (3 min) *(il servizio che risponde)*
 
-**Obiettivo:** mostrare il secondo strumento telefonico: `crm_a_inbound_care`. L'agente costruisce
-**dal vivo** l'agente inbound di customer care — lo stesso che poi risponderà a Lorenzo nell'Atto 6 —
-invece di averlo pre-creato in preparazione. Di qui parte il callback dell'Atto 6.
+**Obiettivo:** mostrare il secondo strumento telefonico: `crm_a_inbound_care`. L'agente **attiva la
+Pearl inbound già provisionata** (per nome, zero passi manuali su NLPearl) — lo stesso servizio che
+risponderà a Lorenzo nell'Atto 6. Di qui parte il callback dell'Atto 6.
 
 **🖥️ Azione:** in chat:
 
-> "Crea l'agente inbound di customer care per il lancio Galaxy: saluta per nome chi già conosciamo,
-> usa la memoria dell'ordine in consegna e proponi il brief del Galaxy 27. Usa il numero inbound
-> `686fd112a91849a9e59a5353`."
+> "Per il customer care inbound, riusa la pearl esistente 'Customer Care' sul numero inbound
+> `686fd112a91849a9e59a5353`: saluta per nome chi già conosciamo, usa la memoria dell'ordine in
+> consegna e proponi il brief del Galaxy 27. Attivala."
 
 **🎙️ Script (beat):**
-> *(`create`)* "Stesso principio dell'outbound, ma al contrario. L'agente crea la **Pearl inbound**:
-> prima di salutare, una chiamata al CRM — il **PreCallAPI** — cerca il numero tra i contatti. Se lo
-> conosce, saluta per nome e legge lo stato dell'ordine; se non lo conosce, saluta genericamente. Parte
-> **in pausa**: nessuna chiamata in ingresso finché non la attivo io."
+> *(`activate` con `pearlName` → conferma)* "Stesso principio dell'outbound, ma al contrario. L'agente
+> aggancia la **Pearl inbound** che abbiamo già — la riconosce dal nome, nessuna creazione, nessuna
+> configurazione manuale. Prima di salutare, una chiamata al CRM — il **PreCallAPI** — cerca il numero
+> tra i contatti: se lo conosce, saluta per nome e legge lo stato dell'ordine; se non lo conosce,
+> saluta genericamente."
 >
-> *(`activate` → conferma)* "Ora la accendo. Come per l'outbound, **l'agente mi chiede conferma** prima
-> di attivare la linea. Confermo — da qui in poi quel numero risponde davvero." *(Confermare →
-> `active: true`.)*
+> *(Confermare.)* "Come per l'outbound, **l'agente mi chiede conferma** prima di attivare la linea.
+> Confermo — da qui in poi quel numero risponde davvero." *(→ `active: true`.)*
 
-**👀 Pubblico vede:** tool-call `create→activate`; Pearl inbound `Paused` → attiva; gate di conferma
-su `activate`.
+**👀 Pubblico vede:** tool-call `activate (pearlName)`; Pearl inbound esistente che risponde; gate di
+conferma su `activate`.
 
 **Regole sul palco:** `activate` solo dietro conferma esplicita (`confirm: true`). Il numero inbound
-va collaudato **prima** di salire (mai la prima attivazione sul palco — vedi checklist).
+e la Pearl esistente vanno collaudati **prima** di salire (mai la prima attivazione sul palco — vedi checklist).
 
 ---
 
@@ -254,10 +279,47 @@ va collaudato **prima** di salire (mai la prima attivazione sul palco — vedi c
 
 ---
 
+### Atto 6bis — Variante senza telefono (simulata, per ambienti senza chiamata)
+
+Usare quando non è possibile (o si vuole evitare) la chiamata vera. La Console non distingue un webhook
+simulato da una chiamata reale: il flusso è identico (PreCallAPI → riconoscimento → interazione in
+timeline), solo innescato da terminale invece che dal telefono.
+
+**🖥️ Azione:** due comandi (verifica tecnica, in preparazione o durante la demo):
+
+```bash
+# 1) Il "PreCallAPI": la Console riconosce il numero di Lorenzo e restituisce il contesto
+#    che la Pearl inbound "pronuncerebbe".
+curl -s "http://localhost:3100/api/nlpearl/precall?token=$CRM_A_PHONE_WEBHOOK_SECRET&phone=+393312345678"
+# → { data: { firstName: "Lorenzo", context: "Cliente esistente: Lorenzo… ultimo acquisto:
+#     Samsung Galaxy S26… corriere GLS… consegna prevista domani entro le 18…" } }
+
+# 2) Webhook di fine chiamata: registra l'interazione Call in timeline (stesso payload V2 che
+#    NLPearl invierebbe a fine chiamata reale).
+curl -sX POST "http://localhost:3100/api/nlpearl/webhook/call?token=$CRM_A_PHONE_WEBHOOK_SECRET" \
+  -H 'content-type: application/json' -d '{
+    "id":"demo-act6","pearlId":"<pearl-inbound-id>","startTime":"2026-10-18T10:00:00Z",
+    "conversationStatus":"Success","status":"Completed",
+    "from":"+393312345678","to":"+39654547159","name":"Lorenzo","duration":72,
+    "summary":"Cliente interessato al Galaxy S27; confermata la promo di lancio.",
+    "leadId":null
+  }'
+# → { ok, interactionId, personId }  → la timeline di Lorenzo si aggiorna con la Call.
+```
+
+**🎙️ Script:** identico all'Atto 6, con un'aggiunta: "la chiamata qui è simulata dal webhook, ma il
+flusso è lo stesso che la Pearl inbound esegue da sola: la Console cerca il numero, riconosce Lorenzo,
+e registra l'esito in timeline."
+
+**👀 Pubblico vede:** contesto del PreCallAPI (riconoscimento + stato ordine) e la nuova interazione
+Call nella timeline di Lorenzo.
+
+---
+
 ## Chiusura (2 min) — Call to action
 
 **🎙️ Script:**
-> "Ricapitolando. Il CRM partiva **vuoto**: il primo record è nato da un touchpoint — un acquisto sull'e-commerce che, via webhook, ha creato l'anagrafica, l'evento e l'ordine. L'operatore ha poi abilitato il consenso e creato in chat **due servizi telefonici** — mai in automatico: la campagna outbound e l'agente inbound di customer care, entrambi con conferma umana prima di attivare. Il telefono ha squillato davvero: una voce vera, un consenso registrato. La stessa meccanica è diventata un **brief multicanale per gli accessori**, instradato per canale — un secondo caso d'uso, non una ripetizione. E quando il cliente ha richiamato, il CRM lo ha riconosciuto: nome, ordine, consegna, offerta — e ha chiuso il pre-ordine. Crm-A Console: **il CRM che ascolta, ricorda e agisce.** Domande?"
+> "Ricapitolando. Il CRM partiva **vuoto**: il primo record è nato da un touchpoint — un acquisto sull'e-commerce che, via webhook, ha creato l'anagrafica, l'evento e l'ordine. L'operatore ha poi abilitato il consenso e in chat ha riusato **due servizi telefonici già pronti** — mai in automatico: la campagna outbound e l'agente inbound di customer care, agganciati per nome e attivati con conferma umana, senza toccare la dashboard. Il telefono ha squillato davvero: una voce vera, un consenso registrato. La stessa meccanica è diventata un **brief multicanale per gli accessori**, instradato per canale — un secondo caso d'uso, non una ripetizione. E quando il cliente ha richiamato, il CRM lo ha riconosciuto: nome, ordine, consegna, offerta — e ha chiuso il pre-ordine. Crm-A Console: **il CRM che ascolta, ricorda e agisce.** Domande?"
 
 **🖥️ Azione:** aprire le domande. Tenere pronti `DEMO-RUNBOOK.md`, `SHOPIFY-SETUP.md` e `NLPEARL-SERVICES-PROMPT.md` per chi chiede come è costruito.
 
@@ -293,8 +355,10 @@ Origin pubblica attuale: **`https://top-mgm-00-2.taileb6b.ts.net`** (già impost
 - [ ] **Shopify**: dev store + prodotto SAM-S26 + app custom con webhook `orders/create` e `order/fulfilled` → URL Console (vedi `SHOPIFY-SETUP.md`)
 - [ ] **Seed + reset**: `bash scripts/demo-seed.sh` → crea catalogo (SAM-S27/S26/S25) + 4 contatti + ordine Lorenzo + segmento "Lancio Samsung Galaxy", poi **rimuove Lorenzo** (persona+ordine). Verifica finale: 3 prodotti, 3 contatti (senza Lorenzo), 1 segmento.
 - [ ] Numero inbound **verificato** (`686fd112a91849a9e59a5353`); numero outbound **verificato**; chiamata outbound **collaudata** (mai la prima volta sul palco)
-- [ ] **Collaudo inbound prima del palco**: `create` + `activate` + una chiamata inbound reale di prova (la Pearl inbound nasce **dal vivo** nell'Atto 5, non in prep) — poi `pause` e lasciare pulita la dashboard
+- [ ] **Collaudo inbound prima del palco**: `activate` con `pearlName` della Pearl esistente + una chiamata inbound reale di prova — poi `pause` e lasciare pulita la dashboard
+- [ ] **Nomi Pearl esistenti** annotati (outbound "Campagna Galaxy S27" e inbound "Customer Care") — i tool li risolvono per nome (`pearlName`)
 - [ ] Collaudo webhook Shopify con `scripts/shopify-demo-simulate.sh` (+ `--fulfilled`)
 - [ ] Canali Telegram/email (Atto 4) collaudati — o script pronto a narrarne i `failed: [...]`
+- [ ] **Bot Telegram in polling** (`openclaw channels add telegram` — il token da solo non riceve) + **bridge inbound collaudato**: messaggio al bot → risposta col contesto CRM → `Telegram User ID` auto-mappato nel profilo
 - [ ] Pearl residue di collaudo rimosse dalla dashboard NLPearl
 - [ ] Telefono carico, in vivavoce, numeri (inbound/outbound) a portata di mano; hard refresh browser

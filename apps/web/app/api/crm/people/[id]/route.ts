@@ -39,6 +39,7 @@ type Person = {
   notes: string | null;
   marketing_opt_in: boolean | null;
   preferred_channel: string | null;
+  telegram_user_id: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -122,6 +123,7 @@ export async function GET(
       { name: "Notes", alias: "notes" },
       { name: "Marketing Opt-in", alias: "marketing_opt_in" },
       { name: "Preferred Contact Channel", alias: "preferred_channel" },
+      { name: "Telegram User ID", alias: "telegram_user_id" },
     ],
     whereSql: `e.id = ${sqlString(personId)}`,
   });
@@ -186,6 +188,7 @@ export async function GET(
           ? false
           : null,
     preferred_channel: personRaw.preferred_channel,
+    telegram_user_id: personRaw.telegram_user_id,
     created_at: personRaw.created_at,
     updated_at: personRaw.updated_at,
   };

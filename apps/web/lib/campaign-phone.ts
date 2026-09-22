@@ -24,6 +24,8 @@ import {
   deleteNlpearlLeadsByExternal,
   getPearl,
   createVoicePearl,
+  resolvePearlIdByName,
+  assertPearlKind,
 } from "./nlpearl";
 import { readPhoneWebhookSecret } from "./phone-webhook";
 import { listSegmentMembers, type SegmentDefinition } from "./segments";
@@ -32,6 +34,7 @@ import {
   OUTBOUND_PHONE_DIRECTIONS,
   phoneDirectionLabel,
   resolvePhoneIdFromNumber,
+  type NlpearlPhoneNumber,
 } from "./nlpearl";
 
 // ---------------------------------------------------------------------------
@@ -155,6 +158,12 @@ export type PhoneCampaignUpsertInput = {
   greetingScript?: string;
   /** Dossier di ricerca → knowledge base della Pearl (max 20k). */
   knowledgeBase?: string;
+  /** Existing NLPearl Outbound Pearl id to link (demo: reuse, don't create).
+   * When set, `create`/`send` use it without building a new Pearl. */
+  pearlId?: string;
+  /** Pearl NAME (e.g. "Campagna Galaxy S27") → resolved to its id. Prefer this
+   * in the demo over the opaque pearl id; validated as an outbound Pearl. */
+  pearlName?: string;
 };
 
 /** Resolve a segment by its Name field → segment entry id (null when absent). */
@@ -167,6 +176,23 @@ export async function resolveSegmentIdByName(name: string): Promise<string | nul
     `SELECT ef.entry_id FROM entries e
      JOIN entry_fields ef ON ef.entry_id = e.id
      WHERE e.object_id = '${ONBOARDING_OBJECT_IDS.segment}'
+       AND ef.field_id = ${sqlString(nameFld)}
+       AND LOWER(ef.value) = ${sqlString(name.toLowerCase())}
+     LIMIT 1;`,
+  );
+  return rows[0]?.entry_id ?? null;
+}
+
+/** Resolve a person by their Full Name field → people entry id (null when absent). */
+export async function resolvePersonIdByName(name: string): Promise<string | null> {
+  const dbPath = await duckdbPathAsync();
+  const fieldMaps = await loadCrmFieldMaps();
+  const nameFld = fieldMaps.people["Full Name"];
+  if (!dbPath || !nameFld) {return null;}
+  const rows = await duckdbQueryAsync<{ entry_id: string }>(
+    `SELECT ef.entry_id FROM entries e
+     JOIN entry_fields ef ON ef.entry_id = e.id
+     WHERE e.object_id = '${ONBOARDING_OBJECT_IDS.people}'
        AND ef.field_id = ${sqlString(nameFld)}
        AND LOWER(ef.value) = ${sqlString(name.toLowerCase())}
      LIMIT 1;`,
@@ -191,18 +217,38 @@ export async function resolveConfiguredPhoneId(
 ): Promise<string> {
   const value = raw.trim();
   if (!/^\+?[\d\s().-]{8,}$/u.test(value)) {
-    return value;
+    // Opaque Phone ID — still verify it exists AND is direction-compatible, so
+    // an outbound-only line can never be wired into an inbound Pearl (or vice
+    // versa). NLPearl otherwise rejects at Pearl-create with a confusing error.
+    const phones = await listPhoneNumbers();
+    const match = phones.find((p) => p.id === value);
+    if (match) {
+      const ok = directions.includes(match.direction ?? -1);
+      if (!ok) {
+        throw new Error(
+          `NLPearl number ${match.number ?? match.displayName ?? value} (id ${value}) is ${phoneDirectionLabel(match.direction)} — this action needs one of: ${directions.map(phoneDirectionLabel).join(" / ")}. Numbers on this account: ${describePhones(phones)}.`,
+        );
+      }
+      return value;
+    }
+    throw new Error(
+      `No NLPearl phone id matches "${value}". Numbers on this account: ${describePhones(phones) || "none"}.`,
+    );
   }
   const resolved = await resolvePhoneIdFromNumber(value, { directions });
   if (resolved) {
     return resolved;
   }
-  const available = (await listPhoneNumbers())
+  const available = describePhones(await listPhoneNumbers());
+  throw new Error(
+    `No ${directions.map(phoneDirectionLabel).join("/")} NLPearl number matches "${value}". Numbers on this account: ${available || "none"}.`,
+  );
+}
+
+function describePhones(phones: NlpearlPhoneNumber[]): string {
+  return phones
     .map((phone) => `${phone.number ?? phone.displayName ?? "unknown"} (id ${phone.id}, ${phoneDirectionLabel(phone.direction)})`)
     .join(", ");
-  throw new Error(
-    `No outbound-capable NLPearl number matches "${value}". Numbers on this account: ${available || "none"}.`,
-  );
 }
 
 export async function upsertPhoneCampaign(input: PhoneCampaignUpsertInput): Promise<string> {
@@ -246,6 +292,14 @@ export async function upsertPhoneCampaign(input: PhoneCampaignUpsertInput): Prom
   }
   writeField("Segment", segmentId);
   writeField("Voice Brief", input.brief);
+  // Link an existing outbound Pearl (demo path: reuse, never create). Name
+  // wins over id for the operator; both are validated as outbound pearls.
+  if (input.pearlName?.trim()) {
+    writeField("Nlpearl Pearl ID", await resolvePearlIdByName(input.pearlName.trim(), { kind: "outbound" }));
+  } else if (input.pearlId?.trim()) {
+    await assertPearlKind(input.pearlId.trim(), "outbound");
+    writeField("Nlpearl Pearl ID", input.pearlId.trim());
+  }
   statements.push(`UPDATE entries SET updated_at = ${sqlString(now)} WHERE id = ${sqlString(campaignId)};`);
   await duckdbExecOnFileAsync(dbPath, statements.join("\n"));
   return campaignId;

@@ -26,6 +26,8 @@ vi.mock("./segments", () => ({
 
 const listPhoneNumbersMock = vi.fn().mockResolvedValue([]);
 const resolvePhoneIdFromNumberMock = vi.fn().mockResolvedValue(null);
+const resolvePearlIdByNameMock = vi.fn().mockResolvedValue("pearl-existing");
+const assertPearlKindMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("./nlpearl", () => ({
   isNlpearlConfigured: () => true,
@@ -33,10 +35,12 @@ vi.mock("./nlpearl", () => ({
   resolveVoiceId: (...a: unknown[]) => resolveVoiceIdMock(...a),
   listPhoneNumbers: (...a: unknown[]) => listPhoneNumbersMock(...a),
   resolvePhoneIdFromNumber: (...a: unknown[]) => resolvePhoneIdFromNumberMock(...a),
-  OUTBOUND_PHONE_DIRECTIONS: [2, 3],
-  INBOUND_PHONE_DIRECTIONS: [1, 3],
+  resolvePearlIdByName: (...a: unknown[]) => resolvePearlIdByNameMock(...a),
+  assertPearlKind: (...a: unknown[]) => assertPearlKindMock(...a),
+  OUTBOUND_PHONE_DIRECTIONS: [1, 3],
+  INBOUND_PHONE_DIRECTIONS: [1, 2],
   phoneDirectionLabel: (direction?: number) =>
-    direction === 1 ? "inbound" : direction === 2 ? "outbound" : direction === 3 ? "inbound+outbound" : "unclassified",
+    direction === 1 ? "inbound+outbound" : direction === 2 ? "inbound" : direction === 3 ? "outbound" : direction === 10 ? "unset" : "unclassified",
   addLead: vi.fn(),
   setPearlActive: vi.fn(),
   buildNlpearlCallbackUrls: () => ({
@@ -119,6 +123,9 @@ describe("upsertPhoneCampaign", () => {
   });
 
   it("creates a campaign card and writes phone config + Voice Brief", async () => {
+    listPhoneNumbersMock.mockResolvedValueOnce([
+      { id: "686fd112a91849a9e59a5353", number: "+39654547159", direction: 3 },
+    ]);
     const id = await upsertPhoneCampaign({
       name: "Demo",
       phoneId: "686fd112a91849a9e59a5353",
@@ -138,17 +145,40 @@ describe("upsertPhoneCampaign", () => {
     resolvePhoneIdFromNumberMock.mockResolvedValueOnce("686fd112a91849a9e59a5353");
     await upsertPhoneCampaign({ name: "Demo", phoneId: "390654547620" });
     expect(resolvePhoneIdFromNumberMock).toHaveBeenCalledWith("390654547620", {
-      directions: [2, 3],
+      directions: [1, 3],
     });
     const sql = execMock.mock.calls[0][1] as string;
     expect(sql).toContain("686fd112a91849a9e59a5353");
     expect(sql).not.toContain("390654547620");
   });
 
-  it("keeps an opaque Phone ID untouched", async () => {
+  it("keeps an opaque Phone ID untouched when it exists with a compatible direction", async () => {
+    listPhoneNumbersMock.mockResolvedValueOnce([
+      { id: "686fd112a91849a9e59a5353", number: "+39654547159", direction: 3 },
+    ]);
     await upsertPhoneCampaign({ name: "Demo", phoneId: "686fd112a91849a9e59a5353" });
     expect(resolvePhoneIdFromNumberMock).not.toHaveBeenCalled();
     expect(execMock.mock.calls[0][1]).toContain("686fd112a91849a9e59a5353");
+  });
+
+  it("rejects an opaque Phone ID whose direction does not fit the action", async () => {
+    listPhoneNumbersMock.mockResolvedValueOnce([
+      { id: "inbound-only", number: "+393331112222", direction: 2 },
+    ]);
+    await expect(
+      upsertPhoneCampaign({ name: "Demo", phoneId: "inbound-only" }),
+    ).rejects.toThrow(/inbound-only.*inbound-only.*outbound|is inbound.*outbound/su);
+    expect(execMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects an opaque Phone ID that matches no account number", async () => {
+    listPhoneNumbersMock.mockResolvedValueOnce([
+      { id: "id-1", number: "+393331112222", direction: 2 },
+    ]);
+    await expect(
+      upsertPhoneCampaign({ name: "Demo", phoneId: "unknown-id" }),
+    ).rejects.toThrow(/No NLPearl phone id matches "unknown-id".*id-1/su);
+    expect(execMock).not.toHaveBeenCalled();
   });
 
   it("rejects an unmatched number with the account's usable numbers", async () => {
@@ -158,14 +188,37 @@ describe("upsertPhoneCampaign", () => {
     ]);
     await expect(
       upsertPhoneCampaign({ name: "Demo", phoneId: "+3939065457620" }),
-    ).rejects.toThrow(/No outbound-capable NLPearl number matches.*\+393331112222.*id-1/su);
+    ).rejects.toThrow(/No inbound\+outbound\/outbound NLPearl number matches.*\+393331112222.*id-1/su);
     expect(execMock).not.toHaveBeenCalled();
   });
 
   it("reuses a provided campaignId", async () => {
+    listPhoneNumbersMock.mockResolvedValueOnce([
+      { id: "p", number: "+393331112222", direction: 3 },
+    ]);
     const id = await upsertPhoneCampaign({ campaignId: "C-1", phoneId: "p" });
     expect(id).toBe("C-1");
     expect(execMock.mock.calls[0][1]).toContain("'C-1'");
+  });
+
+  it("links an existing outbound Pearl by NAME (reuse, no creation)", async () => {
+    resolvePearlIdByNameMock.mockResolvedValueOnce("pearl-outbound-1");
+    const id = await upsertPhoneCampaign({
+      name: "Demo",
+      pearlName: "Campagna Galaxy S27",
+    });
+    expect(id).toBeTruthy();
+    expect(resolvePearlIdByNameMock).toHaveBeenCalledWith("Campagna Galaxy S27", { kind: "outbound" });
+    const sql = execMock.mock.calls[0][1] as string;
+    expect(sql).toContain("fld_pearl_id");
+    expect(sql).toContain("pearl-outbound-1");
+  });
+
+  it("links an existing outbound Pearl by ID after validating its kind", async () => {
+    const id = await upsertPhoneCampaign({ name: "Demo", pearlId: "pearl-outbound-1" });
+    expect(id).toBeTruthy();
+    expect(assertPearlKindMock).toHaveBeenCalledWith("pearl-outbound-1", "outbound");
+    expect(execMock.mock.calls[0][1]).toContain("pearl-outbound-1");
   });
 });
 

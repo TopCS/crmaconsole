@@ -42,6 +42,7 @@ const FIELD_MAPS = {
     Source: "fld_people_source",
     "Preferred Contact Channel": "fld_people_pref",
     "Marketing Opt-in": "fld_people_optin",
+    "Telegram User ID": "fld_people_telegram",
     Notes: "fld_people_notes",
     "Last Interaction At": "fld_people_last",
   },
@@ -226,5 +227,84 @@ describe("/api/webhooks/phone", () => {
     expect(sql).toContain('"kind":"Message"');
     // sqlString doubles the apostrophe in the stored JSON.
     expect(sql).toContain("Mi interessa l''offerta");
+  });
+
+  it("auto-maps the Telegram User ID on message when the phone matches", async () => {
+    mockedQuery
+      .mockResolvedValueOnce([{ entry_id: "person-123" }]) // found by phone
+      .mockResolvedValueOnce([{ entry_id: "person-123", name: "Lorenzo", email: null,
+        phone: "+393323000000", status: null, preferredContact: "telegram",
+        telegramUserId: null, marketingOptIn: null, notes: null, lastInteractionAt: null }]);
+
+    const res = await POST(
+      authedRequest({
+        action: "message",
+        messageId: "tg-9",
+        contact: { telegramUserId: "987654321", phone: "+393323000000", name: "Lorenzo" },
+        text: "Ciao",
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const sql = mockedExec.mock.calls.map((call) => String(call[1])).join("\n");
+    expect(sql).toContain("fld_people_telegram");
+    expect(sql).toContain("987654321");
+  });
+
+  it("does not overwrite the Telegram User ID when it is unchanged", async () => {
+    mockedQuery
+      .mockResolvedValueOnce([{ entry_id: "person-123" }]) // found by phone
+      .mockResolvedValueOnce([{ entry_id: "person-123", name: "Lorenzo", email: null,
+        phone: "+393323000000", status: null, preferredContact: "telegram",
+        telegramUserId: "987654321", marketingOptIn: null, notes: null, lastInteractionAt: null }]);
+
+    const res = await POST(
+      authedRequest({
+        action: "message",
+        messageId: "tg-10",
+        contact: { telegramUserId: "987654321", phone: "+393323000000" },
+        text: "Ciao",
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const sql = mockedExec.mock.calls.map((call) => String(call[1])).join("\n");
+    expect(sql).not.toContain("fld_people_telegram");
+  });
+
+  it("resolves by Telegram User ID when the message has no phone", async () => {
+    // loadPhonePerson after creation, keyed on telegram id.
+    mockedQuery
+      .mockResolvedValueOnce([]) // findPersonIdByTelegram → none
+      .mockResolvedValueOnce([
+        { entry_id: "person-tg", name: "Marco", email: null,
+          phone: null, status: null, preferredContact: "telegram",
+          telegramUserId: "555", marketingOptIn: null, notes: null, lastInteractionAt: null },
+      ]);
+
+    const res = await POST(
+      authedRequest({
+        action: "message",
+        messageId: "tg-55",
+        contact: { telegramUserId: "555", name: "Marco" },
+        text: "Ciao",
+      }),
+    );
+    expect(res.status).toBe(200);
+    const payload = await res.json();
+    expect(payload.matched).toBe("created");
+    expect(payload.person.telegramUserId).toBe("555");
+
+    const sql = mockedExec.mock.calls.map((call) => String(call[1])).join("\n");
+    expect(sql).toContain("fld_people_telegram");
+    expect(sql).toContain("555");
+  });
+
+  it("400 on message with neither phone nor telegram user id", async () => {
+    const res = await POST(
+      authedRequest({ action: "message", contact: {}, text: "Ciao" }),
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("Missing contact phone or telegram user id");
   });
 });

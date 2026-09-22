@@ -13,7 +13,7 @@
  */
 
 import { createInboundPearl } from "@/lib/nlpearl-inbound";
-import { setPearlActive } from "@/lib/nlpearl";
+import { resolvePearlIdByName, setPearlActive } from "@/lib/nlpearl";
 import { isPhoneWebhookAuthorized } from "@/lib/phone-webhook";
 import { resolveAppPublicOrigin } from "@/lib/public-origin";
 
@@ -42,12 +42,16 @@ export async function POST(req: Request) {
     const pearlId = typeof body.pearlId === "string" && body.pearlId.trim()
       ? body.pearlId.trim()
       : undefined;
-    if (!pearlId) {
-      return Response.json({ error: "pearlId is required for activate/pause." }, { status: 400 });
-    }
+    const pearlName = typeof body.pearlName === "string" && body.pearlName.trim()
+      ? body.pearlName.trim()
+      : undefined;
     try {
-      await setPearlActive(pearlId, action === "activate");
-      return Response.json({ ok: true, pearlId, active: action === "activate" });
+      const resolved = pearlId ?? (pearlName ? await resolvePearlIdByName(pearlName, { kind: "inbound" }) : undefined);
+      if (!resolved) {
+        return Response.json({ error: "pearlId or pearlName is required for activate/pause." }, { status: 400 });
+      }
+      await setPearlActive(resolved, action === "activate");
+      return Response.json({ ok: true, pearlId: resolved, active: action === "activate" });
     } catch (err) {
       return Response.json(
         { error: err instanceof Error ? err.message : `Failed to ${action} inbound Pearl.` },

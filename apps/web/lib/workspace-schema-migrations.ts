@@ -221,6 +221,12 @@ const PEOPLE_NEW_FIELDS: FieldDef[] = [
     type: "text",
     sortOrder: 28,
   },
+  {
+    id: "seed_fld_people_telegram_id_000",
+    name: "Telegram User ID",
+    type: "text",
+    sortOrder: 29,
+  },
 ];
 
 const COMPANY_NEW_FIELDS: FieldDef[] = [

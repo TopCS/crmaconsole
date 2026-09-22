@@ -12,12 +12,15 @@
  */
 
 import { timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { duckdbQueryAsync } from "./workspace";
 import { loadCrmFieldMaps, sqlString } from "./crm-queries";
 import { ONBOARDING_OBJECT_IDS } from "./workspace-schema-migrations";
 import {
   createPersonFromPhone,
   findPersonIdByPhone,
+  findPersonIdByTelegram,
+  insertPersonRow,
   normalizePhone,
 } from "./events";
 
@@ -86,6 +89,37 @@ export async function resolvePhonePerson(
   return { personId, matched: "created", phone };
 }
 
+/**
+ * Resolve a Person from a Telegram message that may not carry a phone number.
+ * Priority: existing person by Telegram User ID → existing by phone → create
+ * a Telegram-backed person (Telegram User ID + Full Name, no phone). Returns
+ * null only when there is no telegram id to key on.
+ */
+export async function resolvePersonFromTelegram(params: {
+  telegramUserId?: string | null;
+  phone?: string | null;
+  name?: string | null;
+}): Promise<{ personId: string; matched: MatchedKind } | null> {
+  const telegramId = params.telegramUserId?.trim() || null;
+  const phone = params.phone ? normalizePhone(params.phone) : "";
+  if (telegramId) {
+    const existing = await findPersonIdByTelegram(telegramId);
+    if (existing) {return { personId: existing, matched: "existing" };}
+  }
+  if (phone) {
+    const existing = await findPersonIdByPhone(phone);
+    if (existing) {return { personId: existing, matched: "existing" };}
+  }
+  if (!telegramId) {return null;}
+  const personId = randomUUID();
+  const values: Array<[string, string]> = [["Source", "Manual"], ["Telegram User ID", telegramId]];
+  const cleanName = params.name?.trim();
+  if (cleanName) {values.push(["Full Name", cleanName]);}
+  const ok = await insertPersonRow({ personId, values });
+  if (!ok) {return null;}
+  return { personId, matched: "created" };
+}
+
 // ---------------------------------------------------------------------------
 // Person context (the CRM data the provider's AI speaks)
 // ---------------------------------------------------------------------------
@@ -106,6 +140,7 @@ export type PhonePerson = {
   phone: string | null;
   status: string | null;
   preferredContact: string | null;
+  telegramUserId: string | null;
   marketingOptIn: string | null;
   notes: string | null;
   lastInteractionAt: string | null;
@@ -121,6 +156,7 @@ export async function loadPhonePerson(personId: string): Promise<PhonePerson | n
     ["Phone Number", "phone"],
     ["Status", "status"],
     ["Preferred Contact Channel", "preferredContact"],
+    ["Telegram User ID", "telegramUserId"],
     ["Marketing Opt-in", "marketingOptIn"],
     ["Notes", "notes"],
     ["Last Interaction At", "lastInteractionAt"],
@@ -142,6 +178,7 @@ export async function loadPhonePerson(personId: string): Promise<PhonePerson | n
     phone: row.phone ?? null,
     status: row.status ?? null,
     preferredContact: row.preferredContact ?? null,
+    telegramUserId: row.telegramUserId ?? null,
     marketingOptIn: row.marketingOptIn ?? null,
     notes: row.notes ?? null,
     lastInteractionAt: row.lastInteractionAt ?? null,

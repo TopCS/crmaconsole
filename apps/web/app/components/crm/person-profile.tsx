@@ -35,6 +35,7 @@ type PersonResponse = {
     notes: string | null;
     marketing_opt_in: boolean | null;
     preferred_channel: string | null;
+    telegram_user_id: string | null;
     created_at: string | null;
     updated_at: string | null;
   };
@@ -546,6 +547,7 @@ function OverviewTab({
             value={person.marketing_opt_in == null ? "—" : person.marketing_opt_in ? "Granted" : "Not granted"}
           />
           <Field label="Preferred channel" value={person.preferred_channel} />
+          <Field label="Telegram user ID" value={person.telegram_user_id} />
         </div>
       </section>
 

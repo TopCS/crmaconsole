@@ -101,6 +101,8 @@ export async function POST(req: Request) {
         greetingScript,
         knowledgeBase,
         segmentName,
+        pearlId: asString(body.pearlId),
+        pearlName: asString(body.pearlName),
       });
       return Response.json({ ok: true, campaignId: result });
     } catch (err) {

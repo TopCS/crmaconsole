@@ -117,6 +117,53 @@ describe("resolveAppPublicOrigin", () => {
     });
   });
 
+  describe("loopback / private forwarded hosts (web runtime reverse proxy)", () => {
+    it("ignores a loopback forwarded host and uses the env var instead", () => {
+      process.env.CRM_A_CONSOLE_PUBLIC_URL =
+        "https://top-mgm-00-2.taileb6b.ts.net";
+      const origin = resolveAppPublicOrigin(
+        makeRequest({
+          forwardedHost: "127.0.0.1:3100",
+          forwardedProto: "http",
+        }),
+      );
+      expect(origin).toBe("https://top-mgm-00-2.taileb6b.ts.net");
+    });
+
+    it("ignores a `localhost` forwarded host and falls back to request.url when no env", () => {
+      const origin = resolveAppPublicOrigin(
+        makeRequest({
+          forwardedHost: "localhost:3100",
+          url: "http://127.0.0.1:3100/api/composio/connect",
+        }),
+      );
+      expect(origin).toBe("http://127.0.0.1:3100");
+    });
+
+    it("ignores private-network forwarded hosts (10.x / 192.168.x / 172.16-31.x)", () => {
+      process.env.CRM_A_CONSOLE_PUBLIC_URL =
+        "https://acme.example.com";
+      for (const host of ["10.0.0.5:3100", "192.168.1.20", "172.20.0.3:8080"]) {
+        const origin = resolveAppPublicOrigin(
+          makeRequest({ forwardedHost: host, forwardedProto: "https" }),
+        );
+        expect(origin).toBe("https://acme.example.com");
+      }
+    });
+
+    it("still honors a public forwarded host even when the env var is set", () => {
+      process.env.CRM_A_CONSOLE_PUBLIC_URL =
+        "https://stale-warm-pool-slug.sandbox.merseoriginals.com";
+      const origin = resolveAppPublicOrigin(
+        makeRequest({
+          forwardedHost: "real-org-slug.sandbox.merseoriginals.com",
+          forwardedProto: "https",
+        }),
+      );
+      expect(origin).toBe("https://real-org-slug.sandbox.merseoriginals.com");
+    });
+  });
+
   describe("local dev fallback", () => {
     it("returns the request.url origin when neither forwarded headers nor env var are set", () => {
       const origin = resolveAppPublicOrigin(

@@ -4,14 +4,28 @@
  * Registers two chat tools backed by the local web app:
  *
  *   crm_a_phone_campaign (outbound) → POST /api/campaigns/phone
- *     upsert  → create/update the campaign card (name, phone config, Voice Brief)
+ *     upsert  → create/update the campaign card (name, phone config, Voice Brief);
+ *               pass pearlId/pearlName to REUSE an existing outbound Pearl
  *     create  → build the NLPearl Voice Pearl (paused; no dialing)
  *     send    → enqueue the phone-compliant audience as NLPearl leads
  *     pause / resume → toggle Pearl activity
  *
  *   crm_a_inbound_care (inbound) → POST /api/nlpearl/inbound
  *     create   → build the inbound customer-care Pearl (paused)
- *     activate / pause → toggle the inbound Pearl's activity
+ *     activate / pause → toggle the inbound Pearl's activity (pearlId or pearlName)
+ *
+ *   crm_a_multichannel (Atto 3/4) → POST /api/campaigns/send-multichannel
+ *     send a launch message to a segment, routing by Preferred Contact Channel
+ *     (Telegram via runtime, email via SES); preview:true returns the routing
+ *     matrix without delivering.
+ *
+ *   crm_a_telegram_person → POST /api/campaigns/telegram-person
+ *     send a Telegram message to a single person by name; preview:true returns
+ *     the resolved target (telegram:<id> / phone:<e164>) without delivering.
+ *
+ *   inbound bridge (hook message_received, channel telegram)
+ *     forwards inbound Telegram messages to POST /api/webhooks/phone and
+ *     replies on the channel with the CRM context returned by the console.
  *
  * Safety: `send`, `resume` (which starts dialing) and `activate` (which makes
  * the inbound line answer) REQUIRE the caller to pass `confirm: true`, else
@@ -115,6 +129,16 @@ const PHONE_CAMPAIGN_PARAMETERS = {
     brandName: { type: "string", description: "Brand name the Pearl introduces itself with." },
     greetingScript: { type: "string", description: "Opening line the Pearl says." },
     knowledgeBase: { type: "string", description: "Knowledge Base / dossier text the Pearl may quote on the call." },
+    pearlId: {
+      type: "string",
+      description:
+        "Existing NLPearl Outbound Pearl id (upsert) — reuse it instead of creating a new one. When set, create/send target it without building.",
+    },
+    pearlName: {
+      type: "string",
+      description:
+        "Existing NLPearl Outbound Pearl NAME (upsert) — resolved to its id, so the demo can reuse a pre-provisioned Pearl by name. Validated as outbound.",
+    },
     criteria: {
       type: "object",
       additionalProperties: false,
@@ -189,6 +213,11 @@ const INBOUND_CARE_PARAMETERS = {
     },
     brief: { type: "string", description: "Marketing Message MD the agent should speak (create)." },
     pearlId: { type: "string", description: "Inbound Pearl ID (activate/pause)." },
+    pearlName: {
+      type: "string",
+      description:
+        "Existing inbound Pearl NAME (activate/pause) — resolved to its id, so the demo can reuse a pre-provisioned Pearl without creating one.",
+    },
     confirm: { type: "boolean", description: "MUST be true to run activate; anything else refuses the action." },
   },
   required: ["action"],
@@ -223,12 +252,99 @@ async function callInboundRoute(
   }
 }
 
+async function callMultichannelRoute(
+  webBaseUrl: string,
+  secret: string,
+  body: Record<string, unknown>,
+): Promise<{ status: number; body: UnknownRecord }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CALL_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${webBaseUrl}/api/campaigns/send-multichannel`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    let parsed: UnknownRecord = {};
+    if (text.trim()) {
+      try { parsed = JSON.parse(text) as UnknownRecord; } catch { parsed = { error: text.slice(0, 240) }; }
+    }
+    return { status: res.status, body: parsed };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function callPhoneWebhook(
+  webBaseUrl: string,
+  secret: string,
+  body: Record<string, unknown>,
+): Promise<{ status: number; body: UnknownRecord }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CALL_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${webBaseUrl}/api/webhooks/phone`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    let parsed: UnknownRecord = {};
+    if (text.trim()) {
+      try { parsed = JSON.parse(text) as UnknownRecord; } catch { parsed = { error: text.slice(0, 240) }; }
+    }
+    return { status: res.status, body: parsed };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function callTelegramPersonRoute(
+  webBaseUrl: string,
+  secret: string,
+  body: Record<string, unknown>,
+): Promise<{ status: number; body: UnknownRecord }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CALL_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${webBaseUrl}/api/campaigns/telegram-person`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    let parsed: UnknownRecord = {};
+    if (text.trim()) {
+      try { parsed = JSON.parse(text) as UnknownRecord; } catch { parsed = { error: text.slice(0, 240) }; }
+    }
+    return { status: res.status, body: parsed };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function createInboundCareTool(webBaseUrl: string, secret: string): AnyAgentTool {
   return {
     name: INBOUND_TOOL_NAME,
     label: "NLPearl inbound customer care",
     description:
-      "Drive the NLPearl inbound customer-care Pearl from chat. create: build the inbound Pearl (paused, PreCallAPI greeting + order memory + offer brief). activate/pause: toggle whether the inbound number is answered. activate requires the operator's explicit confirmation (confirm: true).",
+      "Drive the NLPearl inbound customer-care Pearl from chat. create: build the inbound Pearl (paused, PreCallAPI greeting + order memory + offer brief). activate/pause: toggle whether the inbound number is answered; pass pearlId or pearlName to reuse an already-provisioned Pearl. activate requires the operator's explicit confirmation (confirm: true).",
     parameters: INBOUND_CARE_PARAMETERS,
     async execute(_toolCallId: string, input: UnknownRecord) {
       const action = readString(input.action);
@@ -251,10 +367,12 @@ function createInboundCareTool(webBaseUrl: string, secret: string): AnyAgentTool
         }
       } else {
         const pearlId = readString(input.pearlId);
-        if (!pearlId) {
-          return jsonResult({ error: "pearlId is required for activate/pause." });
+        const pearlName = readString(input.pearlName);
+        if (!pearlId && !pearlName) {
+          return jsonResult({ error: "pearlId or pearlName is required for activate/pause." });
         }
-        body.pearlId = pearlId;
+        if (pearlId) { body.pearlId = pearlId; }
+        if (pearlName) { body.pearlName = pearlName; }
       }
 
       try {
@@ -275,7 +393,7 @@ function createPhoneCampaignTool(webBaseUrl: string, secret: string): AnyAgentTo
     name: TOOL_NAME,
     label: "NLPearl outbound phone campaign",
     description:
-      "Drive an NLPearl outbound voice campaign from chat. upsert: create/update the campaign card (name, phone config, Voice Brief). create: build the NLPearl Pearl on NLPearl (paused, nothing dialed yet). send: enqueue the phone-compliant audience as NLPearl leads. pause/resume: pause or activate the Pearl. send and resume (which start dialing) require the operator's explicit confirmation (confirm: true).",
+      "Drive an NLPearl outbound voice campaign from chat. upsert: create/update the campaign card (name, phone config, Voice Brief); pass pearlId/pearlName to REUSE an already-provisioned outbound Pearl instead of creating one. create: build the NLPearl Pearl on NLPearl (paused, nothing dialed yet). send: enqueue the phone-compliant audience as NLPearl leads. pause/resume: pause or activate the Pearl. send and resume (which start dialing) require the operator's explicit confirmation (confirm: true).",
     parameters: PHONE_CAMPAIGN_PARAMETERS,
     async execute(_toolCallId: string, input: UnknownRecord) {
       const action = readString(input.action);
@@ -311,6 +429,8 @@ function createPhoneCampaignTool(webBaseUrl: string, secret: string): AnyAgentTo
           "brandName",
           "greetingScript",
           "knowledgeBase",
+          "pearlId",
+          "pearlName",
         ] as const) {
           const v = readString(input[k]);
           if (v) { body[k] = v; }
@@ -348,6 +468,215 @@ function createPhoneCampaignTool(webBaseUrl: string, secret: string): AnyAgentTo
   } as AnyAgentTool;
 }
 
+const MULTICHANNEL_PARAMETERS = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    segmentEntryId: {
+      type: "string",
+      description: "Segment entry id to target. Omit when segmentName is given.",
+    },
+    segmentName: {
+      type: "string",
+      description: "Segment name (e.g. \"Lancio Samsung Galaxy\") — resolved to its entry id automatically.",
+    },
+    subject: { type: "string", description: "Subject/heading of the message (email subject, telegram first line)." },
+    body: { type: "string", description: "Message body to send." },
+    preview: {
+      type: "boolean",
+      description:
+        "When true, does NOT deliver: returns the per-channel routing matrix (who lands on Telegram vs email). Use this for the demo / dry-run before sending for real.",
+    },
+    confirm: {
+      type: "boolean",
+      description:
+        "MUST be true to run a real send (preview:false). Anything else refuses the action. Ask the operator for explicit confirmation first.",
+    },
+  },
+  required: ["body"],
+} as const;
+
+function createMultichannelTool(webBaseUrl: string, secret: string): AnyAgentTool {
+  return {
+    name: "crm_a_multichannel",
+    label: "Crm-A multichannel send (Atto 3/4)",
+    description:
+      "Send a launch message to a segment's audience, routing each recipient by their Preferred Contact Channel (Telegram via the OpenClaw runtime, email via SES). With preview: true it returns the routing matrix without delivering anything — perfect for demoing who lands where. A real send requires the operator's explicit confirmation (confirm: true).",
+    parameters: MULTICHANNEL_PARAMETERS,
+    async execute(_toolCallId: string, input: UnknownRecord) {
+      const segmentEntryId = readString(input.segmentEntryId);
+      const segmentName = readString(input.segmentName);
+      if (!segmentEntryId && !segmentName) {
+        return jsonResult({ error: "segmentEntryId or segmentName is required." });
+      }
+      const subject = readString(input.subject) ?? "";
+      const body = readString(input.body);
+      if (!body) {
+        return jsonResult({ error: "body is required." });
+      }
+      const preview = input.preview === true;
+      const confirm = input.confirm === true;
+      if (!preview && !confirm) {
+        return jsonResult({
+          error: "Refusing to send for real without confirmation. Ask the operator to confirm, then call again with confirm: true (or use preview: true for a dry-run).",
+          needsConfirmation: true,
+        });
+      }
+
+      const payload: Record<string, unknown> = {
+        subject,
+        body,
+        preview,
+      };
+      if (segmentEntryId) { payload.segmentEntryId = segmentEntryId; }
+      else { payload.segmentName = segmentName; }
+
+      try {
+        const { status, body: resBody } = await callMultichannelRoute(webBaseUrl, secret, payload);
+        if (status >= 400) {
+          return jsonResult({ error: resBody.error ?? `Multichannel send failed (HTTP ${status}).` });
+        }
+        return jsonResult(resBody);
+      } catch (err) {
+        return jsonResult({ error: `Multichannel send request failed: ${err instanceof Error ? err.message : String(err)}` });
+      }
+    },
+  } as AnyAgentTool;
+}
+
+const TELEGRAM_PERSON_PARAMETERS = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    personEntryId: {
+      type: "string",
+      description: "Person entry id to message. Omit when personName is given.",
+    },
+    personName: {
+      type: "string",
+      description: "Person's Full Name (e.g. \"Lorenzo Lorato\") — resolved to their entry id automatically.",
+    },
+    subject: { type: "string", description: "Optional heading prepended to the message." },
+    body: { type: "string", description: "Message text to send." },
+    preview: {
+      type: "boolean",
+      description:
+        "When true, does NOT deliver: returns who the person resolved to and the delivery target (telegram:<id> or phone:<e164>).",
+    },
+    confirm: {
+      type: "boolean",
+      description:
+        "MUST be true to run a real send (preview:false). Anything else refuses the action. Ask the operator for explicit confirmation first.",
+    },
+  },
+  required: ["body"],
+} as const;
+
+function createTelegramPersonTool(webBaseUrl: string, secret: string): AnyAgentTool {
+  return {
+    name: "crm_a_telegram_person",
+    label: "Send a Telegram message to a person",
+    description:
+      "Send a Telegram message to a single person by name (e.g. \"manda un messaggio Telegram a Lorenzo Lorato\"). Resolves the person, delivers on their session (telegram:<id> if their Telegram User ID is on file, else phone:<e164>). With preview: true it returns the resolved target without delivering. A real send requires the operator's explicit confirmation (confirm: true).",
+    parameters: TELEGRAM_PERSON_PARAMETERS,
+    async execute(_toolCallId: string, input: UnknownRecord) {
+      const personEntryId = readString(input.personEntryId);
+      const personName = readString(input.personName);
+      if (!personEntryId && !personName) {
+        return jsonResult({ error: "personEntryId or personName is required." });
+      }
+      const subject = readString(input.subject) ?? "";
+      const body = readString(input.body);
+      if (!body) {
+        return jsonResult({ error: "body is required." });
+      }
+      const preview = input.preview === true;
+      const confirm = input.confirm === true;
+      if (!preview && !confirm) {
+        return jsonResult({
+          error: "Refusing to send for real without confirmation. Ask the operator to confirm, then call again with confirm: true (or use preview: true for a dry-run).",
+          needsConfirmation: true,
+        });
+      }
+
+      const payload: Record<string, unknown> = {
+        subject,
+        body,
+        preview,
+      };
+      if (personEntryId) { payload.personEntryId = personEntryId; }
+      else { payload.personName = personName; }
+
+      try {
+        const { status, body: resBody } = await callTelegramPersonRoute(webBaseUrl, secret, payload);
+        if (status >= 400) {
+          return jsonResult({ error: resBody.error ?? `Telegram send failed (HTTP ${status}).` });
+        }
+        return jsonResult(resBody);
+      } catch (err) {
+        return jsonResult({ error: `Telegram send request failed: ${err instanceof Error ? err.message : String(err)}` });
+      }
+    },
+  } as AnyAgentTool;
+}
+
+/**
+ * Inbound bridge: hook `message_received` on the Telegram channel and answer
+ * directly with the CRM context returned by the console webhook. This is the
+ * missing half of the loop ("messaggio DA telegram → risposta dalla console"):
+ * the gateway may not route the telegram session to an agent, so we reply on
+ * the channel ourselves with the speakable CRM context (profile + last order),
+ * while the webhook also records the interaction and auto-maps the Telegram
+ * User ID onto the person.
+ */
+function registerInboundBridge(api: any, webBaseUrl: string, secret: string): void {
+  api.on(
+    "message_received",
+    async (event: any, ctx: any) => {
+      try {
+        const channel = String(ctx?.channelId ?? "").toLowerCase();
+        if (channel !== "telegram") {return;}
+        const content = typeof event?.content === "string" ? event.content.trim() : "";
+        if (!content) {return;}
+        const meta = (event?.metadata ?? {}) as UnknownRecord;
+        const telegramUserId = readString(meta.senderId);
+        const name = readString(meta.senderName);
+        const phone = readString(meta.senderE164);
+        const messageId = readString(meta.messageId);
+
+        const payload: UnknownRecord = {
+          action: "message",
+          text: content,
+          contact: { telegramUserId: telegramUserId ?? "", name: name ?? null, phone: phone ?? null },
+        };
+        if (messageId) {payload.messageId = messageId;}
+
+        const { status, body } = await callPhoneWebhook(webBaseUrl, secret, payload);
+        if (status >= 400) {
+          api.logger?.info?.(
+            `[crm-a-nlpearl-outbound] inbound telegram forwarded failed (${status}): ${String(body.error ?? "")}`,
+          );
+          return;
+        }
+        const context = readString(body.context);
+        if (!context) {return;}
+        const to = readString(event?.from) ?? telegramUserId;
+        if (!to) {return;}
+        api.runtime?.channel?.telegram?.sendMessageTelegram?.(to, context).catch((err: unknown) => {
+          api.logger?.info?.(
+            `[crm-a-nlpearl-outbound] inbound telegram reply failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        });
+      } catch (err) {
+        api.logger?.info?.(
+          `[crm-a-nlpearl-outbound] inbound telegram bridge error: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    },
+    { priority: 100 },
+  );
+}
+
 export default function register(api: any) {
   const rootConfig = asRecord(api?.config);
   const pluginEntries = asRecord(asRecord(rootConfig?.plugins)?.entries);
@@ -370,5 +699,14 @@ export default function register(api: any) {
     name: INBOUND_TOOL_NAME,
     optional: true,
   });
-  api.logger?.info?.(`[crm-a-nlpearl-outbound] registered ${TOOL_NAME} + ${INBOUND_TOOL_NAME} (web: ${webBaseUrl})`);
+  api.registerTool(createMultichannelTool(webBaseUrl, secret), {
+    name: "crm_a_multichannel",
+    optional: true,
+  });
+  api.registerTool(createTelegramPersonTool(webBaseUrl, secret), {
+    name: "crm_a_telegram_person",
+    optional: true,
+  });
+  registerInboundBridge(api, webBaseUrl, secret);
+  api.logger?.info?.(`[crm-a-nlpearl-outbound] registered ${TOOL_NAME} + ${INBOUND_TOOL_NAME} + crm_a_multichannel + crm_a_telegram_person + inbound bridge (web: ${webBaseUrl})`);
 }
