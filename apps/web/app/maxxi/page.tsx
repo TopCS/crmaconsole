@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Badge, Card, DemoNote, Empty, ErrorNote, Kpi, Loading, SectionTitle } from "./ui";
+import { hasRole, useMe } from "./use-me";
 
 type Overview = {
 	banner: string;
@@ -16,6 +17,8 @@ export default function MaxxiDashboard() {
 	const [data, setData] = useState<Overview | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [seeding, setSeeding] = useState(false);
+	const { me } = useMe();
+	const isAdmin = hasRole(me, "admin");
 
 	const load = useCallback(async () => {
 		setError(null);
@@ -57,16 +60,18 @@ export default function MaxxiDashboard() {
 		<div className="space-y-6">
 			<div className="flex flex-wrap items-end justify-between gap-3">
 				<SectionTitle hint={`Orologio demo fisso: ${data.clock}`}>Panoramica del pubblico</SectionTitle>
-				<button
-					type="button"
-					onClick={seed}
-					disabled={seeding}
-					className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-60"
-					style={{ borderColor: "var(--color-border)", color: "var(--color-text)" }}
-					title="Ricostruisce il dataset demo dai fixture (idempotente)"
-				>
-					{seeding ? "Seed…" : "Ricarica dati demo"}
-				</button>
+				{isAdmin && (
+					<button
+						type="button"
+						onClick={seed}
+						disabled={seeding}
+						className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-60"
+						style={{ borderColor: "var(--color-border)", color: "var(--color-text)" }}
+						title="Ricostruisce il dataset demo dai fixture (idempotente)"
+					>
+						{seeding ? "Seed…" : "Ricarica dati demo"}
+					</button>
+				)}
 			</div>
 
 			<div className="grid grid-cols-2 gap-3 md:grid-cols-4">

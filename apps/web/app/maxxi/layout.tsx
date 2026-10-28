@@ -1,17 +1,8 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
+import { MaxxiHeader } from "./header";
 import { DEMO_BANNER } from "./ui";
 
 export const dynamic = "force-dynamic";
-
-const NAV = [
-	{ href: "/maxxi", label: "Panoramica" },
-	{ href: "/maxxi/people", label: "Visitatori" },
-	{ href: "/maxxi/sources", label: "Fonti" },
-	{ href: "/maxxi/segments", label: "Segmenti" },
-	{ href: "/maxxi/campaigns", label: "Campagne" },
-	{ href: "/maxxi/agent", label: "Assistente" },
-];
 
 export default function MaxxiLayout({ children }: { children: ReactNode }) {
 	return (
@@ -29,18 +20,7 @@ export default function MaxxiLayout({ children }: { children: ReactNode }) {
 							Demo non ufficiale
 						</p>
 					</div>
-					<nav className="flex flex-wrap gap-1">
-						{NAV.map((item) => (
-							<Link
-								key={item.href}
-								href={item.href}
-								className="rounded-lg px-2.5 py-1.5 text-[12px] font-medium hover:opacity-80"
-								style={{ color: "var(--color-text-muted)" }}
-							>
-								{item.label}
-							</Link>
-						))}
-					</nav>
+					<MaxxiHeader />
 				</div>
 				<div
 					className="px-5 py-1.5 text-center text-[11px] font-semibold uppercase tracking-[0.14em]"

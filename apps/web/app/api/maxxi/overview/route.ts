@@ -1,6 +1,6 @@
 /** GET /api/maxxi/overview — dashboard KPIs, sources and review queue. */
 
-import { guard } from "../_guard";
+import { guardPermission } from "../_guard";
 import { getDashboardKpis, listReviewCandidates, listSources } from "@/lib/maxxi/queries";
 import { MAXXI_CLOCK_ISO } from "@/lib/maxxi/store";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
-  const auth = guard(req);
+  const auth = guardPermission(req, "maxxi.view");
   if (!auth.ok) {return auth.response;}
 
   try {

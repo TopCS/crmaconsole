@@ -1,10 +1,11 @@
 /**
- * GET  /api/maxxi/campaigns — list drafts and audit trail.
- * POST /api/maxxi/campaigns — create a dry-run draft (no send).
- * POST /api/maxxi/campaigns?id=<id>&action=approve — simulated approval.
+ * GET  /api/maxxi/campaigns — list drafts and audit trail (maxxi.view).
+ * POST /api/maxxi/campaigns — create a dry-run draft (campaigns.create).
+ * POST /api/maxxi/campaigns?action=approve&id=<id> — simulated approval
+ *      (campaigns.approve).
  */
 
-import { guard, jsonError } from "../_guard";
+import { guardPermission, principalUsername } from "../_guard";
 import {
   approveCampaignSimulated,
   createCampaignDraft,
@@ -17,43 +18,45 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
-  const auth = guard(req);
+  const auth = guardPermission(req, "maxxi.view");
   if (!auth.ok) {return auth.response;}
   const [campaigns, audit] = await Promise.all([listCampaigns(), listAudit(50)]);
   return Response.json({ ok: true, campaigns, audit, demoMode: isDemoMode() });
 }
 
 export async function POST(req: Request) {
-  const auth = guard(req);
-  if (!auth.ok) {return auth.response;}
-
   const url = new URL(req.url);
   const action = url.searchParams.get("action");
   const campaignId = url.searchParams.get("id")?.trim();
 
   if (action === "approve") {
-    if (!campaignId) {return jsonError("id is required for approve.");}
+    const auth = guardPermission(req, "maxxi.campaigns.approve");
+    if (!auth.ok) {return auth.response;}
+    if (!campaignId) {return Response.json({ error: "id is required for approve." }, { status: 400 });}
     const result = await approveCampaignSimulated({
       campaignId,
-      principalId: auth.principal.sub,
+      principalId: principalUsername(auth.principal),
     });
     return Response.json(result);
   }
+
+  const auth = guardPermission(req, "maxxi.campaigns.create");
+  if (!auth.ok) {return auth.response;}
 
   let body: { subject?: unknown; body?: unknown };
   try {
     body = (await req.json()) as { subject?: unknown; body?: unknown };
   } catch {
-    return jsonError("Invalid JSON body.");
+    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
   }
   const subject = typeof body.subject === "string" ? body.subject.trim() : "";
   const content = typeof body.body === "string" ? body.body.trim() : "";
-  if (!subject || !content) {return jsonError("subject and body are required.");}
+  if (!subject || !content) {return Response.json({ error: "subject and body are required." }, { status: 400 });}
 
   const draft = await createCampaignDraft({
     subject,
     body: content,
-    principalId: auth.principal.sub,
+    principalId: principalUsername(auth.principal),
   });
   return Response.json({ ok: true, draft });
 }

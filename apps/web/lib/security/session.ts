@@ -11,12 +11,15 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
+import type { OperatorRole } from "./rbac";
 
 export const SESSION_COOKIE = "crm_a_session";
 export const SESSION_TTL_SECONDS = 12 * 60 * 60;
 
 export type OperatorPrincipal = {
   sub: "operator";
+  username: string;
+  roles: OperatorRole[];
   iat: number;
   exp: number;
 };
@@ -38,17 +41,21 @@ export function readSessionSecret(): string | null {
   return secret && secret.length >= 16 ? secret : null;
 }
 
-/** Operator password — operator-provided. Missing => login is disabled. */
-export function readOperatorPassword(): string | null {
-  const password = process.env.CRM_A_OPERATOR_PASSWORD?.trim();
-  return password && password.length >= 8 ? password : null;
-}
-
-export function signSessionToken(nowMs = Date.now()): string | null {
+export function signSessionToken(
+  username: string,
+  roles: OperatorRole[],
+  nowMs = Date.now(),
+): string | null {
   const secret = readSessionSecret();
   if (!secret) {return null;}
   const iat = Math.floor(nowMs / 1000);
-  const payload: OperatorPrincipal = { sub: "operator", iat, exp: iat + SESSION_TTL_SECONDS };
+  const payload: OperatorPrincipal = {
+    sub: "operator",
+    username,
+    roles,
+    iat,
+    exp: iat + SESSION_TTL_SECONDS,
+  };
   const body = b64url(JSON.stringify(payload));
   const sig = b64url(createHmac("sha256", secret).update(body).digest());
   return `${body}.${sig}`;
@@ -69,24 +76,16 @@ export function verifySessionToken(token: string | null | undefined, nowMs = Dat
     const parsed = JSON.parse(fromB64url(body).toString("utf-8")) as Partial<OperatorPrincipal>;
     if (parsed.sub !== "operator" || typeof parsed.exp !== "number") {return null;}
     if (parsed.exp * 1000 <= nowMs) {return null;}
-    return { sub: "operator", iat: Number(parsed.iat ?? 0), exp: parsed.exp };
+    return {
+      sub: "operator",
+      username: typeof parsed.username === "string" ? parsed.username : "",
+      roles: Array.isArray(parsed.roles) ? parsed.roles : [],
+      iat: Number(parsed.iat ?? 0),
+      exp: parsed.exp,
+    };
   } catch {
     return null;
   }
-}
-
-/** Constant-time password check. */
-export function checkOperatorPassword(candidate: string): boolean {
-  const expected = readOperatorPassword();
-  if (!expected) {return false;}
-  const a = Buffer.from(candidate, "utf-8");
-  const b = Buffer.from(expected, "utf-8");
-  if (a.length !== b.length) {
-    // Still do a comparison to keep timing roughly uniform.
-    timingSafeEqual(b, b);
-    return false;
-  }
-  return timingSafeEqual(a, b);
 }
 
 /** Read the session cookie from a request. */
@@ -118,11 +117,7 @@ export function requireOperator(
   return { ok: true, principal };
 }
 
-/**
- * Service-to-service guard (webhooks, ingestors, tools). Accepts the shared
- * phone-webhook secret or a dedicated service token. Never accepts the
- * operator cookie.
- */
+/** True when the request carries a valid Bearer service token. */
 export function requireService(
   req: Request,
 ): { ok: true; principal: { sub: "service" } } | { ok: false; response: Response } {

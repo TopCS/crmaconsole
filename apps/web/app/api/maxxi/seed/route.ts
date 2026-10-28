@@ -1,9 +1,6 @@
-/**
- * POST /api/maxxi/seed — deterministic seed/reset of the isolated MAXXI demo DB.
- * Operator-only. Re-running is idempotent (full rebuild from the fixture).
- */
+/** POST /api/maxxi/seed — admin-only deterministic seed/reset of the MAXXI demo DB. */
 
-import { guard } from "../_guard";
+import { guardPermission, principalUsername } from "../_guard";
 import { seedMaxxiDemo } from "@/lib/maxxi/seed";
 import { recordAudit } from "@/lib/maxxi/queries";
 
@@ -11,13 +8,13 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  const auth = guard(req);
+  const auth = guardPermission(req, "maxxi.seed");
   if (!auth.ok) {return auth.response;}
 
   try {
     const summary = await seedMaxxiDemo();
     await recordAudit({
-      principalId: auth.principal.sub,
+      principalId: principalUsername(auth.principal),
       action: "maxxi_seed",
       targetId: summary.workspaceId,
       status: "ok",

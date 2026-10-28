@@ -7,7 +7,7 @@ void guardReadOnlySql;
 
 function authedHeaders(extra: Record<string, string> = {}): Record<string, string> {
   process.env.CRM_A_SESSION_SECRET = "test-session-secret-value-1234";
-  const token = signSessionToken() as string;
+  const token = signSessionToken("maria.rossi", ["communication"]) as string;
   return {
     "Content-Type": "application/json",
     cookie: `${SESSION_COOKIE}=${encodeURIComponent(token)}`,

@@ -7,27 +7,48 @@ obbligatorio prima di qualsiasi esposizione pubblica.
 
 | Principal | Come si autentica | Cosa può fare |
 |---|---|---|
-| `operator` | cookie di sessione firmato (HMAC-SHA256), emesso da `POST /api/auth/login` | UI e API della console, inclusi seed demo e bozze campagna |
-| `service` | `Authorization: Bearer <CRM_A_SERVICE_TOKEN \| CRM_A_PHONE_WEBHOOK_SECRET>` | tool agentici e webhook; sola lettura + dry-run sul demo |
+| `operator` | account individuale + cookie di sessione firmato (HMAC-SHA256) | UI e API secondo i **ruoli** dell'account |
+| `service` | `Authorization: Bearer <CRM_A_SERVICE_TOKEN \| CRM_A_PHONE_WEBHOOK_SECRET>` | tool agentici: lettura + bozza campagna dry-run |
 | `public_ingestion` | write-key pubblica del tracker (per definizione non è identità) | solo eventi anonimi/identificati di tracking |
 
-Nessun altro principal. **Default-deny**: senza un principal valido le route
-rispondono `401`.
+Gli account operatore vivono in `<stateDir>/maxxi-demo/operators.json` con password
+**scrypt + salt** (mai in chiaro, mai nel repo). Il primo account admin nasce da
+`CRM_A_ADMIN_USERNAME` + `CRM_A_ADMIN_PASSWORD` al primo login.
+
+### Ruoli e permessi
+
+| Ruolo | Permessi |
+|---|---|
+| `admin` | tutti, inclusi seed, gestione account, audit |
+| `communication` | lettura pubblico, eleggibilità, creazione/approvazione bozze |
+| `membership` | lettura profili, eleggibilità, membership |
+| `infopoint` | lettura profili, gestione feedback + **note infopoint** |
+| `relations` | solo organizzazioni e relazioni (niente persone/consensi) |
+
+Le note dei casi infopoint sono **mascherate** lato server per i ruoli senza
+`maxxi.feedback.viewNotes`. Il concessionario `service` è read-only sui dati
+personali; l'unica scrittura consentita è la bozza di campagna dry-run.
 
 ## Dove vive il controllo
 
 1. **`apps/web/middleware.ts`** — choke point unico su tutto il surface web.
-   Allowlist esplicita (auto-verificanti): `/login`, `/api/auth/*`,
-   `/api/events/collect`, `/api/events/identify`, `/api/webhooks/*`,
-   `/api/nlpearl/webhook/*`, asset statici.
-   Tutto il resto richiede cookie valido; le chiamate `/api/*` ricevono JSON 401,
-   le pagine vengono redirette a `/login`.
+   Allowlist esplicita (auto-verificanti la propria credenziale): `/login`,
+   `/api/auth/*`, `/api/events/collect`, `/api/events/identify`,
+   `/api/webhooks/*`, `/api/nlpearl/*`, `/api/campaigns/*`, `/api/demo/*`,
+   `/api/marketing/brief`, `/api/shopify/admin`, `/api/maxxi/*` (esatta:
+   `/api/crm/segments`), asset statici.
+   Tutto il resto richiede una sessione valida: le chiamate `/api/*` ricevono
+   JSON 401, le pagine vengono redirette a `/login`.
+   Le pagine con vincolo di ruolo (es. `/maxxi/operators` → `admin`) vengono
+   redirette a `/maxxi` per un utente autenticato ma non autorizzato.
    Se `CRM_A_SESSION_SECRET` manca o è < 16 caratteri, il gate **fallisce chiuso**
    (solo le route pubbliche restano raggiungibili).
 2. **`requireOperator()` / `requireService()`** in `apps/web/lib/security/session.ts`
-   — difesa in profondità nei handler più esposti (`/api/crm/*`, `/api/memories`,
+   e **`guardPermission()`** in `apps/web/app/api/maxxi/_guard.ts` — difesa in
+   profondità nei handler più esposti (`/api/crm/*`, `/api/memories`,
    `/api/workspace/query|execute`, `/api/maxxi/*`), così il controllo non dipende
-   solo dal middleware.
+   solo dal middleware. `guardPermission` nega con 403 quando il ruolo non ha il
+   permesso richiesto.
 3. **`guardReadOnlySql()`** in `apps/web/lib/security/sql-guard.ts` — allowlist
    positiva: un solo statement, solo `SELECT`/`WITH`, keyword vietate rimosse dopo
    lo stripping dei commenti, ogni `FROM`/`JOIN` deve essere una relazione
@@ -78,12 +99,32 @@ autenticazione perimetrale e dopo i test qui sotto.
 | SEC-03 | SQL senza auth → 401; multi-statement e DDL → 403 |
 | SEC-05 | `SELECT ...; DROP ...`, commenti, CTE e relazioni fuori allowlist |
 | SEC-07 | `assertOutboundAllowed` blocca ogni adapter in demo mode |
+| SEC-11 | RBAC: ruoli, permessi, note infopoint mascherate, service senza approvazioni |
+| SEC-12 | ogni endpoint sensibile nega l'anonimo e il Bearer non valido |
 
-Comando: `pnpm --dir apps/web vitest run lib/security app/api/security-gate.test.ts`
+Comando:
+
+```bash
+pnpm --dir apps/web vitest run lib/security app/api/security-gate.test.ts app/api/middleware.test.ts app/api/maxxi/rbac.test.ts
+```
+
+Verifica dal vivo (dev server su porta dedicata) con quattro account demo:
+
+| Caso | Atteso |
+|---|---|
+| anonimo su `/api/maxxi/overview` | 401 |
+| login errato | 401 |
+| `communication` su `/api/maxxi/seed` | 403 |
+| `communication` sulle note di `P-GIULIA` | `summary: ""` |
+| `infopoint` sulle note di `P-GIULIA` | testo presente |
+| `communication` su `/maxxi/operators` | 307 → `/maxxi` |
+| service Bearer: lettura | 200 |
+| service Bearer: approve/seed/operators | 403 |
+| Bearer inventato | 401 |
 
 ## Rischi residui (fuori dal perimetro demo)
 
-- Un solo principal operatore: nessun RBAC granulare per ruolo.
+- Permessi a grana grossa (risorsa.azione): nessuna autorizzazione per singolo record.
 - Nessuna rotazione/revoca delle sessioni lato server (TTL 12h, cookie firmato).
 - Il tracking pubblico (`/api/events/*`) resta aperto per design con write-key
   pubblica: non va trattato come prova di identità o consenso.

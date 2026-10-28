@@ -8,7 +8,7 @@ Pull request: https://github.com/TopCS/crmaconsole/pull/1
 | Gate | Esito | Note |
 |---|---|---|
 | G0 baseline | ✅ | Revisione registrata; suite baseline eseguita prima delle modifiche |
-| G1 security | ✅ | Default-deny, SQL allowlist, outbound kill switch, bind su 127.0.0.1 — test automatici verdi |
+| G1 security | ✅ | Default-deny, SQL allowlist, outbound kill switch, bind su 127.0.0.1, **RBAC a ruoli** — test automatici verdi |
 | G2 seed | ✅ | Seed idempotente, isolato, dati sintetici, nessun merge su solo nome |
 | G3 demo UI | ✅ | 6 viste navigabili (panoramica, profilo 360, fonti, segmenti, campagne, assistente) |
 | G4 agent | ✅ | 3 tool: profilo 360, segmento, proposta dry-run; risposta deterministica grounded |
@@ -55,10 +55,32 @@ Non eseguiti: E2E browser; test su istanza pubblica (per scelta: nessuna esposiz
 | `POST /api/maxxi/ask` (donazioni) | `"Non ho evidenze sufficienti"` |
 | Pagine `/maxxi*` autenticate | `200` e banner demo presente su tutte |
 
+### Verifica live RBAC (4 account demo)
+
+| Caso | Esito |
+|---|---|
+| anonimo su `/api/maxxi/overview` | `401` |
+| login con password errata | `401` |
+| bootstrap: primo login crea admin | `200`, ruoli `["admin"]` |
+| `communication` su `/api/maxxi/segment` | `200` |
+| `communication` su `/api/maxxi/seed` | `403` |
+| `communication` su `/api/maxxi/operators` | `403` |
+| `infopoint` su bozza campagna | `403` |
+| note `P-GIULIA` per `communication` | `summary: ""` (mascherate) |
+| note `P-GIULIA` per `infopoint` | testo presente |
+| `communication` su `/maxxi/operators` | `307` → `/maxxi` |
+| service Bearer: overview/people | `200` |
+| service Bearer: bozza campagna | `200` (`externalCalls: 0`) |
+| service Bearer: approve / seed / operators | `403` |
+| Bearer inventato | `401` |
+
 ## 3. File modificati / aggiunti
 
 **Sicurezza**
-- `apps/web/middleware.ts` *(nuovo)* — default-deny.
+- `apps/web/middleware.ts` *(nuovo)* — default-deny + guardia di ruolo sulle pagine.
+- `apps/web/lib/security/rbac.ts` *(nuovo)* — ruoli, permessi, concessione service.
+- `apps/web/lib/security/operators.ts` *(nuovo)* — account individuali scrypt+salt, bootstrap admin.
+- `apps/web/app/api/maxxi/operators/route.ts` *(nuovo)* + `apps/web/app/maxxi/operators/page.tsx` *(nuovo)*.
 - `apps/web/lib/security/session.ts` *(nuovo)* — sessione firmata, `requireOperator`, `requireService`.
 - `apps/web/lib/security/sql-guard.ts` *(nuovo)* — allowlist SQL.
 - `apps/web/lib/security/demo-mode.ts` *(nuovo)* — kill switch outbound.
@@ -93,7 +115,8 @@ workspace CRM esistente non viene toccato.
 ## 4. Endpoint nuovi/modificati
 
 Nuovi (operator o service):
-`POST /api/auth/login`, `POST /api/auth/logout`,
+`POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`,
+`GET|POST|DELETE /api/maxxi/operators` (admin),
 `POST /api/maxxi/seed`, `GET /api/maxxi/overview`, `GET /api/maxxi/people`,
 `GET /api/maxxi/segment`, `GET|POST /api/maxxi/campaigns`, `POST /api/maxxi/ask`.
 
@@ -121,8 +144,9 @@ middleware, l'intera superficie web tranne l'allowlist pubblica.
 
 ## 7. Gap e rischi residui
 
-1. **Un solo principal operatore** — nessun RBAC per ruolo (Comunicazione,
-   Membership, Infopoint). La UI non finge ruoli non applicati.
+1. **RBAC a grana grossa** — i ruoli sono applicati lato server, ma non esiste
+   ancora autorizzazione *per record* (es. casi infopoint assegnati a un
+   operatore) né revoca sessioni lato server.
 2. **Nessuna revoca sessione lato server** (TTL 12h) né rotazione chiavi da UI.
 3. **Rate limiting** solo in memoria sul tracking pubblico.
 4. **Build Docker** non verificabile in questa sessione per un errore di rete
@@ -152,7 +176,7 @@ middleware, l'intera superficie web tranne l'allowlist pubblica.
 
 1. **API v1 `/api/v1/cdp/*`** con OpenAPI e scope (read/write separati), sopra la
    façade già isolata.
-2. **RBAC + audit a livello record** per i tre ruoli museali.
+2. **Autorizzazione per record + audit delle letture** (il RBAC a ruoli è già in piedi).
 3. **ADR PostgreSQL vs DuckDB** con benchmark su dataset sintetico ~170k record.
 4. **Memoria cliente temporale** (facts con `valid_from`/`valid_to`, `supersedes`)
    per iscrizioni myMAXXI, con provenance in UI.

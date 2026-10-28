@@ -5,7 +5,7 @@ import { signSessionToken, SESSION_COOKIE } from "@/lib/security/session";
 
 function authedRequest(): Request {
   process.env.CRM_A_SESSION_SECRET = "test-session-secret-value-1234";
-  const token = signSessionToken() as string;
+  const token = signSessionToken("maria.rossi", ["communication"]) as string;
   return new Request("http://localhost/api/memories", {
     headers: { cookie: `${SESSION_COOKIE}=${encodeURIComponent(token)}` },
   });

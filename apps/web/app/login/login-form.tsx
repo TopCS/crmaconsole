@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 export function LoginForm({ next }: { next: string }) {
+	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -15,7 +16,7 @@ export function LoginForm({ next }: { next: string }) {
 			const res = await fetch("/api/auth/login", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ password }),
+				body: JSON.stringify({ username, password }),
 			});
 			if (!res.ok) {
 				const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -32,8 +33,25 @@ export function LoginForm({ next }: { next: string }) {
 
 	return (
 		<form onSubmit={submit} className="flex w-full max-w-sm flex-col gap-3">
+			<label htmlFor="username" className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
+				Operatore
+			</label>
+			<input
+				id="username"
+				type="text"
+				autoComplete="username"
+				value={username}
+				onChange={(event) => setUsername(event.target.value)}
+				className="rounded-lg border px-3 py-2 text-sm"
+				style={{
+					borderColor: "var(--color-border)",
+					background: "var(--color-surface)",
+					color: "var(--color-text)",
+				}}
+				required
+			/>
 			<label htmlFor="password" className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
-				Password operatore
+				Password
 			</label>
 			<input
 				id="password"

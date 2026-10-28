@@ -9,9 +9,10 @@
 ```bash
 pnpm install --frozen-lockfile
 
-# Segreti operatore (impostali tu, non sono nel repo)
+# Segreti (impostali tu, non sono nel repo)
 export CRM_A_SESSION_SECRET="$(openssl rand -hex 32)"
-export CRM_A_OPERATOR_PASSWORD="<password a tua scelta, >=8 caratteri>"
+export CRM_A_ADMIN_USERNAME="admin.demo"
+export CRM_A_ADMIN_PASSWORD="<password >=8 caratteri>"
 export CRM_A_SERVICE_TOKEN="$(openssl rand -hex 24)"
 export CRM_A_DEMO_MODE=1
 
@@ -19,9 +20,22 @@ pnpm build:crm-a-plugins
 pnpm --dir apps/web dev      # oppure: docker compose up -d --build
 ```
 
-Apri `http://localhost:3100` → redirect a `/login` → inserisci la password
-operatore. Senza `CRM_A_SESSION_SECRET` + `CRM_A_OPERATOR_PASSWORD` il login è
-disabilitato e l'intera superficie resta chiusa (fail-closed).
+Apri `http://localhost:3100` → redirect a `/login` → **username + password**.
+Il primo login crea l'account admin da `CRM_A_ADMIN_USERNAME`/`CRM_A_ADMIN_PASSWORD`.
+Senza `CRM_A_SESSION_SECRET` il login è disabilitato e la superficie resta chiusa
+(fail-closed).
+
+### Ruoli per la demo
+
+| Account | Ruolo | Cosa vede |
+|---|---|---|
+| `admin.demo` | `admin` | tutto + Operatori + “Ricarica dati demo” |
+| `comm.demo` | `communication` | segmenti, bozze/approvazioni; **non** le note infopoint |
+| `memb.demo` | `membership` | profili e membership |
+| `info.demo` | `infopoint` | profili + **note infopoint** |
+| `rel.demo` | `relations` | organizzazioni e relazioni |
+
+Gli account extra si creano da **/maxxi/operators** (solo admin).
 
 ## 2. Caricare i dati demo
 

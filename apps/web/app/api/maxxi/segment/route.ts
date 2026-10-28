@@ -1,13 +1,13 @@
 /** GET /api/maxxi/segment — deterministic S_ARCH_RENEWAL_45D with reasons. */
 
-import { guard } from "../_guard";
+import { guardPermission } from "../_guard";
 import { evaluateArchRenewal45d, listCatalog } from "@/lib/maxxi/queries";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
-  const auth = guard(req);
+  const auth = guardPermission(req, "maxxi.people.eligible");
   if (!auth.ok) {return auth.response;}
 
   try {

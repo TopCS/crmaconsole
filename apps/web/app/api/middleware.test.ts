@@ -34,7 +34,7 @@ describe("middleware default-deny", () => {
   });
 
   it("allows a valid session", async () => {
-    const token = signSessionToken() as string;
+    const token = signSessionToken("maria.rossi", ["communication"]) as string;
     const res = await middleware(req("/api/crm/people", token));
     // NextResponse.next() has no status set (200 by convention) and no location.
     expect(res.headers.get("location")).toBeNull();
@@ -42,7 +42,7 @@ describe("middleware default-deny", () => {
   });
 
   it("rejects a tampered session", async () => {
-    const token = signSessionToken() as string;
+    const token = signSessionToken("maria.rossi", ["communication"]) as string;
     const tampered = `x${token.slice(1)}`;
     const res = await middleware(req("/api/crm/people", tampered));
     expect(res.status).toBe(401);

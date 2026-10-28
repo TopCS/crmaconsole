@@ -14,17 +14,36 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const SESSION_COOKIE = "crm_a_session";
 
-/** Routes that intentionally accept unauthenticated traffic (self-verified). */
+/**
+ * Routes that intentionally accept unauthenticated traffic.
+ *
+ * Every entry here verifies its own credential (Bearer secret, shared token or
+ * HMAC) inside the handler, and fails closed when the secret is not configured.
+ * Keep this list narrow: anything not listed requires an operator session.
+ */
 const PUBLIC_PREFIXES = [
   "/api/auth/login",
   "/api/auth/logout",
   "/api/events/collect",
   "/api/events/identify",
+  // Self-verified by isPhoneWebhookAuthorized / token query param.
   "/api/webhooks/",
-  "/api/nlpearl/webhook/",
+  "/api/nlpearl/",
+  "/api/campaigns/",
+  "/api/demo/",
+  "/api/marketing/brief",
+  "/api/shopify/admin",
+  // Self-verified by guardPermission → operator session or service Bearer.
+  "/api/maxxi/",
 ];
 
-const PUBLIC_EXACT = new Set<string>(["/login", "/favicon.ico", "/tracker.js"]);
+const PUBLIC_EXACT = new Set<string>([
+  "/login",
+  "/favicon.ico",
+  "/tracker.js",
+  // Exact route only: subpaths are NOT service-authenticated.
+  "/api/crm/segments",
+]);
 
 const PUBLIC_ASSET_PREFIXES = ["/_next/", "/images/", "/assets/"];
 
@@ -53,9 +72,11 @@ function toB64url(bytes: ArrayBuffer): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-async function verifyToken(token: string, secret: string): Promise<boolean> {
+type VerifiedSession = { roles: string[] } | null;
+
+async function verifyToken(token: string, secret: string): Promise<VerifiedSession> {
   const dot = token.lastIndexOf(".");
-  if (dot <= 0) {return false;}
+  if (dot <= 0) {return null;}
   const body = token.slice(0, dot);
   const provided = token.slice(dot + 1);
   try {
@@ -67,17 +88,32 @@ async function verifyToken(token: string, secret: string): Promise<boolean> {
       ["sign"],
     );
     const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
-    if (toB64url(sig) !== provided) {return false;}
+    if (toB64url(sig) !== provided) {return null;}
     const payload = JSON.parse(new TextDecoder().decode(b64urlToBytes(body))) as {
       sub?: string;
       exp?: number;
+      roles?: unknown;
     };
-    if (payload.sub !== "operator") {return false;}
-    if (typeof payload.exp !== "number" || payload.exp * 1000 <= Date.now()) {return false;}
-    return true;
+    if (payload.sub !== "operator") {return null;}
+    if (typeof payload.exp !== "number" || payload.exp * 1000 <= Date.now()) {return null;}
+    const roles = Array.isArray(payload.roles)
+      ? payload.roles.filter((role): role is string => typeof role === "string")
+      : [];
+    return { roles };
   } catch {
-    return false;
+    return null;
   }
+}
+
+/** Page-level roles: the sidebar hides these links, this enforces the URL. */
+const PAGE_ROLES: Array<{ prefix: string; roles: string[] }> = [
+  { prefix: "/maxxi/operators", roles: ["admin"] },
+];
+
+function pageAllowed(pathname: string, roles: string[]): boolean {
+  const rule = PAGE_ROLES.find((entry) => pathname === entry.prefix || pathname.startsWith(`${entry.prefix}/`));
+  if (!rule) {return true;}
+  return rule.roles.some((role) => roles.includes(role));
 }
 
 export async function middleware(req: NextRequest) {
@@ -86,9 +122,19 @@ export async function middleware(req: NextRequest) {
 
   const secret = process.env.CRM_A_SESSION_SECRET?.trim() ?? "";
   const token = req.cookies.get(SESSION_COOKIE)?.value ?? "";
-  const authorized = secret.length >= 16 && token ? await verifyToken(token, secret) : false;
+  const session = secret.length >= 16 && token ? await verifyToken(token, secret) : null;
 
-  if (authorized) {return NextResponse.next();}
+  if (session) {
+    // Signed-in but lacking the page role: send them back to the dashboard
+    // instead of rendering a page whose data calls will all 403.
+    if (!pageAllowed(pathname, session.roles)) {
+      const deniedUrl = req.nextUrl.clone();
+      deniedUrl.pathname = "/maxxi";
+      deniedUrl.search = "";
+      return NextResponse.redirect(deniedUrl);
+    }
+    return NextResponse.next();
+  }
 
   if (pathname.startsWith("/api/")) {
     return NextResponse.json(

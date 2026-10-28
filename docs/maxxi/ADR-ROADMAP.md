@@ -30,17 +30,23 @@ contratto più stabile. Va fatto dopo ADR-102.
 
 ## ADR-102 — RBAC e audit per record
 
-**Stato:** proposto.
+**Stato:** *parzialmente implementato* (RBAC a grana grossa) — audit per record ancora proposto.
 
-Ruoli del PRD (Comunicazione, Membership, Infopoint, Relazioni) oggi **non**
-applicati. Decisione: introdurre `role` nel principal e una matrice
-risorsa × azione, con audit a livello di record per le letture sensibili
-(consensi, note infopoint, relazioni).
+Implementato in questa tranche:
+- account individuali (`operators.json`, scrypt+salt) con ruoli
+  `admin` / `communication` / `membership` / `infopoint` / `relations`;
+- permessi risorsa.azione (`lib/security/rbac.ts`) applicati lato server da
+  `guardPermission()`, non solo nascosti in UI;
+- note infopoint mascherate per i ruoli senza `maxxi.feedback.viewNotes`;
+- pagine con vincolo di ruolo (`/maxxi/operators`) redirette dal middleware;
+- audit di seed, bozze, approvazioni, creazione/eliminazione account con username.
 
-Vincoli:
-- niente "ruoli finti" in UI prima dell'enforcement;
-- ogni endpoint deve dichiarare lo scope richiesto;
-- i test negativi per ruolo vanno aggiunti alla suite SEC.
+Ancora da fare (proposto): autorizzazione **per record** (es. un operatore
+Infopoint vede solo i casi assegnati a lui), revoca sessioni lato server,
+rotazione credenziali da UI, e audit delle *letture* sensibili.
+
+Vincoli mantenuti: nessun ruolo finto in UI, ogni endpoint dichiara il permesso,
+test negativi per ruolo nella suite (`app/api/maxxi/rbac.test.ts`).
 
 ---
 
