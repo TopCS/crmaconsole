@@ -111,6 +111,20 @@ const PAGE_ROLES: Array<{ prefix: string; roles: string[] }> = [
   { prefix: "/maxxi/operators", roles: ["admin"] },
 ];
 
+/**
+ * Absolute origin for redirects, taken from the request host (not from the
+ * server bind address). Next's middleware adapter resolves `Location` headers
+ * as URLs, so a relative value throws ERR_INVALID_URL; using `req.url` would
+ * send the browser to the container address (0.0.0.0) and drop cookies.
+ */
+function requestOrigin(req: NextRequest): string {
+  const forwardedHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || req.headers.get("host") || req.nextUrl.host;
+  const forwardedProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const proto = forwardedProto || req.nextUrl.protocol.replace(":", "") || "http";
+  return `${proto}://${host}`;
+}
+
 function pageAllowed(pathname: string, roles: string[]): boolean {
   const rule = PAGE_ROLES.find((entry) => pathname === entry.prefix || pathname.startsWith(`${entry.prefix}/`));
   if (!rule) {return true;}
@@ -129,10 +143,7 @@ export async function middleware(req: NextRequest) {
     // Signed-in but lacking the page role: send them back to the dashboard
     // instead of rendering a page whose data calls will all 403.
     if (!pageAllowed(pathname, session.roles)) {
-      const deniedUrl = req.nextUrl.clone();
-      deniedUrl.pathname = "/maxxi";
-      deniedUrl.search = "";
-      return NextResponse.redirect(deniedUrl);
+      return NextResponse.redirect(new URL("/maxxi", requestOrigin(req)));
     }
     return NextResponse.next();
   }
@@ -148,10 +159,8 @@ export async function middleware(req: NextRequest) {
     );
   }
 
-  const loginUrl = req.nextUrl.clone();
-  loginUrl.pathname = "/login";
-  loginUrl.search = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname + search)}`;
-  return NextResponse.redirect(loginUrl);
+  const loginSearch = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname + search)}`;
+  return NextResponse.redirect(new URL(`/login${loginSearch}`, requestOrigin(req)));
 }
 
 export const config = {

@@ -377,6 +377,17 @@ export async function probeWebRuntime(port: number): Promise<WebProbeResult> {
       signal: controller.signal,
       redirect: "manual",
     });
+    // 401/403 mean the app is up but the endpoint is behind the operator
+    // gate (default-deny). Treating them as "not ready" made the container
+    // roll back to a stale web runtime, which then served a build whose CSS
+    // chunks no longer existed. Liveness != authorization.
+    if (response.status === 401 || response.status === 403) {
+      return {
+        ok: true,
+        status: response.status,
+        reason: "web runtime is responding (auth-protected /api/profiles)",
+      };
+    }
     if (response.status < 200 || response.status >= 400) {
       return {
         ok: false,

@@ -94,7 +94,7 @@ describe("GET /api/auth/callback", () => {
       new Request("http://localhost:3100/api/auth/callback?code=abc"),
     );
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toContain("/login?error=state_missing");
+    expect(res.headers.get("location")).toBe("/login?error=state_missing");
     expect(res.headers.get("set-cookie") ?? "").toContain(`${OIDC_STATE_COOKIE}=`);
   });
 
@@ -114,7 +114,7 @@ describe("GET /api/auth/callback", () => {
       }),
     );
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toContain("/login?error=state_mismatch");
+    expect(res.headers.get("location")).toBe("/login?error=state_mismatch");
   });
 
   it("rejects an expired state even when it matches", async () => {
@@ -132,14 +132,14 @@ describe("GET /api/auth/callback", () => {
         headers: { cookie: `${OIDC_STATE_COOKIE}=${state}` },
       }),
     );
-    expect(res.headers.get("location")).toContain("/login?error=state_expired");
+    expect(res.headers.get("location")).toBe("/login?error=state_expired");
   });
 
   it("forwards an IdP access_denied without issuing a session", async () => {
     const res = await callbackGet(
       new Request("http://localhost:3100/api/auth/callback?error=access_denied"),
     );
-    expect(res.headers.get("location")).toContain("/login?error=access_denied");
+    expect(res.headers.get("location")).toBe("/login?error=access_denied");
     expect(res.headers.get("set-cookie") ?? "").not.toContain(`${SESSION_COOKIE}=`);
   });
 });
@@ -163,7 +163,7 @@ describe("logout", () => {
     delete process.env.CRM_A_OIDC_ISSUER;
     const res = await logoutGet(new Request("http://localhost:3100/api/auth/logout"));
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("http://localhost:3100/login");
+    expect(res.headers.get("location")).toBe("/login");
     expect(res.headers.get("set-cookie") ?? "").toContain("Max-Age=0");
   });
 });

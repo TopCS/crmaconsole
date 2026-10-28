@@ -33,7 +33,7 @@ export async function POST(req: Request) {
 export async function GET(req: Request) {
   const config = readOidcConfig(req);
   const idToken = readCookie(req, ID_TOKEN_COOKIE) ?? undefined;
-  const location = config ? buildLogoutUrl(config, idToken) : new URL("/login", req.url).toString();
+  const location = config ? buildLogoutUrl(config, idToken) : "/login";
   const headers = new Headers({ location, "cache-control": "no-store" });
   for (const cookie of clearedCookies(req)) {headers.append("set-cookie", cookie);}
   return new Response(null, { status: 302, headers });

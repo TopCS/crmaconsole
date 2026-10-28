@@ -39,17 +39,17 @@ type StatePayload = {
   createdAt?: unknown;
 };
 
-function redirectTo(req: Request, location: string, cookies: string[] = []): Response {
+function redirectTo(location: string, cookies: string[] = []): Response {
   const headers = new Headers({ location, "cache-control": "no-store" });
   for (const cookie of cookies) {headers.append("set-cookie", cookie);}
   return new Response(null, { status: 302, headers });
 }
 
 function loginError(req: Request, code: string, detail?: string): Response {
-  const target = new URL("/login", req.url);
-  target.searchParams.set("error", code);
-  if (detail) {target.searchParams.set("detail", detail);}
-  return redirectTo(req, target.toString(), [
+  const target = new URLSearchParams({ error: code });
+  if (detail) {target.set("detail", detail);}
+  // Relative location: never send the browser to the container bind address.
+  return redirectTo(`/login?${target.toString()}`, [
     clearCookie(req, OIDC_STATE_COOKIE, "/api/auth"),
   ]);
 }
@@ -67,7 +67,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const config = readOidcConfig(req);
   if (!config) {
-    return redirectTo(req, new URL("/login?error=not_configured", req.url).toString());
+    return redirectTo("/login?error=not_configured");
   }
 
   // Keycloak can send ?error=access_denied (user cancelled, session expired…).
@@ -135,5 +135,5 @@ export async function GET(req: Request) {
     buildCookie(req, ID_TOKEN_COOKIE, tokens.idToken, { maxAge: SESSION_TTL_SECONDS }),
     clearCookie(req, OIDC_STATE_COOKIE, "/api/auth"),
   ];
-  return redirectTo(req, new URL(next, req.url).toString(), cookies);
+  return redirectTo(next, cookies);
 }

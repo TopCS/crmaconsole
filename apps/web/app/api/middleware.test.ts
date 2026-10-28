@@ -30,7 +30,8 @@ describe("middleware default-deny", () => {
   it("redirects an anonymous page to /login", async () => {
     const res = await middleware(req("/workspace"));
     expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toContain("/login");
+    expect(res.headers.get("location")).toBe("http://localhost/login?next=%2Fworkspace");
+    expect(res.headers.get("location")).not.toContain("0.0.0.0");
   });
 
   it("allows a valid session", async () => {
