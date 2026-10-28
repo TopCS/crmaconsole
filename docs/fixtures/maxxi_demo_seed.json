@@ -1,0 +1,516 @@
+{
+  "_comment": "SYNTHETIC FIXTURE. These are not real MAXXI visitors, accounts, transactions, consents or ticket data. All emails use example.invalid. Provider CSV schemas are invented.",
+  "schema_version": "1.0",
+  "workspace_id": "demo-maxxi-cdp-2026",
+  "clock": "2026-10-28T12:00:00+01:00",
+  "random_seed": 20261028,
+  "demo_mode": {
+    "enabled": true,
+    "external_outbound_enabled": false,
+    "telemetry_enabled": false,
+    "public_url_enabled": false,
+    "banner": "DEMO - DATI SINTETICI - NESSUN INVIO ESTERNO"
+  },
+  "catalog": [
+    {
+      "id": "X-ARCH-2026",
+      "title": "Vitalità dell’architettura italiana 1946-2026",
+      "type": "exhibition",
+      "start_date": "2026-05-29",
+      "end_date": "2026-11-15",
+      "source_url": "https://www.maxxi.art/events/categories/mostre/",
+      "is_public_real_exhibition": true
+    },
+    {
+      "id": "X-CALLE-2026",
+      "title": "Sophie Calle - Matrimoni, Rotture e Funerali inclusi",
+      "type": "exhibition",
+      "start_date": "2026-10-16",
+      "end_date": "2027-02-07",
+      "source_url": "https://www.maxxi.art/events/categories/mostre/",
+      "is_public_real_exhibition": true
+    }
+  ],
+  "people": [
+    {
+      "id": "P-MARIA",
+      "name": "Maria Rossi",
+      "email": "maria.rossi@example.invalid",
+      "interests_explicit": [
+        "architecture"
+      ],
+      "language": "it"
+    },
+    {
+      "id": "P-MARIA-AMBIG",
+      "name": "Maria Rossi",
+      "email": "maria.omonima@example.invalid",
+      "interests_explicit": [],
+      "language": "it"
+    },
+    {
+      "id": "P-GIULIA",
+      "name": "Giulia Bianchi",
+      "email": "giulia.bianchi@example.invalid",
+      "interests_explicit": [
+        "architecture"
+      ],
+      "language": "it"
+    },
+    {
+      "id": "P-ELENA",
+      "name": "Elena Conti",
+      "email": "elena.conti@example.invalid",
+      "interests_explicit": [
+        "architecture",
+        "photography"
+      ],
+      "language": "it"
+    },
+    {
+      "id": "P-PAOLO",
+      "name": "Paolo Verdi",
+      "email": "paolo.verdi@example.invalid",
+      "interests_explicit": [
+        "architecture"
+      ],
+      "language": "it"
+    },
+    {
+      "id": "P-LUCA",
+      "name": "Luca Neri",
+      "email": "luca.neri@example.invalid",
+      "interests_explicit": [
+        "architecture"
+      ],
+      "language": "it"
+    },
+    {
+      "id": "P-SARA",
+      "name": "Sara Romano",
+      "email": "sara.romano@example.invalid",
+      "interests_explicit": [
+        "photography"
+      ],
+      "language": "it"
+    },
+    {
+      "id": "P-GIOVANNI",
+      "name": "Giovanni Greco",
+      "email": "giovanni.greco@example.invalid",
+      "interests_explicit": [],
+      "language": "it"
+    }
+  ],
+  "organizations": [
+    {
+      "id": "O-PARTNER",
+      "name": "Laboratorio Fittizio Cultura S.r.l.",
+      "relationship_kind": "prospective_sponsor",
+      "synthetic": true
+    }
+  ],
+  "source_records": [
+    {
+      "source_system": "site_form",
+      "source_record_id": "P-MARIA-WEB",
+      "email": "maria.rossi@example.invalid",
+      "name": "Maria Rossi",
+      "verified_email": true,
+      "observed_at": "2026-09-01T10:00:00+02:00",
+      "expected_person_id": "P-MARIA"
+    },
+    {
+      "source_system": "mymaxxi_manual",
+      "source_record_id": "P-MARIA-MEMBER",
+      "email": "maria.rossi@example.invalid",
+      "name": "Maria Rossi",
+      "card_code": "MYMAXXI-DEMO-001",
+      "verified_email": true,
+      "observed_at": "2026-09-02T10:00:00+02:00",
+      "expected_person_id": "P-MARIA"
+    },
+    {
+      "source_system": "site_form",
+      "source_record_id": "P-MARIA-AMBIG",
+      "email": "maria.omonima@example.invalid",
+      "name": "Maria Rossi",
+      "verified_email": false,
+      "observed_at": "2026-09-03T10:00:00+02:00",
+      "expected_person_id": "P-MARIA-AMBIG"
+    },
+    {
+      "source_system": "mymaxxi_manual",
+      "source_record_id": "P-GIULIA-MEMBER",
+      "email": "giulia.bianchi@example.invalid",
+      "card_code": "MYMAXXI-DEMO-002",
+      "verified_email": true,
+      "observed_at": "2026-10-05T10:00:00+02:00",
+      "expected_person_id": "P-GIULIA"
+    },
+    {
+      "source_system": "mymaxxi_manual",
+      "source_record_id": "P-ELENA-MEMBER",
+      "email": "elena.conti@example.invalid",
+      "card_code": "MYMAXXI-DEMO-003",
+      "verified_email": true,
+      "observed_at": "2026-09-05T10:00:00+02:00",
+      "expected_person_id": "P-ELENA"
+    },
+    {
+      "source_system": "mymaxxi_manual",
+      "source_record_id": "P-PAOLO-MEMBER",
+      "email": "paolo.verdi@example.invalid",
+      "card_code": "MYMAXXI-DEMO-004",
+      "verified_email": true,
+      "observed_at": "2026-09-06T10:00:00+02:00",
+      "expected_person_id": "P-PAOLO"
+    },
+    {
+      "source_system": "mymaxxi_manual",
+      "source_record_id": "P-LUCA-MEMBER",
+      "email": "luca.neri@example.invalid",
+      "card_code": "MYMAXXI-DEMO-005",
+      "verified_email": true,
+      "observed_at": "2026-09-06T11:00:00+02:00",
+      "expected_person_id": "P-LUCA"
+    },
+    {
+      "source_system": "mymaxxi_manual",
+      "source_record_id": "P-SARA-MEMBER",
+      "email": "sara.romano@example.invalid",
+      "card_code": "MYMAXXI-DEMO-006",
+      "verified_email": true,
+      "observed_at": "2026-09-06T12:00:00+02:00",
+      "expected_person_id": "P-SARA"
+    }
+  ],
+  "memberships": [
+    {
+      "id": "M-001",
+      "person_id": "P-MARIA",
+      "card_code": "MYMAXXI-DEMO-001",
+      "product": "myMAXXI",
+      "valid_from": "2025-11-20",
+      "valid_to": "2026-11-20",
+      "source_system": "mymaxxi_manual",
+      "source_record_id": "M-001"
+    },
+    {
+      "id": "M-002",
+      "person_id": "P-GIULIA",
+      "card_code": "MYMAXXI-DEMO-002",
+      "product": "myMAXXI",
+      "valid_from": "2025-11-28",
+      "valid_to": "2026-11-28",
+      "source_system": "mymaxxi_manual",
+      "source_record_id": "M-002"
+    },
+    {
+      "id": "M-003",
+      "person_id": "P-ELENA",
+      "card_code": "MYMAXXI-DEMO-003",
+      "product": "myMAXXI",
+      "valid_from": "2025-12-05",
+      "valid_to": "2026-12-05",
+      "source_system": "mymaxxi_manual",
+      "source_record_id": "M-003"
+    },
+    {
+      "id": "M-004",
+      "person_id": "P-PAOLO",
+      "card_code": "MYMAXXI-DEMO-004",
+      "product": "myMAXXI",
+      "valid_from": "2025-11-10",
+      "valid_to": "2026-11-10",
+      "source_system": "mymaxxi_manual",
+      "source_record_id": "M-004"
+    },
+    {
+      "id": "M-005",
+      "person_id": "P-LUCA",
+      "card_code": "MYMAXXI-DEMO-005",
+      "product": "myMAXXI",
+      "valid_from": "2025-12-20",
+      "valid_to": "2026-12-20",
+      "source_system": "mymaxxi_manual",
+      "source_record_id": "M-005"
+    },
+    {
+      "id": "M-006",
+      "person_id": "P-SARA",
+      "card_code": "MYMAXXI-DEMO-006",
+      "product": "myMAXXI",
+      "valid_from": "2025-11-18",
+      "valid_to": "2026-11-18",
+      "source_system": "mymaxxi_manual",
+      "source_record_id": "M-006"
+    }
+  ],
+  "consents": [
+    {
+      "person_id": "P-MARIA",
+      "purpose": "event_marketing",
+      "channel": "email",
+      "status": "granted",
+      "captured_at": "2026-09-01T10:00:00+02:00",
+      "source_system": "site_form",
+      "source_record_id": "CONS-001"
+    },
+    {
+      "person_id": "P-MARIA-AMBIG",
+      "purpose": "event_marketing",
+      "channel": "email",
+      "status": "unknown",
+      "captured_at": null,
+      "source_system": "site_form",
+      "source_record_id": "CONS-AMB"
+    },
+    {
+      "person_id": "P-GIULIA",
+      "purpose": "event_marketing",
+      "channel": "email",
+      "status": "unknown",
+      "captured_at": null,
+      "source_system": "mymaxxi_manual",
+      "source_record_id": "CONS-002"
+    },
+    {
+      "person_id": "P-ELENA",
+      "purpose": "event_marketing",
+      "channel": "email",
+      "status": "granted",
+      "captured_at": "2026-09-05T11:00:00+02:00",
+      "source_system": "site_form",
+      "source_record_id": "CONS-003"
+    },
+    {
+      "person_id": "P-PAOLO",
+      "purpose": "event_marketing",
+      "channel": "email",
+      "status": "withdrawn",
+      "captured_at": "2026-07-01T10:00:00+02:00",
+      "withdrawn_at": "2026-10-01T10:00:00+02:00",
+      "source_system": "site_form",
+      "source_record_id": "CONS-004"
+    },
+    {
+      "person_id": "P-LUCA",
+      "purpose": "event_marketing",
+      "channel": "email",
+      "status": "granted",
+      "captured_at": "2026-09-01T10:00:00+02:00",
+      "source_system": "site_form",
+      "source_record_id": "CONS-005"
+    },
+    {
+      "person_id": "P-SARA",
+      "purpose": "event_marketing",
+      "channel": "email",
+      "status": "granted",
+      "captured_at": "2026-09-01T10:00:00+02:00",
+      "source_system": "site_form",
+      "source_record_id": "CONS-006"
+    },
+    {
+      "person_id": "P-GIOVANNI",
+      "purpose": "event_marketing",
+      "channel": "email",
+      "status": "unknown",
+      "captured_at": null,
+      "source_system": "operator_relation",
+      "source_record_id": "CONS-007"
+    }
+  ],
+  "events": [
+    {
+      "id": "E-M-1",
+      "person_id": "P-MARIA",
+      "type": "form_submitted",
+      "occurred_at": "2026-09-01T09:30:00+02:00",
+      "source_system": "site_form",
+      "source_record_id": "EV-MARIA-FORM",
+      "properties": {
+        "topic": "architecture"
+      }
+    },
+    {
+      "id": "E-M-2",
+      "person_id": "P-MARIA",
+      "type": "museum_visit_attended",
+      "occurred_at": "2026-09-10T12:00:00+02:00",
+      "source_system": "archeoares_xls",
+      "source_record_id": "EV-MARIA-ENTRY",
+      "catalog_item_id": "X-ARCH-2026",
+      "properties": {
+        "linked_by_card": "MYMAXXI-DEMO-001",
+        "attendance_verified": true
+      }
+    },
+    {
+      "id": "E-M-3",
+      "person_id": "P-MARIA",
+      "type": "exhibition_ticket_purchased",
+      "occurred_at": "2026-10-04T12:00:00+02:00",
+      "source_system": "archeoares_xls",
+      "source_record_id": "EV-MARIA-PURCHASE",
+      "catalog_item_id": "X-CALLE-2026",
+      "properties": {
+        "amount_eur": 14,
+        "attendance_verified": false
+      }
+    },
+    {
+      "id": "E-E-1",
+      "person_id": "P-ELENA",
+      "type": "museum_visit_attended",
+      "occurred_at": "2026-08-12T12:00:00+02:00",
+      "source_system": "archeoares_xls",
+      "source_record_id": "EV-ELENA-ENTRY-1",
+      "catalog_item_id": "X-ARCH-2026",
+      "properties": {
+        "attendance_verified": true
+      }
+    },
+    {
+      "id": "E-E-2",
+      "person_id": "P-ELENA",
+      "type": "library_checkin",
+      "occurred_at": "2026-09-05T12:00:00+02:00",
+      "source_system": "biblioteca_manual",
+      "source_record_id": "EV-ELENA-LIB",
+      "properties": {}
+    },
+    {
+      "id": "E-G-1",
+      "person_id": "P-GIULIA",
+      "type": "museum_visit_attended",
+      "occurred_at": "2026-10-06T12:00:00+02:00",
+      "source_system": "archeoares_xls",
+      "source_record_id": "EV-GIULIA-ENTRY",
+      "catalog_item_id": "X-ARCH-2026",
+      "properties": {
+        "attendance_verified": true
+      }
+    },
+    {
+      "id": "E-G-2",
+      "person_id": "P-GIULIA",
+      "type": "feedback_submitted",
+      "occurred_at": "2026-10-10T14:00:00+02:00",
+      "source_system": "infopoint_xls",
+      "source_record_id": "EV-GIULIA-FEEDBACK",
+      "properties": {
+        "case_id": "F-001"
+      }
+    },
+    {
+      "id": "E-P-1",
+      "person_id": "P-PAOLO",
+      "type": "museum_visit_attended",
+      "occurred_at": "2026-09-14T12:00:00+02:00",
+      "source_system": "archeoares_xls",
+      "source_record_id": "EV-PAOLO-ENTRY",
+      "catalog_item_id": "X-ARCH-2026",
+      "properties": {
+        "attendance_verified": true
+      }
+    },
+    {
+      "id": "E-L-1",
+      "person_id": "P-LUCA",
+      "type": "museum_visit_attended",
+      "occurred_at": "2026-09-25T12:00:00+02:00",
+      "source_system": "archeoares_xls",
+      "source_record_id": "EV-LUCA-ENTRY",
+      "catalog_item_id": "X-ARCH-2026",
+      "properties": {
+        "attendance_verified": true
+      }
+    },
+    {
+      "id": "E-S-1",
+      "person_id": "P-SARA",
+      "type": "museum_visit_attended",
+      "occurred_at": "2026-10-09T12:00:00+02:00",
+      "source_system": "archeoares_xls",
+      "source_record_id": "EV-SARA-ENTRY",
+      "catalog_item_id": "X-CALLE-2026",
+      "properties": {
+        "attendance_verified": true
+      }
+    },
+    {
+      "id": "E-ANON-1",
+      "person_id": null,
+      "anonymous_subject_id": "anon-T-ANON-001",
+      "type": "exhibition_ticket_purchased",
+      "occurred_at": "2026-10-08T10:00:00+02:00",
+      "source_system": "archeoares_xls",
+      "source_record_id": "T-ANON-001",
+      "properties": {
+        "ticket_type": "standard",
+        "identity_unavailable": true
+      }
+    }
+  ],
+  "feedback_cases": [
+    {
+      "id": "F-001",
+      "person_id": "P-GIULIA",
+      "channel": "infopoint",
+      "category": "info_prenotazione",
+      "status": "open",
+      "opened_at": "2026-10-10T14:00:00+02:00",
+      "summary": "Richiesta informazioni sulla prenotazione di una visita; attende risposta dall'operatore.",
+      "source_system": "infopoint_xls",
+      "source_record_id": "F-001"
+    }
+  ],
+  "relationships": [
+    {
+      "id": "R-001",
+      "person_id": "P-GIOVANNI",
+      "organization_id": "O-PARTNER",
+      "type": "contact_of",
+      "source_system": "operator_relation",
+      "source_record_id": "R-001"
+    }
+  ],
+  "segments": [
+    {
+      "id": "S_ARCH_RENEWAL_45D",
+      "display_name": "Architettura + rinnovo myMAXXI entro 45 giorni",
+      "rule": "membership valid_to in [2026-10-28,2026-12-12] AND architecture interest explicit AND interaction in last 365 days AND event_marketing/email consent granted"
+    },
+    {
+      "id": "S_RETURNING_VISITORS",
+      "display_name": "Visitatori ricorrenti (visite certe)",
+      "rule": ">=2 museum_visit_attended events within last 365 days"
+    },
+    {
+      "id": "S_MEMBERSHIP_AT_RISK",
+      "display_name": "myMAXXI scaduta da <=60 giorni senza rinnovo",
+      "rule": "latest membership valid_to in [2026-08-29,2026-10-27] and no later membership"
+    }
+  ],
+  "expected_for_reference_seed": {
+    "identified_people": 8,
+    "memberships_mymaxxi": 6,
+    "total_events": 11,
+    "arch_renewal_45d_email_eligible_person_ids": [
+      "P-MARIA",
+      "P-ELENA"
+    ],
+    "arch_renewal_45d_excluded_consent_person_ids": [
+      "P-GIULIA",
+      "P-PAOLO"
+    ],
+    "must_not_merge_person_ids": [
+      "P-MARIA",
+      "P-MARIA-AMBIG"
+    ],
+    "anonymous_ticket_id": "T-ANON-001",
+    "outbound_calls": 0
+  }
+}

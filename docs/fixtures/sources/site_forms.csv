@@ -1,0 +1,4 @@
+record_id,name,email,topic,marketing_opt_in,submitted_at
+P-MARIA-WEB,Maria Rossi,maria.rossi@example.invalid,architecture,yes,2026-09-01T09:30:00+02:00
+P-MARIA-AMBIG,Maria Rossi,maria.omonima@example.invalid,,unknown,2026-09-03T10:00:00+02:00
+P-ELENA-WEB,Elena Conti,elena.conti@example.invalid,architecture,yes,2026-09-05T11:00:00+02:00

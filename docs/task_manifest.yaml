@@ -1,0 +1,207 @@
+manifest_version: '1.0'
+project: crm-a-console-maxxi-cdp-demo
+project_type: existing-repository-evolution
+repo: https://github.com/TopCS/crmaconsole
+base_branch: main
+working_branch: feat/maxxi-cdp-demo
+reference_date: '2026-10-28'
+language: it
+priorities: [security, correct_identity, demo_e2e, agent_interoperability, enterprise_roadmap]
+constraints:
+  sandbox_only: true
+  synthetic_data_only: true
+  no_real_outbound: true
+  no_public_exposure_by_default: true
+  no_database_replatforming: true
+  additive_migrations_only: true
+  preserve_existing_workspaces: true
+  no_unauthorized_credentials_in_code: true
+  avoid_code_changes_outside_repo: true
+  do_not_modify_main: true
+inputs:
+  - 00_START_HERE_HARNESS.md
+  - 01_PLATFORM_EVOLUTION.md
+  - 02_MAXXI_DEMO_PRD.md
+  - 03_MAXXI_DATA_CONTRACT.md
+  - 04_ACCEPTANCE_AND_DEMO_SCRIPT.md
+  - fixtures/maxxi_demo_seed.json
+  - sources/CRM_brief_MAXXI(1).pdf
+  - sources/Fonti_Dati.docx.pdf
+  - sources/MAXXI_Funzionalita_CRM_Sviluppo.md.pdf
+workstreams:
+  - id: T00
+    title: Discovery, baseline e branch
+    priority: P0
+    dependencies: []
+    relevant_paths:
+      - package.json
+      - apps/web/app/api/
+      - apps/web/lib/workspace.ts
+      - apps/web/lib/workspace-schema-migrations.ts
+      - apps/web/lib/events.ts
+      - apps/web/lib/segments.ts
+      - apps/web/lib/people-merge.ts
+    tasks:
+      - Read and inventory actual repo code and baseline commit
+      - Create a non-destructive feature branch
+      - Run baseline tests/lint/build and record failures
+      - Write ADR for demo mode and source mapping
+    acceptance:
+      - Commit SHA and baseline test result documented
+      - No mutation of existing workspace data
+    output: docs/maxxi/ADR-000-baseline.md
+  - id: T01
+    title: Security gate and access boundaries
+    priority: P0
+    dependencies: [T00]
+    relevant_paths:
+      - apps/web/app/api/crm/
+      - apps/web/app/api/memories/route.ts
+      - apps/web/app/api/workspace/query/route.ts
+      - apps/web/app/api/workspace/execute/route.ts
+      - apps/web/app/api/events/collect/route.ts
+      - apps/web/app/api/webhooks/phone/route.ts
+      - docker-compose.yml
+    tasks:
+      - Default-deny access policy, principal/workspace enforcement
+      - Block unrestricted SQL execution from network
+      - Scope ingestion/service endpoints and protect secrets
+      - Bind demo locally and disable public exposure default
+      - Make all outbound providers fail-closed in demo mode
+      - Add authorization and no-send negative tests
+    acceptance: [SEC-001, SEC-002, SEC-003, SEC-004, SEC-005, SEC-006, SEC-007]
+    output: docs/maxxi/SECURITY_GATE.md
+  - id: T02
+    title: MAXXI demo workspace and idempotent seed
+    priority: P0
+    dependencies: [T00, T01]
+    relevant_paths:
+      - apps/web/lib/workspace-schema-migrations.ts
+      - assets/seed/schema.sql
+      - apps/web/lib/workspace.ts
+    tasks:
+      - Create isolated workspace MAXXI demo with data flag
+      - Map domain objects to existing DuckDB EAV objects and add missing fields only
+      - Build deterministic fixture loader with reset and double-run idempotency
+      - Show synthetic-demo banner throughout workspace
+    acceptance: [ID-001, ID-002, ID-003, ID-004, UI-001, REG-001]
+    output: docs/maxxi/SEED_AND_RESET.md
+  - id: T03
+    title: Data source adapters and quality panel
+    priority: P1
+    dependencies: [T02]
+    relevant_paths:
+      - apps/web/lib/events.ts
+      - apps/web/lib/people-merge.ts
+      - apps/web/lib/gmail-sync.ts
+    tasks:
+      - Implement synthetic importers for forms, ticket XLS, membership, library, infopoint
+      - Preserve lineage, source_record_id, occurred_at and observed_at
+      - Enforce person resolution hard match/candidate/anonymous
+      - Render imported, unlinked and candidate review counts
+    acceptance: [ID-001, ID-002, ID-003, DATA-001, DATA-002]
+    output: docs/maxxi/SOURCE_MAPPING.md
+  - id: T04
+    title: Person 360, membership and event catalog
+    priority: P1
+    dependencies: [T02, T03]
+    tasks:
+      - Build profile 360 with source citations and timeline
+      - Membership active/expiring/expired and verified events
+      - Catalog public exhibitions separately from synthetic visits
+      - Add infopoint feedback and supporter relationships
+    acceptance: [DATA-001, DATA-002, UI-001]
+    output: docs/maxxi/PROFILE_360.md
+  - id: T05
+    title: Deterministic segments and dashboard
+    priority: P1
+    dependencies: [T02, T03]
+    relevant_paths:
+      - apps/web/lib/segments.ts
+      - apps/web/lib/strength-score.ts
+    tasks:
+      - Implement museum-specific predicates and segment definitions
+      - Implement per-record inclusion and exclusion reasoning
+      - Calculate KPIs from fixture queries; no hardcoded numbers
+      - Suppress unknown, withdrawn and invalid marketing consent
+    acceptance: [SEG-001, CON-001, CON-002, KPI-001]
+    output: docs/maxxi/SEGMENTS_AND_KPIS.md
+  - id: T06
+    title: Agent read tools and grounded summaries
+    priority: P1
+    dependencies: [T04, T05]
+    relevant_paths:
+      - skills/crm/SKILL.md
+      - apps/web/lib/agent-runner.ts
+      - apps/web/lib/crm-graph.ts
+    tasks:
+      - Expose read-only profile, timeline, segment and membership tools
+      - Make responses cite event/source IDs and use fixed demo clock
+      - Support deterministic no-cloud fallback when provider unavailable
+      - Never invent exhibitions, attendance, consent or donor amounts
+    acceptance: [AGT-001, AGT-002]
+    output: docs/maxxi/AGENT_TOOLS.md
+  - id: T07
+    title: Campaign draft, preview and simulated approval
+    priority: P1
+    dependencies: [T01, T05, T06]
+    relevant_paths:
+      - apps/web/lib/campaigns.ts
+      - apps/web/lib/campaign-worker.ts
+    tasks:
+      - Generate marketing copy drafts with public exhibition references
+      - Apply event_marketing/email consent and suppression filters
+      - Persist only drafts, previews and audit approvals
+      - Prove zero network calls or queued outbound in demo mode
+    acceptance: [SEC-006, CON-001, CON-002, UI-002]
+    output: docs/maxxi/CAMPAIGN_DRY_RUN.md
+  - id: T08
+    title: Demo E2E and operator runbook
+    priority: P1
+    dependencies: [T04, T05, T06, T07]
+    tasks:
+      - Implement and rehearse three narrative scenarios
+      - Add integration and E2E tests on isolated fixture database
+      - Run regression test against an unrelated workspace
+      - Deliver local bootstrap, reset and manual demonstration notes
+    acceptance: [REG-001, UI-001, UI-002]
+    output: docs/maxxi/DEMO_RUNBOOK.md
+  - id: T09
+    title: Architecture decisions for future sprints
+    priority: P2
+    dependencies: [T00]
+    tasks:
+      - Record API v1 and possible MCP design with auth scopes
+      - Record PostgreSQL vs DuckDB ADR and migration risks
+      - Record temporal customer facts/provenance extensions
+      - Record GDPR retention and real-system integration questions
+    acceptance:
+      - Explicitly does not replatform the current demo
+      - Clearly labels proposed, implemented and unverified features
+    output: docs/maxxi/ADR-ROADMAP.md
+  - id: T10
+    title: Final verification and report
+    priority: P0
+    dependencies: [T01, T02, T03, T04, T05, T06, T07, T08, T09]
+    tasks:
+      - Run full check/test/build and prove no external outbound
+      - Record exact code and UI changes
+      - List blockers, deviations and residual security risks
+      - Prepare DELIVERY_REPORT.md according to acceptance plan
+    acceptance: [SEC-001, SEC-002, SEC-003, SEC-004, SEC-005, SEC-006, SEC-007, ID-004, REG-001]
+    output: DELIVERY_REPORT.md
+delivery:
+  final_artifacts:
+    - running local MAXXI workspace
+    - deterministic seed loader
+    - protected CDP views and agent tools
+    - campaign dry-run workflow
+    - security regression tests
+    - local demo runbook
+    - DELIVERY_REPORT.md
+  cannot_claim_done_when:
+    - any sensitive endpoint is accessible without principal
+    - any real email, phone or messenger outbound occurs
+    - fixture imports mutate a non-MAXXI workspace
+    - no repeatable seed reset exists
+    - agent outputs cannot be grounded in fixture data

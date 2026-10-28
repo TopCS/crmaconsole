@@ -1,4 +1,5 @@
 import { fetchCrmGraph, type CrmGraph } from "@/lib/crm-graph";
+import { requireOperator } from "@/lib/security/session";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -17,6 +18,8 @@ export const runtime = "nodejs";
  * No writes to the workspace — pure SELECT projection over the EAV tables.
  */
 export async function GET(req: Request): Promise<Response> {
+  const auth = requireOperator(req);
+  if (!auth.ok) {return auth.response;}
   const url = new URL(req.url);
 
   const typeParam = url.searchParams.get("type") ?? "";

@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 import { resolveOpenClawStateDir } from "./workspace";
+import { assertOutboundAllowed } from "./security/demo-mode";
 
 /**
  * AWS SES transport for campaign sending. Config is stored per workspace in
@@ -96,6 +97,7 @@ export async function sendSesEmail(params: {
   subject: string;
   body: string;
 }): Promise<{ messageId: string }> {
+  assertOutboundAllowed("ses-email");
   const config = readSesConfig();
   if (!config) {
     throw new Error("AWS SES is not configured.");

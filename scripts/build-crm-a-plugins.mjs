@@ -9,6 +9,7 @@ const plugins = [
   "extensions/crm-a-ai-gateway/index.ts",
   "extensions/crm-a-nlpearl-outbound/index.ts",
   "extensions/crm-a-shopify-admin/index.ts",
+  "extensions/crm-a-maxxi/index.ts",
 ];
 
 for (const entry of plugins) {

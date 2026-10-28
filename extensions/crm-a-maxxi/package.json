@@ -1,0 +1,10 @@
+{
+  "name": "crm-a-maxxi",
+  "version": "1.0.0",
+  "description": "MAXXI CDP demo agent tools (read-only + dry-run campaign proposal)",
+  "type": "module",
+  "main": "index.mjs",
+  "peerDependencies": {
+    "openclaw": "*"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "id": "crm-a-maxxi",
+  "name": "Crm-A MAXXI CDP demo",
+  "version": "1.0.0",
+  "description": "Read-only user/profile/segment tools plus a dry-run campaign proposal over the MAXXI demo API. No outbound.",
+  "entry": "./index.mjs"
+}

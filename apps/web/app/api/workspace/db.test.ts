@@ -1,5 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+// SEC-03: /api/workspace/query now requires an operator session.
+import { signSessionToken, SESSION_COOKIE } from "@/lib/security/session";
+import { guardReadOnlySql } from "@/lib/security/sql-guard";
+void guardReadOnlySql;
+
+function authedHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  process.env.CRM_A_SESSION_SECRET = "test-session-secret-value-1234";
+  const token = signSessionToken() as string;
+  return {
+    "Content-Type": "application/json",
+    cookie: `${SESSION_COOKIE}=${encodeURIComponent(token)}`,
+    ...extra,
+  };
+}
+
+
 // Mock workspace (include ALL exports used by the routes)
 vi.mock("@/lib/workspace", () => ({
   safeResolvePath: vi.fn(() => null),
@@ -236,7 +252,7 @@ describe("Workspace DB & Reports API", () => {
       const { POST } = await import("./query/route.js");
       const req = new Request("http://localhost/api/workspace/query", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authedHeaders(),
         body: JSON.stringify({}),
       });
       const res = await POST(req);
@@ -250,7 +266,7 @@ describe("Workspace DB & Reports API", () => {
       const { POST } = await import("./query/route.js");
       const req = new Request("http://localhost/api/workspace/query", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authedHeaders(),
         body: JSON.stringify({ sql: "SELECT 1 as id" }),
       });
       const res = await POST(req);
@@ -263,7 +279,7 @@ describe("Workspace DB & Reports API", () => {
       const { POST } = await import("./query/route.js");
       const req = new Request("http://localhost/api/workspace/query", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authedHeaders(),
         body: JSON.stringify({ sql: "DELETE FROM users" }),
       });
       const res = await POST(req);

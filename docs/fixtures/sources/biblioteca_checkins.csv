@@ -1,0 +1,2 @@
+record_id,person_email,library_card_code,occurred_at,record_kind
+EV-ELENA-LIB,elena.conti@example.invalid,BIBLIO-DEMO-101,2026-09-05T12:00:00+02:00,validated_library_entry

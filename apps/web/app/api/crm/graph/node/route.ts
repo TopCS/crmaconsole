@@ -1,4 +1,5 @@
 import { fetchGraphNodeDetail } from "@/lib/crm-graph";
+import { requireOperator } from "@/lib/security/session";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -11,6 +12,8 @@ export const runtime = "nodejs";
  * payload lean by not embedding every field on every node.
  */
 export async function GET(req: Request): Promise<Response> {
+  const auth = requireOperator(req);
+  if (!auth.ok) {return auth.response;}
   const entryId = new URL(req.url).searchParams.get("entryId")?.trim();
   if (!entryId) {
     return Response.json({ error: "entryId is required" }, { status: 400 });

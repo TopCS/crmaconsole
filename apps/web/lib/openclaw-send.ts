@@ -12,6 +12,7 @@
  */
 
 import { callGatewayRpc } from "./agent-runner";
+import { blocked, isDemoMode } from "./security/demo-mode";
 
 export type DeliverToSessionParams = {
   /** The channel-bound session key (e.g. `telegram:123456789`). */
@@ -39,6 +40,10 @@ export async function deliverToSession(
 ): Promise<DeliverToSessionResult> {
   if (!params.sessionKey.trim() || !params.message.trim()) {
     return { ok: false, error: "sessionKey and message are required", payload: null };
+  }
+  // SEC-07: never reach a real channel in demo mode.
+  if (isDemoMode()) {
+    return { ...blocked("openclaw-channel"), payload: null };
   }
   const res = await callGatewayRpc("chat.send", {
     sessionKey: params.sessionKey,

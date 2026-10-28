@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { resolveOpenClawStateDir, resolveWorkspaceRoot } from "@/lib/workspace";
+import { requireOperator } from "@/lib/security/session";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,9 @@ type MemoryFile = {
   sizeBytes: number;
 };
 
-export async function GET() {
+export async function GET(req: Request) {
+  const auth = requireOperator(req);
+  if (!auth.ok) {return auth.response;}
   const stateDir = resolveOpenClawStateDir();
   const workspaceDir = resolveWorkspaceRoot() ?? join(stateDir, "workspace");
   let mainMemory: string | null = null;

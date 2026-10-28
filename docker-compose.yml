@@ -4,7 +4,9 @@ services:
     image: crm-a-console
     container_name: crm-a-console
     ports:
-      - "3100:3100"
+      # SEC-06: bind locally by default; publish explicitly only with an
+      # authenticated perimeter (see docs/maxxi/SECURITY_GATE.md).
+      - "127.0.0.1:3100:3100"
       # Dev web (profilo "dev", next dev hot-reload). Bind su 127.0.0.1:
       # iterazione dell'operatore, mai pubblico. Il servizio di produzione
       # resta su 3100/funnel — il profilo dev è additivo e off di default.

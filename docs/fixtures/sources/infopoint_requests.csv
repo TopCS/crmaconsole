@@ -1,0 +1,2 @@
+record_id,person_email,opened_at,category,status,summary
+F-001,giulia.bianchi@example.invalid,2026-10-10T14:00:00+02:00,info_prenotazione,open,Richiesta informazioni sulla prenotazione di una visita; in attesa operatore

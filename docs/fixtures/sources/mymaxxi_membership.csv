@@ -1,0 +1,7 @@
+record_id,card_code,name,email,valid_from,valid_to
+M-001,MYMAXXI-DEMO-001,Maria Rossi,maria.rossi@example.invalid,2025-11-20,2026-11-20
+M-002,MYMAXXI-DEMO-002,Giulia Bianchi,giulia.bianchi@example.invalid,2025-11-28,2026-11-28
+M-003,MYMAXXI-DEMO-003,Elena Conti,elena.conti@example.invalid,2025-12-05,2026-12-05
+M-004,MYMAXXI-DEMO-004,Paolo Verdi,paolo.verdi@example.invalid,2025-11-10,2026-11-10
+M-005,MYMAXXI-DEMO-005,Luca Neri,luca.neri@example.invalid,2025-12-20,2026-12-20
+M-006,MYMAXXI-DEMO-006,Sara Romano,sara.romano@example.invalid,2025-11-18,2026-11-18
