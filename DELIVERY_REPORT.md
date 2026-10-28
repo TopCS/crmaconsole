@@ -1,6 +1,7 @@
 # Delivery Report — MAXXI CDP demo
 
 Data: 2026-10-28 · Branch: `feat/maxxi-cdp-demo` · Base: `main` @ `67c71e5de9`
+Pull request: https://github.com/TopCS/crmaconsole/pull/1
 
 ## 1. Esito dei gate
 
@@ -75,6 +76,16 @@ Non eseguiti: E2E browser; test su istanza pubblica (per scelta: nessuna esposiz
 - `extensions/crm-a-maxxi/*` *(nuovo)* + registrazione in `scripts/build-crm-a-plugins.mjs`.
 - `scripts/maxxi-demo.sh` *(nuovo)*.
 - `docs/maxxi/SECURITY_GATE.md`, `docs/maxxi/DEMO_RUNBOOK.md` *(nuovi)*.
+
+**Documentazione di committenza**
+- `docs/maxxi/ADR-000-baseline.md` — baseline, decisioni, deviazioni.
+- `docs/maxxi/SEED_AND_RESET.md` — dataset, idempotenza, reset.
+- `docs/maxxi/SOURCE_MAPPING.md` — fonti, provenance, regole di identità.
+- `docs/maxxi/PROFILE_360.md` — contenuto della vista e casi del fixture.
+- `docs/maxxi/SEGMENTS_AND_KPIS.md` — definizioni KPI e logica del segmento.
+- `docs/maxxi/AGENT_TOOLS.md` — fallback deterministico e tool OpenClaw.
+- `docs/maxxi/CAMPAIGN_DRY_RUN.md` — flusso dry-run e prove di zero invii.
+- `docs/maxxi/ADR-ROADMAP.md` — decisioni per gli sprint successivi (propositive).
 
 Nessuna migrazione distruttiva: il dataset demo vive in un DuckDB separato, il
 workspace CRM esistente non viene toccato.
