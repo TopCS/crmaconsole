@@ -11,6 +11,8 @@
 | `02_MAXXI_DEMO_PRD.md` | Requisiti della demo verticale e 3 scenari |
 | `03_MAXXI_DATA_CONTRACT.md` | Fonti, eventi, identity resolution, membership, consenso, lineage |
 | `04_ACCEPTANCE_AND_DEMO_SCRIPT.md` | Test negativi/positivi, demo da 12 minuti, go/no-go |
+| `05_MAXXI_UI_LOOK_AND_FEEL.md` | Specifica di branding MAXXI, componenti, griglia, UX e test visuali |
+| `ui/maxxi-theme.reference.css` | Token CSS scoped proposti, da integrare con controllo workspace |
 | `task_manifest.yaml` | Task machine-readable con dipendenze, priorita', output e accettazione |
 | `fixtures/maxxi_demo_seed.json` | Dataset fittizio e oracoli deterministici di test |
 | `fixtures/sources/*.csv` | Esempi sintetici di file di sorgente, NON tracciati originali |
@@ -22,7 +24,8 @@
 2. Allega o monta questo pacchetto nel workspace dell'harness.
 3. Dai come primo messaggio il contenuto di `00_START_HERE_HARNESS.md`.
 4. Imposta il lavoro in fasi e non saltare G1 (sicurezza), anche se inizialmente si lavora in locale.
-5. Richiedi il `DELIVERY_REPORT.md` prima di usare la demo con un cliente.
+5. Usa il task `T11` per realizzare il tema MAXXI senza alterare gli altri workspace.
+6. Richiedi il `DELIVERY_REPORT.md` con test di sicurezza **e visual QA** prima di usare la demo con un cliente.
 
 ## Messaggio chiave
 

@@ -11,7 +11,7 @@ process.env.CRM_A_MAXXI_FIXTURE = path.resolve(
 );
 
 const { seedMaxxiDemo, resolveIdentity } = await import("./seed");
-const { getDashboardKpis, getPerson360, evaluateArchRenewal45d, listReviewCandidates, listSources } =
+const { getActivityByMonth, getDashboardKpis, getPerson360, evaluateArchRenewal45d, listReviewCandidates, listSources } =
   await import("./queries");
 const { loadMaxxiFixture } = await import("./fixture");
 
@@ -30,6 +30,13 @@ describe("MAXXI seed — determinism and identity", () => {
     const kpis = await getDashboardKpis();
     expect(kpis.identifiedPeople).toBeGreaterThanOrEqual(expected.identified_people);
     expect(kpis.totalEvents).toBe(expected.total_events);
+  });
+
+  it("exposes a monthly activity series for the dashboard chart", async () => {
+    const activity = await getActivityByMonth();
+    expect(activity.map((point) => point.month)).toEqual(["2026-08", "2026-09", "2026-10"]);
+    expect(activity.reduce((sum, point) => sum + point.visits, 0)).toBe(6);
+    expect(activity.reduce((sum, point) => sum + point.events, 0)).toBe(11);
   });
 
   it("is idempotent: a second run yields identical counts", async () => {

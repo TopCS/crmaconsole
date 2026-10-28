@@ -171,6 +171,28 @@ rotazione di `CRM_A_SESSION_SECRET`.
 
 ---
 
+## ADR-108 — Tema editoriale MAXXI scoped
+
+**Stato:** *implementato*.
+
+Decisione: applicare l'estetica editoriale MAXXI **solo** al workspace demo,
+tramite `[data-workspace-theme="maxxi"]` sul layout `/maxxi`, senza modificare
+`:root`, `.dark` o i componenti condivisi.
+
+- token `--maxxi-*` e rimappatura locale dei `--color-*` esistenti;
+- shell con sidebar nera, top bar e ribbon demo persistenti;
+- componenti editoriali riusabili (`PageHeader`, `Kpi`, tabelle, status testuali);
+- tema chiaro dichiarato: dark non implementato nello scope;
+- nessun logo/font/foto proprietari; registro in `UI_ASSET_REGISTER.md`;
+- QA UX-001..010 in `UI_QA.md`, screenshot in `docs/maxxi/screenshots/`.
+
+Deviazioni: le voci `myMAXXI`, `Mostre`, `Infopoint`, `Sostenitori` non hanno
+ancora rotte dedicate; i contenuti sono nelle viste esistenti. Il grafico
+“Pubblico nel tempo” usa solo i mesi presenti nel fixture, senza inventare una
+serie storica.
+
+---
+
 ## Ordine consigliato
 
 1. **ADR-104 (PostgreSQL + RLS)** — abilita l'autorizzazione per record.

@@ -173,7 +173,7 @@ const EDGES_SQL = `
       f.relationship_type AS rel
     FROM entry_fields ef
     JOIN fields f ON f.id = ef.field_id,
-         unnest(from_json(ef.value, '["VARCHAR"]')) AS u(v)
+         unnest(from_json(CASE WHEN json_valid(ef.value) THEN ef.value ELSE '[]' END, '["VARCHAR"]')) AS u(v)
     WHERE f.type = 'relation'
       AND f.relationship_type = 'many_to_many'
       AND ef.value IS NOT NULL
@@ -385,7 +385,7 @@ export async function fetchGraphNodeDetail(entryId: string): Promise<GraphNodeDe
         f.name AS type
       FROM entry_fields ef
       JOIN fields f ON f.id = ef.field_id,
-           unnest(from_json(ef.value, '["VARCHAR"]')) AS u(v)
+           unnest(from_json(CASE WHEN json_valid(ef.value) THEN ef.value ELSE '[]' END, '["VARCHAR"]')) AS u(v)
       WHERE f.type = 'relation'
         AND f.relationship_type = 'many_to_many'
         AND ef.value IS NOT NULL

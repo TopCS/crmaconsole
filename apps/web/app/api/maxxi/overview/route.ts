@@ -1,7 +1,7 @@
 /** GET /api/maxxi/overview — dashboard KPIs, sources and review queue. */
 
 import { guardPermission } from "../_guard";
-import { getDashboardKpis, listReviewCandidates, listSources } from "@/lib/maxxi/queries";
+import { getActivityByMonth, getDashboardKpis, listReviewCandidates, listSources } from "@/lib/maxxi/queries";
 import { MAXXI_CLOCK_ISO } from "@/lib/maxxi/store";
 
 export const dynamic = "force-dynamic";
@@ -12,10 +12,11 @@ export async function GET(req: Request) {
   if (!auth.ok) {return auth.response;}
 
   try {
-    const [kpis, sources, reviews] = await Promise.all([
+    const [kpis, sources, reviews, activity] = await Promise.all([
       getDashboardKpis(),
       listSources(),
       listReviewCandidates(),
+      getActivityByMonth(),
     ]);
     return Response.json({
       ok: true,
@@ -24,6 +25,7 @@ export async function GET(req: Request) {
       kpis,
       sources,
       reviews,
+      activity,
     });
   } catch (err) {
     return Response.json(

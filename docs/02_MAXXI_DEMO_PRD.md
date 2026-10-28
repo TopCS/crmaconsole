@@ -1,6 +1,6 @@
 # PRD - demo verticale MAXXI Customer Intelligence (CDP)
 
-**Stato:** specification per implementazione nell'harness. **Pubblico:** comunicazione, marketing, membership, relazioni, infopoint, direzione MAXXI. **Lingua:** italiano. **Branding:** usare un titolo dimostrativo `MAXXI Customer Intelligence - DEMO NON UFFICIALE` senza fingersi portale in produzione del museo.
+**Stato:** specification per implementazione nell'harness. **UI design:** `05_MAXXI_UI_LOOK_AND_FEEL.md` e `ui/maxxi-theme.reference.css` (normativi per la demo). **Pubblico:** comunicazione, marketing, membership, relazioni, infopoint, direzione MAXXI. **Lingua:** italiano. **Branding:** usare un titolo dimostrativo `MAXXI Customer Intelligence - DEMO NON UFFICIALE` senza fingersi portale in produzione del museo.
 
 ## 1. Perche' la demo e' una CDP
 
@@ -78,7 +78,7 @@ Successo: CTA e workflow simulati, contesto coerente, nessuna inferenza ingiusti
 
 ## 6. UX e copy
 
-- Interfaccia di stile professionale, chiara, sobria, orientata al MAXXI senza copiare marchi grafici se non autorizzati.
+- Interfaccia editorialmente affine al sito MAXXI: bianco/nero, grande gerarchia tipografica, card sobrie, fotografia contestuale; dettagli e test in `05_MAXXI_UI_LOOK_AND_FEEL.md`. Non riprodurre logo o font proprietari senza permesso.
 - Indicatore persistente in header: `DEMO - DATI SINTETICI - NESSUN INVIO ESTERNO`.
 - In ogni grafico: `Dati dimostrativi generati, non statistiche del MAXXI`.
 - Nelle fonti: distinguere `fonte descritta dal museo`, `connettore demo simulato`, `integrazione reale non verificata`.

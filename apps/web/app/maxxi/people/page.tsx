@@ -1,8 +1,9 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Badge, Card, DemoNote, Empty, ErrorNote, Loading, SectionTitle } from "../ui";
+import { Badge, Card, DemoNote, Empty, ErrorNote, Loading, PageHeader, SectionTitle } from "../ui";
 
 type PersonListItem = {
 	id: string;
@@ -31,14 +32,27 @@ const EVENT_LABEL: Record<string, string> = {
 	museum_visit_attended: "Visita effettiva",
 	exhibition_ticket_purchased: "Acquisto biglietto",
 	library_checkin: "Accesso biblioteca",
-	feedback_submitted: "Feedback infospoint",
+	feedback_submitted: "Feedback infopoint",
 	newsletter_consent_granted: "Consenso newsletter",
 	membership_activated: "Membership attivata",
 };
 
+const CONSENT_LABEL: Record<string, string> = {
+	granted: "Concesso",
+	withdrawn: "Revocato",
+	unknown: "Non noto",
+};
+
+const MEMBERSHIP_LABEL: Record<string, string> = {
+	active: "Attiva",
+	expiring: "In scadenza",
+	expired: "Scaduta",
+	not_linked: "Non associata",
+};
+
 export default function PeoplePage() {
 	return (
-		<Suspense fallback={<Loading />}>
+		<Suspense fallback={<Loading label="Caricamento visitatori…" />}>
 			<PeopleInner />
 		</Suspense>
 	);
@@ -79,170 +93,306 @@ function PeopleInner() {
 	}, [load]);
 
 	if (error) {return <ErrorNote>{error}</ErrorNote>;}
-	if (loading) {return <Loading />;}
+	if (loading) {return <Loading label="Caricamento visitatori…" />;}
 	if (selectedId && person) {return <Profile360 person={person} />;}
 
 	return (
 		<div className="space-y-4">
-			<SectionTitle hint="Persone univoche del dataset dimostrativo">Visitatori</SectionTitle>
-			<Card>
+			<PageHeader
+				eyebrow="Pubblico / Visitatori"
+				title="Profili 360"
+				subtitle="Persone univoche del dataset dimostrativo. Ogni profilo conserva la provenienza dei record e distingue visite, acquisti e consensi."
+			/>
+
+			<Card className="p-0">
 				{people.length === 0 ? (
 					<Empty>Nessuna persona: esegui il seed demo dalla Panoramica.</Empty>
 				) : (
-					<ul className="divide-y" style={{ borderColor: "var(--color-border)" }}>
-						{people.map((item) => (
-							<li key={item.id} className="py-2">
-								<a
-									href={`/maxxi/people?id=${encodeURIComponent(item.id)}`}
-									className="flex flex-wrap items-center justify-between gap-2 text-sm hover:opacity-80"
-								>
-									<span className="flex flex-wrap items-center gap-2">
-										<span className="font-medium" style={{ color: "var(--color-text)" }}>{item.name}</span>
-										<span className="text-xs" style={{ color: "var(--color-text-muted)" }}>{item.email}</span>
-										{item.interests.map((interest) => (
-											<Badge key={interest} tone="neutral">{interest}</Badge>
-										))}
-									</span>
-									<span className="flex items-center gap-2 text-xs" style={{ color: "var(--color-text-muted)" }}>
-										<span>{item.links} fonti</span>
-										<span>{item.memberships} card</span>
-										{item.lastEventAt && <span>ultimo evento {item.lastEventAt.slice(0, 10)}</span>}
-									</span>
-								</a>
-							</li>
-						))}
-					</ul>
+					<div className="maxxi-table-scroll">
+						<table className="maxxi-table">
+							<caption className="sr-only">Elenco delle persone identificate</caption>
+							<thead>
+								<tr>
+									<th scope="col">Persona</th>
+									<th scope="col">Interessi</th>
+									<th scope="col" className="num">Fonti</th>
+									<th scope="col" className="num">Card</th>
+									<th scope="col">Ultimo evento</th>
+								</tr>
+							</thead>
+							<tbody>
+								{people.map((item) => (
+									<tr key={item.id}>
+										<th scope="row">
+											<Link
+												href={`/maxxi/people?id=${encodeURIComponent(item.id)}`}
+												className="font-medium underline-offset-2 hover:underline"
+											>
+												{item.name}
+											</Link>
+											<span className="mt-0.5 block text-[12px] font-normal" style={{ color: "var(--maxxi-muted)" }}>
+												{item.email}
+											</span>
+										</th>
+										<td>
+											{item.interests.length === 0 ? (
+												<span style={{ color: "var(--maxxi-muted)" }}>—</span>
+											) : (
+												<span className="flex flex-wrap gap-1.5">
+													{item.interests.map((interest) => (
+														<span
+															key={interest}
+															className="border px-1.5 py-0.5 text-[11px]"
+															style={{ borderColor: "var(--maxxi-line-strong)" }}
+														>
+															{interest}
+														</span>
+													))}
+												</span>
+											)}
+										</td>
+										<td className="num">{item.links}</td>
+										<td className="num">{item.memberships}</td>
+										<td className="text-[12.5px]" style={{ color: "var(--maxxi-muted)" }}>
+											{item.lastEventAt ? item.lastEventAt.slice(0, 10) : "—"}
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
 				)}
 			</Card>
+
 			<DemoNote>Dati sintetici. Nessuna persona elencata corrisponde a un visitatore reale del museo.</DemoNote>
 		</div>
 	);
 }
 
 function Profile360({ person }: { person: Person360 }) {
+	const certain = person.dataQuality.identityIsCertain;
+
 	return (
-		<div className="space-y-4">
-			<div className="flex flex-wrap items-center justify-between gap-2">
-				<SectionTitle hint={`${person.person.email} · lingua ${person.person.language}`}>
-					{person.person.name}
-				</SectionTitle>
-				<Badge tone={person.dataQuality.identityIsCertain ? "ok" : "warn"}>
-					{person.dataQuality.identityIsCertain ? "identità verificata" : "identità da verificare"}
-				</Badge>
+		<div className="space-y-6">
+			<PageHeader
+				eyebrow="Pubblico / Visitatore 360"
+				title={person.person.name}
+				subtitle={`${person.person.email} · lingua ${person.person.language}`}
+				actions={
+					<>
+						<Badge tone={certain ? "ok" : "warn"}>
+							{certain ? "Identità verificata" : "Identità da verificare"}
+						</Badge>
+						<Link href="/maxxi/people" className="maxxi-secondary-action">
+							Tutti i visitatori
+						</Link>
+					</>
+				}
+			/>
+
+			<div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+				<div className="space-y-5 lg:col-span-2">
+					<Card>
+						<SectionTitle hint="Ogni riga mostra la fonte e l'ID del record originale">
+							Timeline
+						</SectionTitle>
+						{person.timeline.length === 0 ? (
+							<Empty>Nessun evento attribuito.</Empty>
+						) : (
+							<ol className="divide-y" style={{ borderColor: "var(--maxxi-line)" }}>
+								{person.timeline.map((event) => (
+									<li key={event.eventId} className="grid grid-cols-1 gap-2 py-3 sm:grid-cols-[92px_1fr]">
+										<span className="text-[12px] tabular-nums" style={{ color: "var(--maxxi-muted)" }}>
+											{event.occurredAt.slice(0, 10)}
+										</span>
+										<div className="min-w-0">
+											<div className="flex flex-wrap items-center gap-2">
+												<strong className="text-[13.5px] font-semibold">
+													{EVENT_LABEL[event.type] ?? event.type}
+												</strong>
+												{event.catalogItemId && (
+													<span className="text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>
+														{event.catalogItemId}
+													</span>
+												)}
+											</div>
+											<p className="mt-1 break-words text-[11px]" style={{ color: "var(--maxxi-muted)" }}>
+												{event.sourceSystem}:{event.sourceRecordId}
+											</p>
+										</div>
+									</li>
+								))}
+							</ol>
+						)}
+					</Card>
+
+					<Card>
+						<SectionTitle hint="Da quale sistema arriva ogni identificativo">
+							Identità di origine
+						</SectionTitle>
+						{person.identityLinks.length === 0 ? (
+							<Empty>Nessun identificativo collegato.</Empty>
+						) : (
+							<div className="maxxi-table-scroll">
+								<table className="maxxi-table">
+									<caption className="sr-only">Record di origine collegati al profilo</caption>
+									<thead>
+										<tr>
+											<th scope="col">Fonte</th>
+											<th scope="col">Record</th>
+											<th scope="col">Regola</th>
+											<th scope="col" className="num">Confidenza</th>
+										</tr>
+									</thead>
+									<tbody>
+										{person.identityLinks.map((link) => (
+											<tr key={`${link.sourceSystem}:${link.sourceRecordId}`}>
+												<th scope="row">{link.sourceSystem}</th>
+												<td>{link.sourceRecordId}</td>
+												<td>{link.matchMethod}</td>
+												<td className="num">{link.confidence.toFixed(2)}</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
+						)}
+						<details className="mt-3 border-t pt-3" style={{ borderColor: "var(--maxxi-line)" }}>
+							<summary className="cursor-pointer text-[12px] font-semibold">
+								Perché questi record sono collegati?
+							</summary>
+							<ul className="mt-2 space-y-1 text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>
+								{person.identityLinks.map((link) => (
+									<li key={`why-${link.sourceSystem}:${link.sourceRecordId}`}>
+										{link.sourceSystem} · regola {link.matchMethod} · confidenza {link.confidence.toFixed(2)}
+										{link.matchedAt ? ` · verificato il ${link.matchedAt.slice(0, 10)}` : ""}
+									</li>
+								))}
+								{person.identityLinks.length === 0 && <li>Nessun collegamento registrato.</li>}
+							</ul>
+						</details>
+					</Card>
+				</div>
+
+				<div className="space-y-5">
+					<Card>
+						<SectionTitle hint="Acquisto ≠ presenza effettiva">myMAXXI</SectionTitle>
+						{person.memberships.length === 0 ? (
+							<Empty>Nessuna card.</Empty>
+						) : (
+							<ul className="divide-y" style={{ borderColor: "var(--maxxi-line)" }}>
+								{person.memberships.map((membership) => (
+									<li key={membership.membershipId} className="py-3">
+										<div className="flex items-start justify-between gap-2">
+											<strong className="text-[13.5px]">{membership.product}</strong>
+											<Badge tone={membership.status === "active" ? "ok" : membership.status === "expired" ? "bad" : "warn"}>
+												{MEMBERSHIP_LABEL[membership.status] ?? membership.status}
+											</Badge>
+										</div>
+										<p className="mt-1 text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>
+											{membership.cardCode} · {membership.validFrom} → {membership.validTo}
+										</p>
+										<p className="text-[11px]" style={{ color: "var(--maxxi-muted)" }}>
+											fonte {membership.sourceSystem}
+										</p>
+									</li>
+								))}
+							</ul>
+						)}
+					</Card>
+
+					<Card>
+						<SectionTitle hint="Per finalità e canale, non un flag unico">Consensi</SectionTitle>
+						{person.consents.length === 0 ? (
+							<Empty>Nessun consenso registrato.</Empty>
+						) : (
+							<ul className="divide-y" style={{ borderColor: "var(--maxxi-line)" }}>
+								{person.consents.map((consent) => (
+									<li key={`${consent.purpose}:${consent.channel}`} className="flex items-center justify-between gap-2 py-2.5">
+										<span className="text-[12.5px]">
+											{consent.purpose} / {consent.channel}
+										</span>
+										<Badge tone={consent.status === "granted" ? "ok" : consent.status === "withdrawn" ? "bad" : "warn"}>
+											{CONSENT_LABEL[consent.status] ?? consent.status}
+										</Badge>
+									</li>
+								))}
+							</ul>
+						)}
+					</Card>
+
+					<Card>
+						<SectionTitle hint="Dichiarati nel profilo, non inferiti">Interessi</SectionTitle>
+						{person.person.interestsExplicit.length === 0 ? (
+							<Empty>Nessun interesse dichiarato.</Empty>
+						) : (
+							<ul className="flex flex-wrap gap-1.5">
+								{person.person.interestsExplicit.map((interest) => (
+									<li
+										key={interest}
+										className="border px-2 py-1 text-[11.5px]"
+										style={{ borderColor: "var(--maxxi-line-strong)" }}
+									>
+										{interest}
+									</li>
+								))}
+							</ul>
+						)}
+					</Card>
+
+					<Card>
+						<SectionTitle>Organizzazioni</SectionTitle>
+						{person.organizations.length === 0 ? (
+							<Empty>Nessuna relazione con organizzazioni.</Empty>
+						) : (
+							<ul className="divide-y" style={{ borderColor: "var(--maxxi-line)" }}>
+								{person.organizations.map((org) => (
+									<li key={org.organizationId} className="flex items-center justify-between gap-2 py-2.5">
+										<span className="text-[12.5px]">{org.name}</span>
+										<Badge tone="neutral">{org.type}</Badge>
+									</li>
+								))}
+							</ul>
+						)}
+					</Card>
+
+					<Card>
+						<SectionTitle>Qualità del dato</SectionTitle>
+						<p className="text-[12.5px]">
+							Provenienza:{" "}
+							<strong>{person.dataQuality.hasProvenance ? "presente" : "assente"}</strong>
+						</p>
+						{person.dataQuality.notes.length > 0 && (
+							<ul className="mt-2 list-disc space-y-1 pl-4 text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>
+								{person.dataQuality.notes.map((note) => (
+									<li key={note}>{note}</li>
+								))}
+							</ul>
+						)}
+					</Card>
+				</div>
 			</div>
-
-			<div className="grid gap-3 md:grid-cols-2">
-				<Card>
-					<SectionTitle hint="Da quale sistema arriva ogni identificativo">Identità di origine</SectionTitle>
-					{person.identityLinks.length === 0 ? (
-						<Empty>Nessun identificativo collegato.</Empty>
-					) : (
-						<ul className="space-y-2 text-sm">
-							{person.identityLinks.map((link) => (
-								<li key={`${link.sourceSystem}:${link.sourceRecordId}`} className="flex flex-wrap items-center justify-between gap-2">
-									<span style={{ color: "var(--color-text)" }}>{link.sourceSystem}</span>
-									<span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-										{link.sourceRecordId} · regola {link.matchMethod} · confidenza {link.confidence.toFixed(2)}
-									</span>
-								</li>
-							))}
-						</ul>
-					)}
-				</Card>
-
-				<Card>
-					<SectionTitle hint="Consenso per scopo e canale, non un flag unico">Consensi</SectionTitle>
-					{person.consents.length === 0 ? (
-						<Empty>Nessun consenso registrato.</Empty>
-					) : (
-						<ul className="space-y-2 text-sm">
-							{person.consents.map((consent) => (
-								<li key={`${consent.purpose}:${consent.channel}`} className="flex items-center justify-between gap-2">
-									<span style={{ color: "var(--color-text)" }}>
-										{consent.purpose} / {consent.channel}
-									</span>
-									<Badge tone={consent.status === "granted" ? "ok" : consent.status === "withdrawn" ? "bad" : "warn"}>
-										{consent.status}
-									</Badge>
-								</li>
-							))}
-						</ul>
-					)}
-				</Card>
-
-				<Card>
-					<SectionTitle hint="Acquisto ≠ presenza effettiva">Membership</SectionTitle>
-					{person.memberships.length === 0 ? (
-						<Empty>Nessuna card.</Empty>
-					) : (
-						<ul className="space-y-2 text-sm">
-							{person.memberships.map((membership) => (
-								<li key={membership.membershipId} className="flex flex-wrap items-center justify-between gap-2">
-									<span style={{ color: "var(--color-text)" }}>{membership.product}</span>
-									<span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-										{membership.cardCode} · {membership.validFrom} → {membership.validTo}
-									</span>
-								</li>
-							))}
-						</ul>
-					)}
-				</Card>
-
-				<Card>
-					<SectionTitle>Organizzazioni</SectionTitle>
-					{person.organizations.length === 0 ? (
-						<Empty>Nessuna relazione con organizzazioni.</Empty>
-					) : (
-						<ul className="space-y-2 text-sm">
-							{person.organizations.map((org) => (
-								<li key={org.organizationId} className="flex items-center justify-between gap-2">
-									<span style={{ color: "var(--color-text)" }}>{org.name}</span>
-									<Badge tone="neutral">{org.type}</Badge>
-								</li>
-							))}
-						</ul>
-					)}
-				</Card>
-			</div>
-
-			<Card>
-				<SectionTitle hint="Ogni riga mostra la fonte e l'ID del record originale">Timeline</SectionTitle>
-				{person.timeline.length === 0 ? (
-					<Empty>Nessun evento attribuito.</Empty>
-				) : (
-					<ul className="space-y-2">
-						{person.timeline.map((event) => (
-							<li key={event.eventId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2.5 text-sm" style={{ borderColor: "var(--color-border)" }}>
-								<span className="flex flex-wrap items-center gap-2">
-									<Badge tone={event.type === "museum_visit_attended" ? "ok" : "neutral"}>
-										{EVENT_LABEL[event.type] ?? event.type}
-									</Badge>
-									<span style={{ color: "var(--color-text)" }}>{event.occurredAt.slice(0, 10)}</span>
-									{event.catalogItemId && (
-										<span className="text-xs" style={{ color: "var(--color-text-muted)" }}>{event.catalogItemId}</span>
-									)}
-								</span>
-								<span className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>
-									{event.sourceSystem}:{event.sourceRecordId}
-								</span>
-							</li>
-						))}
-					</ul>
-				)}
-			</Card>
 
 			{person.feedback.length > 0 && (
 				<Card>
-					<SectionTitle>Infopoint e feedback</SectionTitle>
-					<ul className="space-y-2 text-sm">
+					<SectionTitle hint="Visibile solo ai ruoli con accesso alle note infopoint">
+						Infopoint e feedback
+					</SectionTitle>
+					<ul className="divide-y" style={{ borderColor: "var(--maxxi-line)" }}>
 						{person.feedback.map((feedback) => (
-							<li key={feedback.caseId}>
-								<div className="flex items-center gap-2">
-									<Badge tone={feedback.status === "open" ? "warn" : "ok"}>{feedback.status}</Badge>
-									<span style={{ color: "var(--color-text)" }}>{feedback.category}</span>
-									<span className="text-xs" style={{ color: "var(--color-text-muted)" }}>{feedback.openedAt.slice(0, 10)}</span>
+							<li key={feedback.caseId} className="py-3">
+								<div className="flex flex-wrap items-center gap-2">
+									<Badge tone={feedback.status === "open" ? "warn" : "ok"}>
+										{feedback.status === "open" ? "Aperto" : "Chiuso"}
+									</Badge>
+									<strong className="text-[13px]">{feedback.category}</strong>
+									<span className="text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>
+										{feedback.openedAt.slice(0, 10)}
+									</span>
 								</div>
-								<p className="mt-1 text-xs" style={{ color: "var(--color-text-muted)" }}>{feedback.summary}</p>
+								<p className="mt-1 text-[12px]" style={{ color: "var(--maxxi-muted)" }}>
+									{feedback.summary}
+								</p>
 							</li>
 						))}
 					</ul>
@@ -251,36 +401,27 @@ function Profile360({ person }: { person: Person360 }) {
 
 			{person.reviewCandidates.length > 0 && (
 				<Card>
-					<SectionTitle hint="Non uniti automaticamente: serve una decisione umana">Candidati in revisione</SectionTitle>
-					<ul className="space-y-2 text-sm">
+					<SectionTitle hint="Non uniti automaticamente: serve una decisione umana">
+						Candidati in revisione
+					</SectionTitle>
+					<ul className="divide-y" style={{ borderColor: "var(--maxxi-line)" }}>
 						{person.reviewCandidates.map((candidate) => (
-							<li key={candidate.candidateId}>
+							<li key={candidate.candidateId} className="py-3">
 								<div className="flex flex-wrap items-center gap-2">
-									<span style={{ color: "var(--color-text)" }}>{candidate.name}</span>
-									<span className="text-xs" style={{ color: "var(--color-text-muted)" }}>{candidate.email}</span>
-									<Badge tone="warn">{candidate.status}</Badge>
+									<strong className="text-[13px]">{candidate.name}</strong>
+									<span className="text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>
+										{candidate.email}
+									</span>
+									<Badge tone="warn">Da verificare</Badge>
 								</div>
-								<p className="mt-1 text-xs" style={{ color: "var(--color-text-muted)" }}>{candidate.reason}</p>
+								<p className="mt-1 text-[12px]" style={{ color: "var(--maxxi-muted)" }}>
+									{candidate.reason}
+								</p>
 							</li>
 						))}
 					</ul>
 				</Card>
 			)}
-
-			{person.dataQuality.notes.length > 0 && (
-				<Card>
-					<SectionTitle>Note sulla qualità del dato</SectionTitle>
-					<ul className="list-disc space-y-1 pl-5 text-xs" style={{ color: "var(--color-text-muted)" }}>
-						{person.dataQuality.notes.map((note) => (
-							<li key={note}>{note}</li>
-						))}
-					</ul>
-				</Card>
-			)}
-
-			<a href="/maxxi/people" className="text-sm underline" style={{ color: "var(--color-accent)" }}>
-				← Tutti i visitatori
-			</a>
 		</div>
 	);
 }

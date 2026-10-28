@@ -8,7 +8,8 @@
 - `G3 demo UI`: 9 viste se praticabili, minimo 5 complete (dashboard, profilo 360, fonti, segmenti, campagne); le altre possono essere tab collegate ma devono mostrare dati coerenti.
 - `G4 Agent`: risposte basate su tool/query, fonte/campo/id; niente metriche inventate; fallback senza provider cloud.
 - `G5 Actions`: **zero outbound reale** (bloccare API, worker, cron, tool e provider); audit dell'approvazione simulata.
-- `G6 regression`: workspace non MAXXI invariato; test e build eseguiti; istruzioni avvio e reset.
+- `G6 regression`: workspace non MAXXI invariato, inclusi i CSS; test e build eseguiti; istruzioni avvio e reset.
+- `G7 visual`: UX-001..UX-010 come da `05_MAXXI_UI_LOOK_AND_FEEL.md`; screenshot desktop/mobile dove possibile; asset register e design system finale.
 
 ## 2. Matrice test minimi (id -> procedura -> esito atteso)
 
@@ -38,6 +39,10 @@
 | REG-001 | Apri workspace non MAXXI | Nessuna modifica schema/UX obbligatoria |
 
 Test di sicurezza da eseguire solo su istanza/container e database di test isolati. Non lanciare probe su infrastruttura del museo.
+
+### Visual QA aggiuntiva
+
+Applicare i casi `UX-001..UX-010` del design system. In particolare: no cambi di stile agli altri workspace, banner demo visibile, leggibilita' dei consensi, focus da tastiera, asset autorizzati e presenza di evidenza screenshot.
 
 ## 3. Copione dal vivo (circa 12 minuti)
 
@@ -95,6 +100,7 @@ Prepara una bozza email dedicata alla mostra Vitalita' dell'architettura italian
 - Dati demo, fixture e reset:
 - Runbook start/stop:
 - Percorsi UI:
+- UX tests / screenshots / asset register:
 - Come riprodurre 3 scenari:
 - Dove vengono simulati i connettori:
 - Prove assenza invii:

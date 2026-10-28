@@ -10,10 +10,11 @@ Pull request: https://github.com/TopCS/crmaconsole/pull/1
 | G0 baseline | ✅ | Revisione registrata; suite baseline eseguita prima delle modifiche |
 | G1 security | ✅ | Default-deny, SQL allowlist, outbound kill switch, bind su 127.0.0.1, **Keycloak OIDC + RBAC a ruoli** — test automatici verdi |
 | G2 seed | ✅ | Seed idempotente, isolato, dati sintetici, nessun merge su solo nome |
-| G3 demo UI | ✅ | 6 viste navigabili (panoramica, profilo 360, fonti, segmenti, campagne, assistente) |
+| G3 demo UI | ✅ | 7 viste navigabili con tema editoriale MAXXI scoped (panoramica, profilo 360, fonti, segmenti, campagne, assistente, accessi) |
 | G4 agent | ✅ | 3 tool: profilo 360, segmento, proposta dry-run; risposta deterministica grounded |
 | G5 actions | ✅ | Zero outbound: adapter bloccati lato server in demo mode + audit |
-| G6 regression | ⚠️ | Suite web: 2228 pass / 2 fail **preesistenti** (timeout in `composio-execute-direct.test.ts`). Build web OK. Build Docker bloccata da errore di rete preesistente (`npm install -g openclaw`), non dal codice |
+| G6 regression | ⚠️ | Suite web: 2293 pass / 2 fail **preesistenti** (timeout in `composio-execute-direct.test.ts`). Build web OK. Build Docker bloccata da errore di rete preesistente (`npm install -g openclaw`), non dal codice |
+| G7 visual | ✅ | Tema scoped, responsive, drawer mobile, focus/tastiera, screenshot desktop/mobile, UX-001..010 in `docs/maxxi/UI_QA.md` (UX-007 parziale: contrasto non misurato con axe) |
 
 ## 2. Test realmente eseguiti
 
@@ -36,7 +37,9 @@ Test nuovi aggiunti (tutti verdi):
 - `apps/web/lib/maxxi/seed.test.ts` (13) — determinismo, idempotenza, ID-001/002/003, DATA-002, SEG-001, CON-001/002.
 - `apps/web/lib/maxxi/agent.test.ts` (5) — AGT-001/AGT-002, persona, fallback.
 
-Non eseguiti: E2E browser; test su istanza pubblica (per scelta: nessuna esposizione).
+Eseguiti anche: visual QA con Chrome headless (Playwright) su build di produzione,
+login Keycloak reale, viewport desktop e mobile, 12 screenshot. Non eseguiti: suite
+E2E Playwright completa e test su istanza pubblica (per scelta: nessuna esposizione).
 
 ### Verifica live (Next dev su porta dedicata, DB demo temporaneo)
 
@@ -44,16 +47,21 @@ Non eseguiti: E2E browser; test su istanza pubblica (per scelta: nessuna esposiz
 |---|---|
 | `GET /` senza sessione | `307` → `/login` |
 | `GET /api/maxxi/overview` senza sessione | `401 {"error":"Unauthorized"}` |
-| `GET /login` | `200` |
-| `POST /api/auth/login` password errata | `401` |
-| `POST /api/auth/login` password corretta | `200` + cookie HttpOnly |
-| `POST /api/maxxi/seed` | `8` persone, `11` eventi, `6` card, `7` link, `1` candidato in revisione, `0` invii |
+| `GET /api/auth/login` | `302` a Keycloak con PKCE S256 + state/nonce |
+| login Keycloak con password errata | form con errore, nessuna sessione |
+| login Keycloak corretto | `302` → callback → cookie HttpOnly con ruolo del realm |
+| `POST /api/maxxi/seed` (admin) | `8` persone, `11` eventi, `6` card, `7` link, `1` candidato in revisione, `0` invii |
 | `GET /api/maxxi/overview` | KPI coerenti (8 identificate, 6 con fonti, 1 anonimo, 1 da revisionare) |
 | `GET /api/maxxi/segment` | eleggibili `P-ELENA`, `P-MARIA`; finestra `2026-10-28 → 2026-12-12` |
 | `POST /api/maxxi/campaigns` + `approve` | bozza `dry_run` per 2 destinatari, `externalCalls: 0`, audit scritto |
 | `POST /api/maxxi/ask` (rinnovi) | risposta grounded con conteggi/finestra |
 | `POST /api/maxxi/ask` (donazioni) | `"Non ho evidenze sufficienti"` |
-| Pagine `/maxxi*` autenticate | `200` e banner demo presente su tutte |
+| Pagine `/maxxi*` autenticate | `200` e ribbon demo presente su tutte |
+| `/maxxi` desktop 1440×900 | 4 KPI + grafico + fonti + revisione, `overflowX = 0` |
+| `/maxxi` mobile 375×812 | nessun overflow; drawer apribile con `aria-expanded="true"` |
+| `/workspace` standard | nessuno scope MAXXI; accent `#0065A2`, sfondo `#f5f5f4` invariati |
+| Screenshot | 12 PNG in `docs/maxxi/screenshots/` (desktop, mobile, drawer, non-regressione) |
+| Console browser (build produzione) | 0 errori su tutte le viste |
 
 ### Verifica live Keycloak + RBAC (5 account demo)
 
@@ -81,6 +89,15 @@ Non eseguiti: E2E browser; test su istanza pubblica (per scelta: nessuna esposiz
 | Bearer inventato | `401` |
 
 ## 3. File modificati / aggiunti
+
+**UI / tema MAXXI**
+- `apps/web/app/globals.css` — blocco `[data-workspace-theme="maxxi"]` (token scoped, shell, tabelle, focus, responsive).
+- `apps/web/app/maxxi/shell.tsx` *(nuovo)* — sidebar nera, top bar, ribbon demo, drawer mobile accessibile.
+- `apps/web/app/maxxi/ui.tsx` — `PageHeader`, `Card`, `Kpi`, `Badge`, tabelle e note editoriali.
+- `apps/web/app/maxxi/{page,people,sources,segments,campaigns,agent,operators}/page.tsx` — reskin e gerarchia editoriale.
+- `apps/web/app/api/maxxi/overview/route.ts` + `lib/maxxi/queries.ts` — serie mensile `activity` dal dataset.
+- `apps/web/lib/crm-graph.ts` — guardia `json_valid` nell'unnest delle relazioni: con DuckDB CLI 2.0 il filtro non veniva applicato prima del cast e la query restituiva zero archi (fix incidentale, test `crm-graph` verde).
+- `docs/maxxi/UI_DESIGN_SYSTEM.md`, `UI_ASSET_REGISTER.md`, `UI_QA.md` *(nuovi)* + `screenshots/*.png`.
 
 **Sicurezza / identità**
 - `deploy/keycloak/realm/crm-a-realm.json` *(nuovo)* — realm, ruoli, client PKCE, admin client, utenti demo.
@@ -160,6 +177,8 @@ middleware, l'intera superficie web tranne l'allowlist pubblica.
 1. **RBAC a grana grossa** — i ruoli sono applicati lato server, ma non esiste
    ancora autorizzazione *per record* (es. casi infopoint assegnati a un
    operatore). Le policy arriveranno con PostgreSQL/RLS (ADR-104).
+   Lato UI, `myMAXXI`, `Mostre`, `Infopoint` e `Sostenitori` non hanno ancora
+   rotte dedicate: i contenuti sono dentro Visitatore 360, Segmenti e Fonti.
 2. **Keycloak in `start-dev` su HTTP locale** — adatto alla demo, non a
    esposizione pubblica: servono TLS, `start`, segreti reali e backup.
 3. **Ruoli letti al login** (TTL 12h): la revoca immediata richiede

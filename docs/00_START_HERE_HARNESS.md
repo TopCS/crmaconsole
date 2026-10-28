@@ -14,8 +14,10 @@ Prima di scrivere codice LEGGI, nell'ordine:
 2. `02_MAXXI_DEMO_PRD.md` - esperienza, flussi e criteri prodotto.
 3. `03_MAXXI_DATA_CONTRACT.md` - dati, identita', consenso, fonti, semantica.
 4. `04_ACCEPTANCE_AND_DEMO_SCRIPT.md` - prove di accettazione e copione.
-5. `task_manifest.yaml` - dipendenze e workstream.
-6. `fixtures/maxxi_demo_seed.json` - dati tutti fittizi e deterministici.
+5. `05_MAXXI_UI_LOOK_AND_FEEL.md` - design system, layout, componenti e test visivi derivati dal sito MAXXI.
+6. `ui/maxxi-theme.reference.css` - proposta dei token CSS da verificare/adattare, non drop-in.
+7. `task_manifest.yaml` - dipendenze e workstream.
+8. `fixtures/maxxi_demo_seed.json` - dati tutti fittizi e deterministici.
 
 Riferimenti originali (forniti dal committente):
 - `CRM_brief_MAXXI(1).pdf`, MAXXI Ufficio comunicazione, settembre 2024.
@@ -31,6 +33,7 @@ Riferimenti originali (forniti dal committente):
 - **No false integrazioni**: simula in modo chiaramente indicato i report XLS e i sistemi terzi; non presentare l'integrazione con Archeoares, WordPress, biblioteca, Matomo o i fornitori di biglietteria come completata.
 - **Identita' e consenso spiegabili**: deduplica conservativa, indicazione fonte/periodo, scopo del trattamento e possibilita' di verifica umana.
 - **Non distruggere il comportamento esistente**: migrazioni add-only, seed idempotente, default demo disabilitata, UI generica invariata fuori dal contesto MAXXI.
+- **Tema locale MAXXI**: branding e token CSS scoped solo sul workspace demo, senza alterare UI e temi degli altri workspace. Asset brand solo con provenienza e permessi verificati.
 - **Lavora per task piccoli verificabili**: nessun commit massivo, nessuna cancellazione delle cartelle workspace esistenti, no force-push, no chiavi nei log.
 
 ## Strategia di esecuzione
@@ -54,6 +57,11 @@ Riferimenti originali (forniti dal committente):
 - Aggiungi viste: Panoramica del pubblico; Profili 360; Segmenti; Membership; Mostre/eventi; Campagne (anteprima); Feedback/Infopoint; Sostenitori (lite).
 - Mostra su ogni vista persistente un indicatore testuale "DATI DIMOSTRATIVI". Aggiungi una descrizione trasparente delle fonti simulate.
 
+**G2b - MAXXI look & feel**
+- Implementa il tema visuale a partire da `05_MAXXI_UI_LOOK_AND_FEEL.md`; segui la checklist UX-001..UX-010 e prepara una prova su desktop/tablet/mobile.
+- Il testo `DEMO · DATI SINTETICI` resta persistente; non copiare la navigazione pubblica del sito e non usare loghi/font/immagini senza diritti d’uso.
+- Mantieni un look editoriale ma conserva le funzionalita' di tabelle, filtri, consensi, timeline e strumenti OpenClaw.
+
 **G3 - Tre percorsi demo end-to-end**
 1. Da fonti eterogenee al profilo 360, con deduplica e provenienza.
 2. Segmento dinamico -> proposta AI -> campagna in anteprima -> conferma simulata, mai invio.
@@ -67,6 +75,7 @@ Riferimenti originali (forniti dal committente):
 **G5 - Validazione e consegna**
 - Test automatici (unit/integration/e2e dove possibile) per sicurezza, seed, identita', consenso, segmenti, campagne, KPI e percorso demo.
 - Esegui lint, test e build; riporta esattamente cosa e' passato e cosa no, senza dichiarare test eseguiti se non lo sono.
+- Verifica il look & feel per UX-001..UX-010, includendo screenshot 1440x900 e 375x812 se il browser di test e' disponibile; non inventare prove visive.
 - Fornisci README con bootstrap locale, account di test (credenziali impostate dall'operatore, non hardcoded), reset demo, runbook presentazione e screenshot se possibili.
 - Alla fine scrivi una relazione `DELIVERY_REPORT.md`: file modificati, schema, checklist accettazione, test, eventuali blocker e prossimi task.
 
@@ -81,6 +90,7 @@ F. Da segmento si produce la bozza di comunicazione legata a una mostra reale de
 G. L'operatore vede lo storico delle azioni/approvazioni anche se simulate.
 H. Le route di dati e SQL non sono disponibili a richieste non autenticate, con test automatici.
 I. Nessun contatto reale, invio esterno o credenziale in repository o output di test.
+J. Il workspace MAXXI usa il tema editoriale dedicato e gli altri workspace restano visivamente invariati; UX-001..UX-010 documentati.
 
 ## Decisioni e comportamento in caso di ambiguita'
 

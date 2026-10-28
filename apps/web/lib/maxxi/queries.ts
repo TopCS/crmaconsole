@@ -331,6 +331,34 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
   };
 }
 
+export type ActivityPoint = {
+  month: string;
+  visits: number;
+  events: number;
+};
+
+/**
+ * Monthly activity for the "Pubblico nel tempo" panel.
+ * Only months present in the dataset are returned: the demo window is
+ * Aug–Oct 2026 and a synthetic zero-filled timeline would imply knowledge
+ * we do not have.
+ */
+export async function getActivityByMonth(): Promise<ActivityPoint[]> {
+  const rows = await maxxiQuery<{ month: string; visits: number | string; events: number | string }>(
+    `SELECT substr(occurred_at, 1, 7) AS month,
+            SUM(CASE WHEN type = 'museum_visit_attended' AND person_id IS NOT NULL THEN 1 ELSE 0 END) AS visits,
+            COUNT(*) AS events
+       FROM maxxi_event
+      GROUP BY 1
+      ORDER BY 1;`,
+  );
+  return rows.map((row) => ({
+    month: row.month,
+    visits: Number(row.visits ?? 0),
+    events: Number(row.events ?? 0),
+  }));
+}
+
 export type SourceRow = {
   sourceSystem: string;
   description: string;

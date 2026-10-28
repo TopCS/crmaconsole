@@ -24,6 +24,8 @@ inputs:
   - 02_MAXXI_DEMO_PRD.md
   - 03_MAXXI_DATA_CONTRACT.md
   - 04_ACCEPTANCE_AND_DEMO_SCRIPT.md
+  - 05_MAXXI_UI_LOOK_AND_FEEL.md
+  - ui/maxxi-theme.reference.css
   - fixtures/maxxi_demo_seed.json
   - sources/CRM_brief_MAXXI(1).pdf
   - sources/Fonti_Dati.docx.pdf
@@ -179,16 +181,36 @@ workstreams:
       - Explicitly does not replatform the current demo
       - Clearly labels proposed, implemented and unverified features
     output: docs/maxxi/ADR-ROADMAP.md
+  - id: T11
+    title: MAXXI workspace-scoped visual design and UX QA
+    priority: P1
+    dependencies: [T02]
+    relevant_paths:
+      - apps/web/app/globals.css
+      - apps/web/app/page.tsx
+      - apps/web/app/components/sidebar.tsx
+      - apps/web/app/components/crm/
+      - apps/web/app/components/ui/
+    tasks:
+      - Translate MAXXI editorial aesthetic into workspace-specific visual tokens
+      - Build scoped brand wrapper and reusable MAXXI demo visual components
+      - Restyle overview, profile, sources, segment builder and campaign dry-run
+      - Preserve neutral theme and functionality in other workspaces
+      - Verify keyboard accessibility, contrast and responsive layouts
+      - Build image/font/license register and screenshot review
+    acceptance: [UX-001, UX-002, UX-003, UX-004, UX-005, UX-006, UX-007, UX-008, UX-009, UX-010, REG-001]
+    output: docs/maxxi/UI_DESIGN_SYSTEM.md
   - id: T10
     title: Final verification and report
     priority: P0
-    dependencies: [T01, T02, T03, T04, T05, T06, T07, T08, T09]
+    dependencies: [T01, T02, T03, T04, T05, T06, T07, T08, T09, T11]
     tasks:
       - Run full check/test/build and prove no external outbound
       - Record exact code and UI changes
+      - Execute visual QA UX-001..UX-010 and attach viewport screenshots where possible
       - List blockers, deviations and residual security risks
       - Prepare DELIVERY_REPORT.md according to acceptance plan
-    acceptance: [SEC-001, SEC-002, SEC-003, SEC-004, SEC-005, SEC-006, SEC-007, ID-004, REG-001]
+    acceptance: [SEC-001, SEC-002, SEC-003, SEC-004, SEC-005, SEC-006, SEC-007, ID-004, REG-001, UX-001, UX-002, UX-003, UX-004, UX-005, UX-006, UX-007, UX-008, UX-009, UX-010]
     output: DELIVERY_REPORT.md
 delivery:
   final_artifacts:
@@ -198,6 +220,7 @@ delivery:
     - campaign dry-run workflow
     - security regression tests
     - local demo runbook
+    - MAXXI scoped UI theme, visual QA and asset register
     - DELIVERY_REPORT.md
   cannot_claim_done_when:
     - any sensitive endpoint is accessible without principal

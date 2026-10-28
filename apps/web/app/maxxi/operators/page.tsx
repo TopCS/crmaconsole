@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Card, DemoNote, ErrorNote, SectionTitle } from "../ui";
+import { Badge, Card, DemoNote, ErrorNote, Loading, PageHeader, SectionTitle } from "../ui";
 import { labelForRole, type OperatorRole } from "../../../lib/security/rbac";
 
 type OperatorRow = {
@@ -20,6 +20,7 @@ export default function OperatorsPage() {
 	const [operators, setOperators] = useState<OperatorRow[]>([]);
 	const [error, setError] = useState<string | null>(null);
 	const [notice, setNotice] = useState<string | null>(null);
+	const [loading, setLoading] = useState(true);
 	const [busy, setBusy] = useState(false);
 
 	const [editingId, setEditingId] = useState<string | null>(null);
@@ -38,6 +39,8 @@ export default function OperatorsPage() {
 			setOperators(body.operators ?? []);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Caricamento fallito.");
+		} finally {
+			setLoading(false);
 		}
 	}, []);
 
@@ -106,50 +109,60 @@ export default function OperatorsPage() {
 		}
 	}
 
+	if (loading) {return <Loading label="Caricamento utenti…" />;}
+
 	return (
-		<div className="space-y-4">
-			<SectionTitle hint="Identità e ruoli sono gestiti da Keycloak (solo amministratore)">Accessi</SectionTitle>
+		<div className="space-y-6">
+			<PageHeader
+				eyebrow="Strumenti / Accessi"
+				title="Utenti e ruoli"
+				subtitle="Identità e password vivono in Keycloak. La console invia le credenziali una sola volta e non le rilegge; i ruoli determinano i permessi lato server."
+				actions={<Badge tone="neutral">Solo amministratore</Badge>}
+			/>
 
 			{error && <ErrorNote>{error}</ErrorNote>}
-			{notice && <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>{notice}</p>}
+			{notice && (
+				<p className="text-[12.5px]" role="status" style={{ color: "var(--maxxi-muted)" }}>
+					{notice}
+				</p>
+			)}
 
 			<Card>
-				<SectionTitle hint="La console non memorizza password: le invia a Keycloak una sola volta">
+				<SectionTitle hint="La password non viene memorizzata nella console">
 					{editingId ? `Modifica ${username}` : "Nuovo utente"}
 				</SectionTitle>
-				<form onSubmit={submit} className="grid gap-3 md:grid-cols-2">
-					<label className="flex flex-col gap-1 text-xs" style={{ color: "var(--color-text-muted)" }}>
-						Username
+				<form onSubmit={submit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+					<label className="flex flex-col gap-1.5">
+						<span className="maxxi-eyebrow">Username</span>
 						<input
 							type="text"
 							value={username}
 							onChange={(e) => setUsername(e.target.value)}
 							readOnly={editingId !== null}
-							className="rounded-lg border px-2 py-1.5 text-sm read-only:opacity-60"
-							style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-text)" }}
+							className="maxxi-input read-only:opacity-60"
 							required
 							pattern="[a-z0-9._-]{3,32}"
 							title="3-32 caratteri: a-z, 0-9, . _ -"
 						/>
 					</label>
-					<label className="flex flex-col gap-1 text-xs" style={{ color: "var(--color-text-muted)" }}>
-						Email
+					<label className="flex flex-col gap-1.5">
+						<span className="maxxi-eyebrow">Email</span>
 						<input
 							type="email"
 							value={email}
 							onChange={(e) => setEmail(e.target.value)}
-							className="rounded-lg border px-2 py-1.5 text-sm"
-							style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-text)" }}
+							className="maxxi-input"
 						/>
 					</label>
-					<label className="flex flex-col gap-1 text-xs md:col-span-2" style={{ color: "var(--color-text-muted)" }}>
-						{editingId ? "Nuova password (lascia vuoto per non cambiarla)" : "Password iniziale (min. 8 caratteri)"}
+					<label className="flex flex-col gap-1.5 md:col-span-2">
+						<span className="maxxi-eyebrow">
+							{editingId ? "Nuova password (lascia vuoto per non cambiarla)" : "Password iniziale (min. 8 caratteri)"}
+						</span>
 						<input
 							type="password"
 							value={password}
 							onChange={(e) => setPassword(e.target.value)}
-							className="rounded-lg border px-2 py-1.5 text-sm"
-							style={{ borderColor: "var(--color-border)", background: "var(--color-surface)", color: "var(--color-text)" }}
+							className="maxxi-input"
 							minLength={8}
 							required={editingId === null}
 						/>
@@ -162,36 +175,31 @@ export default function OperatorsPage() {
 									key={role}
 									type="button"
 									onClick={() => toggleRole(role)}
-									className="rounded-lg border px-2.5 py-1 text-[11px] font-medium"
+									aria-pressed={checked}
+									className="min-h-[44px] border px-3 text-[11.5px] font-semibold"
 									style={{
-										borderColor: checked ? "var(--color-accent)" : "var(--color-border)",
-										color: checked ? "var(--color-accent)" : "var(--color-text-muted)",
-										background: checked ? "color-mix(in srgb, var(--color-accent) 14%, transparent)" : "transparent",
+										borderColor: checked ? "var(--maxxi-ink)" : "var(--maxxi-line-strong)",
+										background: checked ? "var(--maxxi-ink)" : "var(--maxxi-paper)",
+										color: checked ? "#ffffff" : "var(--maxxi-ink)",
 									}}
 								>
 									{labelForRole(role)}
 								</button>
 							);
 						})}
-						<label className="flex items-center gap-1.5 text-xs" style={{ color: "var(--color-text-muted)" }}>
+						<label className="flex min-h-[44px] items-center gap-2 text-[12px]">
 							<input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
 							attivo
 						</label>
 						{editingId && (
-							<button
-								type="button"
-								onClick={resetForm}
-								className="rounded-lg border px-2.5 py-1 text-[11px]"
-								style={{ borderColor: "var(--color-border)", color: "var(--color-text-muted)" }}
-							>
+							<button type="button" onClick={resetForm} className="maxxi-secondary-action">
 								Annulla
 							</button>
 						)}
 						<button
 							type="submit"
 							disabled={busy || roles.length === 0}
-							className="ml-auto rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-60"
-							style={{ background: "var(--color-accent)", color: "#fff" }}
+							className="maxxi-primary-action ml-auto"
 						>
 							{busy ? "Salvataggio…" : editingId ? "Aggiorna" : "Crea utente"}
 						</button>
@@ -199,45 +207,77 @@ export default function OperatorsPage() {
 				</form>
 			</Card>
 
-			<Card>
-				<SectionTitle hint={`${operators.length} utenti nel realm`}>Utenti Keycloak</SectionTitle>
+			<Card className="p-0">
+				<div className="p-4 pb-0 sm:p-5 sm:pb-0">
+					<SectionTitle hint={`${operators.length} utenti nel realm crm-a`}>Utenti Keycloak</SectionTitle>
+				</div>
 				{operators.length === 0 ? (
-					<p className="py-4 text-center text-sm" style={{ color: "var(--color-text-muted)" }}>
+					<p className="py-10 text-center text-sm" style={{ color: "var(--maxxi-muted)" }}>
 						Nessun utente.
 					</p>
 				) : (
-					<ul className="divide-y" style={{ borderColor: "var(--color-border)" }}>
-						{operators.map((operator) => (
-							<li key={operator.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
-								<span className="flex flex-wrap items-center gap-2">
-									<span style={{ color: "var(--color-text)" }}>{operator.username}</span>
-									{operator.roles.length === 0 && <Badge tone="bad">nessun ruolo</Badge>}
-									{operator.roles.map((role) => (
-										<Badge key={role} tone="neutral">{labelForRole(role)}</Badge>
-									))}
-								</span>
-								<span className="flex items-center gap-2 text-xs" style={{ color: "var(--color-text-muted)" }}>
-									<Badge tone={operator.enabled ? "ok" : "bad"}>{operator.enabled ? "attivo" : "disattivo"}</Badge>
-									<button
-										type="button"
-										onClick={() => startEdit(operator)}
-										className="rounded-lg border px-2 py-0.5 text-[11px]"
-										style={{ borderColor: "var(--color-border)", color: "var(--color-text)" }}
-									>
-										Modifica
-									</button>
-									<button
-										type="button"
-										onClick={() => void remove(operator)}
-										className="rounded-lg border px-2 py-0.5 text-[11px]"
-										style={{ borderColor: "var(--color-border)", color: "var(--color-error, #ef4444)" }}
-									>
-										Elimina
-									</button>
-								</span>
-							</li>
-						))}
-					</ul>
+					<div className="maxxi-table-scroll">
+						<table className="maxxi-table">
+							<caption className="sr-only">Utenti del realm Keycloak con i ruoli CRM-A</caption>
+							<thead>
+								<tr>
+									<th scope="col">Utente</th>
+									<th scope="col">Ruoli</th>
+									<th scope="col">Stato</th>
+									<th scope="col">Azioni</th>
+								</tr>
+							</thead>
+							<tbody>
+								{operators.map((operator) => (
+									<tr key={operator.id}>
+										<th scope="row">
+											<span className="font-medium">{operator.username}</span>
+											{operator.email && (
+												<span className="mt-0.5 block text-[11.5px] font-normal" style={{ color: "var(--maxxi-muted)" }}>
+													{operator.email}
+												</span>
+											)}
+										</th>
+										<td>
+											{operator.roles.length === 0 ? (
+												<Badge tone="bad">Nessun ruolo</Badge>
+											) : (
+												<span className="flex flex-wrap gap-2">
+													{operator.roles.map((role) => (
+														<Badge key={role} tone="neutral">{labelForRole(role)}</Badge>
+													))}
+												</span>
+											)}
+										</td>
+										<td>
+											<Badge tone={operator.enabled ? "ok" : "bad"}>
+												{operator.enabled ? "Attivo" : "Disattivo"}
+											</Badge>
+										</td>
+										<td>
+											<div className="flex flex-wrap gap-2">
+												<button
+													type="button"
+													onClick={() => startEdit(operator)}
+													className="maxxi-secondary-action"
+												>
+													Modifica
+												</button>
+												<button
+													type="button"
+													onClick={() => void remove(operator)}
+													className="maxxi-secondary-action"
+													style={{ color: "var(--maxxi-negative)", borderColor: "var(--maxxi-negative)" }}
+												>
+													Elimina
+												</button>
+											</div>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
 				)}
 			</Card>
 
