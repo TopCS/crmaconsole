@@ -15,9 +15,9 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/* \
   && arch="$(dpkg --print-architecture)" \
   && case "$arch" in amd64) duckarch=amd64 ;; arm64) duckarch=aarch64 ;; *) echo "unsupported arch: $arch" >&2; exit 1 ;; esac \
-  && curl -fsSL "https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-${duckarch}.zip" -o /tmp/duckdb.zip \
-  && unzip -o /tmp/duckdb.zip -d /usr/local/bin \
-  && rm /tmp/duckdb.zip \
+  && curl -fsSL "https://github.com/duckdb/duckdb/releases/download/v2.0.0/duckdb-cli-linux-${duckarch}.tar.gz" -o /tmp/duckdb.tar.gz \
+  && tar -xzf /tmp/duckdb.tar.gz -C /usr/local/bin duckdb \
+  && rm /tmp/duckdb.tar.gz \
   && duckdb --version
 
 # Install dependencies first for better layer caching.
@@ -59,9 +59,9 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/* \
   && arch="$(dpkg --print-architecture)" \
   && case "$arch" in amd64) duckarch=amd64 ;; arm64) duckarch=aarch64 ;; *) echo "unsupported arch: $arch" >&2; exit 1 ;; esac \
-  && curl -fsSL "https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-${duckarch}.zip" -o /tmp/duckdb.zip \
-  && unzip -o /tmp/duckdb.zip -d /usr/local/bin \
-  && rm /tmp/duckdb.zip \
+  && curl -fsSL "https://github.com/duckdb/duckdb/releases/download/v2.0.0/duckdb-cli-linux-${duckarch}.tar.gz" -o /tmp/duckdb.tar.gz \
+  && tar -xzf /tmp/duckdb.tar.gz -C /usr/local/bin duckdb \
+  && rm /tmp/duckdb.tar.gz \
   && duckdb --version \
   && npm install -g openclaw@2026.9.1
 

@@ -89,7 +89,9 @@ services:
       # Keycloak (OIDC). The browser uses ISSUER, the container uses the
       # internal hostname for token/JWKS calls; the `iss` claim stays public.
       - CRM_A_OIDC_ISSUER=${CRM_A_OIDC_ISSUER:-http://localhost:8080/realms/crm-a}
-      - CRM_A_OIDC_INTERNAL_ISSUER=${CRM_A_OIDC_INTERNAL_ISSUER:-http://keycloak:8080/realms/crm-a}
+      # Inside Compose the server must reach Keycloak by service DNS, even if
+      # .env carries the host-oriented localhost value for `next dev`/`start`.
+      - CRM_A_OIDC_INTERNAL_ISSUER=${CRM_A_OIDC_INTERNAL_ISSUER_DOCKER:-http://keycloak:8080/realms/crm-a}
       - CRM_A_OIDC_CLIENT_ID=${CRM_A_OIDC_CLIENT_ID:-crm-a-console}
       - CRM_A_OIDC_CLIENT_SECRET=${CRM_A_OIDC_CLIENT_SECRET:-crm-a-demo-client-secret}
       - CRM_A_OIDC_REDIRECT_URI=${CRM_A_OIDC_REDIRECT_URI:-http://localhost:3100/api/auth/callback}
