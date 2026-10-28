@@ -20,8 +20,9 @@ export function MaxxiHeader() {
 	const items = NAV.filter((item) => !item.require || hasRole(me, item.require));
 
 	async function logout() {
-		await fetch("/api/auth/logout", { method: "POST" });
-		window.location.assign("/login");
+		const res = await fetch("/api/auth/logout", { method: "POST" });
+		const body = (await res.json().catch(() => ({}))) as { logoutUrl?: string };
+		window.location.assign(body.logoutUrl ?? "/login");
 	}
 
 	return (

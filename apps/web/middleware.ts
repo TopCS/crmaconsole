@@ -23,6 +23,7 @@ const SESSION_COOKIE = "crm_a_session";
  */
 const PUBLIC_PREFIXES = [
   "/api/auth/login",
+  "/api/auth/callback",
   "/api/auth/logout",
   "/api/events/collect",
   "/api/events/identify",

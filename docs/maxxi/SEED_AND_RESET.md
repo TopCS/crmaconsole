@@ -14,13 +14,16 @@ Il DB demo è **separato** dal workspace CRM: nessun seed o reset tocca
 ## Comandi
 
 ```bash
-# da UI: Panoramica → “Ricarica dati demo”
-# da terminale:
-bash scripts/maxxi-demo.sh seed
-bash scripts/maxxi-demo.sh health
+# da UI: Panoramica → “Ricarica dati demo” (solo admin)
+# da terminale (health usa il token di servizio):
+CRM_A_SERVICE_TOKEN=... bash scripts/maxxi-demo.sh health
+# seed: serve il cookie di sessione di un admin, non una credenziale macchina
+CRM_A_ADMIN_SESSION=... bash scripts/maxxi-demo.sh seed
 ```
 
-`POST /api/maxxi/seed` richiede un principal operatore o di servizio.
+`POST /api/maxxi/seed` richiede il permesso `maxxi.seed`, cioè un operatore con
+ruolo `admin`. Il token di servizio è deliberatamente escluso: non può
+ricostruire o cancellare il dataset demo.
 
 ## Idempotenza
 

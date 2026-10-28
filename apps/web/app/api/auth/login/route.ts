@@ -1,86 +1,86 @@
 /**
- * POST /api/auth/login — operator login (individual accounts + RBAC).
+ * GET /api/auth/login — starts the Keycloak Authorization Code + PKCE flow.
  *
- * Body: { username, password }
- * On first run, when the account store is empty, an admin account is created
- * from CRM_A_ADMIN_USERNAME + CRM_A_ADMIN_PASSWORD (operator-provided, never
- * hardcoded). After that, accounts are managed by an admin.
+ * The console no longer accepts passwords: identity is delegated to Keycloak.
+ * We only store a short-lived, httpOnly state cookie holding the CSRF state,
+ * the OIDC nonce and the PKCE verifier; the callback validates all three.
+ *
+ * When Keycloak is not configured the endpoint fails closed with a 503.
  */
 
 import {
-  SESSION_COOKIE,
-  SESSION_TTL_SECONDS,
-  readSessionSecret,
-  signSessionToken,
+  OIDC_STATE_COOKIE,
+  OIDC_STATE_TTL_SECONDS,
+  buildCookie,
 } from "@/lib/security/session";
 import {
-  bootstrapAdminIfNeeded,
-  readOperators,
-  verifyCredentials,
-} from "@/lib/security/operators";
+  buildAuthorizeUrl,
+  createPkcePair,
+  createRandomToken,
+  readOidcConfig,
+} from "@/lib/security/oidc";
+import { safeNextPath } from "@/lib/security/redirect";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function noAccountsError(): { error: string; hint: string } {
-  return {
-    error: "Nessun account operatore configurato.",
-    hint: "Imposta CRM_A_ADMIN_USERNAME e CRM_A_ADMIN_PASSWORD per creare il primo account admin.",
-  };
+function notConfigured(): Response {
+  return new Response(
+    `<!doctype html><html lang="it"><meta charset="utf-8"><title>Accesso non configurato</title>
+<body style="font-family:system-ui;max-width:34rem;margin:12vh auto;padding:0 1.5rem;line-height:1.5">
+<h1 style="font-size:1.2rem">Accesso non configurato</h1>
+<p>Keycloak non è raggiungibile dalla console: mancano <code>CRM_A_OIDC_ISSUER</code>,
+<code>CRM_A_OIDC_CLIENT_ID</code> o <code>CRM_A_OIDC_CLIENT_SECRET</code>.</p>
+<p>La superficie resta chiusa (fail-closed). Avvia lo stack con
+<code>docker compose up -d keycloak keycloak-db</code> e imposta le variabili OIDC.</p>
+</body></html>`,
+    { status: 503, headers: { "content-type": "text/html; charset=utf-8" } },
+  );
 }
 
-export async function POST(req: Request) {
-  if (!readSessionSecret()) {
-    return Response.json(
-      { error: "Login disabled: CRM_A_SESSION_SECRET is not configured." },
-      { status: 503 },
-    );
-  }
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const config = readOidcConfig(req);
+  if (!config) {return notConfigured();}
 
-  let body: { username?: unknown; password?: unknown };
-  try {
-    body = (await req.json()) as { username?: unknown; password?: unknown };
-  } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
+  const next = safeNextPath(url.searchParams.get("next"));
+  const state = createRandomToken();
+  const nonce = createRandomToken();
+  const pkce = createPkcePair();
 
-  const username = typeof body.username === "string" ? body.username.trim() : "";
-  const password = typeof body.password === "string" ? body.password : "";
+  const payload = JSON.stringify({
+    state,
+    nonce,
+    verifier: pkce.verifier,
+    next,
+    createdAt: Date.now(),
+  });
 
-  // Bootstrap admin on the very first login when the store is empty.
-  if (readOperators().length === 0) {
-    const boot = bootstrapAdminIfNeeded();
-    if (!boot.ok) {
-      return Response.json(noAccountsError(), { status: 503 });
-    }
-  }
+  const location = buildAuthorizeUrl(config, {
+    state,
+    nonce,
+    codeChallenge: pkce.challenge,
+  });
 
-  const result = verifyCredentials(username, password);
-  if (!result.ok) {
-    const status = result.reason === "account_disabled" ? 403 : 401;
-    return Response.json({ error: "Credenziali non valide." }, { status });
-  }
+  return new Response(null, {
+    status: 302,
+    headers: {
+      location,
+      "cache-control": "no-store",
+      "set-cookie": buildCookie(req, OIDC_STATE_COOKIE, payload, {
+        maxAge: OIDC_STATE_TTL_SECONDS,
+        path: "/api/auth",
+      }),
+    },
+  });
+}
 
-  const token = signSessionToken(result.account.username, result.account.roles);
-  if (!token) {
-    return Response.json(
-      { error: "Session unavailable: CRM_A_SESSION_SECRET is not configured." },
-      { status: 503 },
-    );
-  }
-
-  const secure = new URL(req.url).protocol === "https:";
-  const cookie = [
-    `${SESSION_COOKIE}=${encodeURIComponent(token)}`,
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Lax",
-    `Max-Age=${SESSION_TTL_SECONDS}`,
-    ...(secure ? ["Secure"] : []),
-  ].join("; ");
-
+export async function POST() {
   return Response.json(
-    { ok: true, username: result.account.username, roles: result.account.roles },
-    { headers: { "set-cookie": cookie } },
+    {
+      error: "Password login is disabled: authentication is delegated to Keycloak.",
+      hint: "Start the flow with GET /api/auth/login.",
+    },
+    { status: 405, headers: { allow: "GET" } },
   );
 }

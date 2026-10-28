@@ -8,7 +8,7 @@ Pull request: https://github.com/TopCS/crmaconsole/pull/1
 | Gate | Esito | Note |
 |---|---|---|
 | G0 baseline | ✅ | Revisione registrata; suite baseline eseguita prima delle modifiche |
-| G1 security | ✅ | Default-deny, SQL allowlist, outbound kill switch, bind su 127.0.0.1, **RBAC a ruoli** — test automatici verdi |
+| G1 security | ✅ | Default-deny, SQL allowlist, outbound kill switch, bind su 127.0.0.1, **Keycloak OIDC + RBAC a ruoli** — test automatici verdi |
 | G2 seed | ✅ | Seed idempotente, isolato, dati sintetici, nessun merge su solo nome |
 | G3 demo UI | ✅ | 6 viste navigabili (panoramica, profilo 360, fonti, segmenti, campagne, assistente) |
 | G4 agent | ✅ | 3 tool: profilo 360, segmento, proposta dry-run; risposta deterministica grounded |
@@ -55,13 +55,15 @@ Non eseguiti: E2E browser; test su istanza pubblica (per scelta: nessuna esposiz
 | `POST /api/maxxi/ask` (donazioni) | `"Non ho evidenze sufficienti"` |
 | Pagine `/maxxi*` autenticate | `200` e banner demo presente su tutte |
 
-### Verifica live RBAC (4 account demo)
+### Verifica live Keycloak + RBAC (5 account demo)
 
 | Caso | Esito |
 |---|---|
 | anonimo su `/api/maxxi/overview` | `401` |
-| login con password errata | `401` |
-| bootstrap: primo login crea admin | `200`, ruoli `["admin"]` |
+| `GET /api/auth/login` | `302` a Keycloak con PKCE S256 + state/nonce |
+| login Keycloak `comm.demo` | `302` → callback → sessione `communication` |
+| ID token manomesso / nonce errato | rifiutato (test automatici) |
+| utente senza ruolo CRM-A | `/login?error=no_role`, nessuna sessione |
 | `communication` su `/api/maxxi/segment` | `200` |
 | `communication` su `/api/maxxi/seed` | `403` |
 | `communication` su `/api/maxxi/operators` | `403` |
@@ -69,6 +71,10 @@ Non eseguiti: E2E browser; test su istanza pubblica (per scelta: nessuna esposiz
 | note `P-GIULIA` per `communication` | `summary: ""` (mascherate) |
 | note `P-GIULIA` per `infopoint` | testo presente |
 | `communication` su `/maxxi/operators` | `307` → `/maxxi` |
+| admin crea utente da `/maxxi/operators` | utente nel realm Keycloak, ruolo assegnato |
+| login del nuovo utente | ruolo corretto letto dal realm |
+| admin elimina il proprio account | `400` (guardia) |
+| logout | cookie azzerato + SSO Keycloak terminato |
 | service Bearer: overview/people | `200` |
 | service Bearer: bozza campagna | `200` (`externalCalls: 0`) |
 | service Bearer: approve / seed / operators | `403` |
@@ -76,11 +82,17 @@ Non eseguiti: E2E browser; test su istanza pubblica (per scelta: nessuna esposiz
 
 ## 3. File modificati / aggiunti
 
-**Sicurezza**
+**Sicurezza / identità**
+- `deploy/keycloak/realm/crm-a-realm.json` *(nuovo)* — realm, ruoli, client PKCE, admin client, utenti demo.
+- `deploy/keycloak/themes/crm-a/*` *(nuovo)* — login personalizzata (estende `keycloak.v2`).
+- `docker-compose.yml` — servizi `keycloak` + `keycloak-db` (PostgreSQL), bind localhost.
+- `apps/web/lib/security/oidc.ts` *(nuovo)* — PKCE, token exchange, verifica ID token/JWKS, mapping ruoli.
+- `apps/web/lib/security/keycloak-admin.ts` *(nuovo)* — client Admin REST con service account minimo.
+- `apps/web/app/api/auth/login|callback|logout` *(nuovi)* — flusso OIDC completo, state/nonce.
+- `apps/web/app/login/page.tsx` *(riscritto)* — redirect a Keycloak + errori leggibili.
 - `apps/web/middleware.ts` *(nuovo)* — default-deny + guardia di ruolo sulle pagine.
 - `apps/web/lib/security/rbac.ts` *(nuovo)* — ruoli, permessi, concessione service.
-- `apps/web/lib/security/operators.ts` *(nuovo)* — account individuali scrypt+salt, bootstrap admin.
-- `apps/web/app/api/maxxi/operators/route.ts` *(nuovo)* + `apps/web/app/maxxi/operators/page.tsx` *(nuovo)*.
+- `apps/web/app/api/maxxi/operators/route.ts` *(nuovo)* + `apps/web/app/maxxi/operators/page.tsx` *(nuovo)* — utenti Keycloak.
 - `apps/web/lib/security/session.ts` *(nuovo)* — sessione firmata, `requireOperator`, `requireService`.
 - `apps/web/lib/security/sql-guard.ts` *(nuovo)* — allowlist SQL.
 - `apps/web/lib/security/demo-mode.ts` *(nuovo)* — kill switch outbound.
@@ -115,8 +127,9 @@ workspace CRM esistente non viene toccato.
 ## 4. Endpoint nuovi/modificati
 
 Nuovi (operator o service):
-`POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`,
-`GET|POST|DELETE /api/maxxi/operators` (admin),
+`GET /api/auth/login` (redirect Keycloak), `GET /api/auth/callback`,
+`POST|GET /api/auth/logout`, `GET /api/auth/me`,
+`GET|POST|PATCH|DELETE /api/maxxi/operators` (admin, proxy Keycloak),
 `POST /api/maxxi/seed`, `GET /api/maxxi/overview`, `GET /api/maxxi/people`,
 `GET /api/maxxi/segment`, `GET|POST /api/maxxi/campaigns`, `POST /api/maxxi/ask`.
 
@@ -146,14 +159,17 @@ middleware, l'intera superficie web tranne l'allowlist pubblica.
 
 1. **RBAC a grana grossa** — i ruoli sono applicati lato server, ma non esiste
    ancora autorizzazione *per record* (es. casi infopoint assegnati a un
-   operatore) né revoca sessioni lato server.
-2. **Nessuna revoca sessione lato server** (TTL 12h) né rotazione chiavi da UI.
-3. **Rate limiting** solo in memoria sul tracking pubblico.
-4. **Build Docker** non verificabile in questa sessione per un errore di rete
+   operatore). Le policy arriveranno con PostgreSQL/RLS (ADR-104).
+2. **Keycloak in `start-dev` su HTTP locale** — adatto alla demo, non a
+   esposizione pubblica: servono TLS, `start`, segreti reali e backup.
+3. **Ruoli letti al login** (TTL 12h): la revoca immediata richiede
+   disattivazione in Keycloak + rotazione di `CRM_A_SESSION_SECRET`.
+4. **Rate limiting** solo in memoria sul tracking pubblico.
+5. **Build Docker** non verificabile in questa sessione per un errore di rete
    preesistente su `npm install -g openclaw`; il build Next è verde.
-5. **`.next` root-owned** nel sandbox ha richiesto un `distDir` temporaneo per la
+6. **`.next` root-owned** nel sandbox ha richiesto un `distDir` temporaneo per la
    verifica; la config è stata ripristinata.
-6. Il manifest chiedeva il mapping sugli oggetti EAV esistenti: ho scelto un
+7. Il manifest chiedeva il mapping sugli oggetti EAV esistenti: ho scelto un
    **DB relazionale isolato** per avere provenance e determinismo senza toccare
    il workspace CRM. Deviazione dichiarata (vedi §8).
 7. `Main` non è stato modificato: il lavoro è sul branch `feat/maxxi-cdp-demo`.
@@ -176,8 +192,9 @@ middleware, l'intera superficie web tranne l'allowlist pubblica.
 
 1. **API v1 `/api/v1/cdp/*`** con OpenAPI e scope (read/write separati), sopra la
    façade già isolata.
-2. **Autorizzazione per record + audit delle letture** (il RBAC a ruoli è già in piedi).
-3. **ADR PostgreSQL vs DuckDB** con benchmark su dataset sintetico ~170k record.
+2. **PostgreSQL + Row-Level Security** per l'autorizzazione per record e l'audit
+   delle letture (Keycloak usa già PostgreSQL dedicato).
+3. **API v1 `/api/v1/cdp/*`** con scope OAuth, sopra la façade isolata.
 4. **Memoria cliente temporale** (facts con `valid_from`/`valid_to`, `supersedes`)
    per iscrizioni myMAXXI, con provenance in UI.
 5. **MCP server** con tool read-only separati e human-in-the-loop sulle scritture.

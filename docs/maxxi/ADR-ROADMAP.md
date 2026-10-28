@@ -33,17 +33,19 @@ contratto più stabile. Va fatto dopo ADR-102.
 **Stato:** *parzialmente implementato* (RBAC a grana grossa) — audit per record ancora proposto.
 
 Implementato in questa tranche:
-- account individuali (`operators.json`, scrypt+salt) con ruoli
-  `admin` / `communication` / `membership` / `infopoint` / `relations`;
+- identità delegata a **Keycloak** (ADR-107): ruoli
+  `admin` / `communication` / `membership` / `infopoint` / `relations` nel realm;
 - permessi risorsa.azione (`lib/security/rbac.ts`) applicati lato server da
   `guardPermission()`, non solo nascosti in UI;
 - note infopoint mascherate per i ruoli senza `maxxi.feedback.viewNotes`;
 - pagine con vincolo di ruolo (`/maxxi/operators`) redirette dal middleware;
-- audit di seed, bozze, approvazioni, creazione/eliminazione account con username.
+- audit di seed, bozze, approvazioni, creazione/modifica/eliminazione utenti con
+  username reale (non più account locali).
 
 Ancora da fare (proposto): autorizzazione **per record** (es. un operatore
-Infopoint vede solo i casi assegnati a lui), revoca sessioni lato server,
-rotazione credenziali da UI, e audit delle *letture* sensibili.
+Infopoint vede solo i casi assegnati a lui), revoca sessioni immediata,
+audit delle *letture* sensibili. Le policy per record si appoggeranno a
+PostgreSQL/RLS (ADR-104).
 
 Vincoli mantenuti: nessun ruolo finto in UI, ogni endpoint dichiara il permesso,
 test negativi per ruolo nella suite (`app/api/maxxi/rbac.test.ts`).
@@ -73,12 +75,24 @@ scopo/canale con `withdrawn_at`.
 
 ## ADR-104 — PostgreSQL vs DuckDB
 
-**Stato:** proposto, **non** implementato.
+**Stato:** *decisione presa* (PostgreSQL per il dato operativo + RLS) — migrazione da pianificare.
 
 Contesto: ~170k record dichiarati nel 2024 (non certificati), multiutente,
-transazioni, concorrenza in scrittura, retention/portabilità.
+transazioni, concorrenza in scrittura, retention/portabilità. Keycloak usa già
+PostgreSQL dedicato (`keycloak-db`), quindi l'infrastruttura è nota.
 
-Decisione proposta: architettura **ibrida**, non sostituzione.
+Decisione: il dato operativo e le **policy di autorizzazione per record** vivono
+in PostgreSQL; DuckDB resta per analytics/export e per il dataset demo isolato.
+Le policy saranno **Row-Level Security** sul ruolo applicativo, non `WHERE`
+sparso nel codice:
+
+- `tenant_id`/`workspace_id` e `purpose` su ogni tabella con dato personale;
+- ruolo applicativo `crm_app` senza `BYPASSRLS`;
+- policy per ruolo CRM-A (es. Infopoint limitato ai casi assegnati);
+- `SET LOCAL app.principal_id` per ogni transazione, così l'audit è coerente;
+- i controlli applicativi restano (difesa in profondità), non vengono rimossi.
+
+Architettura **ibrida**, non sostituzione.
 
 | Carico | Storage |
 |---|---|
@@ -132,14 +146,38 @@ vieta.
 
 ---
 
+## ADR-107 — Identità delegata a Keycloak (OIDC)
+
+**Stato:** *implementato*.
+
+Decisione: la console non gestisce password. Keycloak è l'unico IdP, con
+PostgreSQL dedicato e realm versionato in `deploy/keycloak/realm/crm-a-realm.json`.
+
+- flusso **Authorization Code + PKCE (S256)**, `state` + `nonce` in cookie
+  httpOnly a vita breve;
+- ID token verificato con JWKS (RS256) e controlli su `iss`, `aud`/`azp`, `exp`,
+  `nonce`; ruoli da `realm_access.roles` filtrati sulla matrice locale;
+- sessione console firmata HMAC con username + ruoli, così middleware, guard e
+  audit restano invariati;
+- logout locale + `end_session_endpoint` Keycloak (SSO terminato);
+- client `crm-a-admin` con service account limitato a `view-users`/
+  `query-users`/`manage-users` per la pagina Accessi;
+- login personalizzata con tema `crm-a` (estende `keycloak.v2`, palette e
+  tipografia della console), verificata dopo gli aggiornamenti.
+
+Limiti dichiarati: `start-dev` e HTTP locale solo per demo; i ruoli sono letti al
+login (TTL 12h); la revoca immediata richiede disattivazione in Keycloak +
+rotazione di `CRM_A_SESSION_SECRET`.
+
+---
+
 ## Ordine consigliato
 
-1. **ADR-102 (RBAC)** — sblocca tutto il resto senza aumentare la superficie.
+1. **ADR-104 (PostgreSQL + RLS)** — abilita l'autorizzazione per record.
 2. **ADR-101 (API v1)** — sopra la façade già esistente.
 3. **ADR-103 (memoria temporale)** — 1-2 fatti, con provenienza.
-4. **ADR-104 (benchmark DB)** — decisione informata, non ideologica.
-5. **ADR-105 (MCP)** — solo dopo 102.
-6. **ADR-106 (integrazioni)** — dipende dal committente, non dal codice.
+4. **ADR-105 (MCP)** — solo dopo 102/104.
+5. **ADR-106 (integrazioni)** — dipende dal committente, non dal codice.
 
 ## Non-goals (riconfermati)
 

@@ -11,40 +11,56 @@ pnpm install --frozen-lockfile
 
 # Segreti (impostali tu, non sono nel repo)
 export CRM_A_SESSION_SECRET="$(openssl rand -hex 32)"
-export CRM_A_ADMIN_USERNAME="admin.demo"
-export CRM_A_ADMIN_PASSWORD="<password >=8 caratteri>"
 export CRM_A_SERVICE_TOKEN="$(openssl rand -hex 24)"
 export CRM_A_DEMO_MODE=1
+
+# Keycloak / OIDC (valori demo: cambiali prima di condividere l'ambiente)
+export KEYCLOAK_ADMIN_PASSWORD="<password admin Keycloak>"
+export KEYCLOAK_DB_PASSWORD="<password database Keycloak>"
+export CRM_A_OIDC_CLIENT_SECRET="<client secret crm-a-console>"
+export CRM_A_KEYCLOAK_ADMIN_CLIENT_SECRET="<client secret crm-a-admin>"
+
+# Identità + database dedicato (il CRM resta su DuckDB)
+docker compose up -d keycloak-db keycloak
 
 pnpm build:crm-a-plugins
 pnpm --dir apps/web dev      # oppure: docker compose up -d --build
 ```
 
-Apri `http://localhost:3100` → redirect a `/login` → **username + password**.
-Il primo login crea l'account admin da `CRM_A_ADMIN_USERNAME`/`CRM_A_ADMIN_PASSWORD`.
-Senza `CRM_A_SESSION_SECRET` il login è disabilitato e la superficie resta chiusa
-(fail-closed).
+Apri `http://localhost:3100` → redirect alla **login Keycloak** (tema CRM-A) →
+username + password. La console non accetta password: senza Keycloak la
+superficie resta chiusa (fail-closed).
+
+Keycloak Admin Console: `http://localhost:8080` (solo localhost).
+Realm `crm-a`. La password degli utenti demo è `demo-password-1`; è un valore di
+demo, da cambiare in qualsiasi ambiente condiviso.
+
+Senza `CRM_A_SESSION_SECRET` la console non può emettere sessioni; senza
+`CRM_A_OIDC_*` il login risponde 503 e tutto il resto resta chiuso.
 
 ### Ruoli per la demo
 
 | Account | Ruolo | Cosa vede |
 |---|---|---|
-| `admin.demo` | `admin` | tutto + Operatori + “Ricarica dati demo” |
+| `admin.demo` | `admin` | tutto + Accessi + “Ricarica dati demo” |
 | `comm.demo` | `communication` | segmenti, bozze/approvazioni; **non** le note infopoint |
 | `memb.demo` | `membership` | profili e membership |
 | `info.demo` | `infopoint` | profili + **note infopoint** |
 | `rel.demo` | `relations` | organizzazioni e relazioni |
 
-Gli account extra si creano da **/maxxi/operators** (solo admin).
+I ruoli si assegnano nel realm Keycloak. Da **/maxxi/operators** (solo admin) si
+possono creare/modificare/disattivare utenti senza aprire la Admin Console; la
+console usa un service account Keycloak con permessi minimi (`manage-users`).
 
 ## 2. Caricare i dati demo
 
-Dalla UI: **Panoramica → “Ricarica dati demo”**.
+Dalla UI: **Panoramica → “Ricarica dati demo”** (solo `admin`; `communication`
+e gli altri ruoli ricevono 403).
 Da terminale (stesso risultato, idempotente):
 
 ```bash
-bash scripts/maxxi-demo.sh seed
-bash scripts/maxxi-demo.sh health
+CRM_A_ADMIN_SESSION=<cookie crm_a_session di un admin> bash scripts/maxxi-demo.sh seed
+CRM_A_SERVICE_TOKEN=<token> bash scripts/maxxi-demo.sh health
 ```
 
 Il dataset vive in un DuckDB isolato (`<stateDir>/maxxi-demo/maxxi.duckdb`):

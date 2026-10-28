@@ -1,8 +1,75 @@
 services:
+  # ── Identity provider ─────────────────────────────────────────────────────
+  # Keycloak owns users, credentials and realm roles. It has its own
+  # PostgreSQL so the CRM database can stay on DuckDB until the migration
+  # sprint (where row-level policies will land).
+  keycloak-db:
+    image: postgres:16-alpine
+    container_name: crm-a-keycloak-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-demo-db-password}
+    volumes:
+      - keycloak-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: crm-a-keycloak
+    restart: unless-stopped
+    command:
+      - start-dev
+      - --import-realm
+      - --http-port=8080
+      - --hostname=http://localhost:8080
+    environment:
+      # Bootstrap only: after the first boot, manage admins in Keycloak.
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin-demo-password}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-demo-db-password}
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_PROXY_HEADERS: xforwarded
+    ports:
+      # Local only: expose Keycloak beyond localhost only behind TLS + proxy.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # Realm, roles, demo users, theme. The theme is mounted read-only and
+      # extends the stock keycloak.v2 login theme (see deploy/keycloak/).
+      - ./deploy/keycloak/realm:/opt/keycloak/data/import:ro
+      - ./deploy/keycloak/themes:/opt/keycloak/themes:ro
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200' <&3",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
   crm-a-console:
     build: .
     image: crm-a-console
     container_name: crm-a-console
+    depends_on:
+      keycloak:
+        condition: service_healthy
+
     ports:
       # SEC-06: bind locally by default; publish explicitly only with an
       # authenticated perimeter (see docs/maxxi/SECURITY_GATE.md).
@@ -19,6 +86,20 @@ services:
     environment:
       # Secrets come from .env (gitignored) or the shell environment.
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      # Keycloak (OIDC). The browser uses ISSUER, the container uses the
+      # internal hostname for token/JWKS calls; the `iss` claim stays public.
+      - CRM_A_OIDC_ISSUER=${CRM_A_OIDC_ISSUER:-http://localhost:8080/realms/crm-a}
+      - CRM_A_OIDC_INTERNAL_ISSUER=${CRM_A_OIDC_INTERNAL_ISSUER:-http://keycloak:8080/realms/crm-a}
+      - CRM_A_OIDC_CLIENT_ID=${CRM_A_OIDC_CLIENT_ID:-crm-a-console}
+      - CRM_A_OIDC_CLIENT_SECRET=${CRM_A_OIDC_CLIENT_SECRET:-crm-a-demo-client-secret}
+      - CRM_A_OIDC_REDIRECT_URI=${CRM_A_OIDC_REDIRECT_URI:-http://localhost:3100/api/auth/callback}
+      - CRM_A_OIDC_POST_LOGOUT_REDIRECT_URI=${CRM_A_OIDC_POST_LOGOUT_REDIRECT_URI:-http://localhost:3100/login}
+      # Admin REST client for /maxxi/operators (server-side only).
+      - CRM_A_KEYCLOAK_ADMIN_CLIENT_ID=${CRM_A_KEYCLOAK_ADMIN_CLIENT_ID:-crm-a-admin}
+      - CRM_A_KEYCLOAK_ADMIN_CLIENT_SECRET=${CRM_A_KEYCLOAK_ADMIN_CLIENT_SECRET:-crm-a-admin-demo-secret}
+      - CRM_A_SESSION_SECRET=${CRM_A_SESSION_SECRET:-}
+      - CRM_A_SERVICE_TOKEN=${CRM_A_SERVICE_TOKEN:-}
+      - CRM_A_DEMO_MODE=${CRM_A_DEMO_MODE:-1}
       # Web search provider (openclaw bundled Gemini provider). Optional:
       # when set, the agent's web_search tool auto-detects it.
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
@@ -76,3 +157,4 @@ services:
 
 volumes:
   crm-a-data:
+  keycloak-db-data:

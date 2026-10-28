@@ -3,7 +3,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { SESSION_COOKIE, signSessionToken } from "@/lib/security/session";
-import { upsertOperator } from "@/lib/security/operators";
 import type { OperatorRole } from "@/lib/security/rbac";
 
 const dir = mkdtempSync(path.join(tmpdir(), "maxxi-rbac-"));
@@ -23,20 +22,6 @@ const operatorsRoute = await import("./operators/route");
 const overviewRoute = await import("./overview/route");
 
 beforeAll(async () => {
-  for (const [username, roles] of [
-    ["admin.demo", ["admin"]],
-    ["comm.demo", ["communication"]],
-    ["info.demo", ["infopoint"]],
-    ["rel.demo", ["relations"]],
-  ] as const) {
-    upsertOperator({
-      username,
-      password: "password-1234",
-      roles: [...roles],
-      active: true,
-      createdBy: "test",
-    });
-  }
   await seedMaxxiDemo();
 });
 
@@ -123,19 +108,23 @@ describe("MAXXI RBAC", () => {
     expect(res.status).toBe(403);
   });
 
-  it("lets only admin manage operators", async () => {
+  it("lets only admin reach identity management", async () => {
     const forbidden = await operatorsRoute.GET(req("comm.demo"));
     expect(forbidden.status).toBe(403);
+
+    // Admin passes RBAC, then the Keycloak admin client is required. Without
+    // it the endpoint fails closed instead of falling back to local accounts.
+    delete process.env.CRM_A_KEYCLOAK_ADMIN_CLIENT_SECRET;
     const allowed = await operatorsRoute.GET(req("admin.demo"));
-    expect(allowed.status).toBe(200);
-    const body = (await allowed.json()) as { operators: Array<{ username: string }> };
-    expect(body.operators.map((row) => row.username)).toContain("comm.demo");
+    expect(allowed.status).toBe(503);
+    const body = (await allowed.json()) as { error?: string };
+    expect(body.error).toContain("Keycloak");
   });
 
-  it("never returns password hashes", async () => {
+  it("never exposes secrets in the identity response", async () => {
     const res = await operatorsRoute.GET(req("admin.demo"));
     const text = await res.text();
-    expect(text).not.toContain("hash");
-    expect(text).not.toContain("salt");
+    expect(text).not.toContain("client_secret");
+    expect(text).not.toContain("refresh_token");
   });
 });

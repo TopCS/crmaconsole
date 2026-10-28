@@ -7,33 +7,54 @@ obbligatorio prima di qualsiasi esposizione pubblica.
 
 | Principal | Come si autentica | Cosa può fare |
 |---|---|---|
-| `operator` | account individuale + cookie di sessione firmato (HMAC-SHA256) | UI e API secondo i **ruoli** dell'account |
-| `service` | `Authorization: Bearer <CRM_A_SERVICE_TOKEN \| CRM_A_PHONE_WEBHOOK_SECRET>` | tool agentici: lettura + bozza campagna dry-run |
+| `operator` | **Keycloak** (OIDC Authorization Code + PKCE) → cookie di sessione firmato (HMAC-SHA256) | UI e API secondo i **ruoli del realm** |
+| `service` | `Authorization: Bearer <CRM_A_SERVICE_TOKEN>` | tool agentici: lettura + bozza campagna dry-run |
 | `public_ingestion` | write-key pubblica del tracker (per definizione non è identità) | solo eventi anonimi/identificati di tracking |
 
-Gli account operatore vivono in `<stateDir>/maxxi-demo/operators.json` con password
-**scrypt + salt** (mai in chiaro, mai nel repo). Il primo account admin nasce da
-`CRM_A_ADMIN_USERNAME` + `CRM_A_ADMIN_PASSWORD` al primo login.
+La console **non contiene password né account**: identità, credenziali e ruoli
+vivono nel realm Keycloak `crm-a` (PostgreSQL dedicato). Il browser viene
+rediretto alla login Keycloak, personalizzata con il tema `crm-a`; al ritorno la
+console verifica firma, `iss`, `aud`, `exp` e `nonce` dell'ID token, poi emette
+il proprio cookie di sessione. Un utente senza ruoli CRM-A viene respinto
+(`no_role`), non autenticato con permessi vuoti.
+
+Le credenziali di servizio sono **separate** dai segreti dei webhook:
+`CRM_A_SERVICE_TOKEN` autentica solo i tool agentici; i webhook verificano il
+proprio segreto (`CRM_A_PHONE_WEBHOOK_SECRET`, HMAC Shopify) nel route che li
+serve.
 
 ### Ruoli e permessi
 
 | Ruolo | Permessi |
 |---|---|
-| `admin` | tutti, inclusi seed, gestione account, audit |
+| `admin` | tutti, inclusi seed, gestione utenti Keycloak, audit |
 | `communication` | lettura pubblico, eleggibilità, creazione/approvazione bozze |
 | `membership` | lettura profili, eleggibilità, membership |
 | `infopoint` | lettura profili, gestione feedback + **note infopoint** |
 | `relations` | solo organizzazioni e relazioni (niente persone/consensi) |
 
-Le note dei casi infopoint sono **mascherate** lato server per i ruoli senza
-`maxxi.feedback.viewNotes`. Il concessionario `service` è read-only sui dati
-personali; l'unica scrittura consentita è la bozza di campagna dry-run.
+I ruoli sono assegnati in Keycloak (`realm_access.roles`) e interpretati dalla
+matrice locale `apps/web/lib/security/rbac.ts`; un ruolo sconosciuto viene
+ignorato. Le note dei casi infopoint sono **mascherate** lato server per i ruoli
+senza `maxxi.feedback.viewNotes`. Il concessionario `service` è read-only sui
+dati personali; l'unica scrittura consentita è la bozza di campagna dry-run.
+
+I ruoli vengono letti al login: una modifica in Keycloak si applica alla
+sessione successiva (TTL 12h, allineato a `ssoSessionMaxLifespan`). Per una
+revoca immediata disattivare l'utente in Keycloak e ruotare
+`CRM_A_SESSION_SECRET` (invalida tutte le sessioni della console).
 
 ## Dove vive il controllo
 
+0. **Keycloak** (`deploy/keycloak/`) — unica fonte di identità. Client
+   `crm-a-console` (confidential, PKCE S256, redirect registrati) e client
+   `crm-a-admin` (service account con soli `view-users`/`query-users`/
+   `manage-users`, usato dalla console per `/maxxi/operators`). Il realm è
+   importato all'avvio; il tema di login estende `keycloak.v2`.
 1. **`apps/web/middleware.ts`** — choke point unico su tutto il surface web.
    Allowlist esplicita (auto-verificanti la propria credenziale): `/login`,
-   `/api/auth/*`, `/api/events/collect`, `/api/events/identify`,
+   `/api/auth/login`, `/api/auth/callback`, `/api/auth/logout`,
+   `/api/events/collect`, `/api/events/identify`,
    `/api/webhooks/*`, `/api/nlpearl/*`, `/api/campaigns/*`, `/api/demo/*`,
    `/api/marketing/brief`, `/api/shopify/admin`, `/api/maxxi/*` (esatta:
    `/api/crm/segments`), asset statici.
@@ -101,11 +122,13 @@ autenticazione perimetrale e dopo i test qui sotto.
 | SEC-07 | `assertOutboundAllowed` blocca ogni adapter in demo mode |
 | SEC-11 | RBAC: ruoli, permessi, note infopoint mascherate, service senza approvazioni |
 | SEC-12 | ogni endpoint sensibile nega l'anonimo e il Bearer non valido |
+| SEC-13 | OIDC: PKCE S256, state/nonce, firma RS256 + iss/aud/exp, ruoli dal realm, no_role respinto |
+| SEC-14 | gestione utenti solo via Keycloak Admin API, mai password/hash in console o nel repo |
 
 Comando:
 
 ```bash
-pnpm --dir apps/web vitest run lib/security app/api/security-gate.test.ts app/api/middleware.test.ts app/api/maxxi/rbac.test.ts
+pnpm --dir apps/web vitest run lib/security app/api/auth app/api/security-gate.test.ts app/api/middleware.test.ts app/api/maxxi/rbac.test.ts
 ```
 
 Verifica dal vivo (dev server su porta dedicata) con quattro account demo:
@@ -113,7 +136,8 @@ Verifica dal vivo (dev server su porta dedicata) con quattro account demo:
 | Caso | Atteso |
 |---|---|
 | anonimo su `/api/maxxi/overview` | 401 |
-| login errato | 401 |
+| login errato su Keycloak | form con errore, nessuna sessione |
+| utente Keycloak senza ruolo CRM-A | `/login?error=no_role`, nessuna sessione |
 | `communication` su `/api/maxxi/seed` | 403 |
 | `communication` sulle note di `P-GIULIA` | `summary: ""` |
 | `infopoint` sulle note di `P-GIULIA` | testo presente |
@@ -121,10 +145,17 @@ Verifica dal vivo (dev server su porta dedicata) con quattro account demo:
 | service Bearer: lettura | 200 |
 | service Bearer: approve/seed/operators | 403 |
 | Bearer inventato | 401 |
+| logout | cookie azzerato + SSO Keycloak terminato |
+| creazione utente da `/maxxi/operators` | utente nel realm, audit con username admin |
 
 ## Rischi residui (fuori dal perimetro demo)
 
-- Permessi a grana grossa (risorsa.azione): nessuna autorizzazione per singolo record.
+- Permessi a grana grossa (risorsa.azione): nessuna autorizzazione per singolo
+  record. Le policy a livello di dato (Row-Level Security) arrivano con la
+  migrazione a PostgreSQL (ADR-103).
+- Keycloak gira in `start-dev` su HTTP locale: adatto alla demo, non a
+  esposizione pubblica. In produzione servono TLS, `start`, realm versionato e
+  backup del database Keycloak.
 - Nessuna rotazione/revoca delle sessioni lato server (TTL 12h, cookie firmato).
 - Il tracking pubblico (`/api/events/*`) resta aperto per design con write-key
   pubblica: non va trattato come prova di identità o consenso.
