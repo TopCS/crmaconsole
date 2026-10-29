@@ -3,6 +3,8 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Badge, Card, DemoNote, ErrorNote, Loading, PageHeader, SectionTitle } from "../ui";
 
 type Answer = {
@@ -13,8 +15,14 @@ type Answer = {
 	counts?: Record<string, number>;
 	evidence: Array<{ kind: string; id: string; detail?: string }>;
 	citations: string[];
-	fallback: boolean;
+	fallback?: boolean;
+	mode?: "llm" | "fallback";
+	toolsUsed?: string[];
+	model?: string | null;
+	fallbackReason?: string;
 };
+
+type Mode = "verified" | "chat";
 
 const COUNT_LABELS: Record<string, string> = {
 	eligible: "Eleggibili",
@@ -41,6 +49,7 @@ export default function AgentPage() {
 function AgentInner() {
 	const params = useSearchParams();
 	const [question, setQuestion] = useState(params.get("q") ?? EXAMPLES[0]);
+	const [mode, setMode] = useState<Mode>("verified");
 	const [answer, setAnswer] = useState<Answer | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -50,7 +59,7 @@ function AgentInner() {
 		setError(null);
 		setAnswer(null);
 		try {
-			const res = await fetch("/api/maxxi/ask", {
+			const res = await fetch(mode === "chat" ? "/api/maxxi/chat" : "/api/maxxi/ask", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({ question }),
@@ -70,9 +79,46 @@ function AgentInner() {
 			<PageHeader
 				eyebrow="Strumenti / Assistente"
 				title="Assistente MAXXI"
-				subtitle="Risposte deterministiche dai dati demo, con ID e finestra temporale. Nessun modello cloud: se il dato non c'è, l'assistente lo dichiara."
-				actions={<Badge tone="neutral">Solo dati dimostrativi</Badge>}
+				subtitle="Due modalità sullo stesso dataset: risposte verificate dal motore deterministico, oppure chat AI che usa solo i tool MAXXI e cita le fonti."
 			/>
+
+			<div
+				role="group"
+				aria-label="Modalità di risposta"
+				className="flex flex-wrap items-center gap-2"
+			>
+				<button
+					type="button"
+					aria-pressed={mode === "verified"}
+					onClick={() => { setMode("verified"); setAnswer(null); setError(null); }}
+					className="maxxi-secondary-action"
+					style={
+						mode === "verified"
+							? { background: "var(--maxxi-ink)", color: "#ffffff", borderColor: "var(--maxxi-ink)" }
+							: undefined
+					}
+				>
+					Verificato
+				</button>
+				<button
+					type="button"
+					aria-pressed={mode === "chat"}
+					onClick={() => { setMode("chat"); setAnswer(null); setError(null); }}
+					className="maxxi-secondary-action"
+					style={
+						mode === "chat"
+							? { background: "var(--maxxi-ink)", color: "#ffffff", borderColor: "var(--maxxi-ink)" }
+							: undefined
+					}
+				>
+					Chat AI
+				</button>
+				<span className="text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>
+					{mode === "verified"
+						? "Numeri e ID calcolati dal motore deterministico."
+						: "Il modello può solo usare i tool MAXXI read-only; se non risponde, si torna al verificato."}
+				</span>
+			</div>
 
 			<div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
 				<Card className="lg:col-span-2">
@@ -117,15 +163,28 @@ function AgentInner() {
 					</div>
 
 					<DemoNote>
-						L&apos;assistente usa l&apos;orologio fisso della demo. Non inventa esposizioni, presenze, consensi
-						o importi: fuori dal perimetro risponde &quot;non ho evidenze sufficienti&quot;.
+						{mode === "verified"
+							? "Il motore deterministico usa l'orologio fisso della demo e non inventa esposizioni, presenze, consensi o importi."
+							: "La chat usa il modello configurato e solo i tool MAXXI read-only. Nessun tool di invio, approvazione o modifica è disponibile."}
 					</DemoNote>
 				</Card>
 
 				<div className="lg:col-span-3">
 					{error && <ErrorNote>{error}</ErrorNote>}
 
-					{!answer && !error && (
+					{busy && !answer && (
+						<Card>
+							<Loading
+								label={
+									mode === "chat"
+										? "La chat sta consultando i tool MAXXI…"
+										: "Calcolo della risposta verificata…"
+								}
+							/>
+						</Card>
+					)}
+
+					{!answer && !error && !busy && (
 						<Card>
 							<SectionTitle>Risposta</SectionTitle>
 							<p className="py-8 text-center text-[13px]" style={{ color: "var(--maxxi-muted)" }}>
@@ -137,6 +196,8 @@ function AgentInner() {
 					{answer && (
 						<Card>
 							<div className="flex flex-wrap items-center gap-2">
+								{answer.mode === "llm" && <Badge tone="ok">Chat AI</Badge>}
+								{answer.mode === "fallback" && <Badge tone="warn">Fallback verificato</Badge>}
 								<Badge tone={answer.grounded ? "ok" : "warn"}>
 									{answer.grounded ? "Basata sui dati" : "Nessuna evidenza"}
 								</Badge>
@@ -149,7 +210,25 @@ function AgentInner() {
 							</div>
 
 							<div aria-live="polite" className="mt-4">
-								<p className="text-[14px] leading-relaxed">{answer.answer}</p>
+								{answer.mode === "llm" ? (
+									<div className="maxxi-answer text-[14px] leading-relaxed">
+										<ReactMarkdown remarkPlugins={[remarkGfm]}>{answer.answer}</ReactMarkdown>
+									</div>
+								) : (
+									<p className="text-[14px] leading-relaxed">{answer.answer}</p>
+								)}
+								{answer.mode === "fallback" && (
+									<p className="mt-2 text-[11px]" style={{ color: "var(--maxxi-muted)" }}>
+										Il provider AI non era disponibile o non ha prodotto una risposta con evidenze:
+										mostro il risultato del motore verificato.
+									</p>
+								)}
+								{answer.mode === "llm" && answer.toolsUsed && answer.toolsUsed.length > 0 && (
+									<p className="mt-2 text-[11px]" style={{ color: "var(--maxxi-muted)" }}>
+										Tool usati: {answer.toolsUsed.join(", ")}
+										{answer.model ? ` · modello ${answer.model}` : ""}
+									</p>
+								)}
 							</div>
 
 							{answer.counts && (
@@ -185,23 +264,37 @@ function AgentInner() {
 								</p>
 							)}
 
-							{answer.grounded && (
-								<div className="mt-5 flex flex-wrap gap-2 border-t pt-4" style={{ borderColor: "var(--maxxi-line)" }}>
-									<Link href="/maxxi/segments" className="maxxi-primary-action">
-										Prepara bozza dal segmento
-									</Link>
-									{answer.evidence.some((item) => item.kind === "person" && item.id.startsWith("P-")) && (
-										<Link
-											href={`/maxxi/people?id=${encodeURIComponent(
-												answer.evidence.find((item) => item.kind === "person" && item.id.startsWith("P-"))?.id ?? "",
-											)}`}
-											className="maxxi-secondary-action"
-										>
-											Apri profilo correlato
-										</Link>
-									)}
-								</div>
-							)}
+							{answer.grounded && (() => {
+								const tools = answer.toolsUsed ?? [];
+								const segment = answer.intent?.includes("segment") || tools.includes("maxxi_segment_arch_renewal");
+								const sources = answer.intent === "sources" || tools.includes("maxxi_sources");
+								const campaigns = answer.intent === "campaigns" || tools.includes("maxxi_campaigns");
+								const person = answer.evidence.find((item) => item.kind === "person" && item.id.startsWith("P-"))?.id;
+								return (
+									<div className="mt-5 flex flex-wrap gap-2 border-t pt-4" style={{ borderColor: "var(--maxxi-line)" }}>
+										{segment && (
+											<Link href="/maxxi/segments" className="maxxi-primary-action">
+												Prepara bozza dal segmento
+											</Link>
+										)}
+										{person && (
+											<Link href={`/maxxi/people?id=${encodeURIComponent(person)}`} className="maxxi-secondary-action">
+												Apri profilo correlato
+											</Link>
+										)}
+										{sources && (
+											<Link href="/maxxi/sources" className="maxxi-secondary-action">
+												Apri fonti dati
+											</Link>
+										)}
+										{campaigns && (
+											<Link href="/maxxi/campaigns" className="maxxi-secondary-action">
+												Apri campagne
+											</Link>
+										)}
+									</div>
+								);
+							})()}
 						</Card>
 					)}
 				</div>

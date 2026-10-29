@@ -32,6 +32,7 @@ Ambiente: build di produzione Next.js servita su `http://localhost:3100`
 | `screenshots/05-campaigns-desktop.png` | Campagne | 1440×900 |
 | `screenshots/06-agent-desktop.png` | Assistente | 1440×900 |
 | `screenshots/06b-agent-answer.png` | Assistente con risposta grounded | 1440×900 |
+| `screenshots/06c-agent-chat.png` | Assistente, modalità Chat AI | 1440×900 |
 | `screenshots/07-operators-desktop.png` | Accessi | 1440×900 |
 | `screenshots/08-standard-workspace.png` | Workspace standard (non-regressione) | 1440×900 |
 | `screenshots/09-overview-mobile.png` | Panoramica | 375×812 |

@@ -20,6 +20,7 @@ const segmentRoute = await import("./segment/route");
 const campaignsRoute = await import("./campaigns/route");
 const operatorsRoute = await import("./operators/route");
 const overviewRoute = await import("./overview/route");
+const chatRoute = await import("./chat/route");
 
 beforeAll(async () => {
   await seedMaxxiDemo();
@@ -52,6 +53,42 @@ describe("MAXXI RBAC", () => {
   it("denies anonymous callers", async () => {
     const res = await overviewRoute.GET(req(null));
     expect(res.status).toBe(401);
+  });
+
+  it("denies anonymous chat callers", async () => {
+    const res = await chatRoute.POST(
+      req(null, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: "Quali fonti?" }),
+      }),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("falls back to the verified engine when the provider is not configured", async () => {
+    const previous = process.env.OPENROUTER_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
+    try {
+      const res = await chatRoute.POST(
+        req("comm.demo", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ question: "Quali fonti abbiamo e quanto sono affidabili?" }),
+        }),
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        answer?: { mode?: string; grounded?: boolean; toolsUsed?: string[]; answer?: string };
+      };
+      expect(body.answer?.mode).toBe("fallback");
+      expect(body.answer?.grounded).toBe(true);
+      expect(body.answer?.toolsUsed).toEqual([]);
+      expect(body.answer?.answer).toContain("fonti");
+    } finally {
+      if (previous === undefined) {delete process.env.OPENROUTER_API_KEY;}
+      else {process.env.OPENROUTER_API_KEY = previous;}
+    }
   });
 
   it("lets any role read the overview", async () => {

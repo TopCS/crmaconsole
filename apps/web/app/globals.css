@@ -2678,6 +2678,46 @@ td:has(> div > :empty) {
 [data-workspace-theme="maxxi"] .maxxi-status-bad { color: var(--maxxi-negative); }
 [data-workspace-theme="maxxi"] .maxxi-status-neutral { color: var(--maxxi-muted); }
 
+/* ---------------- Chat answer (markdown) ---------------- */
+[data-workspace-theme="maxxi"] .maxxi-answer p {
+  margin: 0 0 0.65em;
+}
+
+[data-workspace-theme="maxxi"] .maxxi-answer ul,
+[data-workspace-theme="maxxi"] .maxxi-answer ol {
+  margin: 0.35em 0 0.85em;
+  padding-left: 1.3em;
+}
+
+[data-workspace-theme="maxxi"] .maxxi-answer ul { list-style: disc; }
+[data-workspace-theme="maxxi"] .maxxi-answer ol { list-style: decimal; }
+
+[data-workspace-theme="maxxi"] .maxxi-answer li {
+  margin: 0.18em 0;
+}
+
+[data-workspace-theme="maxxi"] .maxxi-answer strong {
+  font-weight: 700;
+}
+
+[data-workspace-theme="maxxi"] .maxxi-answer code {
+  font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+  font-size: 0.86em;
+  background: var(--maxxi-selected);
+  border: 1px solid var(--maxxi-line);
+  border-radius: 3px;
+  padding: 0.1em 0.3em;
+}
+
+[data-workspace-theme="maxxi"] .maxxi-answer h1,
+[data-workspace-theme="maxxi"] .maxxi-answer h2,
+[data-workspace-theme="maxxi"] .maxxi-answer h3 {
+  font-family: var(--maxxi-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0.6em 0 0.35em;
+}
+
 /* ---------------- Tables ---------------- */
 [data-workspace-theme="maxxi"] .maxxi-table-scroll {
   max-width: 100%;
