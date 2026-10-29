@@ -109,6 +109,7 @@ async function verifyToken(token: string, secret: string): Promise<VerifiedSessi
 /** Page-level roles: the sidebar hides these links, this enforces the URL. */
 const PAGE_ROLES: Array<{ prefix: string; roles: string[] }> = [
   { prefix: "/maxxi/operators", roles: ["admin"] },
+  { prefix: "/maxxi/graph", roles: ["admin", "communication", "membership", "infopoint"] },
 ];
 
 /**

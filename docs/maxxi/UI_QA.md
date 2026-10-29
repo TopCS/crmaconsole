@@ -40,6 +40,9 @@ Ambiente: build di produzione Next.js servita su `http://localhost:3100`
 | `screenshots/09-overview-mobile.png` | Panoramica | 375×812 |
 | `screenshots/10-mobile-drawer.png` | Drawer di navigazione | 375×812 |
 | `screenshots/11-profile-mobile.png` | Visitatore 360 (`P-GIULIA`) | 375×812 |
+| `screenshots/12-graph-desktop.png` | Grafo relazioni, focus su Maria | 1440×900 |
+| `screenshots/12b-graph-mobile.png` | Grafo relazioni | 375×812 |
+| `screenshots/12c-graph-detail.png` | Dettaglio nodo nel grafo | 1440×900 |
 
 ## Misure raccolte
 

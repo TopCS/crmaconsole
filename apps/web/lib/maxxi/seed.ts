@@ -21,6 +21,7 @@ import {
   q,
   resetMaxxiDemo,
 } from "./store";
+import { clearMaxxiGraphCache } from "./graph";
 
 const SOURCE_META: Record<string, { description: string; mock: boolean }> = {
   site_form: { description: "Form del sito (newsletter/eventi) — connettore demo simulato", mock: true },
@@ -110,6 +111,7 @@ export async function seedMaxxiDemo(): Promise<SeedSummary> {
   const fixture = loadMaxxiFixture();
   await ensureMaxxiSchema();
   await resetMaxxiDemo();
+  clearMaxxiGraphCache();
 
   const statements: string[] = [];
   const counts = {

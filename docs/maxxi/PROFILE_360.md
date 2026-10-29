@@ -1,6 +1,7 @@
 # Profilo 360
 
 Vista: `/maxxi/people` (elenco) → `/maxxi/people?id=<personId>` (profilo).
+Dal profilo, **Vedi relazioni** apre `/maxxi/graph?focus=<personId>&depth=2`.
 
 L’elenco ha una ricerca server-side per **nome, email o person ID** (`?q=`),
 disponibile anche dalla barra superiore della console. Il profilo mostra la coda

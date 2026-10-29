@@ -21,6 +21,8 @@ const campaignsRoute = await import("./campaigns/route");
 const operatorsRoute = await import("./operators/route");
 const overviewRoute = await import("./overview/route");
 const chatRoute = await import("./chat/route");
+const graphRoute = await import("./graph/route");
+const graphNodeRoute = await import("./graph/node/route");
 
 beforeAll(async () => {
   await seedMaxxiDemo();
@@ -64,6 +66,15 @@ describe("MAXXI RBAC", () => {
       }),
     );
     expect(res.status).toBe(401);
+  });
+
+  it("protects the MAXXI graph with people.read", async () => {
+    expect((await graphRoute.GET(req(null))).status).toBe(401);
+    expect((await graphRoute.GET(req("rel.demo"))).status).toBe(403);
+    expect((await graphNodeRoute.GET(req(null, undefined, "/api/maxxi/graph/node?id=P-MARIA"))).status).toBe(401);
+    expect(
+      (await graphNodeRoute.GET(req("rel.demo", undefined, "/api/maxxi/graph/node?id=P-MARIA"))).status,
+    ).toBe(403);
   });
 
   it("falls back to the verified engine when the provider is not configured", async () => {

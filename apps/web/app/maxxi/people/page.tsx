@@ -239,6 +239,12 @@ function Profile360({ person }: { person: Person360 }) {
 						<Badge tone={certain ? "ok" : "warn"}>
 							{certain ? "Identità verificata" : "Identità da verificare"}
 						</Badge>
+						<Link
+							href={`/maxxi/graph?focus=${encodeURIComponent(person.person.id)}&depth=2`}
+							className="maxxi-secondary-action"
+						>
+							Vedi relazioni
+						</Link>
 						<Link href="/maxxi/people" className="maxxi-secondary-action">
 							Tutti i visitatori
 						</Link>

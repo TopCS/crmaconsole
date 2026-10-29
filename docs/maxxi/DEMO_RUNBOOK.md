@@ -73,13 +73,14 @@ Reset completo = rieseguire il seed (ricostruisce le tabelle demo).
 ## 3. I tre percorsi
 
 Viste: `/maxxi` (panoramica), `/maxxi/people`, `/maxxi/sources`,
-`/maxxi/segments`, `/maxxi/campaigns`, `/maxxi/agent`.
+`/maxxi/segments`, `/maxxi/graph`, `/maxxi/campaigns`, `/maxxi/agent`.
 
 ### Percorso 1 — dal frammento alla persona (3')
 
 1. `/maxxi/people?id=P-MARIA` → identità canonica, **due** fonti collegate
    (`site_form`, `mymaxxi_manual`) con regola e confidenza, timeline con
-   `source_system:source_record_id` su ogni riga.
+   `source_system:source_record_id` su ogni riga. Da qui **Vedi relazioni**
+   apre il grafo centrato sulla persona.
 2. Apri `P-MARIA-AMBIG`: resta una **persona distinta** e compare tra i
    candidati in revisione (`/maxxi/sources`), non viene fusa.
 3. Nella timeline di Maria il biglietto `X-CALLE-2026` è un **acquisto**, non una

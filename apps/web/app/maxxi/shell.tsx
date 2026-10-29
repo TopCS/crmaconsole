@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { hasRole, useMe } from "./use-me";
 import { labelForRole, type OperatorRole } from "../../lib/security/rbac";
 
-type NavItem = { href: string; label: string; require?: OperatorRole };
+type NavItem = { href: string; label: string; require?: OperatorRole; requireAny?: OperatorRole[] };
 type NavGroup = { label: string; items: NavItem[] };
 
 const NAV_GROUPS: NavGroup[] = [
@@ -20,6 +20,7 @@ const NAV_GROUPS: NavGroup[] = [
 			{ href: "/maxxi/people", label: "Visitatori" },
 			{ href: "/maxxi/sources", label: "Fonti dati" },
 			{ href: "/maxxi/segments", label: "Segmenti" },
+			{ href: "/maxxi/graph", label: "Grafo relazioni", requireAny: ["admin", "communication", "membership", "infopoint"] },
 		],
 	},
 	{
@@ -88,7 +89,11 @@ export function MaxxiShell({ children }: { children: ReactNode }) {
 
 	const groups = NAV_GROUPS.map((group) => ({
 		...group,
-		items: group.items.filter((item) => !item.require || hasRole(me, item.require)),
+		items: group.items.filter((item) => {
+			if (item.require && !hasRole(me, item.require)) {return false;}
+			if (item.requireAny && !item.requireAny.some((role) => hasRole(me, role))) {return false;}
+			return true;
+		}),
 	})).filter((group) => group.items.length > 0);
 
 	return (

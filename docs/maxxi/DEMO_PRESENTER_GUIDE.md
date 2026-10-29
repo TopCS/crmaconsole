@@ -238,6 +238,19 @@ Indicare la card e il consenso email:
 > futura comunicazione: validità della membership e consenso per uno specifico
 > scopo e canale.»
 
+### Grafo delle relazioni
+
+Premere **Vedi relazioni** dal profilo di Maria.
+
+> «Il grafo rende visibili le connessioni: fonti, interessi, mostre,
+> organizzazioni. Il collegamento “Possibile duplicato” è tratteggiato nella
+> lettura, ma soprattutto è dichiarato come da verificare: non è un’identità
+> confermata. Il grafo legge solo il database demo e non espone le note
+> infopoint.»
+
+Se il grafo è già stato caricato, il dettaglio di un nodo è immediato; la prima
+apertura può richiedere qualche secondo.
+
 ---
 
 ## 5. Segmentazione

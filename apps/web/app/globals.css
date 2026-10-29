@@ -2387,6 +2387,12 @@ td:has(> div > :empty) {
   --color-error: var(--maxxi-negative);
   --radius: 0.25rem;
 
+  /* shadcn/HSL tokens consumed by the shared G6 canvas theme resolver. */
+  --background: 60 9% 98%;
+  --foreground: 0 0% 6.7%;
+  --muted-foreground: 0 0% 33.3%;
+  --border: 60 2% 84%;
+
   font-family: var(--maxxi-body);
 }
 
