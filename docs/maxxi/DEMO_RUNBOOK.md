@@ -4,6 +4,8 @@
 > Nessun dato appartiene a visitatori reali del MAXXI. Tutte le email usano
 > `example.invalid`. I connettori sono simulati.
 
+> **Copione completo per chi presenta:** [Guida per il presentatore](DEMO_PRESENTER_GUIDE.md).
+
 ## 1. Bootstrap locale
 
 ```bash
