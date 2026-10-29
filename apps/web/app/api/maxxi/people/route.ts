@@ -18,6 +18,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const id = url.searchParams.get("id")?.trim();
   const limitRaw = Number(url.searchParams.get("limit") ?? "100");
+  const q = (url.searchParams.get("q") ?? "").trim().slice(0, 120);
   const canViewNotes =
     auth.principal.sub === "operator"
       ? auth.principal.roles.includes("admin") || auth.principal.roles.includes("infopoint")
@@ -32,8 +33,11 @@ export async function GET(req: Request) {
       }
       return Response.json({ ok: true, person });
     }
-    const people = await listPeople({ limit: Number.isFinite(limitRaw) ? limitRaw : 100 });
-    return Response.json({ ok: true, people });
+    const people = await listPeople({
+      limit: Number.isFinite(limitRaw) ? limitRaw : 100,
+      search: q,
+    });
+    return Response.json({ ok: true, people, query: q });
   } catch (err) {
     return Response.json(
       { error: err instanceof Error ? err.message : "People query failed." },

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { hasRole, useMe } from "./use-me";
 import { labelForRole, type OperatorRole } from "../../lib/security/rbac";
 
@@ -51,8 +51,10 @@ function currentLabel(pathname: string): string {
 
 export function MaxxiShell({ children }: { children: ReactNode }) {
 	const pathname = usePathname();
+	const router = useRouter();
 	const { me } = useMe();
 	const [open, setOpen] = useState(false);
+	const [globalQuery, setGlobalQuery] = useState("");
 	const menuButton = useRef<HTMLButtonElement>(null);
 	const sidebar = useRef<HTMLElement>(null);
 
@@ -183,6 +185,27 @@ export function MaxxiShell({ children }: { children: ReactNode }) {
 									MAXXI / <span className="text-[var(--maxxi-ink)]">{currentLabel(pathname)}</span>
 								</p>
 							</div>
+
+							{pathname !== "/maxxi/people" && (
+								<form
+									role="search"
+									onSubmit={(event) => {
+										event.preventDefault();
+										const query = globalQuery.trim();
+										router.push(`/maxxi/people${query ? `?q=${encodeURIComponent(query)}` : ""}`);
+									}}
+									className="hidden min-w-0 flex-1 justify-center px-4 md:flex"
+								>
+									<input
+										type="search"
+										value={globalQuery}
+										onChange={(event) => setGlobalQuery(event.target.value)}
+										placeholder="Cerca visitatori, email o ID…"
+										aria-label="Cerca visitatori"
+										className="maxxi-input max-w-xs"
+									/>
+								</form>
+							)}
 
 							<div className="flex items-center gap-3">
 								<span className="maxxi-status maxxi-status-neutral">

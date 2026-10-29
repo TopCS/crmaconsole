@@ -27,6 +27,7 @@ Ambiente: build di produzione Next.js servita su `http://localhost:3100`
 |---|---|---|
 | `screenshots/01-overview-desktop.png` | Panoramica | 1440×900 |
 | `screenshots/02-profile-desktop.png` | Visitatore 360 (`P-MARIA`) | 1440×900 |
+| `screenshots/02b-people-search.png` | Ricerca visitatori (`elena`) | 1440×900 |
 | `screenshots/03-sources-desktop.png` | Fonti e qualità | 1440×900 |
 | `screenshots/04-segments-desktop.png` | Segmenti | 1440×900 |
 | `screenshots/05-campaigns-desktop.png` | Campagne | 1440×900 |

@@ -98,7 +98,7 @@ Miller) è stato incluso.
 | Vista | Rotta | Interventi |
 |---|---|---|
 | Panoramica | `/maxxi` | hero tipografico, 4 KPI primari, 7 indicatori di contesto, line chart visite/mese, tabella fonti, revisione identità, percorsi demo |
-| Visitatore 360 | `/maxxi/people?id=` | layout 8/4: timeline + provenienza a sinistra, myMAXXI/consensi/interessi/organizzazioni/qualità a destra, feedback e revisione a tutta larghezza |
+| Visitatore 360 | `/maxxi/people?id=` | ricerca server-side per nome/email/ID; layout 8/4: timeline + provenienza a sinistra, myMAXXI/consensi/interessi/organizzazioni/qualità a destra, feedback a tutta larghezza; “Possibile duplicato” solo se il candidato corrisponde |
 | Fonti | `/maxxi/sources` | tabella qualità con record, attribuite, non associabili, in revisione, ultimo import |
 | Segmenti | `/maxxi/segments` | due numeri (contattabili vs valutate), esclusioni raggruppate, tabella con motivo testuale, proposta e CTA dry-run |
 | Campagne | `/maxxi/campaigns` | stepper 1–5, banner dry-run, bozze con “Dettaglio” (anteprima, destinatari, esclusioni, audit) e “Simula approvazione” |

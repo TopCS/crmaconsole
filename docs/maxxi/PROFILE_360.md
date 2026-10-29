@@ -2,6 +2,11 @@
 
 Vista: `/maxxi/people` (elenco) → `/maxxi/people?id=<personId>` (profilo).
 
+L’elenco ha una ricerca server-side per **nome, email o person ID** (`?q=`),
+disponibile anche dalla barra superiore della console. Il profilo mostra la coda
+di revisione solo quando il candidato è plausibilmente la stessa persona: la
+coda globale resta in `/maxxi/sources`.
+
 ## Cosa mostra
 
 | Blocco | Contenuto | Fonte |
@@ -13,7 +18,7 @@ Vista: `/maxxi/people` (elenco) → `/maxxi/people?id=<personId>` (profilo).
 | Organizzazioni | relazioni con organizzazioni (tipo relazione) | `maxxi_relationship` + `maxxi_organization` |
 | Timeline | eventi con data, tipo e **fonte:record su ogni riga** | `maxxi_event` |
 | Infopoint | casi aperti/chiusi con riepilogo | `maxxi_feedback_case` |
-| Candidati in revisione | possibili duplicati non uniti | `maxxi_review_candidate` |
+| Possibile duplicato | solo candidati con **stesso nome o stessa email** della persona; record non uniti automaticamente | `maxxi_review_candidate` filtrata |
 | Qualità del dato | note esplicite (es. "un acquisto non implica la presenza") | calcolate |
 
 ## Esempi nel fixture

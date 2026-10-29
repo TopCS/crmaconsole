@@ -26,8 +26,12 @@ export type PersonSummary = {
   lastEventAt: string | null;
 };
 
-export async function listPeople(options?: { limit?: number }): Promise<PersonSummary[]> {
+export async function listPeople(options?: { limit?: number; search?: string }): Promise<PersonSummary[]> {
   const limit = Math.max(1, Math.min(200, options?.limit ?? 100));
+  const search = (options?.search ?? "").trim().replace(/'/g, "''");
+  const where = search
+    ? `WHERE p.name ILIKE '%${search}%' OR p.email ILIKE '%${search}%' OR p.person_id ILIKE '%${search}%'`
+    : "";
   const rows = await maxxiQuery<{
     person_id: string;
     name: string;
@@ -45,6 +49,7 @@ export async function listPeople(options?: { limit?: number }): Promise<PersonSu
       (SELECT COUNT(*) FROM maxxi_membership m WHERE m.person_id = p.person_id) AS memberships,
       (SELECT MAX(e.occurred_at) FROM maxxi_event e WHERE e.person_id = p.person_id) AS last_event_at
     FROM maxxi_person p
+    ${where}
     ORDER BY p.name ASC
     LIMIT ${limit};
   `);
@@ -141,11 +146,18 @@ export async function getPerson360(personId: string): Promise<Person360 | null> 
   }>(`SELECT source_system, source_record_id, match_method, confidence, status, matched_at
       FROM maxxi_identity_link WHERE person_id = '${safe}' ORDER BY source_system;`);
 
+  // Only candidates that plausibly refer to THIS person (same name or email).
+  // Showing the global review queue on every profile was confusing: it made
+  // unrelated visitors look like duplicates.
+  const safeName = person.name.replace(/'/g, "''");
+  const safeEmail = person.email.replace(/'/g, "''");
   const candidates = await maxxiQuery<{
     candidate_id: string; name: string; email: string; source_system: string;
     source_record_id: string; reason: string; status: string;
   }>(`SELECT candidate_id, name, email, source_system, source_record_id, reason, status
-      FROM maxxi_review_candidate ORDER BY candidate_id;`);
+      FROM maxxi_review_candidate
+      WHERE lower(name) = lower('${safeName}') OR lower(email) = lower('${safeEmail}')
+      ORDER BY candidate_id;`);
 
   const events = await maxxiQuery<{
     event_id: string; type: string; occurred_at: string; source_system: string;

@@ -11,7 +11,7 @@ process.env.CRM_A_MAXXI_FIXTURE = path.resolve(
 );
 
 const { seedMaxxiDemo, resolveIdentity } = await import("./seed");
-const { createCampaignDraft, getActivityByMonth, getCampaignDetail, getDashboardKpis, getPerson360, evaluateArchRenewal45d, listReviewCandidates, listSources } =
+const { createCampaignDraft, getActivityByMonth, getCampaignDetail, getDashboardKpis, getPerson360, evaluateArchRenewal45d, listPeople, listReviewCandidates, listSources } =
   await import("./queries");
 const { loadMaxxiFixture } = await import("./fixture");
 
@@ -37,6 +37,20 @@ describe("MAXXI seed — determinism and identity", () => {
     expect(activity.map((point) => point.month)).toEqual(["2026-08", "2026-09", "2026-10"]);
     expect(activity.reduce((sum, point) => sum + point.visits, 0)).toBe(6);
     expect(activity.reduce((sum, point) => sum + point.events, 0)).toBe(11);
+  });
+
+  it("searches visitors by name, email and ID", async () => {
+    expect((await listPeople({ search: "elena" })).map((person) => person.id)).toEqual(["P-ELENA"]);
+    expect((await listPeople({ search: "maria.rossi@" })).some((person) => person.id === "P-MARIA")).toBe(true);
+    expect((await listPeople({ search: "P-GIULIA" })).map((person) => person.id)).toEqual(["P-GIULIA"]);
+    expect(await listPeople({ search: "nessuno-xy" })).toEqual([]);
+  });
+
+  it("shows review candidates only on the matching profile", async () => {
+    const maria = await getPerson360("P-MARIA");
+    expect(maria?.reviewCandidates.length).toBe(1);
+    const giulia = await getPerson360("P-GIULIA");
+    expect(giulia?.reviewCandidates).toEqual([]);
   });
 
   it("returns the full detail of a dry-run campaign draft", async () => {

@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Badge, Card, DemoNote, Empty, ErrorNote, Loading, PageHeader, SectionTitle } from "../ui";
 
 type PersonListItem = {
@@ -60,7 +60,10 @@ export default function PeoplePage() {
 
 function PeopleInner() {
 	const params = useSearchParams();
+	const router = useRouter();
 	const selectedId = params.get("id");
+	const q = params.get("q") ?? "";
+	const [search, setSearch] = useState(q);
 	const [people, setPeople] = useState<PersonListItem[]>([]);
 	const [person, setPerson] = useState<Person360 | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -76,7 +79,8 @@ function PeopleInner() {
 				if (!res.ok || !body.person) {throw new Error(body.error ?? `HTTP ${res.status}`);}
 				setPerson(body.person);
 			} else {
-				const res = await fetch("/api/maxxi/people", { cache: "no-store" });
+				const query = q ? `?q=${encodeURIComponent(q)}` : "";
+				const res = await fetch(`/api/maxxi/people${query}`, { cache: "no-store" });
 				const body = (await res.json()) as { people?: PersonListItem[]; error?: string };
 				if (!res.ok) {throw new Error(body.error ?? `HTTP ${res.status}`);}
 				setPeople(body.people ?? []);
@@ -86,11 +90,34 @@ function PeopleInner() {
 		} finally {
 			setLoading(false);
 		}
-	}, [selectedId]);
+	}, [selectedId, q]);
 
 	useEffect(() => {
 		void load();
 	}, [load]);
+
+	useEffect(() => {
+		setSearch(q);
+	}, [q]);
+
+	const applySearch = useCallback(
+		(value: string) => {
+			const next = new URLSearchParams(params.toString());
+			const trimmed = value.trim();
+			if (trimmed) {next.set("q", trimmed);} else {next.delete("q");}
+			next.delete("id");
+			const qs = next.toString();
+			router.replace(`/maxxi/people${qs ? `?${qs}` : ""}`, { scroll: false });
+		},
+		[params, router],
+	);
+
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			if (search !== q) {applySearch(search);}
+		}, 250);
+		return () => clearTimeout(timer);
+	}, [search, q, applySearch]);
 
 	if (error) {return <ErrorNote>{error}</ErrorNote>;}
 	if (loading) {return <Loading label="Caricamento visitatori…" />;}
@@ -102,11 +129,40 @@ function PeopleInner() {
 				eyebrow="Pubblico / Visitatori"
 				title="Profili 360"
 				subtitle="Persone univoche del dataset dimostrativo. Ogni profilo conserva la provenienza dei record e distingue visite, acquisti e consensi."
+				actions={
+					<form
+						role="search"
+						onSubmit={(event) => { event.preventDefault(); applySearch(search); }}
+						className="flex w-full max-w-sm gap-2"
+					>
+						<input
+							type="search"
+							value={search}
+							onChange={(event) => setSearch(event.target.value)}
+							placeholder="Cerca nome, email o ID…"
+							aria-label="Cerca visitatori per nome, email o ID"
+							className="maxxi-input"
+						/>
+						<button type="submit" className="maxxi-secondary-action">
+							Cerca
+						</button>
+					</form>
+				}
 			/>
+
+			{q && (
+				<p className="text-[12px]" role="status" style={{ color: "var(--maxxi-muted)" }}>
+					Risultati per “{q}”: {people.length}
+				</p>
+			)}
 
 			<Card className="p-0">
 				{people.length === 0 ? (
-					<Empty>Nessuna persona: esegui il seed demo dalla Panoramica.</Empty>
+					<Empty>
+						{q
+							? `Nessun visitatore trovato per “${q}”.`
+							: "Nessuna persona: esegui il seed demo dalla Panoramica."}
+					</Empty>
 				) : (
 					<div className="maxxi-table-scroll">
 						<table className="maxxi-table">
@@ -401,8 +457,8 @@ function Profile360({ person }: { person: Person360 }) {
 
 			{person.reviewCandidates.length > 0 && (
 				<Card>
-					<SectionTitle hint="Non uniti automaticamente: serve una decisione umana">
-						Candidati in revisione
+					<SectionTitle hint="Record simile non unito automaticamente: la decisione si prende nella coda di revisione.">
+						Possibile duplicato
 					</SectionTitle>
 					<ul className="divide-y" style={{ borderColor: "var(--maxxi-line)" }}>
 						{person.reviewCandidates.map((candidate) => (
@@ -420,6 +476,9 @@ function Profile360({ person }: { person: Person360 }) {
 							</li>
 						))}
 					</ul>
+					<Link href="/maxxi/sources" className="maxxi-secondary-action mt-3">
+						Apri coda di revisione
+					</Link>
 				</Card>
 			)}
 		</div>
