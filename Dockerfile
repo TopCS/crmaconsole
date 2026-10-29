@@ -21,10 +21,12 @@ RUN apt-get update \
   && duckdb --version
 
 # Install dependencies first for better layer caching.
+# The store is a persistent BuildKit cache keyed independently of the source
+# layer, so a manifest change does not force a full re-download.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/web/package.json apps/web/package.json
-RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=crm-a-pnpm-store,target=/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile --store-dir=/pnpm/store --prefer-offline
 
 # Full prepack chain: seed duckdb, plugin env, plugins, CLI bundle, web build.
 COPY . .
