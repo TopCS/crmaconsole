@@ -55,16 +55,16 @@
       "redirectUris": [
         "http://localhost:3100/api/auth/callback",
         "http://127.0.0.1:3100/api/auth/callback",
-        "https://crm-a-console.share.zrok.io/api/auth/callback",
-        "https://crm-a-console.share.zrok.io"
+        "https://crma.warp.topcs.io/api/auth/callback",
+        "https://crma.warp.topcs.io"
       ],
       "webOrigins": [
         "http://localhost:3100",
         "http://127.0.0.1:3100",
-        "https://crm-a-console.share.zrok.io"
+        "https://crma.warp.topcs.io"
       ],
       "attributes": {
-        "post.logout.redirect.uris": "http://localhost:3100/login##http://127.0.0.1:3100/login##https://crm-a-console.share.zrok.io/login",
+        "post.logout.redirect.uris": "http://localhost:3100/login##http://127.0.0.1:3100/login##https://crma.warp.topcs.io/login",
         "pkce.code.challenge.method": "S256"
       },
       "defaultClientScopes": [
