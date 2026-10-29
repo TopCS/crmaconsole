@@ -43,6 +43,7 @@ export default function SegmentsPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [creating, setCreating] = useState(false);
 	const [message, setMessage] = useState<string | null>(null);
+	const [draftId, setDraftId] = useState<string | null>(null);
 
 	useEffect(() => {
 		void (async () => {
@@ -60,6 +61,7 @@ export default function SegmentsPage() {
 	async function createDraft() {
 		setCreating(true);
 		setMessage(null);
+		setDraftId(null);
 		try {
 			const exhibition = data?.catalog.find((item) => item.id === "X-ARCH-2026");
 			const res = await fetch("/api/maxxi/campaigns", {
@@ -76,6 +78,7 @@ export default function SegmentsPage() {
 			});
 			const body = (await res.json()) as { error?: string; draft?: { campaignId: string; counts: { eligible: number } } };
 			if (!res.ok || !body.draft) {throw new Error(body.error ?? `HTTP ${res.status}`);}
+			setDraftId(body.draft.campaignId);
 			setMessage(`Bozza creata (${body.draft.campaignId}) per ${body.draft.counts.eligible} destinatari eleggibili — dry run.`);
 		} catch (err) {
 			setMessage(err instanceof Error ? err.message : "Creazione bozza fallita.");
@@ -268,9 +271,16 @@ export default function SegmentsPage() {
 					</Link>
 				</div>
 				{message && (
-					<p className="mt-3 text-[12px]" role="status" style={{ color: "var(--maxxi-muted)" }}>
-						{message}
-					</p>
+					<div className="mt-3 flex flex-wrap items-center gap-3">
+						<p className="text-[12px]" role="status" style={{ color: "var(--maxxi-muted)" }}>
+							{message}
+						</p>
+						{draftId && (
+							<Link href={`/maxxi/campaigns?id=${encodeURIComponent(draftId)}`} className="maxxi-secondary-action">
+								Apri bozza
+							</Link>
+						)}
+					</div>
 				)}
 				<DemoNote>
 					La bozza resta nel workspace demo. Nessuna email, SMS o telefonata viene inviata: in modalità demo i

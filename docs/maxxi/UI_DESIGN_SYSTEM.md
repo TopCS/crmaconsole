@@ -101,7 +101,7 @@ Miller) è stato incluso.
 | Visitatore 360 | `/maxxi/people?id=` | layout 8/4: timeline + provenienza a sinistra, myMAXXI/consensi/interessi/organizzazioni/qualità a destra, feedback e revisione a tutta larghezza |
 | Fonti | `/maxxi/sources` | tabella qualità con record, attribuite, non associabili, in revisione, ultimo import |
 | Segmenti | `/maxxi/segments` | due numeri (contattabili vs valutate), esclusioni raggruppate, tabella con motivo testuale, proposta e CTA dry-run |
-| Campagne | `/maxxi/campaigns` | stepper 1–5, banner dry-run, bozze con “Simula approvazione”, audit tabellare |
+| Campagne | `/maxxi/campaigns` | stepper 1–5, banner dry-run, bozze con “Dettaglio” (anteprima, destinatari, esclusioni, audit) e “Simula approvazione” |
 | Assistente | `/maxxi/agent` | composer + risposte in due colonne, evidenze/ID, nessuna chat a pieno schermo |
 | Accessi | `/maxxi/operators` | utenti Keycloak, ruoli, stato, form di creazione/modifica |
 

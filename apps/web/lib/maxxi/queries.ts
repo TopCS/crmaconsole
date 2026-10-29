@@ -663,6 +663,48 @@ export async function listCampaigns() {
   }));
 }
 
+export type CampaignDetail = {
+  campaign: {
+    campaignId: string;
+    segmentId: string;
+    subject: string;
+    body: string;
+    createdBy: string;
+    status: string;
+    deliveryMode: string;
+    createdAt: string;
+  };
+  segment: SegmentResult;
+  audit: Awaited<ReturnType<typeof listAudit>>;
+};
+
+export async function getCampaignDetail(campaignId: string): Promise<CampaignDetail | null> {
+  const safe = escape(campaignId);
+  const rows = await maxxiQuery<{
+    campaign_id: string; segment_id: string; subject: string; body: string;
+    created_by: string; status: string; delivery_mode: string; created_at: string;
+  }>(`SELECT * FROM maxxi_campaign WHERE campaign_id = '${safe}' LIMIT 1;`);
+  const row = rows[0];
+  if (!row) {return null;}
+
+  const segment = await evaluateArchRenewal45d();
+  const audit = await listAudit(100, campaignId);
+  return {
+    campaign: {
+      campaignId: row.campaign_id,
+      segmentId: row.segment_id,
+      subject: row.subject,
+      body: row.body,
+      createdBy: row.created_by,
+      status: row.status,
+      deliveryMode: row.delivery_mode,
+      createdAt: row.created_at,
+    },
+    segment,
+    audit,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Audit
 // ---------------------------------------------------------------------------
@@ -684,12 +726,13 @@ export async function recordAudit(params: {
   );
 }
 
-export async function listAudit(limit = 50) {
+export async function listAudit(limit = 50, targetId?: string) {
   const safeLimit = Math.max(1, Math.min(200, limit));
+  const where = targetId ? ` WHERE target_id = '${escape(targetId)}'` : "";
   const rows = await maxxiQuery<{
     audit_id: string; principal_id: string; action: string; target_id: string;
     requested_at: string; approved_at: string | null; status: string; details_sanitized: string;
-  }>(`SELECT * FROM maxxi_action_audit ORDER BY requested_at DESC LIMIT ${safeLimit};`);
+  }>(`SELECT * FROM maxxi_action_audit${where} ORDER BY requested_at DESC LIMIT ${safeLimit};`);
   return rows.map((row) => ({
     auditId: row.audit_id,
     principalId: row.principal_id,

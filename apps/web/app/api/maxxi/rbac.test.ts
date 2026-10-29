@@ -120,6 +120,49 @@ describe("MAXXI RBAC", () => {
     expect(infoBody.person.feedback.some((case_) => case_.summary.length > 0)).toBe(true);
   });
 
+  it("returns draft detail and masks recipients for roles without people.read", async () => {
+    const created = await campaignsRoute.POST(
+      req("comm.demo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ subject: "Dettaglio test", body: "Testo completo della bozza." }),
+      }),
+    );
+    expect(created.status).toBe(200);
+    const createdBody = (await created.json()) as { draft: { campaignId: string } };
+    const id = createdBody.draft.campaignId;
+
+    const allowed = await campaignsRoute.GET(
+      req("comm.demo", undefined, `/api/maxxi/campaigns?id=${encodeURIComponent(id)}`),
+    );
+    expect(allowed.status).toBe(200);
+    const allowedBody = (await allowed.json()) as {
+      recipientsVisible: boolean;
+      campaign: { subject: string; body: string; status: string };
+      segment: { counts: { eligible: number }; eligible: Array<{ email: string }> };
+      audit: Array<{ action: string }>;
+    };
+    expect(allowedBody.recipientsVisible).toBe(true);
+    expect(allowedBody.campaign.subject).toBe("Dettaglio test");
+    expect(allowedBody.campaign.body).toContain("Testo completo");
+    expect(allowedBody.segment.counts.eligible).toBe(2);
+    expect(allowedBody.segment.eligible.length).toBe(2);
+    expect(allowedBody.audit.some((row) => row.action === "campaign_draft_created")).toBe(true);
+
+    const masked = await campaignsRoute.GET(
+      req("rel.demo", undefined, `/api/maxxi/campaigns?id=${encodeURIComponent(id)}`),
+    );
+    expect(masked.status).toBe(200);
+    const maskedBody = (await masked.json()) as {
+      recipientsVisible: boolean;
+      segment: { counts: { eligible: number }; eligible: unknown[]; excluded: unknown[] };
+    };
+    expect(maskedBody.recipientsVisible).toBe(false);
+    expect(maskedBody.segment.counts.eligible).toBe(2);
+    expect(maskedBody.segment.eligible).toEqual([]);
+    expect(maskedBody.segment.excluded).toEqual([]);
+  });
+
   it("only lets communication/admin create campaign drafts", async () => {
     const forbidden = await campaignsRoute.POST(
       req("info.demo", {

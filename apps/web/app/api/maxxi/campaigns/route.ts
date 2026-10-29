@@ -9,9 +9,11 @@ import { guardPermission, principalUsername } from "../_guard";
 import {
   approveCampaignSimulated,
   createCampaignDraft,
+  getCampaignDetail,
   listAudit,
   listCampaigns,
 } from "@/lib/maxxi/queries";
+import { roleHasPermission } from "@/lib/security/rbac";
 import { isDemoMode } from "@/lib/security/demo-mode";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +22,43 @@ export const runtime = "nodejs";
 export async function GET(req: Request) {
   const auth = guardPermission(req, "maxxi.view");
   if (!auth.ok) {return auth.response;}
+
+  const id = new URL(req.url).searchParams.get("id")?.trim();
+  if (id) {
+    const detail = await getCampaignDetail(id);
+    if (!detail) {return Response.json({ error: "Campagna non trovata." }, { status: 404 });}
+
+    // Recipients are personal data: only roles with people.read see names and
+    // emails. Other roles still see counts, reasons and the campaign text.
+    const canSeePeople =
+      auth.principal.sub === "service" ||
+      roleHasPermission(auth.principal.roles, "maxxi.people.read");
+    const excludedGroups = Object.entries(
+      detail.segment.excluded.reduce<Record<string, number>>((acc, member) => {
+        acc[member.segmentReason] = (acc[member.segmentReason] ?? 0) + 1;
+        return acc;
+      }, {}),
+    ).map(([reason, count]) => ({ reason, count }));
+
+    return Response.json({
+      ok: true,
+      campaign: detail.campaign,
+      segment: {
+        segmentId: detail.segment.segmentId,
+        segmentName: detail.segment.segmentName,
+        windowFrom: detail.segment.windowFrom,
+        windowTo: detail.segment.windowTo,
+        counts: detail.segment.counts,
+        eligible: canSeePeople ? detail.segment.eligible : [],
+        excluded: canSeePeople ? detail.segment.excluded : [],
+      },
+      excludedGroups,
+      recipientsVisible: canSeePeople,
+      audit: detail.audit,
+      demoMode: isDemoMode(),
+    });
+  }
+
   const [campaigns, audit] = await Promise.all([listCampaigns(), listAudit(50)]);
   return Response.json({ ok: true, campaigns, audit, demoMode: isDemoMode() });
 }

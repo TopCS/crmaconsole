@@ -38,6 +38,22 @@ La bozza cita esclusivamente il catalogo pubblico reale presente nel fixture
 (`Vitalità dell'architettura italiana 1946-2026`, `2026-05-29 → 2026-11-15`).
 Nessun orario, opening o prezzo viene inventato.
 
+## Dettaglio e anteprima della bozza
+
+`GET /api/maxxi/campaigns?id=<campaignId>` restituisce la bozza completa:
+
+- oggetto e testo integrale (`body`), stato e `deliveryMode`;
+- segmento e finestra temporale, conteggi eleggibili/esclusi;
+- destinatari eleggibili (nome, email) **solo** per ruoli con `maxxi.people.read`;
+- esclusioni raggruppate per motivo;
+- audit filtrato sulla singola bozza.
+
+Nella UI `/maxxi/campaigns` il pulsante **Dettaglio** apre un pannello con
+anteprima del testo, destinatari, esclusioni, audit e “Simula approvazione”.
+Dopo la creazione dal segmento compare **Apri bozza**, che apre direttamente lo
+stesso pannello via `?id=`. Per i ruoli senza `people.read` i conteggi restano
+visibili ma nomi ed email sono omessi lato server.
+
 ## Prove di "zero invii"
 
 Il blocco non è nella UI, è negli adapter (SEC-07). Con `CRM_A_DEMO_MODE=1`:
@@ -54,6 +70,7 @@ Test: `apps/web/lib/security/demo-mode.test.ts` + verifica live che
 
 ## Cosa manca (dichiarato)
 
-- Nessun template HTML/email: la bozza è testo semplice.
+- Nessun template HTML/email: la bozza è testo semplice, mostrata in anteprima editoriale.
+- Nessuna modifica della bozza dopo la creazione (si crea una nuova bozza).
 - Nessuna programmazione temporale o invio differito.
 - Nessun A/B test o misurazione di conversione (i numeri sarebbero inventati).

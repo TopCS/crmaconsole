@@ -30,6 +30,7 @@ Ambiente: build di produzione Next.js servita su `http://localhost:3100`
 | `screenshots/03-sources-desktop.png` | Fonti e qualità | 1440×900 |
 | `screenshots/04-segments-desktop.png` | Segmenti | 1440×900 |
 | `screenshots/05-campaigns-desktop.png` | Campagne | 1440×900 |
+| `screenshots/05b-campaign-detail.png` | Dettaglio bozza: anteprima, destinatari, esclusioni, audit | 1440×900 |
 | `screenshots/06-agent-desktop.png` | Assistente | 1440×900 |
 | `screenshots/06b-agent-answer.png` | Assistente con risposta grounded | 1440×900 |
 | `screenshots/06c-agent-chat.png` | Assistente, modalità Chat AI | 1440×900 |

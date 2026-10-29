@@ -11,7 +11,7 @@ process.env.CRM_A_MAXXI_FIXTURE = path.resolve(
 );
 
 const { seedMaxxiDemo, resolveIdentity } = await import("./seed");
-const { getActivityByMonth, getDashboardKpis, getPerson360, evaluateArchRenewal45d, listReviewCandidates, listSources } =
+const { createCampaignDraft, getActivityByMonth, getCampaignDetail, getDashboardKpis, getPerson360, evaluateArchRenewal45d, listReviewCandidates, listSources } =
   await import("./queries");
 const { loadMaxxiFixture } = await import("./fixture");
 
@@ -37,6 +37,19 @@ describe("MAXXI seed — determinism and identity", () => {
     expect(activity.map((point) => point.month)).toEqual(["2026-08", "2026-09", "2026-10"]);
     expect(activity.reduce((sum, point) => sum + point.visits, 0)).toBe(6);
     expect(activity.reduce((sum, point) => sum + point.events, 0)).toBe(11);
+  });
+
+  it("returns the full detail of a dry-run campaign draft", async () => {
+    const draft = await createCampaignDraft({
+      subject: "Bozza di test",
+      body: "Testo completo della bozza, nessun invio.",
+      principalId: "test",
+    });
+    const detail = await getCampaignDetail(draft.campaignId);
+    expect(detail?.campaign.subject).toBe("Bozza di test");
+    expect(detail?.campaign.deliveryMode).toBe("dry_run");
+    expect(detail?.segment.counts.eligible).toBe(2);
+    expect(detail?.audit.some((row) => row.action === "campaign_draft_created")).toBe(true);
   });
 
   it("is idempotent: a second run yields identical counts", async () => {
