@@ -113,6 +113,8 @@ E2E Playwright completa e test su istanza pubblica (per scelta: nessuna esposizi
 - `apps/web/app/maxxi/campaigns/page.tsx` + `api/maxxi/campaigns` + `lib/maxxi/queries.ts` — pannello dettaglio bozza, mascheramento destinatari per ruolo, link “Apri bozza” dal segmento.
 - `apps/web/app/maxxi/people/page.tsx` + `api/maxxi/people` + `lib/maxxi/queries.ts` — ricerca server-side per nome/email/ID, barra di ricerca globale, “Possibile duplicato” filtrato sulla persona.
 - `apps/web/lib/maxxi/graph.ts` + `api/maxxi/graph` + `app/maxxi/graph` — proiezione grafo read-only su DuckDB MAXXI, filtri, dettaglio nodo, cache 10s e link dal profilo. Riusa il canvas G6 ma non `/api/crm/graph`.
+- `docker-compose.yml` — profilo `zrok` con share console e Keycloak; Keycloak passa a `start` con hostname pubblico e backchannel interno.
+- `deploy/zrok/`, `docs/maxxi/ZROK.md`, `docs/maxxi/BACKLOG.md` — pubblicazione e backlog workspace nativo.
 - `apps/web/lib/crm-graph.ts` — guardia `json_valid` nell'unnest delle relazioni: con DuckDB CLI 2.0 il filtro non veniva applicato prima del cast e la query restituiva zero archi (fix incidentale, test `crm-graph` verde).
 - `docs/maxxi/UI_DESIGN_SYSTEM.md`, `UI_ASSET_REGISTER.md`, `UI_QA.md` *(nuovi)* + `screenshots/*.png`.
 

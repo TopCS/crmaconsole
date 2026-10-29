@@ -153,9 +153,12 @@ Verifica dal vivo (dev server su porta dedicata) con quattro account demo:
 - Permessi a grana grossa (risorsa.azione): nessuna autorizzazione per singolo
   record. Le policy a livello di dato (Row-Level Security) arrivano con la
   migrazione a PostgreSQL (ADR-103).
-- Keycloak gira in `start-dev` su HTTP locale: adatto alla demo, non a
-  esposizione pubblica. In produzione servono TLS, `start`, realm versionato e
-  backup del database Keycloak.
+- Keycloak gira in modalità `start` dietro zrok per la pubblicazione
+  opzionale; l’Admin Console resta su un hostname locale. In produzione servono
+  TLS gestito, realm versionato, backup e un perimetro applicativo più stretto
+  di un semplice proxy zrok.
+- zrok espone gli endpoint OIDC pubblici: credenziali demo e client secret
+  vanno sostituiti prima di condividere gli URL.
 - Nessuna rotazione/revoca delle sessioni lato server (TTL 12h, cookie firmato).
 - Il tracking pubblico (`/api/events/*`) resta aperto per design con write-key
   pubblica: non va trattato come prova di identità o consenso.

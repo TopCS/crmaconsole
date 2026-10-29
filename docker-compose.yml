@@ -24,10 +24,9 @@ services:
     container_name: crm-a-keycloak
     restart: unless-stopped
     command:
-      - start-dev
+      - start
       - --import-realm
       - --http-port=8080
-      - --hostname=http://localhost:8080
     environment:
       # Bootstrap only: after the first boot, manage admins in Keycloak.
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-admin}
@@ -38,7 +37,15 @@ services:
       KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-demo-db-password}
       KC_HTTP_ENABLED: "true"
       KC_HEALTH_ENABLED: "true"
-      KC_HOSTNAME_STRICT: "false"
+      # Public browser URL (zrok in the published setup, localhost locally).
+      # Backchannel calls from the console use keycloak:8080, so strict
+      # hostname checking must not apply to them.
+      KC_HOSTNAME: ${CRM_A_KEYCLOAK_PUBLIC_URL:-http://localhost:8080}
+      KC_HOSTNAME_STRICT: "true"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      # Keep the admin console on a local-only URL; zrok publishes the OIDC
+      # surface, not the admin UI.
+      KC_HOSTNAME_ADMIN: ${CRM_A_KEYCLOAK_ADMIN_URL:-http://localhost:8080}
       KC_PROXY_HEADERS: xforwarded
     ports:
       # Local only: expose Keycloak beyond localhost only behind TLS + proxy.
@@ -88,6 +95,9 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       # Keycloak (OIDC). The browser uses ISSUER, the container uses the
       # internal hostname for token/JWKS calls; the `iss` claim stays public.
+      # Public identifiers; set these to the zrok URLs when publishing.
+      - CRM_A_PUBLIC_URL=${CRM_A_PUBLIC_URL:-http://localhost:3100}
+      - CRM_A_KEYCLOAK_PUBLIC_URL=${CRM_A_KEYCLOAK_PUBLIC_URL:-http://localhost:8080}
       - CRM_A_OIDC_ISSUER=${CRM_A_OIDC_ISSUER:-http://localhost:8080/realms/crm-a}
       # Inside Compose the server must reach Keycloak by service DNS, even if
       # .env carries the host-oriented localhost value for `next dev`/`start`.
@@ -156,6 +166,105 @@ services:
     entrypoint: ["bash", "-c"]
     command:
       - cd /work/apps/web && exec node_modules/.bin/next dev --turbo --port 3102 --hostname 0.0.0.0
+
+  # ── zrok publication (optional profile) ────────────────────────────────
+  # Two independent public shares:
+  #   console  -> http://crm-a-console:3100
+  #   keycloak -> http://keycloak:8080 (OIDC endpoints)
+  #
+  # Start with:
+  #   docker compose --profile zrok up -d --build
+  # Required in .env: ZROK_ENABLE_TOKEN and the public URLs/redirect URIs
+  # described in docs/maxxi/ZROK.md.
+  zrok-console-init:
+    profiles: ["zrok"]
+    image: busybox
+    command: chown -Rc 2171:2171 /home/ziggy/.zrok
+    user: root
+    volumes:
+      - ./deploy/zrok/console:/home/ziggy/.zrok
+
+  zrok-console-enable:
+    profiles: ["zrok"]
+    image: ${ZROK_CONTAINER_IMAGE:-docker.io/openziti/zrok}
+    depends_on:
+      zrok-console-init:
+        condition: service_completed_successfully
+    entrypoint: zrok-enable.bash
+    volumes:
+      - ./deploy/zrok/console:/home/ziggy/.zrok
+    environment:
+      ZROK_ENABLE_TOKEN: ${ZROK_ENABLE_TOKEN:-}
+      ZROK_API_ENDPOINT: ${ZROK_API_ENDPOINT:-https://api.zrok.io}
+      ZROK_ENVIRONMENT_NAME: ${ZROK_ENVIRONMENT_NAME:-crm-a}
+
+  zrok-console:
+    profiles: ["zrok"]
+    image: ${ZROK_CONTAINER_IMAGE:-docker.io/openziti/zrok}
+    entrypoint: zrok-share.bash
+    depends_on:
+      zrok-console-enable:
+        condition: service_completed_successfully
+      crm-a-console:
+        condition: service_started
+    restart: unless-stopped
+    volumes:
+      - ./deploy/zrok/console:/home/ziggy/.zrok
+    environment:
+      PFXLOG_NO_JSON: "false"
+      ZROK_ENABLE_TOKEN: ${ZROK_ENABLE_TOKEN:-}
+      ZROK_API_ENDPOINT: ${ZROK_API_ENDPOINT:-https://api.zrok.io}
+      ZROK_TARGET: ${ZROK_TARGET:-http://crm-a-console:3100}
+      ZROK_UNIQUE_NAME: ${ZROK_UNIQUE_NAME:-crm-a-console}
+      ZROK_BACKEND_MODE: proxy
+      ZROK_ENVIRONMENT_NAME: ${ZROK_ENVIRONMENT_NAME:-crm-a}
+    extra_hosts:
+      - "host.docker.internal:${HOST_INTERNAL_IP:-host-gateway}"
+
+  zrok-keycloak-init:
+    profiles: ["zrok"]
+    image: busybox
+    command: chown -Rc 2171:2171 /home/ziggy/.zrok
+    user: root
+    volumes:
+      - ./deploy/zrok/keycloak:/home/ziggy/.zrok
+
+  zrok-keycloak-enable:
+    profiles: ["zrok"]
+    image: ${ZROK_CONTAINER_IMAGE:-docker.io/openziti/zrok}
+    depends_on:
+      zrok-keycloak-init:
+        condition: service_completed_successfully
+    entrypoint: zrok-enable.bash
+    volumes:
+      - ./deploy/zrok/keycloak:/home/ziggy/.zrok
+    environment:
+      ZROK_ENABLE_TOKEN: ${ZROK_ENABLE_TOKEN:-}
+      ZROK_API_ENDPOINT: ${ZROK_API_ENDPOINT:-https://api.zrok.io}
+      ZROK_ENVIRONMENT_NAME: ${ZROK_ENVIRONMENT_NAME:-crm-a}
+
+  zrok-keycloak:
+    profiles: ["zrok"]
+    image: ${ZROK_CONTAINER_IMAGE:-docker.io/openziti/zrok}
+    entrypoint: zrok-share.bash
+    depends_on:
+      zrok-keycloak-enable:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./deploy/zrok/keycloak:/home/ziggy/.zrok
+    environment:
+      PFXLOG_NO_JSON: "false"
+      ZROK_ENABLE_TOKEN: ${ZROK_ENABLE_TOKEN:-}
+      ZROK_API_ENDPOINT: ${ZROK_API_ENDPOINT:-https://api.zrok.io}
+      ZROK_TARGET: ${ZROK_KEYCLOAK_TARGET:-http://keycloak:8080}
+      ZROK_UNIQUE_NAME: ${ZROK_KEYCLOAK_UNIQUE_NAME:-crm-a-keycloak}
+      ZROK_BACKEND_MODE: proxy
+      ZROK_ENVIRONMENT_NAME: ${ZROK_ENVIRONMENT_NAME:-crm-a}
+    extra_hosts:
+      - "host.docker.internal:${HOST_INTERNAL_IP:-host-gateway}"
 
 volumes:
   crm-a-data:

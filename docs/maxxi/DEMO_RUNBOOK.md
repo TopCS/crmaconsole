@@ -144,6 +144,17 @@ Estensione `crm-a-maxxi` (richiede `CRM_A_SERVICE_TOKEN`):
 
 Nessun tool può inviare email, messaggi o avviare chiamate.
 
+## 4b. Pubblicazione con zrok (opzionale)
+
+Per esporre console e Keycloak tramite due share zrok, seguire
+`docs/maxxi/ZROK.md` e avviare:
+
+```bash
+docker compose --profile zrok up -d --build
+```
+
+L’avvio locale senza profilo resta su `127.0.0.1`.
+
 ## 5. Cosa NON è reale
 
 - Connettori Archeoares / myMAXXI / biblioteca / infopoint / Matomo / social:

@@ -54,14 +54,17 @@
       "baseUrl": "/",
       "redirectUris": [
         "http://localhost:3100/api/auth/callback",
-        "http://127.0.0.1:3100/api/auth/callback"
+        "http://127.0.0.1:3100/api/auth/callback",
+        "https://crm-a-console.share.zrok.io/api/auth/callback",
+        "https://crm-a-console.share.zrok.io"
       ],
       "webOrigins": [
         "http://localhost:3100",
-        "http://127.0.0.1:3100"
+        "http://127.0.0.1:3100",
+        "https://crm-a-console.share.zrok.io"
       ],
       "attributes": {
-        "post.logout.redirect.uris": "http://localhost:3100/login##http://127.0.0.1:3100/login",
+        "post.logout.redirect.uris": "http://localhost:3100/login##http://127.0.0.1:3100/login##https://crm-a-console.share.zrok.io/login",
         "pkce.code.challenge.method": "S256"
       },
       "defaultClientScopes": [
