@@ -1,6 +1,6 @@
 # Guida per il presentatore — Demo MAXXI Customer Intelligence
 
-**Durata consigliata:** 15 minuti  
+**Durata consigliata:** circa 18 minuti (15 per il nucleo, 2 per il grafo)  
 **Pubblico:** comunicazione, membership, infopoint, relazioni istituzionali, direzione  
 **Ambiente:** demo locale su dati sintetici, nessun invio esterno
 
@@ -18,14 +18,15 @@
 2. [Apertura](#2-apertura)
 3. [Panoramica](#3-panoramica)
 4. [Ricerca e profilo visitatore](#4-ricerca-e-profilo-visitatore)
-5. [Segmentazione](#5-segmentazione)
-6. [Assistente: Verificato e Chat AI](#6-assistente-verificato-e-chat-ai)
-7. [Bozza campagna](#7-bozza-campagna)
-8. [Infopoint e ruoli](#8-infopoint-e-ruoli)
-9. [Chiusura](#9-chiusura)
-10. [Domande frequenti](#10-domande-frequenti)
-11. [Problemi durante la demo](#11-problemi-durante-la-demo)
-12. [Cosa non dire](#12-cosa-non-dire)
+5. [Grafo delle relazioni](#5-grafo-delle-relazioni)
+6. [Segmentazione](#6-segmentazione)
+7. [Assistente: Verificato e Chat AI](#7-assistente-verificato-e-chat-ai)
+8. [Bozza campagna](#8-bozza-campagna)
+9. [Infopoint e ruoli](#9-infopoint-e-ruoli)
+10. [Chiusura](#10-chiusura)
+11. [Domande frequenti](#11-domande-frequenti)
+12. [Problemi durante la demo](#12-problemi-durante-la-demo)
+13. [Cosa non dire](#13-cosa-non-dire)
 
 ---
 
@@ -76,6 +77,8 @@ Verificare che:
 - **Segmenti** mostri 2 persone contattabili;
 - **Campagne** contenga almeno una bozza apribile con **Dettaglio**;
 - **Assistente** risponda in modalità **Verificato**;
+- dal profilo di Maria, **Vedi relazioni** apra il grafo con il nodo Maria
+  visibile;
 - la modalità **Chat AI** produca una risposta oppure mostri chiaramente
   **Fallback verificato**.
 
@@ -238,22 +241,49 @@ Indicare la card e il consenso email:
 > futura comunicazione: validità della membership e consenso per uno specifico
 > scopo e canale.»
 
-### Grafo delle relazioni
+---
 
-Premere **Vedi relazioni** dal profilo di Maria.
+## 5. Grafo delle relazioni
 
-> «Il grafo rende visibili le connessioni: fonti, interessi, mostre,
-> organizzazioni. Il collegamento “Possibile duplicato” è tratteggiato nella
-> lettura, ma soprattutto è dichiarato come da verificare: non è un’identità
-> confermata. Il grafo legge solo il database demo e non espone le note
+**Tempo: 2 minuti**
+
+### A schermo
+
+1. Dal profilo di Maria premere **Vedi relazioni**.
+2. Mostrare il grafo centrato su Maria: fonti collegate, interessi, mostre e
+   il collegamento **Possibile duplicato**.
+3. Cliccare un nodo, ad esempio `Vitalità dell’architettura…`, e mostrare il
+   pannello di dettaglio.
+4. Su un nodo persona, mostrare **Apri profilo 360**.
+5. Se resta tempo, filtrare per tipo e usare **Mostra tutto**.
+
+### Cosa dire
+
+> «Il grafo rende visibili le connessioni che nel profilo restano distribuite
+> tra sezioni diverse: da quali fonti arriva una persona, quali interessi ha,
+> quali mostre ha visitato o acquistato, a quali organizzazioni è collegata.
+>
+> Il collegamento “Possibile duplicato” è un’indicazione di revisione: non è
+> un’identità confermata e non viene conteggiato come tale. La coda completa
+> resta in Fonti dati.
+>
+> Il grafo legge solo il database demo isolato e non espone le note private
 > infopoint.»
 
-Se il grafo è già stato caricato, il dettaglio di un nodo è immediato; la prima
-apertura può richiedere qualche secondo.
+### Cosa evidenziare
+
+- Il grafo **non è un nuovo database**: è una proiezione relazionale read-only
+  costruita sulle tabelle demo.
+- Riusa il **canvas già presente in CRM-A**, ma con nodi, filtri e permessi
+  MAXXI.
+- I ruoli senza accesso ai profili, come Relazioni, non vedono il grafo delle
+  persone.
+- La prima apertura può richiedere qualche secondo; i dettagli successivi sono
+  più rapidi grazie alla cache.
 
 ---
 
-## 5. Segmentazione
+## 6. Segmentazione
 
 **Tempo: 3 minuti**
 
@@ -309,7 +339,7 @@ valido o non noto.
 
 ---
 
-## 6. Assistente: Verificato e Chat AI
+## 7. Assistente: Verificato e Chat AI
 
 **Tempo: 3 minuti**
 
@@ -379,7 +409,7 @@ CRM-A.
 
 ---
 
-## 7. Bozza campagna
+## 8. Bozza campagna
 
 **Tempo: 3 minuti**
 
@@ -426,7 +456,7 @@ storico dei destinatari al momento della creazione**.
 
 ---
 
-## 8. Infopoint e ruoli
+## 9. Infopoint e ruoli
 
 **Tempo: 2 minuti**
 
@@ -463,7 +493,7 @@ Se ci sono account predisposti, effettuare un confronto:
 
 ---
 
-## 9. Chiusura
+## 10. Chiusura
 
 **Tempo: 1 minuto**
 
@@ -485,6 +515,7 @@ Se ci sono account predisposti, effettuare un confronto:
 | Segmento deterministico specifico | Segmenti più flessibili e governati |
 | Assistente verificato e Chat AI | Valutazione, governance e protezione dei dati |
 | Bozze salvate e approvazione simulata | Workflow operativo completo e snapshot dell’audience |
+| Grafo relazioni read-only su dati demo | Policy per record, autorizzazioni più fini e query in linguaggio naturale |
 | Keycloak e controlli applicativi iniziali | Policy per record, PostgreSQL/RLS e sicurezza di produzione |
 
 ### Domanda finale al cliente
@@ -494,7 +525,7 @@ Se ci sono account predisposti, effettuare un confronto:
 
 ---
 
-## 10. Domande frequenti
+## 11. Domande frequenti
 
 ### «I dati sono reali?»
 
@@ -536,9 +567,26 @@ Se ci sono account predisposti, effettuare un confronto:
 > un ruolo Relazioni non riceve i profili personali. Le note private infopoint
 > non sono incluse nei dati restituiti alla chat.»
 
+### «Il grafo è un graph database?»
+
+> «No. È una proiezione relazionale read-only sulle tabelle del database demo.
+> Riusa il canvas grafico di CRM-A, ma non introduce un nuovo motore o una
+> nuova sorgente dati.»
+
+### «Perché un ruolo Relazioni non vede il grafo?»
+
+> «Perché il grafo contiene nomi e relazioni delle persone. L’accesso richiede
+> il permesso di lettura dei profili; senza quel permesso la pagina viene
+> rediretta e l’API risponde 403.»
+
+### «Il grafo unisce i duplicati?»
+
+> «No. Mostra un arco “Possibile duplicato” come segnalazione da verificare.
+> La fusione resta una decisione umana nella coda di revisione.»
+
 ---
 
-## 11. Problemi durante la demo
+## 12. Problemi durante la demo
 
 | Sintomo | Cosa fare |
 |---|---|
@@ -550,6 +598,9 @@ Se ci sono account predisposti, effettuare un confronto:
 | La Chat AI non risponde affatto | Verificare chiave provider e connessione; usare **Verificato** |
 | La bozza non compare | Creare la bozza dal segmento; controllare che il segmento abbia eleggibili |
 | Il dettaglio bozza è vuoto | La bozza potrebbe non esistere più dopo un seed: ricrearla |
+| Il grafo è vuoto | Rimuovere i filtri o premere **Mostra tutto**; verificare che il ruolo abbia accesso ai profili |
+| Il grafo resta su “Caricamento” per più di 10 s | Attendere la prima query; se persiste, controllare i log del container |
+| Relazioni non vede il grafo | È il comportamento previsto: il ruolo non ha accesso ai profili personali |
 | La console non risponde | `docker compose ps`, poi `docker compose logs --tail=100 crm-a-console` |
 
 ### Reset controllato prima della demo
@@ -567,7 +618,7 @@ vuoi mostrare.
 
 ---
 
-## 12. Cosa non dire
+## 13. Cosa non dire
 
 | Non dire | Dire invece |
 |---|---|
@@ -578,6 +629,8 @@ vuoi mostrare.
 | «Il sistema è pronto per dati reali» | «La demo valida il percorso; servono sicurezza, GDPR e integrazioni» |
 | «La chat conosce tutto il CRM» | «La chat usa solo i tool MAXXI consentiti al ruolo» |
 | «I duplicati vengono uniti automaticamente» | «I possibili duplicati vengono segnalati per una revisione umana» |
+| «Il grafo è un graph database / una nuova sorgente» | «È una proiezione relazionale read-only del database demo» |
+| «Il grafo unisce le persone collegate» | «Mostra i collegamenti confermati e segnala i possibili duplicati, senza fonderli» |
 
 ---
 
@@ -586,5 +639,6 @@ vuoi mostrare.
 - `docs/maxxi/DEMO_RUNBOOK.md` — avvio, reset e percorsi demo
 - `docs/maxxi/SECURITY_GATE.md` — autenticazione, ruoli e limiti
 - `docs/maxxi/CAMPAIGN_DRY_RUN.md` — bozze, dettaglio e prove di zero invii
+- `docs/maxxi/GRAPH.md` — nodi, relazioni e permessi del grafo
 - `docs/maxxi/AGENT_TOOLS.md` — modalità Verificato e Chat AI
 - `docs/maxxi/UI_QA.md` — screenshot e verifiche visuali

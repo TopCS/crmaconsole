@@ -70,7 +70,7 @@ Il dataset vive in un DuckDB isolato (`<stateDir>/maxxi-demo/maxxi.duckdb`):
 
 Reset completo = rieseguire il seed (ricostruisce le tabelle demo).
 
-## 3. I tre percorsi
+## 3. I percorsi
 
 Viste: `/maxxi` (panoramica), `/maxxi/people`, `/maxxi/sources`,
 `/maxxi/segments`, `/maxxi/graph`, `/maxxi/campaigns`, `/maxxi/agent`.
@@ -112,6 +112,25 @@ Da dire: *“La macchina propone, l’umano approva; in demo non parte nulla.”
    identità.
 3. Nello stesso profilo, sezione **Organizzazioni**: relazione demo con
    l’organizzazione sostenitrice fittizia (nessun importo).
+
+### Percorso 4 — grafo delle relazioni (2')
+
+1. `/maxxi/people?id=P-MARIA` → **Vedi relazioni**.
+2. Il grafo si apre centrato su Maria con fonti, interessi, mostre e
+   l’arco **Possibile duplicato**.
+3. Clic su un nodo (es. `X-ARCH-2026`) → dettaglio; su una persona compare
+   **Apri profilo 360**.
+4. Filtri per tipo e **Mostra tutto** per la vista completa (15 nodi, 23
+   relazioni nel fixture).
+
+Da dire: *“Il grafo rende visibili le connessioni, ma non trasforma un
+possibile duplicato in un’identità confermata. Legge solo il database demo e
+non espone le note infopoint.”*
+
+La prima apertura può richiedere qualche secondo; i dettagli successivi usano
+la cache. Il ruolo `relations` non ha accesso al grafo delle persone.
+
+---
 
 ## 4. Azioni dell’agente (tool)
 
