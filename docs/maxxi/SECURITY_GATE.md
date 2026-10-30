@@ -35,7 +35,9 @@ serve.
 
 La decisione di revisione identità richiede il permesso `maxxi.people.review`
 (solo `admin`); anche “unisci simulato” registra solo una decisione e un audit,
-senza modificare persone, link o consensi.
+senza modificare persone, link o consensi. I ruoli senza `maxxi.people.read`
+(es. `relations`) non vedono né la coda né il pannello di confronto: l’API
+restituisce 403 e la pagina mostra solo la tabella delle fonti.
 
 I ruoli sono assegnati in Keycloak (`realm_access.roles`) e interpretati dalla
 matrice locale `apps/web/lib/security/rbac.ts`; un ruolo sconosciuto viene

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Card, DemoNote, Empty, ErrorNote, Loading, PageHeader, SectionTitle } from "../ui";
-import { hasRole, useMe } from "../use-me";
+import { useMe } from "../use-me";
+import { roleHasPermission, type OperatorRole } from "../../../lib/security/rbac";
 
 type Overview = {
 	sources: Array<{
@@ -43,7 +44,9 @@ function formatDate(value: string): string {
 
 export default function SourcesPage() {
 	const { me } = useMe();
-	const canReview = hasRole(me, "admin");
+	const roles = (me?.roles ?? []) as OperatorRole[];
+	const canSeePeople = roleHasPermission(roles, "maxxi.people.read");
+	const canReview = roleHasPermission(roles, "maxxi.people.review");
 	const [data, setData] = useState<Overview | null>(null);
 	const [cases, setCases] = useState<ReviewCase[]>([]);
 	const [error, setError] = useState<string | null>(null);
@@ -190,6 +193,7 @@ export default function SourcesPage() {
 				</DemoNote>
 			</Card>
 
+			{canSeePeople && (
 			<Card>
 				<SectionTitle hint="Nessun merge automatico: confronto e decisione simulata">
 					Coda di revisione identità
@@ -235,8 +239,9 @@ export default function SourcesPage() {
 					</ul>
 				)}
 			</Card>
+			)}
 
-			{selected && (
+			{canSeePeople && selected && (
 				<Card>
 					<SectionTitle hint="La decisione viene registrata e auditata; nessuna riga persona viene modificata">
 						Confronto: {selected.name}
