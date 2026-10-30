@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { hasRole, useMe } from "./use-me";
 import { labelForRole, type OperatorRole } from "../../lib/security/rbac";
+import { MaxxiFlow } from "./flow";
 
 type NavItem = { href: string; label: string; require?: OperatorRole; requireAny?: OperatorRole[] };
 type NavGroup = { label: string; items: NavItem[] };
@@ -229,6 +230,7 @@ export function MaxxiShell({ children }: { children: ReactNode }) {
 					</header>
 
 					<main id="maxxi-main" className="maxxi-content">
+						<MaxxiFlow />
 						{children}
 					</main>
 				</div>

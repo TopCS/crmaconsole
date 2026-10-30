@@ -168,6 +168,31 @@ CREATE TABLE IF NOT EXISTS maxxi_campaign (
   delivery_mode VARCHAR,
   created_at VARCHAR
 );
+CREATE TABLE IF NOT EXISTS maxxi_campaign_version (
+  version_id VARCHAR PRIMARY KEY,
+  campaign_id VARCHAR,
+  version INTEGER,
+  subject VARCHAR,
+  body VARCHAR,
+  created_by VARCHAR,
+  created_at VARCHAR
+);
+CREATE TABLE IF NOT EXISTS maxxi_campaign_snapshot (
+  snapshot_id VARCHAR PRIMARY KEY,
+  campaign_id VARCHAR,
+  approved_by VARCHAR,
+  approved_at VARCHAR,
+  recipients_json VARCHAR,
+  exclusions_json VARCHAR,
+  counts_json VARCHAR
+);
+CREATE TABLE IF NOT EXISTS maxxi_review_decision (
+  candidate_id VARCHAR PRIMARY KEY,
+  decision VARCHAR,
+  reason VARCHAR,
+  decided_by VARCHAR,
+  decided_at VARCHAR
+);
 CREATE TABLE IF NOT EXISTS maxxi_action_audit (
   audit_id VARCHAR PRIMARY KEY,
   principal_id VARCHAR,
@@ -214,6 +239,9 @@ export async function resetMaxxiDemo(): Promise<void> {
     "maxxi_feedback_case",
     "maxxi_source_registry",
     "maxxi_campaign",
+    "maxxi_campaign_version",
+    "maxxi_campaign_snapshot",
+    "maxxi_review_decision",
     "maxxi_action_audit",
   ];
   await duckdbExecOnFileAsync(

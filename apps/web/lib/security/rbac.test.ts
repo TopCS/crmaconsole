@@ -20,6 +20,7 @@ describe("RBAC", () => {
       "maxxi.view",
       "maxxi.people.read",
       "maxxi.people.eligible",
+      "maxxi.people.review",
       "maxxi.membership.read",
       "maxxi.feedback.manage",
       "maxxi.feedback.viewNotes",
@@ -49,6 +50,13 @@ describe("RBAC", () => {
     expect(roleHasPermission(["membership"], "maxxi.feedback.viewNotes")).toBe(false);
     expect(roleHasPermission(["communication"], "maxxi.feedback.viewNotes")).toBe(false);
     expect(roleHasPermission(["relations"], "maxxi.feedback.viewNotes")).toBe(false);
+  });
+
+  it("reserves identity review decisions to admin", () => {
+    expect(roleHasPermission(["admin"], "maxxi.people.review")).toBe(true);
+    for (const role of ["communication", "membership", "infopoint", "relations"] as const) {
+      expect(roleHasPermission([role], "maxxi.people.review")).toBe(false);
+    }
   });
 
   it("keeps relations out of personal data except organisations", () => {

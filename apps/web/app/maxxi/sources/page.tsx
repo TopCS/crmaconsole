@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Badge, Card, DemoNote, Empty, ErrorNote, Loading, PageHeader, SectionTitle } from "../ui";
+import { hasRole, useMe } from "../use-me";
 
 type Overview = {
 	sources: Array<{
@@ -17,22 +18,104 @@ type Overview = {
 	reviews: Array<{ candidateId: string; name: string; email: string; sourceSystem: string; sourceRecordId: string; reason: string; status: string }>;
 };
 
+type ReviewDecision = {
+	decision: "keep_separate" | "merge_simulated";
+	reason: string;
+	decidedBy: string;
+	decidedAt: string;
+};
+
+type ReviewCase = {
+	candidateId: string;
+	name: string;
+	email: string;
+	sourceSystem: string;
+	sourceRecordId: string;
+	reason: string;
+	status: string;
+	decision: ReviewDecision | null;
+	matches: Array<{ personId: string; name: string; email: string; links: number; memberships: number }>;
+};
+
+function formatDate(value: string): string {
+	return value ? value.slice(0, 16).replace("T", " ") : "—";
+}
+
 export default function SourcesPage() {
+	const { me } = useMe();
+	const canReview = hasRole(me, "admin");
 	const [data, setData] = useState<Overview | null>(null);
+	const [cases, setCases] = useState<ReviewCase[]>([]);
 	const [error, setError] = useState<string | null>(null);
+	const [notice, setNotice] = useState<string | null>(null);
+	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [decision, setDecision] = useState<"keep_separate" | "merge_simulated">("keep_separate");
+	const [reason, setReason] = useState("");
+	const [saving, setSaving] = useState(false);
+
+	const loadCases = useCallback(async () => {
+		const res = await fetch("/api/maxxi/review", { cache: "no-store" });
+		const body = (await res.json()) as { cases?: ReviewCase[]; error?: string };
+		if (!res.ok) {throw new Error(body.error ?? `HTTP ${res.status}`);}
+		setCases(body.cases ?? []);
+	}, []);
 
 	useEffect(() => {
 		void (async () => {
 			try {
-				const res = await fetch("/api/maxxi/overview", { cache: "no-store" });
-				const body = (await res.json()) as Overview & { error?: string };
-				if (!res.ok) {throw new Error(body.error ?? `HTTP ${res.status}`);}
+				const overview = await fetch("/api/maxxi/overview", { cache: "no-store" });
+				const body = (await overview.json()) as Overview & { error?: string };
+				if (!overview.ok) {throw new Error(body.error ?? `HTTP ${overview.status}`);}
 				setData(body);
+
+				// The review queue contains personal data. Roles without
+				// people.read still see the source table, but not the queue.
+				const reviewCases = await fetch("/api/maxxi/review", { cache: "no-store" });
+				if (reviewCases.ok) {
+					const casesBody = (await reviewCases.json()) as { cases?: ReviewCase[] };
+					setCases(casesBody.cases ?? []);
+				} else if (reviewCases.status !== 403) {
+					throw new Error(`HTTP ${reviewCases.status}`);
+				}
 			} catch (err) {
 				setError(err instanceof Error ? err.message : "Caricamento fallito.");
 			}
 		})();
 	}, []);
+
+	const selected = cases.find((item) => item.candidateId === selectedId) ?? null;
+
+	function openCase(item: ReviewCase) {
+		setSelectedId(item.candidateId);
+		setDecision(item.decision?.decision ?? "keep_separate");
+		setReason(item.decision?.reason ?? "");
+		setNotice(null);
+	}
+
+	async function submitDecision() {
+		if (!selected) {return;}
+		setSaving(true);
+		setNotice(null);
+		try {
+			const res = await fetch("/api/maxxi/review", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					candidateId: selected.candidateId,
+					decision,
+					reason,
+				}),
+			});
+			const body = (await res.json()) as { error?: string; note?: string };
+			if (!res.ok) {throw new Error(body.error ?? `HTTP ${res.status}`);}
+			setNotice(body.note ?? "Decisione registrata. Nessuna fusione eseguita.");
+			await loadCases();
+		} catch (err) {
+			setNotice(err instanceof Error ? err.message : "Decisione non salvata.");
+		} finally {
+			setSaving(false);
+		}
+	}
 
 	if (error) {return <ErrorNote>{error}</ErrorNote>;}
 	if (!data) {return <Loading label="Caricamento fonti…" />;}
@@ -108,36 +191,147 @@ export default function SourcesPage() {
 			</Card>
 
 			<Card>
-				<SectionTitle hint="Nessun merge automatico su nome o email simili">
+				<SectionTitle hint="Nessun merge automatico: confronto e decisione simulata">
 					Coda di revisione identità
 				</SectionTitle>
-				{data.reviews.length === 0 ? (
+				{notice && (
+					<p className="mb-3 text-[12px]" role="status" style={{ color: "var(--maxxi-muted)" }}>
+						{notice}
+					</p>
+				)}
+				{cases.length === 0 ? (
 					<Empty>Nessun candidato in revisione.</Empty>
 				) : (
 					<ul className="divide-y" style={{ borderColor: "var(--maxxi-line)" }}>
-						{data.reviews.map((review) => (
-							<li key={review.candidateId} className="grid grid-cols-1 gap-3 py-4 md:grid-cols-[1fr_auto]">
+						{cases.map((item) => (
+							<li key={item.candidateId} className="grid grid-cols-1 gap-3 py-4 md:grid-cols-[1fr_auto]">
 								<div>
 									<div className="flex flex-wrap items-center gap-2">
-										<strong className="text-[13.5px]">{review.name}</strong>
+										<strong className="text-[13.5px]">{item.name}</strong>
 										<span className="text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>
-											{review.email}
+											{item.email}
 										</span>
-										<Badge tone="warn">Richiede revisione</Badge>
+										<Badge tone={item.decision ? "ok" : "warn"}>
+											{item.decision
+												? item.decision.decision === "keep_separate"
+													? "Mantenuti separati"
+													: "Unione simulata"
+												: "Richiede revisione"}
+										</Badge>
 									</div>
 									<p className="mt-1 text-[12px]" style={{ color: "var(--maxxi-muted)" }}>
-										Prova: {review.sourceSystem}:{review.sourceRecordId}
+										Prova: {item.sourceSystem}:{item.sourceRecordId}
 									</p>
-									<p className="mt-1 text-[12.5px]">{review.reason}</p>
+									<p className="mt-1 text-[12.5px]">{item.reason}</p>
+									<p className="mt-1 text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>
+										{item.matches.length} profili esistenti con nome o email simile
+									</p>
 								</div>
-								<p className="text-[11px] uppercase tracking-[0.08em] md:text-right" style={{ color: "var(--maxxi-muted)" }}>
-									Nessuna azione automatica
-								</p>
+								<button type="button" onClick={() => openCase(item)} className="maxxi-secondary-action">
+									Confronta
+								</button>
 							</li>
 						))}
 					</ul>
 				)}
 			</Card>
+
+			{selected && (
+				<Card>
+					<SectionTitle hint="La decisione viene registrata e auditata; nessuna riga persona viene modificata">
+						Confronto: {selected.name}
+					</SectionTitle>
+					<div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+						<div className="border p-3" style={{ borderColor: "var(--maxxi-line)" }}>
+							<p className="maxxi-eyebrow">Record in revisione</p>
+							<p className="mt-1 text-[13px] font-semibold">{selected.name}</p>
+							<p className="text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>{selected.email}</p>
+							<p className="mt-2 text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>
+								{selected.sourceSystem}:{selected.sourceRecordId}
+							</p>
+							<p className="mt-2 text-[12px]">{selected.reason}</p>
+						</div>
+						<div className="border p-3" style={{ borderColor: "var(--maxxi-line)" }}>
+							<p className="maxxi-eyebrow">Profili esistenti</p>
+							{selected.matches.length === 0 ? (
+								<p className="mt-2 text-[12px]" style={{ color: "var(--maxxi-muted)" }}>
+									Nessun profilo con nome o email corrispondente.
+								</p>
+							) : (
+								<ul className="mt-2 divide-y" style={{ borderColor: "var(--maxxi-line)" }}>
+									{selected.matches.map((match) => (
+										<li key={match.personId} className="py-2">
+											<a href={`/maxxi/people?id=${encodeURIComponent(match.personId)}`} className="text-[12.5px] font-semibold underline-offset-2 hover:underline">
+												{match.name}
+											</a>
+											<p className="text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>
+												{match.email} · {match.links} fonti · {match.memberships} card · {match.personId}
+											</p>
+										</li>
+									))}
+								</ul>
+							)}
+						</div>
+					</div>
+
+					{selected.decision && (
+						<p className="mt-3 border-t pt-3 text-[12px]" style={{ borderColor: "var(--maxxi-line)" }}>
+							Decisione già registrata: <strong>{selected.decision.decision === "keep_separate" ? "mantieni separati" : "unione simulata"}</strong>
+							{" · "}{selected.decision.decidedBy} · {formatDate(selected.decision.decidedAt)}
+							<span className="block text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>
+								Motivo: {selected.decision.reason}
+							</span>
+						</p>
+					)}
+
+					{canReview ? (
+						<div className="mt-4 border-t pt-4" style={{ borderColor: "var(--maxxi-line)" }}>
+							<div className="flex flex-wrap gap-2">
+								<button
+									type="button"
+									onClick={() => setDecision("keep_separate")}
+									className="maxxi-secondary-action"
+									style={decision === "keep_separate" ? { background: "var(--maxxi-ink)", color: "#fff" } : undefined}
+								>
+									Mantieni separati
+								</button>
+								<button
+									type="button"
+									onClick={() => setDecision("merge_simulated")}
+									className="maxxi-secondary-action"
+									style={decision === "merge_simulated" ? { background: "var(--maxxi-ink)", color: "#fff" } : undefined}
+								>
+									Unisci (simulato)
+								</button>
+							</div>
+							<label className="mt-3 flex flex-col gap-1.5">
+								<span className="maxxi-eyebrow">Motivazione (min. 5 caratteri)</span>
+								<textarea
+									value={reason}
+									onChange={(event) => setReason(event.target.value)}
+									className="maxxi-input min-h-[90px]"
+									maxLength={500}
+								/>
+							</label>
+							<button
+								type="button"
+								onClick={() => void submitDecision()}
+								disabled={saving || reason.trim().length < 5}
+								className="maxxi-primary-action mt-3"
+							>
+								{saving ? "Registrazione…" : "Registra decisione simulata"}
+							</button>
+							<p className="mt-2 text-[11px]" style={{ color: "var(--maxxi-muted)" }}>
+								Anche “Unisci” è solo una decisione registrata: nessuna fusione viene applicata al database.
+							</p>
+						</div>
+					) : (
+						<p className="mt-3 text-[12px]" style={{ color: "var(--maxxi-muted)" }}>
+							Solo un amministratore può registrare la decisione.
+						</p>
+					)}
+				</Card>
+			)}
 		</div>
 	);
 }

@@ -99,8 +99,10 @@ sicuro collegarlo.”*
    → conteggio esatto, finestra `2026-10-28 → 2026-12-12`, evidenze puntuali.
 3. Prova *“Quanto hanno donato i sostenitori?”* → **“non ho evidenze
    sufficienti”** (nessun importo inventato).
-4. `/maxxi/segments` → **Crea bozza (dry run)** → poi `/maxxi/campaigns` →
-   **Simula approvazione** → la riga di audit compare in fondo.
+4. `/maxxi/segments` → **Crea bozza (dry run)** oppure **Genera proposta AI**,
+   controlla il testo e salva. Poi `/maxxi/campaigns` → **Dettaglio**:
+   modifica la bozza (nuova versione), confronta le versioni e **Simula
+   approvazione**. Verifica la snapshot dei destinatari e la riga di audit.
 
 Da dire: *“La macchina propone, l’umano approva; in demo non parte nulla.”*
 

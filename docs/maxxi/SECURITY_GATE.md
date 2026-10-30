@@ -33,6 +33,10 @@ serve.
 | `infopoint` | lettura profili, gestione feedback + **note infopoint** |
 | `relations` | solo organizzazioni e relazioni (niente persone/consensi) |
 
+La decisione di revisione identità richiede il permesso `maxxi.people.review`
+(solo `admin`); anche “unisci simulato” registra solo una decisione e un audit,
+senza modificare persone, link o consensi.
+
 I ruoli sono assegnati in Keycloak (`realm_access.roles`) e interpretati dalla
 matrice locale `apps/web/lib/security/rbac.ts`; un ruolo sconosciuto viene
 ignorato. Le note dei casi infopoint sono **mascherate** lato server per i ruoli

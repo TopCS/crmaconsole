@@ -29,6 +29,22 @@ type AuditRow = {
 
 type Member = { personId: string; name: string; email: string; segmentReason: string; reasons: string[] };
 
+type CampaignVersion = {
+	version: number;
+	subject: string;
+	body: string;
+	createdBy: string;
+	createdAt: string;
+};
+
+type CampaignSnapshot = {
+	approvedBy: string;
+	approvedAt: string;
+	recipients: Member[];
+	exclusions: Array<Member & { reason: string }>;
+	counts: { eligible: number; excludedConsent: number; excludedIdentity: number; excludedMissingData: number };
+};
+
 type CampaignDetail = {
 	campaign: Campaign;
 	segment: {
@@ -42,6 +58,8 @@ type CampaignDetail = {
 	};
 	excludedGroups: Array<{ reason: string; count: number }>;
 	recipientsVisible: boolean;
+	versions: CampaignVersion[];
+	snapshot: CampaignSnapshot | null;
 	audit: AuditRow[];
 };
 
@@ -62,6 +80,7 @@ const AUDIT_STATUS_LABEL: Record<string, string> = {
 const AUDIT_LABEL: Record<string, string> = {
 	maxxi_seed: "Seed dati demo",
 	campaign_draft_created: "Bozza creata",
+	campaign_version_created: "Nuova versione",
 	campaign_approval_simulated: "Approvazione simulata",
 	operator_create: "Utente creato",
 	operator_update: "Utente aggiornato",
@@ -110,6 +129,12 @@ function CampaignsInner() {
 	const [detailLoading, setDetailLoading] = useState(false);
 	const [detailError, setDetailError] = useState<string | null>(null);
 	const closeRef = useRef<HTMLButtonElement>(null);
+	const [editing, setEditing] = useState(false);
+	const [editSubject, setEditSubject] = useState("");
+	const [editBody, setEditBody] = useState("");
+	const [saving, setSaving] = useState(false);
+	const [editError, setEditError] = useState<string | null>(null);
+	const [compareVersion, setCompareVersion] = useState<number | null>(null);
 
 	const load = useCallback(async () => {
 		setError(null);
@@ -131,6 +156,8 @@ function CampaignsInner() {
 		setDetailLoading(true);
 		setDetail(null);
 		setDetailError(null);
+		setEditing(false);
+		setCompareVersion(null);
 		try {
 			const res = await fetch(`/api/maxxi/campaigns?id=${encodeURIComponent(id)}`, { cache: "no-store" });
 			const body = (await res.json()) as CampaignDetail & { error?: string };
@@ -177,6 +204,40 @@ function CampaignsInner() {
 		setDetailId(null);
 		setDetail(null);
 		router.replace("/maxxi/campaigns", { scroll: false });
+	}
+
+	function startEdit() {
+		if (!detail) {return;}
+		setEditSubject(detail.campaign.subject);
+		setEditBody(detail.campaign.body);
+		setEditError(null);
+		setEditing(true);
+	}
+
+	async function saveEdit() {
+		if (!detail) {return;}
+		setSaving(true);
+		setEditError(null);
+		try {
+			const res = await fetch("/api/maxxi/campaigns", {
+				method: "PATCH",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					id: detail.campaign.campaignId,
+					subject: editSubject,
+					body: editBody,
+				}),
+			});
+			const body = (await res.json()) as { error?: string; version?: number };
+			if (!res.ok) {throw new Error(body.error ?? `HTTP ${res.status}`);}
+			setEditing(false);
+			await load();
+			await loadDetail(detail.campaign.campaignId);
+		} catch (err) {
+			setEditError(err instanceof Error ? err.message : "Salvataggio fallito.");
+		} finally {
+			setSaving(false);
+		}
 	}
 
 	async function approve(campaignId: string) {
@@ -408,6 +469,103 @@ function CampaignsInner() {
 									</div>
 								</dl>
 
+								<section aria-labelledby="campaign-versions-title">
+									<div className="flex flex-wrap items-center justify-between gap-2">
+										<h3 id="campaign-versions-title" className="maxxi-section-title">Versione</h3>
+										{detail.campaign.status === "draft" && canApprove && !editing && (
+											<button type="button" onClick={startEdit} className="maxxi-secondary-action">
+												Modifica bozza
+											</button>
+										)}
+									</div>
+
+									{editing ? (
+										<div className="mt-3 space-y-3">
+											<label className="flex flex-col gap-1.5">
+												<span className="maxxi-eyebrow">Oggetto</span>
+												<input
+													value={editSubject}
+													onChange={(event) => setEditSubject(event.target.value)}
+													className="maxxi-input"
+													maxLength={180}
+												/>
+											</label>
+											<label className="flex flex-col gap-1.5">
+												<span className="maxxi-eyebrow">Testo</span>
+												<textarea
+													value={editBody}
+													onChange={(event) => setEditBody(event.target.value)}
+													className="maxxi-input min-h-[180px]"
+													maxLength={4000}
+												/>
+											</label>
+											{editError && <ErrorNote>{editError}</ErrorNote>}
+											<div className="flex flex-wrap gap-2">
+												<button
+													type="button"
+													onClick={() => void saveEdit()}
+													disabled={saving || !editSubject.trim() || !editBody.trim()}
+													className="maxxi-primary-action"
+												>
+													{saving ? "Salvataggio…" : "Salva nuova versione"}
+												</button>
+												<button type="button" onClick={() => setEditing(false)} className="maxxi-secondary-action">
+													Annulla
+												</button>
+											</div>
+										</div>
+									) : (
+										<p className="mt-1 text-[12px]" style={{ color: "var(--maxxi-muted)" }}>
+											Versione {detail.versions[0]?.version ?? 1} di {detail.versions.length || 1}
+											{detail.versions[0] ? ` · ${detail.versions[0].createdBy} · ${formatDate(detail.versions[0].createdAt)}` : ""}
+										</p>
+									)}
+
+									{!editing && detail.versions.length > 1 && (() => {
+										const compare =
+											detail.versions.find((version) => version.version === compareVersion) ??
+											detail.versions[1];
+										return (
+											<details className="mt-3 border-t pt-3" style={{ borderColor: "var(--maxxi-line)" }}>
+												<summary className="cursor-pointer text-[12px] font-semibold">
+													Confronta versioni ({detail.versions.length})
+												</summary>
+												<div className="mt-2 flex flex-wrap gap-1.5">
+													{detail.versions.map((version) => (
+														<button
+															key={version.version}
+															type="button"
+															onClick={() => setCompareVersion(version.version)}
+															className="border px-2 py-1 text-[11px]"
+															style={{
+																borderColor: compare?.version === version.version ? "var(--maxxi-ink)" : "var(--maxxi-line-strong)",
+																background: compare?.version === version.version ? "var(--maxxi-ink)" : "var(--maxxi-paper)",
+																color: compare?.version === version.version ? "#ffffff" : "var(--maxxi-ink)",
+															}}
+														>
+															v{version.version} · {formatDate(version.createdAt)}
+														</button>
+													))}
+												</div>
+												{compare && (
+													<div className="mt-3 grid gap-3 sm:grid-cols-2">
+														<div className="border p-3" style={{ borderColor: "var(--maxxi-line)" }}>
+															<p className="maxxi-eyebrow">v{compare.version}</p>
+															<p className="mt-1 text-[12px] font-semibold">{compare.subject}</p>
+															<p className="mt-2 whitespace-pre-wrap text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>{compare.body}</p>
+														</div>
+														<div className="border p-3" style={{ borderColor: "var(--maxxi-line)" }}>
+															<p className="maxxi-eyebrow">Corrente</p>
+															<p className="mt-1 text-[12px] font-semibold">{detail.campaign.subject}</p>
+															<p className="mt-2 whitespace-pre-wrap text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>{detail.campaign.body}</p>
+														</div>
+													</div>
+												)}
+											</details>
+										);
+									})()}
+								</section>
+
 								<section aria-labelledby="campaign-preview-title">
 									<h3 id="campaign-preview-title" className="maxxi-section-title">Anteprima</h3>
 									<div className="mt-2 border p-4" style={{ borderColor: "var(--maxxi-line)" }}>
@@ -473,6 +631,40 @@ function CampaignsInner() {
 										</p>
 									)}
 								</section>
+
+								{detail.snapshot && (
+									<section aria-labelledby="campaign-snapshot-title">
+										<h3 id="campaign-snapshot-title" className="maxxi-section-title">Snapshot dell’approvazione</h3>
+										<p className="mt-1 text-[12px]" style={{ color: "var(--maxxi-muted)" }}>
+											Congelato il {formatDate(detail.snapshot.approvedAt)} da {detail.snapshot.approvedBy}.
+											Destinatari: {detail.snapshot.recipients.length}; esclusioni: {detail.snapshot.exclusions.length}.
+										</p>
+										{detail.recipientsVisible && detail.snapshot.recipients.length > 0 && (
+											<div className="maxxi-table-scroll mt-3">
+												<table className="maxxi-table">
+													<caption className="sr-only">Destinatari al momento dell’approvazione simulata</caption>
+													<thead>
+														<tr>
+															<th scope="col">Persona</th>
+															<th scope="col">Email</th>
+														</tr>
+													</thead>
+													<tbody>
+														{detail.snapshot.recipients.map((member) => (
+															<tr key={`snapshot-${member.personId}`}>
+																<th scope="row">{member.name}</th>
+																<td>{member.email}</td>
+															</tr>
+														))}
+													</tbody>
+												</table>
+											</div>
+										)}
+										<p className="mt-2 text-[11px]" style={{ color: "var(--maxxi-muted)" }}>
+											La snapshot è immutabile: modifiche successive al segmento non cambiano l’audience approvata.
+										</p>
+									</section>
+								)}
 
 								<section aria-labelledby="campaign-exclusions-title">
 									<h3 id="campaign-exclusions-title" className="maxxi-section-title">Esclusioni</h3>

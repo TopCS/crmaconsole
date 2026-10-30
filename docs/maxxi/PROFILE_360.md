@@ -19,7 +19,7 @@ coda globale resta in `/maxxi/sources`.
 | Organizzazioni | relazioni con organizzazioni (tipo relazione) | `maxxi_relationship` + `maxxi_organization` |
 | Timeline | eventi con data, tipo e **fonte:record su ogni riga** | `maxxi_event` |
 | Infopoint | casi aperti/chiusi con riepilogo | `maxxi_feedback_case` |
-| Possibile duplicato | solo candidati con **stesso nome o stessa email** della persona; record non uniti automaticamente | `maxxi_review_candidate` filtrata |
+| Possibile duplicato | solo candidati **pending** con stesso nome o stessa email; record non uniti automaticamente | `maxxi_review_candidate` filtrata |
 | Qualità del dato | note esplicite (es. "un acquisto non implica la presenza") | calcolate |
 
 ## Esempi nel fixture

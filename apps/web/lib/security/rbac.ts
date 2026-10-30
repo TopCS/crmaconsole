@@ -25,6 +25,7 @@ export type MaxxiPermission =
   | "maxxi.view"
   | "maxxi.people.read"
   | "maxxi.people.eligible"
+  | "maxxi.people.review"
   | "maxxi.membership.read"
   | "maxxi.feedback.manage"
   | "maxxi.feedback.viewNotes"
@@ -40,6 +41,7 @@ const ROLE_PERMISSIONS: Record<OperatorRole, readonly MaxxiPermission[]> = {
     "maxxi.view",
     "maxxi.people.read",
     "maxxi.people.eligible",
+    "maxxi.people.review",
     "maxxi.membership.read",
     "maxxi.feedback.manage",
     "maxxi.feedback.viewNotes",

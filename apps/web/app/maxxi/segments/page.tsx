@@ -6,6 +6,15 @@ import { Badge, Card, DemoNote, Empty, ErrorNote, Loading, PageHeader, SectionTi
 
 type Member = { personId: string; name: string; email: string; segmentReason: string; reasons: string[] };
 
+type Proposal = {
+	mode: "llm" | "template";
+	subject: string;
+	body: string;
+	sources: string[];
+	model?: string | null;
+	fallbackReason?: string;
+};
+
 type SegmentResponse = {
 	segment: {
 		segmentId: string;
@@ -44,6 +53,9 @@ export default function SegmentsPage() {
 	const [creating, setCreating] = useState(false);
 	const [message, setMessage] = useState<string | null>(null);
 	const [draftId, setDraftId] = useState<string | null>(null);
+	const [proposal, setProposal] = useState<Proposal | null>(null);
+	const [generating, setGenerating] = useState(false);
+	const [savingProposal, setSavingProposal] = useState(false);
 
 	useEffect(() => {
 		void (async () => {
@@ -57,6 +69,44 @@ export default function SegmentsPage() {
 			}
 		})();
 	}, []);
+
+	async function generateProposal() {
+		setGenerating(true);
+		setMessage(null);
+		try {
+			const res = await fetch("/api/maxxi/campaigns/proposal", { method: "POST" });
+			const body = (await res.json()) as { proposal?: Proposal; error?: string };
+			if (!res.ok || !body.proposal) {throw new Error(body.error ?? `HTTP ${res.status}`);}
+			setProposal(body.proposal);
+		} catch (err) {
+			setMessage(err instanceof Error ? err.message : "Generazione proposta fallita.");
+		} finally {
+			setGenerating(false);
+		}
+	}
+
+	async function saveProposal() {
+		if (!proposal) {return;}
+		setSavingProposal(true);
+		setMessage(null);
+		setDraftId(null);
+		try {
+			const res = await fetch("/api/maxxi/campaigns", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ subject: proposal.subject, body: proposal.body }),
+			});
+			const body = (await res.json()) as { error?: string; draft?: { campaignId: string; counts: { eligible: number } } };
+			if (!res.ok || !body.draft) {throw new Error(body.error ?? `HTTP ${res.status}`);}
+			setDraftId(body.draft.campaignId);
+			setMessage(`Bozza salvata (${body.draft.campaignId}) per ${body.draft.counts.eligible} destinatari — dry run.`);
+			setProposal(null);
+		} catch (err) {
+			setMessage(err instanceof Error ? err.message : "Salvataggio proposta fallito.");
+		} finally {
+			setSavingProposal(false);
+		}
+	}
 
 	async function createDraft() {
 		setCreating(true);
@@ -260,8 +310,16 @@ export default function SegmentsPage() {
 				<div className="flex flex-wrap items-center gap-3">
 					<button
 						type="button"
+						onClick={() => void generateProposal()}
+						disabled={generating || creating || savingProposal}
+						className="maxxi-secondary-action"
+					>
+						{generating ? "Generazione…" : "Genera proposta AI"}
+					</button>
+					<button
+						type="button"
 						onClick={createDraft}
-						disabled={creating}
+						disabled={creating || generating || savingProposal}
 						className="maxxi-primary-action"
 					>
 						{creating ? "Creazione…" : "Crea bozza (dry run)"}
@@ -270,6 +328,53 @@ export default function SegmentsPage() {
 						Vai alle campagne
 					</Link>
 				</div>
+
+				{proposal && (
+					<div className="mt-4 border-t pt-4" style={{ borderColor: "var(--maxxi-line)" }}>
+						<div className="flex flex-wrap items-center gap-2">
+							<Badge tone={proposal.mode === "llm" ? "ok" : "warn"}>
+								{proposal.mode === "llm" ? "Proposta AI" : "Template verificato"}
+							</Badge>
+							<span className="text-[11px]" style={{ color: "var(--maxxi-muted)" }}>
+								{proposal.model ? `modello ${proposal.model}` : "nessun provider AI: testo deterministico"}
+							</span>
+						</div>
+						<label className="mt-3 flex flex-col gap-1.5">
+							<span className="maxxi-eyebrow">Oggetto</span>
+							<input
+								value={proposal.subject}
+								onChange={(event) => setProposal({ ...proposal, subject: event.target.value })}
+								className="maxxi-input"
+								maxLength={180}
+							/>
+						</label>
+						<label className="mt-3 flex flex-col gap-1.5">
+							<span className="maxxi-eyebrow">Testo</span>
+							<textarea
+								value={proposal.body}
+								onChange={(event) => setProposal({ ...proposal, body: event.target.value })}
+								className="maxxi-input min-h-[160px]"
+								maxLength={4000}
+							/>
+						</label>
+						<div className="mt-3 flex flex-wrap items-center gap-3">
+							<button
+								type="button"
+								onClick={() => void saveProposal()}
+								disabled={savingProposal || !proposal.subject.trim() || !proposal.body.trim()}
+								className="maxxi-primary-action"
+							>
+								{savingProposal ? "Salvataggio…" : "Salva come bozza"}
+							</button>
+							<button type="button" onClick={() => setProposal(null)} className="maxxi-secondary-action">
+								Scarta
+							</button>
+							<span className="text-[11px]" style={{ color: "var(--maxxi-muted)" }}>
+								Fonti: {proposal.sources.join(", ") || "catalogo demo"}
+							</span>
+						</div>
+					</div>
+				)}
 				{message && (
 					<div className="mt-3 flex flex-wrap items-center gap-3">
 						<p className="text-[12px]" role="status" style={{ color: "var(--maxxi-muted)" }}>

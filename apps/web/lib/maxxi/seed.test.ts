@@ -11,7 +11,7 @@ process.env.CRM_A_MAXXI_FIXTURE = path.resolve(
 );
 
 const { seedMaxxiDemo, resolveIdentity } = await import("./seed");
-const { createCampaignDraft, getActivityByMonth, getCampaignDetail, getDashboardKpis, getPerson360, evaluateArchRenewal45d, listPeople, listReviewCandidates, listSources } =
+const { approveCampaignSimulated, createCampaignDraft, decideReviewCandidate, getActivityByMonth, getCampaignDetail, getDashboardKpis, getPerson360, evaluateArchRenewal45d, listPeople, listReviewCases, listReviewCandidates, listSources, updateCampaignDraft } =
   await import("./queries");
 const { loadMaxxiFixture } = await import("./fixture");
 
@@ -64,6 +64,64 @@ describe("MAXXI seed — determinism and identity", () => {
     expect(detail?.campaign.deliveryMode).toBe("dry_run");
     expect(detail?.segment.counts.eligible).toBe(2);
     expect(detail?.audit.some((row) => row.action === "campaign_draft_created")).toBe(true);
+  });
+
+  it("versions a draft and freezes the audience on simulated approval", async () => {
+    const draft = await createCampaignDraft({
+      subject: "Versione uno",
+      body: "Testo iniziale.",
+      principalId: "test",
+    });
+    const updated = await updateCampaignDraft({
+      campaignId: draft.campaignId,
+      subject: "Versione due",
+      body: "Testo aggiornato, sempre dry-run.",
+      principalId: "test",
+    });
+    expect(updated).toEqual({ ok: true, version: 2 });
+
+    const before = await getCampaignDetail(draft.campaignId);
+    expect(before?.versions.length).toBe(2);
+    expect(before?.versions[0]?.subject).toBe("Versione due");
+    expect(before?.snapshot).toBeNull();
+
+    await approveCampaignSimulated({ campaignId: draft.campaignId, principalId: "test" });
+    const after = await getCampaignDetail(draft.campaignId);
+    expect(after?.snapshot?.recipients.length).toBe(2);
+    expect(after?.snapshot?.exclusions.length).toBeGreaterThan(0);
+    expect(after?.versions.length).toBe(2);
+
+    const rejected = await updateCampaignDraft({
+      campaignId: draft.campaignId,
+      subject: "Troppo tardi",
+      body: "Non deve essere salvata.",
+      principalId: "test",
+    });
+    expect(rejected.ok).toBe(false);
+  });
+
+  it("records an identity review decision without merging people", async () => {
+    const cases = await listReviewCases();
+    const candidate = cases.find((item) => item.matches.length >= 2);
+    expect(candidate).toBeTruthy();
+    const beforePeople = (await listPeople()).length;
+
+    const result = await decideReviewCandidate({
+      candidateId: candidate!.candidateId,
+      decision: "keep_separate",
+      reason: "Omonimia senza prova sufficiente.",
+      principalId: "test",
+    });
+    expect(result.ok).toBe(true);
+    expect((await listPeople()).length).toBe(beforePeople);
+    expect((await getPerson360("P-MARIA"))?.reviewCandidates).toEqual([]);
+
+    const after = await listReviewCases();
+    const decided = after.find((item) => item.candidateId === candidate!.candidateId);
+    expect(decided?.decision?.decision).toBe("keep_separate");
+
+    // Restore the reference dataset for the idempotency test that follows.
+    await seedMaxxiDemo();
   });
 
   it("is idempotent: a second run yields identical counts", async () => {

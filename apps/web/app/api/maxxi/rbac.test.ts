@@ -23,6 +23,7 @@ const overviewRoute = await import("./overview/route");
 const chatRoute = await import("./chat/route");
 const graphRoute = await import("./graph/route");
 const graphNodeRoute = await import("./graph/node/route");
+const reviewRoute = await import("./review/route");
 
 beforeAll(async () => {
   await seedMaxxiDemo();
@@ -66,6 +67,21 @@ describe("MAXXI RBAC", () => {
       }),
     );
     expect(res.status).toBe(401);
+  });
+
+  it("protects review cases and decisions", async () => {
+    expect((await reviewRoute.GET(req(null))).status).toBe(401);
+    expect((await reviewRoute.GET(req("rel.demo"))).status).toBe(403);
+    expect((await reviewRoute.GET(req("comm.demo"))).status).toBe(200);
+
+    const forbidden = await reviewRoute.POST(
+      req("comm.demo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ candidateId: "RC-x", decision: "keep_separate", reason: "test reason" }),
+      }),
+    );
+    expect(forbidden.status).toBe(403);
   });
 
   it("protects the MAXXI graph with people.read", async () => {

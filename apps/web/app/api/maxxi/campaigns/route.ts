@@ -12,6 +12,7 @@ import {
   getCampaignDetail,
   listAudit,
   listCampaigns,
+  updateCampaignDraft,
 } from "@/lib/maxxi/queries";
 import { roleHasPermission } from "@/lib/security/rbac";
 import { isDemoMode } from "@/lib/security/demo-mode";
@@ -54,6 +55,14 @@ export async function GET(req: Request) {
       },
       excludedGroups,
       recipientsVisible: canSeePeople,
+      versions: detail.versions,
+      snapshot: detail.snapshot
+        ? {
+            ...detail.snapshot,
+            recipients: canSeePeople ? detail.snapshot.recipients : [],
+            exclusions: canSeePeople ? detail.snapshot.exclusions : [],
+          }
+        : null,
       audit: detail.audit,
       demoMode: isDemoMode(),
     });
@@ -61,6 +70,36 @@ export async function GET(req: Request) {
 
   const [campaigns, audit] = await Promise.all([listCampaigns(), listAudit(50)]);
   return Response.json({ ok: true, campaigns, audit, demoMode: isDemoMode() });
+}
+
+export async function PATCH(req: Request) {
+  const auth = guardPermission(req, "maxxi.campaigns.create");
+  if (!auth.ok) {return auth.response;}
+
+  let body: { id?: unknown; subject?: unknown; body?: unknown };
+  try {
+    body = (await req.json()) as typeof body;
+  } catch {
+    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+  const id = typeof body.id === "string" ? body.id.trim() : "";
+  const subject = typeof body.subject === "string" ? body.subject.trim() : "";
+  const content = typeof body.body === "string" ? body.body.trim() : "";
+  if (!id || !subject || !content) {
+    return Response.json({ error: "id, subject and body are required." }, { status: 400 });
+  }
+  if (subject.length > 180 || content.length > 4000) {
+    return Response.json({ error: "subject or body too long." }, { status: 400 });
+  }
+
+  const result = await updateCampaignDraft({
+    campaignId: id,
+    subject,
+    body: content,
+    principalId: principalUsername(auth.principal),
+  });
+  if (!result.ok) {return Response.json({ error: result.reason }, { status: 400 });}
+  return Response.json({ ok: true, campaignId: id, version: result.version });
 }
 
 export async function POST(req: Request) {

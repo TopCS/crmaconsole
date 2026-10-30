@@ -43,6 +43,9 @@ Ambiente: build di produzione Next.js servita su `http://localhost:3100`
 | `screenshots/12-graph-desktop.png` | Grafo relazioni, focus su Maria | 1440×900 |
 | `screenshots/12b-graph-mobile.png` | Grafo relazioni | 375×812 |
 | `screenshots/12c-graph-detail.png` | Dettaglio nodo nel grafo | 1440×900 |
+| `screenshots/13-campaign-versions.png` | Bozza versionata e snapshot | 1440×900 |
+| `screenshots/13b-ai-proposal.png` | Proposta AI con anteprima | 1440×900 |
+| `screenshots/13c-identity-review.png` | Confronto revisione identità | 1440×900 |
 
 ## Misure raccolte
 

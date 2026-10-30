@@ -156,7 +156,8 @@ export async function getPerson360(personId: string): Promise<Person360 | null> 
     source_record_id: string; reason: string; status: string;
   }>(`SELECT candidate_id, name, email, source_system, source_record_id, reason, status
       FROM maxxi_review_candidate
-      WHERE lower(name) = lower('${safeName}') OR lower(email) = lower('${safeEmail}')
+      WHERE status = 'pending'
+        AND (lower(name) = lower('${safeName}') OR lower(email) = lower('${safeEmail}'))
       ORDER BY candidate_id;`);
 
   const events = await maxxiQuery<{
@@ -400,6 +401,99 @@ export async function listSources(): Promise<SourceRow[]> {
   }));
 }
 
+export type ReviewDecision = {
+  decision: "keep_separate" | "merge_simulated";
+  reason: string;
+  decidedBy: string;
+  decidedAt: string;
+};
+
+export type ReviewMatch = {
+  personId: string;
+  name: string;
+  email: string;
+  links: number;
+  memberships: number;
+};
+
+export type ReviewCase = Awaited<ReturnType<typeof listReviewCandidates>>[number] & {
+  decision: ReviewDecision | null;
+  matches: ReviewMatch[];
+};
+
+export async function listReviewCases(): Promise<ReviewCase[]> {
+  const [candidates, decisions, people] = await Promise.all([
+    listReviewCandidates(),
+    maxxiQuery<{ candidate_id: string; decision: string; reason: string; decided_by: string; decided_at: string }>(
+      `SELECT candidate_id, decision, reason, decided_by, decided_at FROM maxxi_review_decision;`,
+    ),
+    listPeople({ limit: 200 }),
+  ]);
+  const decisionMap = new Map(
+    decisions.map((row) => [
+      row.candidate_id,
+      {
+        decision: row.decision as ReviewDecision["decision"],
+        reason: row.reason,
+        decidedBy: row.decided_by,
+        decidedAt: row.decided_at,
+      },
+    ]),
+  );
+  return candidates.map((candidate) => {
+    const name = candidate.name.trim().toLowerCase();
+    const email = candidate.email.trim().toLowerCase();
+    return {
+      ...candidate,
+      decision: decisionMap.get(candidate.candidateId) ?? null,
+      matches: people
+        .filter(
+          (person) =>
+            (name && person.name.toLowerCase() === name) ||
+            (email && person.email.toLowerCase() === email),
+        )
+        .map((person) => ({
+          personId: person.id,
+          name: person.name,
+          email: person.email,
+          links: person.links,
+          memberships: person.memberships,
+        })),
+    };
+  });
+}
+
+export async function decideReviewCandidate(params: {
+  candidateId: string;
+  decision: "keep_separate" | "merge_simulated";
+  reason: string;
+  principalId: string;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const safe = escape(params.candidateId);
+  const rows = await maxxiQuery<{ candidate_id: string }>(
+    `SELECT candidate_id FROM maxxi_review_candidate WHERE candidate_id = '${safe}' LIMIT 1;`,
+  );
+  if (!rows[0]) {return { ok: false, reason: "Candidato non trovato." };}
+  if (!["keep_separate", "merge_simulated"].includes(params.decision)) {
+    return { ok: false, reason: "Decisione non valida." };
+  }
+  const decidedAt = new Date().toISOString();
+  await maxxiExec(
+    `UPDATE maxxi_review_candidate SET status = 'decided' WHERE candidate_id = '${safe}';` +
+      `DELETE FROM maxxi_review_decision WHERE candidate_id = '${safe}';` +
+      `INSERT INTO maxxi_review_decision (candidate_id, decision, reason, decided_by, decided_at) VALUES (` +
+      `'${safe}', '${params.decision}', '${escape(params.reason)}', '${escape(params.principalId)}', '${decidedAt}');`,
+  );
+  await recordAudit({
+    principalId: params.principalId,
+    action: "identity_review_decision",
+    targetId: params.candidateId,
+    status: params.decision,
+    details: { reason: params.reason, applied: false, note: "Decisione simulata: nessuna fusione eseguita." },
+  });
+  return { ok: true };
+}
+
 export async function listReviewCandidates() {
   const rows = await maxxiQuery<{
     candidate_id: string; name: string; email: string; source_system: string;
@@ -611,7 +705,10 @@ export async function createCampaignDraft(params: {
   await maxxiExec(
     `INSERT INTO maxxi_campaign (campaign_id, segment_id, subject, body, created_by, status, delivery_mode, created_at) VALUES (` +
       `'${campaignId}', '${segment.segmentId}', '${escape(params.subject)}', '${escape(params.body)}', ` +
-      `'${escape(params.principalId)}', 'draft', 'dry_run', '${createdAt}');`,
+      `'${escape(params.principalId)}', 'draft', 'dry_run', '${createdAt}');` +
+      `INSERT INTO maxxi_campaign_version (version_id, campaign_id, version, subject, body, created_by, created_at) VALUES (` +
+      `'${campaignId}-v1', '${campaignId}', 1, '${escape(params.subject)}', '${escape(params.body)}', ` +
+      `'${escape(params.principalId)}', '${createdAt}');`,
   );
   await recordAudit({
     principalId: params.principalId,
@@ -639,21 +736,78 @@ export async function createCampaignDraft(params: {
   };
 }
 
-/** Simulated approval: writes an audit row, never contacts a provider. */
+export async function updateCampaignDraft(params: {
+  campaignId: string;
+  subject: string;
+  body: string;
+  principalId: string;
+}): Promise<{ ok: true; version: number } | { ok: false; reason: string }> {
+  const safe = escape(params.campaignId);
+  const rows = await maxxiQuery<{ status: string }>(
+    `SELECT status FROM maxxi_campaign WHERE campaign_id = '${safe}' LIMIT 1;`,
+  );
+  if (!rows[0]) {return { ok: false, reason: "Campagna non trovata." };}
+  if (rows[0].status !== "draft") {
+    return { ok: false, reason: "Una bozza approvata non è modificabile." };
+  }
+
+  const maxRows = await maxxiQuery<{ n: number | string }>(
+    `SELECT COALESCE(MAX(version), 0) AS n FROM maxxi_campaign_version WHERE campaign_id = '${safe}';`,
+  );
+  const version = Number(maxRows[0]?.n ?? 0) + 1;
+  const createdAt = new Date().toISOString();
+  const versionId = `${params.campaignId}-v${version}`;
+
+  await maxxiExec(
+    `UPDATE maxxi_campaign SET subject = '${escape(params.subject)}', body = '${escape(params.body)}' WHERE campaign_id = '${safe}';` +
+      `INSERT INTO maxxi_campaign_version (version_id, campaign_id, version, subject, body, created_by, created_at) VALUES (` +
+      `'${versionId}', '${safe}', ${version}, '${escape(params.subject)}', '${escape(params.body)}', ` +
+      `'${escape(params.principalId)}', '${createdAt}');`,
+  );
+  await recordAudit({
+    principalId: params.principalId,
+    action: "campaign_version_created",
+    targetId: params.campaignId,
+    status: "draft",
+    details: { version, deliveryMode: "dry_run" },
+  });
+  return { ok: true, version };
+}
+
+/** Simulated approval: stores the audience snapshot and never contacts a provider. */
 export async function approveCampaignSimulated(params: {
   campaignId: string;
   principalId: string;
 }): Promise<{ ok: true; campaignId: string; status: "approved_simulated"; externalCalls: 0 }> {
   const approvedAt = new Date().toISOString();
+  const segment = await evaluateArchRenewal45d();
+  const safe = escape(params.campaignId);
+  const recipients = segment.eligible.map((member) => ({
+    personId: member.personId,
+    name: member.name,
+    email: member.email,
+  }));
+  const exclusions = segment.excluded.map((member) => ({
+    personId: member.personId,
+    name: member.name,
+    email: member.email,
+    reason: member.segmentReason,
+  }));
+
   await maxxiExec(
-    `UPDATE maxxi_campaign SET status = 'approved_simulated' WHERE campaign_id = '${escape(params.campaignId)}';`,
+    `UPDATE maxxi_campaign SET status = 'approved_simulated' WHERE campaign_id = '${safe}';` +
+      `DELETE FROM maxxi_campaign_snapshot WHERE snapshot_id = '${safe}';` +
+      `INSERT INTO maxxi_campaign_snapshot (snapshot_id, campaign_id, approved_by, approved_at, recipients_json, exclusions_json, counts_json) VALUES (` +
+      `'${safe}', '${safe}', '${escape(params.principalId)}', '${approvedAt}', ` +
+      `'${escape(JSON.stringify(recipients))}', '${escape(JSON.stringify(exclusions))}', ` +
+      `'${escape(JSON.stringify(segment.counts))}');`,
   );
   await recordAudit({
     principalId: params.principalId,
     action: "campaign_approval_simulated",
     targetId: params.campaignId,
     status: "approved_simulated",
-    details: { deliveryMode: "dry_run", externalCalls: 0, approvedAt },
+    details: { deliveryMode: "dry_run", externalCalls: 0, approvedAt, recipients: recipients.length },
   });
   return { ok: true, campaignId: params.campaignId, status: "approved_simulated", externalCalls: 0 };
 }
@@ -675,6 +829,22 @@ export async function listCampaigns() {
   }));
 }
 
+export type CampaignVersion = {
+  version: number;
+  subject: string;
+  body: string;
+  createdBy: string;
+  createdAt: string;
+};
+
+export type CampaignSnapshot = {
+  approvedBy: string;
+  approvedAt: string;
+  recipients: Array<{ personId: string; name: string; email: string }>;
+  exclusions: Array<{ personId: string; name: string; email: string; reason: string }>;
+  counts: { eligible: number; excludedConsent: number; excludedIdentity: number; excludedMissingData: number };
+};
+
 export type CampaignDetail = {
   campaign: {
     campaignId: string;
@@ -687,6 +857,8 @@ export type CampaignDetail = {
     createdAt: string;
   };
   segment: SegmentResult;
+  versions: CampaignVersion[];
+  snapshot: CampaignSnapshot | null;
   audit: Awaited<ReturnType<typeof listAudit>>;
 };
 
@@ -701,6 +873,27 @@ export async function getCampaignDetail(campaignId: string): Promise<CampaignDet
 
   const segment = await evaluateArchRenewal45d();
   const audit = await listAudit(100, campaignId);
+  const versionRows = await maxxiQuery<{
+    version: number | string; subject: string; body: string; created_by: string; created_at: string;
+  }>(`SELECT version, subject, body, created_by, created_at
+        FROM maxxi_campaign_version WHERE campaign_id = '${safe}' ORDER BY version DESC;`);
+  const snapshotRows = await maxxiQuery<{
+    approved_by: string; approved_at: string; recipients_json: string;
+    exclusions_json: string; counts_json: string;
+  }>(`SELECT approved_by, approved_at, recipients_json, exclusions_json, counts_json
+        FROM maxxi_campaign_snapshot WHERE campaign_id = '${safe}' ORDER BY approved_at DESC LIMIT 1;`);
+
+  let snapshot: CampaignSnapshot | null = null;
+  if (snapshotRows[0]) {
+    snapshot = {
+      approvedBy: snapshotRows[0].approved_by,
+      approvedAt: snapshotRows[0].approved_at,
+      recipients: safeParse(snapshotRows[0].recipients_json) as unknown as CampaignSnapshot["recipients"],
+      exclusions: safeParse(snapshotRows[0].exclusions_json) as unknown as CampaignSnapshot["exclusions"],
+      counts: safeParse(snapshotRows[0].counts_json) as unknown as CampaignSnapshot["counts"],
+    };
+  }
+
   return {
     campaign: {
       campaignId: row.campaign_id,
@@ -713,6 +906,14 @@ export async function getCampaignDetail(campaignId: string): Promise<CampaignDet
       createdAt: row.created_at,
     },
     segment,
+    versions: versionRows.map((version) => ({
+      version: Number(version.version),
+      subject: version.subject,
+      body: version.body,
+      createdBy: version.created_by,
+      createdAt: version.created_at,
+    })),
+    snapshot,
     audit,
   };
 }

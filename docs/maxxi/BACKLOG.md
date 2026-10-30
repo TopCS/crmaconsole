@@ -66,6 +66,6 @@ workspace autorizzato.
 ## P3 — Estensioni demo
 
 - query in linguaggio naturale specifica per il grafo MAXXI;
-- snapshot storico dell’audience al momento dell’approvazione;
-- dettaglio bozza con modifica/versioning;
-- più segmenti e builder generico governato.
+- più segmenti e builder generico governato;
+- template email HTML e anteprima cliente;
+- esportazione audit e snapshot.
