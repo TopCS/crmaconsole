@@ -7,7 +7,7 @@
  * comes from".
  */
 
-import { MAXXI_NOW_MS, maxxiExec, maxxiQuery } from "./store";
+import { MAXXI_NOW_MS, maxxiExec, maxxiQuery, maxxiRun } from "./store";
 
 const DAY_MS = 86_400_000;
 
@@ -137,58 +137,55 @@ export async function getPerson360(personId: string): Promise<Person360 | null> 
 
   const safe = personId.replace(/'/g, "''");
 
-  const interests = await maxxiQuery<{ interest: string }>(
-    `SELECT interest FROM maxxi_person_interest WHERE person_id = '${safe}' AND kind = 'explicit' ORDER BY interest;`,
-  );
-  const links = await maxxiQuery<{
-    source_system: string; source_record_id: string; match_method: string;
-    confidence: number | string; status: string; matched_at: string | null;
-  }>(`SELECT source_system, source_record_id, match_method, confidence, status, matched_at
-      FROM maxxi_identity_link WHERE person_id = '${safe}' ORDER BY source_system;`);
-
   // Only candidates that plausibly refer to THIS person (same name or email).
   // Showing the global review queue on every profile was confusing: it made
   // unrelated visitors look like duplicates.
   const safeName = person.name.replace(/'/g, "''");
   const safeEmail = person.email.replace(/'/g, "''");
-  const candidates = await maxxiQuery<{
-    candidate_id: string; name: string; email: string; source_system: string;
-    source_record_id: string; reason: string; status: string;
-  }>(`SELECT candidate_id, name, email, source_system, source_record_id, reason, status
-      FROM maxxi_review_candidate
-      WHERE status = 'pending'
-        AND (lower(name) = lower('${safeName}') OR lower(email) = lower('${safeEmail}'))
-      ORDER BY candidate_id;`);
 
-  const events = await maxxiQuery<{
-    event_id: string; type: string; occurred_at: string; source_system: string;
-    source_record_id: string; catalog_item_id: string | null; properties_json: string;
-  }>(`SELECT event_id, type, occurred_at, source_system, source_record_id, catalog_item_id, properties_json
-      FROM maxxi_event WHERE person_id = '${safe}' ORDER BY occurred_at DESC;`);
-
-  const memberships = await maxxiQuery<{
-    membership_id: string; card_code: string; product: string; valid_from: string;
-    valid_to: string; status: string; source_system: string;
-  }>(`SELECT membership_id, card_code, product, valid_from, valid_to, status, source_system
-      FROM maxxi_membership WHERE person_id = '${safe}' ORDER BY valid_to DESC;`);
-
-  const consents = await maxxiQuery<{
-    purpose: string; channel: string; status: string; captured_at: string | null;
-    source_system: string; source_record_id: string;
-  }>(`SELECT purpose, channel, status, captured_at, source_system, source_record_id
-      FROM maxxi_consent WHERE person_id = '${safe}' ORDER BY purpose;`);
-
-  const feedback = await maxxiQuery<{
-    case_id: string; channel: string; category: string; status: string;
-    opened_at: string; summary: string;
-  }>(`SELECT case_id, channel, category, status, opened_at, summary
-      FROM maxxi_feedback_case WHERE person_id = '${safe}' ORDER BY opened_at DESC;`);
-
-  const orgs = await maxxiQuery<{ organization_id: string; name: string; relationship_kind: string }>(
-    `SELECT o.organization_id, o.name, o.relationship_kind
-       FROM maxxi_relationship r JOIN maxxi_organization o ON o.organization_id = r.organization_id
-      WHERE r.person_id = '${safe}';`,
-  );
+  const [interests, links, candidates, events, memberships, consents, feedback, orgs] = await maxxiRun([
+    () => maxxiQuery<{ interest: string }>(
+      `SELECT interest FROM maxxi_person_interest WHERE person_id = '${safe}' AND kind = 'explicit' ORDER BY interest;`,
+    ),
+    () => maxxiQuery<{
+      source_system: string; source_record_id: string; match_method: string;
+      confidence: number | string; status: string; matched_at: string | null;
+    }>(`SELECT source_system, source_record_id, match_method, confidence, status, matched_at
+        FROM maxxi_identity_link WHERE person_id = '${safe}' ORDER BY source_system;`),
+    () => maxxiQuery<{
+      candidate_id: string; name: string; email: string; source_system: string;
+      source_record_id: string; reason: string; status: string;
+    }>(`SELECT candidate_id, name, email, source_system, source_record_id, reason, status
+        FROM maxxi_review_candidate
+        WHERE status = 'pending'
+          AND (lower(name) = lower('${safeName}') OR lower(email) = lower('${safeEmail}'))
+        ORDER BY candidate_id;`),
+    () => maxxiQuery<{
+      event_id: string; type: string; occurred_at: string; source_system: string;
+      source_record_id: string; catalog_item_id: string | null; properties_json: string;
+    }>(`SELECT event_id, type, occurred_at, source_system, source_record_id, catalog_item_id, properties_json
+        FROM maxxi_event WHERE person_id = '${safe}' ORDER BY occurred_at DESC;`),
+    () => maxxiQuery<{
+      membership_id: string; card_code: string; product: string; valid_from: string;
+      valid_to: string; status: string; source_system: string;
+    }>(`SELECT membership_id, card_code, product, valid_from, valid_to, status, source_system
+        FROM maxxi_membership WHERE person_id = '${safe}' ORDER BY valid_to DESC;`),
+    () => maxxiQuery<{
+      purpose: string; channel: string; status: string; captured_at: string | null;
+      source_system: string; source_record_id: string;
+    }>(`SELECT purpose, channel, status, captured_at, source_system, source_record_id
+        FROM maxxi_consent WHERE person_id = '${safe}' ORDER BY purpose;`),
+    () => maxxiQuery<{
+      case_id: string; channel: string; category: string; status: string;
+      opened_at: string; summary: string;
+    }>(`SELECT case_id, channel, category, status, opened_at, summary
+        FROM maxxi_feedback_case WHERE person_id = '${safe}' ORDER BY opened_at DESC;`),
+    () => maxxiQuery<{ organization_id: string; name: string; relationship_kind: string }>(
+      `SELECT o.organization_id, o.name, o.relationship_kind
+         FROM maxxi_relationship r JOIN maxxi_organization o ON o.organization_id = r.organization_id
+        WHERE r.person_id = '${safe}';`,
+    ),
+  ]);
 
   const notes: string[] = [];
   if (links.length === 0) {notes.push("Nessun identificativo di origine collegato: profilo non verificato.");}
@@ -293,54 +290,52 @@ export type DashboardKpis = {
 };
 
 export async function getDashboardKpis(): Promise<DashboardKpis> {
-  const [people, linked, anon, events, visits, purchases, expiring, expired, feedback, reviews, sources] =
-    await Promise.all([
-      // "Visitatori identificati" = unique people, never accesses or tickets.
-      maxxiQuery<{ n: number | string }>(`SELECT COUNT(*) AS n FROM maxxi_person;`),
-      maxxiQuery<{ n: number | string }>(
-        `SELECT COUNT(DISTINCT person_id) AS n FROM maxxi_identity_link WHERE status = 'linked';`,
-      ),
-      maxxiQuery<{ n: number | string }>(
-        `SELECT COUNT(*) AS n FROM maxxi_event WHERE person_id IS NULL;`,
-      ),
-      maxxiQuery<{ n: number | string }>(`SELECT COUNT(*) AS n FROM maxxi_event;`),
-      maxxiQuery<{ n: number | string }>(
-        `SELECT COUNT(*) AS n FROM maxxi_event WHERE type = 'museum_visit_attended' AND person_id IS NOT NULL;`,
-      ),
-      maxxiQuery<{ n: number | string }>(
-        `SELECT COUNT(*) AS n FROM maxxi_event WHERE type = 'exhibition_ticket_purchased';`,
-      ),
-      maxxiQuery<{ n: number | string }>(
-        `SELECT COUNT(*) AS n FROM maxxi_membership WHERE product = 'myMAXXI'
-           AND valid_to BETWEEN '${iso(MAXXI_NOW_MS)}' AND '${iso(MAXXI_NOW_MS + 45 * DAY_MS)}';`,
-      ),
-      maxxiQuery<{ n: number | string }>(
-        `SELECT COUNT(*) AS n FROM maxxi_membership WHERE product = 'myMAXXI' AND valid_to < '${iso(MAXXI_NOW_MS)}';`,
-      ),
-      maxxiQuery<{ n: number | string }>(
-        `SELECT COUNT(*) AS n FROM maxxi_feedback_case WHERE status = 'open';`,
-      ),
-      maxxiQuery<{ n: number | string }>(
-        `SELECT COUNT(*) AS n FROM maxxi_review_candidate WHERE status = 'pending';`,
-      ),
-      maxxiQuery<{ n: number | string; last: string | null }>(
-        `SELECT COUNT(*) AS n, MAX(last_imported_at) AS last FROM maxxi_source_registry;`,
-      ),
-    ]);
+  // One statement instead of eleven CLI round-trips. The demo is small; the
+  // cost was never the scans, it was starting a DuckDB process per counter.
+  const rows = await maxxiQuery<{
+    people: number | string;
+    linked: number | string;
+    anonymous: number | string;
+    events: number | string;
+    visits: number | string;
+    purchases: number | string;
+    expiring: number | string;
+    expired: number | string;
+    feedback: number | string;
+    reviews: number | string;
+    sources: number | string;
+    last_import: string | null;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM maxxi_person) AS people,
+      (SELECT COUNT(DISTINCT person_id) FROM maxxi_identity_link WHERE status = 'linked') AS linked,
+      (SELECT COUNT(*) FROM maxxi_event WHERE person_id IS NULL) AS anonymous,
+      (SELECT COUNT(*) FROM maxxi_event) AS events,
+      (SELECT COUNT(*) FROM maxxi_event WHERE type = 'museum_visit_attended' AND person_id IS NOT NULL) AS visits,
+      (SELECT COUNT(*) FROM maxxi_event WHERE type = 'exhibition_ticket_purchased') AS purchases,
+      (SELECT COUNT(*) FROM maxxi_membership WHERE product = 'myMAXXI'
+         AND valid_to BETWEEN '${iso(MAXXI_NOW_MS)}' AND '${iso(MAXXI_NOW_MS + 45 * DAY_MS)}') AS expiring,
+      (SELECT COUNT(*) FROM maxxi_membership WHERE product = 'myMAXXI' AND valid_to < '${iso(MAXXI_NOW_MS)}') AS expired,
+      (SELECT COUNT(*) FROM maxxi_feedback_case WHERE status = 'open') AS feedback,
+      (SELECT COUNT(*) FROM maxxi_review_candidate WHERE status = 'pending') AS reviews,
+      (SELECT COUNT(*) FROM maxxi_source_registry) AS sources,
+      (SELECT MAX(last_imported_at) FROM maxxi_source_registry) AS last_import;
+  `);
+  const row = rows[0];
 
   return {
-    identifiedPeople: Number(people[0]?.n ?? 0),
-    linkedPeople: Number(linked[0]?.n ?? 0),
-    anonymousSubjects: Number(anon[0]?.n ?? 0),
-    totalEvents: Number(events[0]?.n ?? 0),
-    attendedVisits: Number(visits[0]?.n ?? 0),
-    purchases: Number(purchases[0]?.n ?? 0),
-    membershipsExpiring45d: Number(expiring[0]?.n ?? 0),
-    membershipsExpired: Number(expired[0]?.n ?? 0),
-    openFeedback: Number(feedback[0]?.n ?? 0),
-    pendingReviews: Number(reviews[0]?.n ?? 0),
-    sources: Number(sources[0]?.n ?? 0),
-    lastImportAt: sources[0]?.last ?? null,
+    identifiedPeople: Number(row?.people ?? 0),
+    linkedPeople: Number(row?.linked ?? 0),
+    anonymousSubjects: Number(row?.anonymous ?? 0),
+    totalEvents: Number(row?.events ?? 0),
+    attendedVisits: Number(row?.visits ?? 0),
+    purchases: Number(row?.purchases ?? 0),
+    membershipsExpiring45d: Number(row?.expiring ?? 0),
+    membershipsExpired: Number(row?.expired ?? 0),
+    openFeedback: Number(row?.feedback ?? 0),
+    pendingReviews: Number(row?.reviews ?? 0),
+    sources: Number(row?.sources ?? 0),
+    lastImportAt: row?.last_import ?? null,
   };
 }
 

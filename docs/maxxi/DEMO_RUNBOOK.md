@@ -29,6 +29,10 @@ pnpm build:crm-a-plugins
 pnpm --dir apps/web dev      # oppure: docker compose up -d --build
 ```
 
+Con Compose parte anche **`maxxi-quack`**, il sidecar che possiede il database
+MAXXI: la console gli invia le query invece di aprire il file. Senza sidecar
+(`next dev` o test) la modalità diretta resta disponibile e invariata.
+
 Apri `http://localhost:3100` → redirect alla **login Keycloak** (tema CRM-A) →
 username + password. La console non accetta password: senza Keycloak la
 superficie resta chiusa (fail-closed).
@@ -123,6 +127,17 @@ Da dire: *“La macchina propone, l’umano approva; in demo non parte nulla.”
    identità.
 3. Nello stesso profilo, sezione **Organizzazioni**: relazione demo con
    l’organizzazione sostenitrice fittizia (nessun importo).
+
+### Se le pagine MAXXI sono lente o vuote
+
+1. `docker compose ps maxxi-quack` deve essere `healthy`.
+2. `docker compose logs --tail=50 maxxi-quack` mostra l’avvio del server.
+3. In **Panoramica → Stato della demo** il dataset deve riportare
+   `backend Quack`.
+4. Se il sidecar è stato riavviato, attendere `healthy` e ricaricare: la console
+   non apre mai il file direttamente mentre Quack lo possiede.
+
+Dettagli e misure: [PERFORMANCE.md](PERFORMANCE.md).
 
 ### Percorso 4 — grafo delle relazioni (2')
 

@@ -69,12 +69,44 @@ services:
       retries: 30
       start_period: 30s
 
+  # ── MAXXI Quack sidecar ────────────────────────────────────────────────
+  # One DuckDB process owns the demo file; the console reaches it over the
+  # Quack protocol instead of opening the file (and taking its exclusive
+  # lock) for every query. Private Compose network, fixed token, plain HTTP.
+  maxxi-quack:
+    image: crm-a-console
+    container_name: crm-a-maxxi-quack
+    restart: unless-stopped
+    volumes:
+      - crm-a-data:/root/.openclaw-crm-a
+    environment:
+      MAXXI_QUACK_TOKEN: ${MAXXI_QUACK_TOKEN:-maxxi-demo-quack-token}
+    entrypoint: ["bash", "-lc"]
+    command:
+      - |
+        set -euo pipefail
+        mkdir -p /root/.openclaw-crm-a/maxxi-demo
+        tail -f /dev/null | duckdb /root/.openclaw-crm-a/maxxi-demo/maxxi.duckdb \
+          -cmd "INSTALL quack; LOAD quack; CALL quack_serve('quack:0.0.0.0:9494', allow_other_hostname = true, token = '${MAXXI_QUACK_TOKEN:-maxxi-demo-quack-token}', disable_ssl = true);"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "timeout 5 duckdb -no-stdin -c \"LOAD quack; ATTACH 'quack:127.0.0.1:9494' AS h (TOKEN '$${MAXXI_QUACK_TOKEN}', DISABLE_SSL true); FROM h.query('SELECT 1');\" >/dev/null",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
   crm-a-console:
     build: .
     image: crm-a-console
     container_name: crm-a-console
     depends_on:
       keycloak:
+        condition: service_healthy
+      maxxi-quack:
         condition: service_healthy
 
     ports:
@@ -112,6 +144,11 @@ services:
       - CRM_A_SESSION_SECRET=${CRM_A_SESSION_SECRET:-}
       - CRM_A_SERVICE_TOKEN=${CRM_A_SERVICE_TOKEN:-}
       - CRM_A_DEMO_MODE=${CRM_A_DEMO_MODE:-1}
+      # Private Quack sidecar for the isolated MAXXI DuckDB. Without these the
+      # app falls back to direct file access (local dev/tests).
+      - MAXXI_QUACK_URL=${MAXXI_QUACK_URL:-quack:maxxi-quack:9494}
+      - MAXXI_QUACK_TOKEN=${MAXXI_QUACK_TOKEN:-maxxi-demo-quack-token}
+      - MAXXI_QUACK_DISABLE_SSL=${MAXXI_QUACK_DISABLE_SSL:-1}
       # Web search provider (openclaw bundled Gemini provider). Optional:
       # when set, the agent's web_search tool auto-detects it.
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
@@ -162,6 +199,9 @@ services:
       # prod container's tailscaled holds in the shared network namespace.
       - TERMINAL_WS_PORT=3103
       - CRM_A_CONSOLE_DAEMONLESS=1
+      - MAXXI_QUACK_URL=${MAXXI_QUACK_URL:-quack:maxxi-quack:9494}
+      - MAXXI_QUACK_TOKEN=${MAXXI_QUACK_TOKEN:-maxxi-demo-quack-token}
+      - MAXXI_QUACK_DISABLE_SSL=${MAXXI_QUACK_DISABLE_SSL:-1}
     restart: unless-stopped
     entrypoint: ["bash", "-c"]
     command:

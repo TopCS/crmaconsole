@@ -13,7 +13,7 @@ Pull request: https://github.com/TopCS/crmaconsole/pull/1
 | G3 demo UI | ✅ | 7 viste navigabili con tema editoriale MAXXI scoped (panoramica, profilo 360, fonti, segmenti, campagne, assistente, accessi) |
 | G4 agent | ✅ | 3 tool OpenClaw + **Chat AI ibrida** (tool read-only, citazioni, fallback deterministico); modalità Verificato sempre disponibile |
 | G5 actions | ✅ | Zero outbound: adapter bloccati lato server in demo mode + audit |
-| G6 regression | ⚠️ | Suite web: 2328 pass / 2 fail **preesistenti** (timeout in `composio-execute-direct.test.ts`). Build web OK. Build Docker bloccata da errore di rete preesistente (`npm install -g openclaw`), non dal codice |
+| G6 regression | ⚠️ | Suite web: 2330 pass / 2 fail **preesistenti** (timeout in `composio-execute-direct.test.ts`). Build web OK. Build Docker bloccata da errore di rete preesistente (`npm install -g openclaw`), non dal codice |
 | G7 visual | ✅ | Tema scoped, responsive, drawer mobile, focus/tastiera, screenshot desktop/mobile, UX-001..010 in `docs/maxxi/UI_QA.md` (UX-007 parziale: contrasto non misurato con axe) |
 
 ## 2. Test realmente eseguiti
@@ -114,6 +114,7 @@ E2E Playwright completa e test su istanza pubblica (per scelta: nessuna esposizi
 - `apps/web/app/maxxi/people/page.tsx` + `api/maxxi/people` + `lib/maxxi/queries.ts` — ricerca server-side per nome/email/ID, barra di ricerca globale, “Possibile duplicato” filtrato sulla persona.
 - `apps/web/lib/maxxi/graph.ts` + `api/maxxi/graph` + `app/maxxi/graph` — proiezione grafo read-only su DuckDB MAXXI, filtri, dettaglio nodo, cache 10s e link dal profilo. Riusa il canvas G6 ma non `/api/crm/graph`.
 - `apps/web/app/maxxi/flow.tsx` — percorso demo Profilo → Grafo → Segmento → Bozza, con sintesi “domanda / evidenza / azione successiva” per ogni tappa.
+- `docker-compose.yml` + `apps/web/lib/maxxi/store.ts` — sidecar Quack privato per il database MAXXI, schema inizializzato una volta per processo, KPI in una query e letture parallele solo su Quack. Panoramica da 8,4 s a 0,22 s (`docs/maxxi/PERFORMANCE.md`).
 - `apps/web/app/maxxi/demo-status.tsx` + `api/maxxi/status` — controlli di readiness (accesso, dati, kill-switch, provider AI, coda identità) e reset admin con conferma esplicita.
 - `lib/maxxi/queries.ts` + `maxxi_campaign_version|snapshot` — bozze versionate, confronto e snapshot immutabile all’approvazione.
 - `lib/maxxi/campaign-proposal.ts` + `api/maxxi/campaigns/proposal` + UI Segmenti — proposta AI con fonti leggibili, avviso di verifica e salvataggio abilitato solo dopo la conferma esplicita.

@@ -33,6 +33,10 @@ serve.
 | `infopoint` | lettura profili, gestione feedback + **note infopoint** |
 | `relations` | solo organizzazioni e relazioni (niente persone/consensi) |
 
+Il database MAXXI è servito da un sidecar Quack interno (nessuna porta
+pubblicata) protetto da token; la console non apre il file. Il token
+`MAXXI_QUACK_TOKEN` è un segreto e va ruotato insieme a sidecar e console.
+
 `GET /api/maxxi/status` è in sola lettura e richiede `maxxi.view`: riporta solo
 esiti e conteggi aggregati, mai chiavi o dati personali. Il reset resta su
 `POST /api/maxxi/seed`, riservato a `maxxi.seed` (admin), con conferma esplicita

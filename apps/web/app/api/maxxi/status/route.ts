@@ -16,7 +16,7 @@ import {
   roleHasPermission,
   type OperatorRole,
 } from "@/lib/security/rbac";
-import { MAXXI_CLOCK_ISO, maxxiQuery } from "@/lib/maxxi/store";
+import { MAXXI_CLOCK_ISO, maxxiBackend, maxxiQuery, maxxiRun } from "@/lib/maxxi/store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -29,18 +29,20 @@ export async function GET(req: Request) {
   if (!auth.ok) {return auth.response;}
 
   try {
-    // DuckDB on-file takes an exclusive lock per CLI process, so these
-    // aggregate reads run sequentially instead of in parallel.
-    const kpis = await getDashboardKpis();
-    const sources = await listSources();
-    const campaigns = await listCampaigns();
-    const reviewCounts = await maxxiQuery<{
-      candidates: number | string;
-      decisions: number | string;
-    }>(
-      "SELECT (SELECT COUNT(*) FROM maxxi_review_candidate) AS candidates, " +
-        "(SELECT COUNT(*) FROM maxxi_review_decision) AS decisions;",
-    );
+    // maxxiRun parallelizes only on Quack; direct file access stays sequential
+    // because DuckDB takes an exclusive lock per CLI process.
+    const [kpis, sources, campaigns, reviewCounts] = await maxxiRun([
+      () => getDashboardKpis(),
+      () => listSources(),
+      () => listCampaigns(),
+      () => maxxiQuery<{
+        candidates: number | string;
+        decisions: number | string;
+      }>(
+        "SELECT (SELECT COUNT(*) FROM maxxi_review_candidate) AS candidates, " +
+          "(SELECT COUNT(*) FROM maxxi_review_decision) AS decisions;",
+      ),
+    ]);
     const candidateCount = Number(reviewCounts[0]?.candidates ?? 0);
     const decisionCount = Number(reviewCounts[0]?.decisions ?? 0);
 
@@ -55,6 +57,7 @@ export async function GET(req: Request) {
     const approved = campaigns.filter((campaign) => campaign.status === "approved_simulated").length;
     const aiConfigured = Boolean(chatApiKey());
     const demoMode = isDemoMode();
+    const backend = maxxiBackend();
 
     const checks: DemoCheck[] = [
       {
@@ -72,7 +75,7 @@ export async function GET(req: Request) {
         status: people > 0 && sources.length > 0 ? "ok" : "bad",
         detail:
           people > 0
-            ? `${people} persone · ${sourceCount} fonti · ${campaigns.length} campagne (${drafts} bozze, ${approved} approvate simulate)`
+            ? `${people} persone · ${sourceCount} fonti · ${campaigns.length} campagne (${drafts} bozze, ${approved} approvate simulate) · backend ${backend === "quack" ? "Quack" : "file DuckDB"}`
             : "Nessun dato: un amministratore deve ricaricare la demo.",
       },
       {
@@ -107,6 +110,7 @@ export async function GET(req: Request) {
       generatedAt: new Date().toISOString(),
       clock: MAXXI_CLOCK_ISO,
       demoMode,
+      backend,
       canSeed,
       role: roles.length > 0 ? roles.map(labelForRole).join(", ") : "Servizio",
       checks,

@@ -65,6 +65,7 @@ RUN apt-get update \
   && tar -xzf /tmp/duckdb.tar.gz -C /usr/local/bin duckdb \
   && rm /tmp/duckdb.tar.gz \
   && duckdb --version \
+  && duckdb -c "INSTALL quack; LOAD quack;" \
   && npm install -g openclaw@2026.9.1
 
 COPY --from=build /app /app

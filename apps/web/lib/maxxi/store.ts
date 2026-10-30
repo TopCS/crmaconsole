@@ -14,7 +14,16 @@
 
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { duckdbExecOnFileAsync, duckdbQueryOnFileAsync, resolveOpenClawStateDir } from "../workspace";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import {
+  duckdbExecOnFileAsync,
+  duckdbQueryOnFileAsync,
+  resolveDuckdbBin,
+  resolveOpenClawStateDir,
+} from "../workspace";
+
+const execFileAsync = promisify(execFile);
 
 export const MAXXI_WORKSPACE_ID = "demo-maxxi-cdp-2026";
 
@@ -30,6 +39,89 @@ export function maxxiDemoDir(): string {
 
 export function maxxiDbPath(): string {
   return path.join(maxxiDemoDir(), "maxxi.duckdb");
+}
+
+/** Quack endpoint shared by every server-side MAXXI query, when configured. */
+export function maxxiQuackUrl(): string | null {
+  const value = process.env.MAXXI_QUACK_URL?.trim();
+  return value ? value : null;
+}
+
+/** Shared secret for the private Quack sidecar. Never sent to the browser. */
+export function maxxiQuackToken(): string | null {
+  const value = process.env.MAXXI_QUACK_TOKEN?.trim();
+  return value ? value : null;
+}
+
+/** Internal Compose networking is plain HTTP; opt in to TLS explicitly. */
+function maxxiQuackDisableSsl(): boolean {
+  const raw = process.env.MAXXI_QUACK_DISABLE_SSL?.trim().toLowerCase();
+  return raw !== "0" && raw !== "false" && raw !== "no";
+}
+
+/** `quack` when the sidecar is configured, `duckdb-file` in local dev/tests. */
+export function maxxiBackend(): "quack" | "duckdb-file" {
+  return maxxiQuackUrl() && maxxiQuackToken() ? "quack" : "duckdb-file";
+}
+
+function sqlLiteral(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+/**
+ * Route one statement to the Quack sidecar.
+ *
+ * `catalog.query(...)` executes arbitrary SQL remotely, so callers keep
+ * sending plain SQL. The client process still starts per request, but it no
+ * longer opens the database file: there is no exclusive lock and no schema
+ * bootstrap on the hot path.
+ */
+export function buildMaxxiQuackSql(sql: string): string {
+  const url = maxxiQuackUrl();
+  const token = maxxiQuackToken();
+  if (!url || !token) {
+    throw new Error("Quack is not configured (MAXXI_QUACK_URL / MAXXI_QUACK_TOKEN).");
+  }
+  const attachOptions = `TOKEN ${sqlLiteral(token)}${maxxiQuackDisableSsl() ? ", DISABLE_SSL true" : ""}`;
+  return (
+    `LOAD quack;` +
+    `ATTACH ${sqlLiteral(url)} AS maxxi_quack (${attachOptions});` +
+    `FROM maxxi_quack.query(${sqlLiteral(sql)});`
+  );
+}
+
+async function maxxiQuackQuery<T>(sql: string): Promise<T[]> {
+  const bin = resolveDuckdbBin();
+  if (!bin) {return [];}
+  try {
+    const { stdout } = await execFileAsync(bin, ["-json", "-no-stdin", "-c", buildMaxxiQuackSql(sql)], {
+      encoding: "utf-8",
+      timeout: 30_000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    const trimmed = stdout.trim();
+    if (!trimmed || trimmed === "[]") {return [];}
+    return JSON.parse(trimmed) as T[];
+  } catch (err) {
+    console.error(`[maxxi] quack query failed: ${(err as Error).message}`);
+    return [];
+  }
+}
+
+async function maxxiQuackExec(sql: string): Promise<boolean> {
+  const bin = resolveDuckdbBin();
+  if (!bin) {return false;}
+  try {
+    await execFileAsync(bin, ["-no-stdin", "-c", buildMaxxiQuackSql(sql)], {
+      encoding: "utf-8",
+      timeout: 60_000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    return true;
+  } catch (err) {
+    console.error(`[maxxi] quack exec failed: ${(err as Error).message}`);
+    return false;
+  }
 }
 
 export function ensureMaxxiDir(): string {
@@ -205,26 +297,64 @@ CREATE TABLE IF NOT EXISTS maxxi_action_audit (
 );
 `;
 
-export async function ensureMaxxiSchema(): Promise<string> {
-  ensureMaxxiDir();
-  const dbPath = maxxiDbPath();
-  await duckdbExecOnFileAsync(dbPath, SCHEMA_SQL);
-  return dbPath;
+let schemaReady: Promise<string> | null = null;
+
+/**
+ * Run the schema DDL once per process. Previously every query re-executed all
+ * 17 `CREATE TABLE IF NOT EXISTS` statements, which dominated the small demo
+ * queries and multiplied the lock contention.
+ */
+export function ensureMaxxiSchema(): Promise<string> {
+  if (!schemaReady) {
+    schemaReady = (async () => {
+      ensureMaxxiDir();
+      const dbPath = maxxiDbPath();
+      const ok =
+        maxxiBackend() === "quack"
+          ? await maxxiQuackExec(SCHEMA_SQL)
+          : await duckdbExecOnFileAsync(dbPath, SCHEMA_SQL);
+      if (!ok) {throw new Error(`MAXXI schema bootstrap failed (${maxxiBackend()}).`);}
+      return dbPath;
+    })().catch((err) => {
+      schemaReady = null;
+      throw err;
+    });
+  }
+  return schemaReady;
 }
 
 export async function maxxiQuery<T = Record<string, unknown>>(sql: string): Promise<T[]> {
-  const dbPath = await ensureMaxxiSchema();
-  return duckdbQueryOnFileAsync<T>(dbPath, sql);
+  await ensureMaxxiSchema();
+  if (maxxiBackend() === "quack") {return maxxiQuackQuery<T>(sql);}
+  return duckdbQueryOnFileAsync<T>(maxxiDbPath(), sql);
+}
+
+/**
+ * Run several reads. Quack handles concurrent sessions, so parallelize there;
+ * direct file access stays sequential to avoid DuckDB's exclusive lock.
+ */
+export async function maxxiRun<T extends readonly unknown[]>(
+  tasks: { [K in keyof T]: () => Promise<T[K]> },
+): Promise<T> {
+  if (maxxiBackend() === "quack") {
+    return Promise.all(tasks.map((task) => task())) as unknown as Promise<T>;
+  }
+  const results: unknown[] = [];
+  for (const task of tasks) {
+    results.push(await task());
+  }
+  return results as unknown as T;
 }
 
 export async function maxxiExec(sql: string): Promise<boolean> {
-  const dbPath = await ensureMaxxiSchema();
-  return duckdbExecOnFileAsync(dbPath, sql);
+  await ensureMaxxiSchema();
+  if (maxxiBackend() === "quack") {return maxxiQuackExec(sql);}
+  return duckdbExecOnFileAsync(maxxiDbPath(), sql);
 }
 
 /** Reset = drop the demo tables only. Never touches other workspaces. */
 export async function resetMaxxiDemo(): Promise<void> {
-  const dbPath = await ensureMaxxiSchema();
+  await ensureMaxxiSchema();
   const tables = [
     "maxxi_person",
     "maxxi_person_interest",
@@ -244,8 +374,7 @@ export async function resetMaxxiDemo(): Promise<void> {
     "maxxi_review_decision",
     "maxxi_action_audit",
   ];
-  await duckdbExecOnFileAsync(
-    dbPath,
+  await maxxiExec(
     tables.map((table) => `DELETE FROM ${table};`).join("\n"),
   );
 }
