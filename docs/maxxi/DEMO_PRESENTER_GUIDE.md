@@ -83,15 +83,25 @@ Verificare che:
 - la modalità **Chat AI** produca una risposta oppure mostri chiaramente
   **Fallback verificato**.
 
+Prima di tutto, in **Panoramica**, controllare **Stato della demo**:
+
+- **Accesso operatore** e **Dataset demo** devono essere **Pronti**;
+- **Invii esterni** deve essere **Pronto** (kill-switch attivo);
+- **Provider AI** può essere **Attenzione** se non c’è chiave: la proposta userà
+  il template verificato;
+- **Revisione identità** può essere **Attenzione**: è un caso da mostrare, non
+  un errore.
+
 Se manca il dataset:
 
 1. accedere come `admin.demo`;
-2. aprire **Panoramica**;
-3. premere **Ricarica dati demo**.
+2. aprire **Panoramica → Stato della demo**;
+3. premere **Ricarica dati demo** e confermare con **Sì, ripristina la demo**.
 
-> **Attenzione:** il seed ricostruisce il dataset demo e cancella anche bozze e
-> audit. Non premerlo durante la presentazione se vuoi conservare contenuti già
-> creati.
+> **Attenzione:** il seed ricostruisce il dataset demo e cancella anche bozze,
+> versioni, snapshot, audit e decisioni. Non premerlo durante la presentazione
+> se vuoi conservare contenuti già creati. La UI chiede una conferma esplicita
+> proprio per evitare click accidentali.
 
 ### 1.4 Se la Chat AI non risponde
 
@@ -145,7 +155,10 @@ Aprire **Panoramica** e lasciare visibile la banda superiore:
 
 ### A schermo
 
-Mostrare i quattro indicatori principali:
+Mostrare **Stato della demo** e spiegare che la demo è verificata prima di
+iniziare: accesso, dati, blocco invii, provider AI e coda identità.
+
+Poi mostrare i quattro indicatori principali:
 
 - **Persone identificate**
 - **Visite attribuite**
@@ -345,7 +358,9 @@ valido o non noto.
 ### Proposta AI
 
 Premere **Genera proposta AI**, mostrare il testo generato con fonti e modello,
-modificarlo se serve e salvarlo come bozza.
+modificarlo se serve, spuntare **“Ho verificato mostra, date e assenza di
+promesse di invio”** e salvarlo come bozza. Il salvataggio resta disabilitato
+finché la verifica non è esplicita.
 
 > «La proposta usa solo dati verificati del segmento e del catalogo. Resta una
 > bozza: l’operatore la rivede e decide se salvarla; nessun messaggio parte.»

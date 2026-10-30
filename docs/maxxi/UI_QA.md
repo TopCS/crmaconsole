@@ -46,6 +46,8 @@ Ambiente: build di produzione Next.js servita su `http://localhost:3100`
 | `screenshots/13-campaign-versions.png` | Bozza versionata e snapshot | 1440×900 |
 | `screenshots/13b-ai-proposal.png` | Proposta AI con anteprima | 1440×900 |
 | `screenshots/13c-identity-review.png` | Confronto revisione identità | 1440×900 |
+| `screenshots/14-demo-status.png` | Stato della demo e controlli di readiness | 1440×900 |
+| `screenshots/14b-ai-verification.png` | Proposta AI con fonti e verifica esplicita | 1440×900 |
 
 ## Misure raccolte
 

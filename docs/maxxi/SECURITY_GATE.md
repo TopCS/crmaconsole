@@ -33,6 +33,11 @@ serve.
 | `infopoint` | lettura profili, gestione feedback + **note infopoint** |
 | `relations` | solo organizzazioni e relazioni (niente persone/consensi) |
 
+`GET /api/maxxi/status` è in sola lettura e richiede `maxxi.view`: riporta solo
+esiti e conteggi aggregati, mai chiavi o dati personali. Il reset resta su
+`POST /api/maxxi/seed`, riservato a `maxxi.seed` (admin), con conferma esplicita
+nella UI.
+
 La decisione di revisione identità richiede il permesso `maxxi.people.review`
 (solo `admin`); anche “unisci simulato” registra solo una decisione e un audit,
 senza modificare persone, link o consensi. I ruoli senza `maxxi.people.read`

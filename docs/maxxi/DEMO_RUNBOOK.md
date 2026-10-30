@@ -56,8 +56,15 @@ console usa un service account Keycloak con permessi minimi (`manage-users`).
 
 ## 2. Caricare i dati demo
 
-Dalla UI: **Panoramica → “Ricarica dati demo”** (solo `admin`; `communication`
-e gli altri ruoli ricevono 403).
+Prima di caricare o ripresentare, aprire **Panoramica → Stato della demo**:
+cinque controlli (accesso, dataset, invii esterni, provider AI, coda identità).
+“Pronta” richiede che nessun controllo sia **Bloccante**; un avviso su provider
+AI o coda identità è informativo.
+
+Dalla UI: **Stato della demo → “Ricarica dati demo”** (solo `admin`). La UI
+chiede una seconda conferma esplicita perché l’operazione cancella campagne,
+versioni, snapshot, audit e decisioni demo. Gli altri ruoli ricevono 403/assenza
+del comando.
 Da terminale (stesso risultato, idempotente):
 
 ```bash
@@ -68,7 +75,8 @@ CRM_A_SERVICE_TOKEN=<token> bash scripts/maxxi-demo.sh health
 Il dataset vive in un DuckDB isolato (`<stateDir>/maxxi-demo/maxxi.duckdb`):
 **seed e reset non toccano il workspace CRM condiviso**.
 
-Reset completo = rieseguire il seed (ricostruisce le tabelle demo).
+Reset completo = rieseguire il seed (ricostruisce le tabelle demo). Il seed non
+tocca il workspace CRM condiviso né alcun dato reale.
 
 ## 3. I percorsi
 
@@ -100,7 +108,8 @@ sicuro collegarlo.”*
 3. Prova *“Quanto hanno donato i sostenitori?”* → **“non ho evidenze
    sufficienti”** (nessun importo inventato).
 4. `/maxxi/segments` → **Crea bozza (dry run)** oppure **Genera proposta AI**,
-   controlla il testo e salva. Poi `/maxxi/campaigns` → **Dettaglio**:
+   controlla il testo e **spunta “Ho verificato mostra, date e assenza di
+   promesse di invio”**, poi salva. Poi `/maxxi/campaigns` → **Dettaglio**:
    modifica la bozza (nuova versione), confronta le versioni e **Simula
    approvazione**. Verifica la snapshot dei destinatari e la riga di audit.
 
@@ -128,6 +137,9 @@ Da dire: *“La macchina propone, l’umano approva; in demo non parte nulla.”
 Da dire: *“Il grafo rende visibili le connessioni, ma non trasforma un
 possibile duplicato in un’identità confermata. Legge solo il database demo e
 non espone le note infopoint.”*
+
+Ogni tappa del percorso mostra una **sintesi narrativa**: la domanda, l’evidenza
+a schermo e l’azione successiva. Usarla come filo conduttore, non come slide.
 
 La prima apertura può richiedere qualche secondo; i dettagli successivi usano
 la cache. Il ruolo `relations` non ha accesso al grafo delle persone.

@@ -76,6 +76,7 @@ Miller) è stato incluso.
 | Ribbon | banda nera persistente `DEMO · DATI SINTETICI · NESSUN INVIO ESTERNO` |
 | Contenuto | max 1360px, padding 32/24px desktop, 24/16px mobile |
 | Percorso demo | barra a 4 step (Profilo → Grafo → Segmento → Bozza) sopra il contenuto |
+| Sintesi tappa | domanda, evidenza e azione successiva, con bordo sinistro a 4px |
 | Drawer mobile | overlay, chiusura con Escape, focus al primo link, `aria-expanded` |
 | Skip link | “Vai al contenuto” verso `#maxxi-main` |
 
@@ -98,12 +99,12 @@ Miller) è stato incluso.
 
 | Vista | Rotta | Interventi |
 |---|---|---|
-| Panoramica | `/maxxi` | hero tipografico, 4 KPI primari, 7 indicatori di contesto, line chart visite/mese, tabella fonti, revisione identità, percorsi demo |
+| Panoramica | `/maxxi` | hero tipografico, **Stato della demo** con 5 controlli e reset confermato, 4 KPI primari, 7 indicatori di contesto, line chart visite/mese, tabella fonti, revisione identità, percorsi demo |
 | Visitatore 360 | `/maxxi/people?id=` | ricerca server-side per nome/email/ID; layout 8/4: timeline + provenienza a sinistra, myMAXXI/consensi/interessi/organizzazioni/qualità a destra, feedback a tutta larghezza; “Possibile duplicato” solo se il candidato corrisponde |
 | Fonti | `/maxxi/sources` | tabella qualità + coda di revisione con confronto affiancato e decisione simulata |
 | Grafo relazioni | `/maxxi/graph` | grafo read-only di persone, organizzazioni, mostre, interessi e fonti; filtro per tipo, focus e dettaglio nodo |
-| Segmenti | `/maxxi/segments` | due numeri (contattabili vs valutate), esclusioni raggruppate, tabella con motivo testuale, proposta e CTA dry-run |
-| Campagne | `/maxxi/campaigns` | stepper 1–5, banner dry-run, bozze con “Dettaglio” (anteprima, versioni, destinatari, esclusioni, snapshot, audit), modifica versionata e “Simula approvazione” |
+| Segmenti | `/maxxi/segments` | due numeri (contattabili vs valutate), esclusioni con spiegazione e nomi, regole applicate, tabella con motivo testuale, proposta AI con fonti e verifica esplicita, CTA dry-run |
+| Campagne | `/maxxi/campaigns` | stepper 1–5, banner dry-run, **governance dell’approvazione**, bozze con “Dettaglio” (anteprima, versioni, destinatari, esclusioni, snapshot, audit), modifica versionata e “Simula approvazione” |
 | Assistente | `/maxxi/agent` | composer + risposte in due colonne, evidenze/ID, nessuna chat a pieno schermo |
 | Accessi | `/maxxi/operators` | utenti Keycloak, ruoli, stato, form di creazione/modifica |
 

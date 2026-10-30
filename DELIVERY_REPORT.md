@@ -13,7 +13,7 @@ Pull request: https://github.com/TopCS/crmaconsole/pull/1
 | G3 demo UI | ✅ | 7 viste navigabili con tema editoriale MAXXI scoped (panoramica, profilo 360, fonti, segmenti, campagne, assistente, accessi) |
 | G4 agent | ✅ | 3 tool OpenClaw + **Chat AI ibrida** (tool read-only, citazioni, fallback deterministico); modalità Verificato sempre disponibile |
 | G5 actions | ✅ | Zero outbound: adapter bloccati lato server in demo mode + audit |
-| G6 regression | ⚠️ | Suite web: 2326 pass / 2 fail **preesistenti** (timeout in `composio-execute-direct.test.ts`). Build web OK. Build Docker bloccata da errore di rete preesistente (`npm install -g openclaw`), non dal codice |
+| G6 regression | ⚠️ | Suite web: 2328 pass / 2 fail **preesistenti** (timeout in `composio-execute-direct.test.ts`). Build web OK. Build Docker bloccata da errore di rete preesistente (`npm install -g openclaw`), non dal codice |
 | G7 visual | ✅ | Tema scoped, responsive, drawer mobile, focus/tastiera, screenshot desktop/mobile, UX-001..010 in `docs/maxxi/UI_QA.md` (UX-007 parziale: contrasto non misurato con axe) |
 
 ## 2. Test realmente eseguiti
@@ -38,7 +38,7 @@ Test nuovi aggiunti (tutti verdi):
 - `apps/web/lib/maxxi/agent.test.ts` (5) — AGT-001/AGT-002, persona, fallback.
 
 Eseguiti anche: visual QA con Chrome headless (Playwright) su build di produzione,
-login Keycloak reale, viewport desktop e mobile, 21 screenshot. Non eseguiti: suite
+login Keycloak reale, viewport desktop e mobile, 23 screenshot. Non eseguiti: suite
 E2E Playwright completa e test su istanza pubblica (per scelta: nessuna esposizione).
 
 ### Verifica live (Next dev su porta dedicata, DB demo temporaneo)
@@ -60,7 +60,7 @@ E2E Playwright completa e test su istanza pubblica (per scelta: nessuna esposizi
 | `/maxxi` desktop 1440×900 | 4 KPI + grafico + fonti + revisione, `overflowX = 0` |
 | `/maxxi` mobile 375×812 | nessun overflow; drawer apribile con `aria-expanded="true"` |
 | `/workspace` standard | nessuno scope MAXXI; accent `#0065A2`, sfondo `#f5f5f4` invariati |
-| Screenshot | 21 PNG in `docs/maxxi/screenshots/` (desktop, mobile, drawer, dettaglio bozza, non-regressione) |
+| Screenshot | 23 PNG in `docs/maxxi/screenshots/` (desktop, mobile, drawer, dettaglio bozza, non-regressione) |
 | Dettaglio bozza | `GET /api/maxxi/campaigns?id=…` con testo, anteprima, destinatari, esclusioni e audit; contatti mascherati per ruoli senza `people.read` |
 | Console browser (build produzione) | 0 errori su tutte le viste |
 
@@ -113,10 +113,12 @@ E2E Playwright completa e test su istanza pubblica (per scelta: nessuna esposizi
 - `apps/web/app/maxxi/campaigns/page.tsx` + `api/maxxi/campaigns` + `lib/maxxi/queries.ts` — pannello dettaglio bozza, mascheramento destinatari per ruolo, link “Apri bozza” dal segmento.
 - `apps/web/app/maxxi/people/page.tsx` + `api/maxxi/people` + `lib/maxxi/queries.ts` — ricerca server-side per nome/email/ID, barra di ricerca globale, “Possibile duplicato” filtrato sulla persona.
 - `apps/web/lib/maxxi/graph.ts` + `api/maxxi/graph` + `app/maxxi/graph` — proiezione grafo read-only su DuckDB MAXXI, filtri, dettaglio nodo, cache 10s e link dal profilo. Riusa il canvas G6 ma non `/api/crm/graph`.
-- `apps/web/app/maxxi/flow.tsx` — percorso demo Profilo → Grafo → Segmento → Bozza.
+- `apps/web/app/maxxi/flow.tsx` — percorso demo Profilo → Grafo → Segmento → Bozza, con sintesi “domanda / evidenza / azione successiva” per ogni tappa.
+- `apps/web/app/maxxi/demo-status.tsx` + `api/maxxi/status` — controlli di readiness (accesso, dati, kill-switch, provider AI, coda identità) e reset admin con conferma esplicita.
 - `lib/maxxi/queries.ts` + `maxxi_campaign_version|snapshot` — bozze versionate, confronto e snapshot immutabile all’approvazione.
-- `lib/maxxi/campaign-proposal.ts` + `api/maxxi/campaigns/proposal` + UI Segmenti — proposta AI con fonti, editing e salvataggio esplicito.
-- `api/maxxi/review` + UI Fonti — confronto identità, decisione simulata con motivazione e audit, nessuna fusione.
+- `lib/maxxi/campaign-proposal.ts` + `api/maxxi/campaigns/proposal` + UI Segmenti — proposta AI con fonti leggibili, avviso di verifica e salvataggio abilitato solo dopo la conferma esplicita.
+- `api/maxxi/review` + UI Fonti — confronto identità, conteggio casi aperti/decisi, decisione simulata con motivazione e audit, nessuna fusione.
+- UI Campagne/Segmenti — governance visibile: snapshot immutabile, audit, regole del segmento ed esclusioni spiegate con nomi e motivazione.
 - `docker-compose.yml` — profilo `zrok` con share console e Keycloak; Keycloak passa a `start` con hostname pubblico e backchannel interno.
 - `deploy/zrok/`, `docs/maxxi/ZROK.md`, `docs/maxxi/BACKLOG.md` — pubblicazione e backlog workspace nativo.
 - `apps/web/lib/crm-graph.ts` — guardia `json_valid` nell'unnest delle relazioni: con DuckDB CLI 2.0 il filtro non veniva applicato prima del cast e la query restituiva zero archi (fix incidentale, test `crm-graph` verde).
