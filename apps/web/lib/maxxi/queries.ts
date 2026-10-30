@@ -27,7 +27,7 @@ export type PersonSummary = {
 };
 
 export async function listPeople(options?: { limit?: number; search?: string }): Promise<PersonSummary[]> {
-  const limit = Math.max(1, Math.min(200, options?.limit ?? 100));
+  const limit = Math.max(1, Math.min(200, options?.limit ?? 200));
   const search = (options?.search ?? "").trim().replace(/'/g, "''");
   const where = search
     ? `WHERE p.name ILIKE '%${search}%' OR p.email ILIKE '%${search}%' OR p.person_id ILIKE '%${search}%'`

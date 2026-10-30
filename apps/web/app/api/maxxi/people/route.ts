@@ -17,7 +17,7 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const id = url.searchParams.get("id")?.trim();
-  const limitRaw = Number(url.searchParams.get("limit") ?? "100");
+  const limitRaw = Number(url.searchParams.get("limit") ?? "200");
   const q = (url.searchParams.get("q") ?? "").trim().slice(0, 120);
   const canViewNotes =
     auth.principal.sub === "operator"
@@ -34,7 +34,7 @@ export async function GET(req: Request) {
       return Response.json({ ok: true, person });
     }
     const people = await listPeople({
-      limit: Number.isFinite(limitRaw) ? limitRaw : 100,
+      limit: Number.isFinite(limitRaw) ? limitRaw : 200,
       search: q,
     });
     return Response.json({ ok: true, people, query: q });
