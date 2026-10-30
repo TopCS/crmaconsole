@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Badge, Card, Empty, ErrorNote, Loading, PageHeader, SectionTitle } from "../ui";
+import { StepBrief } from "../flow";
 import { metaForType, resolveThemeColors } from "@/app/components/crm/graph/graph-meta";
 
 const G6Canvas = dynamic(
@@ -164,6 +165,13 @@ function GraphInner() {
 						</>
 					) : undefined
 				}
+			/>
+
+			<StepBrief
+				step={1}
+				question="Quali relazioni spiegano il suo coinvolgimento?"
+				evidence={`${data.nodes.length} nodi · ${data.edges.length} relazioni · ${data.edges.filter((edge) => edge.rel === "duplicate").length} possibili duplicati (segnalazioni, non fusioni)`}
+				next={{ href: "/maxxi/segments", label: "Calcola il segmento" }}
 			/>
 
 			<Card className="p-0">

@@ -87,6 +87,8 @@ export default function SourcesPage() {
 	}, []);
 
 	const selected = cases.find((item) => item.candidateId === selectedId) ?? null;
+	const openCases = cases.filter((item) => !item.decision).length;
+	const decidedCases = cases.length - openCases;
 
 	function openCase(item: ReviewCase) {
 		setSelectedId(item.candidateId);
@@ -198,6 +200,10 @@ export default function SourcesPage() {
 				<SectionTitle hint="Nessun merge automatico: confronto e decisione simulata">
 					Coda di revisione identità
 				</SectionTitle>
+				<p className="mb-3 text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>
+					{openCases} casi aperti · {decidedCases} decisi. Nome o email simile non sono prova sufficiente:
+					nessuna fusione automatica.
+				</p>
 				{notice && (
 					<p className="mb-3 text-[12px]" role="status" style={{ color: "var(--maxxi-muted)" }}>
 						{notice}
@@ -238,6 +244,10 @@ export default function SourcesPage() {
 						))}
 					</ul>
 				)}
+				<p className="mt-3 border-t pt-3 text-[11.5px] leading-relaxed" style={{ borderColor: "var(--maxxi-line)", color: "var(--maxxi-muted)" }}>
+					Regola di governance: anche “Unisci (simulato)” registra solo una decisione con motivazione e audit.
+					Persone, link e consensi restano invariati.
+				</p>
 			</Card>
 			)}
 

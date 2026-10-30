@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Badge, Card, DemoNote, Empty, ErrorNote, Loading, PageHeader, SectionTitle } from "../ui";
+import { StepBrief } from "../flow";
 
 type Member = { personId: string; name: string; email: string; segmentReason: string; reasons: string[] };
 
@@ -37,6 +38,14 @@ const REASON_LABEL: Record<string, string> = {
 	excluded_identity_uncertain: "Identità incerta",
 };
 
+const REASON_HELP: Record<string, string> = {
+	excluded_consent: "Il consenso email per eventi e marketing non è concesso o è stato revocato.",
+	excluded_no_interest: "Nessun interesse esplicito per l'architettura: non è un pubblico pertinente.",
+	excluded_membership_window: "La card myMAXXI non scade nella finestra di 45 giorni.",
+	excluded_no_interaction: "Nessuna interazione utile a giustificare il contatto.",
+	excluded_identity_uncertain: "L'identità non è verificata con certezza sufficiente.",
+};
+
 const REASON_TONE: Record<string, "ok" | "warn" | "bad" | "neutral"> = {
 	included: "ok",
 	excluded_consent: "bad",
@@ -56,6 +65,7 @@ export default function SegmentsPage() {
 	const [proposal, setProposal] = useState<Proposal | null>(null);
 	const [generating, setGenerating] = useState(false);
 	const [savingProposal, setSavingProposal] = useState(false);
+	const [verified, setVerified] = useState(false);
 
 	useEffect(() => {
 		void (async () => {
@@ -77,6 +87,7 @@ export default function SegmentsPage() {
 			const res = await fetch("/api/maxxi/campaigns/proposal", { method: "POST" });
 			const body = (await res.json()) as { proposal?: Proposal; error?: string };
 			if (!res.ok || !body.proposal) {throw new Error(body.error ?? `HTTP ${res.status}`);}
+			setVerified(false);
 			setProposal(body.proposal);
 		} catch (err) {
 			setMessage(err instanceof Error ? err.message : "Generazione proposta fallita.");
@@ -100,6 +111,7 @@ export default function SegmentsPage() {
 			if (!res.ok || !body.draft) {throw new Error(body.error ?? `HTTP ${res.status}`);}
 			setDraftId(body.draft.campaignId);
 			setMessage(`Bozza salvata (${body.draft.campaignId}) per ${body.draft.counts.eligible} destinatari — dry run.`);
+			setVerified(false);
 			setProposal(null);
 		} catch (err) {
 			setMessage(err instanceof Error ? err.message : "Salvataggio proposta fallito.");
@@ -148,6 +160,11 @@ export default function SegmentsPage() {
 		list.push(member);
 		groups.set(member.segmentReason, list);
 	}
+	const usedSources = proposal
+		? proposal.sources
+				.map((id) => data.catalog.find((item) => item.id === id))
+				.filter((item): item is SegmentResponse["catalog"][number] => Boolean(item))
+		: [];
 	const assistantQuestion = encodeURIComponent(
 		"Quali visitatori interessati all'architettura hanno una card myMAXXI in scadenza entro 45 giorni e consenso email?",
 	);
@@ -163,6 +180,13 @@ export default function SegmentsPage() {
 						Chiedi all&apos;assistente
 					</Link>
 				}
+			/>
+
+			<StepBrief
+				step={2}
+				question="Chi possiamo contattare, e chi resta fuori?"
+				evidence={`${segment.counts.eligible} contattabili · ${segment.excluded.length} esclusi (${segment.counts.excludedConsent} per consenso)`}
+				next={{ href: "/maxxi/campaigns", label: "Prepara la bozza" }}
 			/>
 
 			<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -275,16 +299,32 @@ export default function SegmentsPage() {
 					) : (
 						<ul className="divide-y" style={{ borderColor: "var(--maxxi-line)" }}>
 							{[...groups.entries()].map(([reason, members]) => (
-								<li key={reason} className="flex items-center justify-between gap-3 py-3">
-									<span className="text-[12.5px]">{REASON_LABEL[reason] ?? reason}</span>
-									<span className="maxxi-kpi-value text-[18px]">{members.length}</span>
+								<li key={reason} className="py-3">
+									<div className="flex items-center justify-between gap-3">
+										<span className="text-[12.5px] font-semibold">{REASON_LABEL[reason] ?? reason}</span>
+										<span className="maxxi-kpi-value text-[18px]">{members.length}</span>
+									</div>
+									<p className="mt-1 text-[11.5px] leading-relaxed" style={{ color: "var(--maxxi-muted)" }}>
+										{REASON_HELP[reason] ?? "Motivo registrato dal calcolo del segmento."}
+									</p>
+									<p className="mt-1 text-[11px]" style={{ color: "var(--maxxi-muted)" }}>
+										{members.map((member) => member.name).join(", ")}
+									</p>
 								</li>
 							))}
 						</ul>
 					)}
-					<p className="mt-3 border-t pt-3 text-[11.5px]" style={{ borderColor: "var(--maxxi-line)", color: "var(--maxxi-muted)" }}>
-						Un&apos;esclusione per consenso non viene mai conteggiata due volte.
-					</p>
+					<div className="mt-3 border-t pt-3" style={{ borderColor: "var(--maxxi-line)" }}>
+						<p className="maxxi-eyebrow">Regole applicate</p>
+						<ul className="mt-2 space-y-1 text-[11.5px] leading-relaxed" style={{ color: "var(--maxxi-muted)" }}>
+							<li>Card in scadenza entro 45 giorni e interesse esplicito per l’architettura.</li>
+							<li>Consenso email valido per la finalità: in assenza, la persona resta fuori.</li>
+							<li>Identità incerta esclusa finché non esiste una prova sufficiente.</li>
+						</ul>
+						<p className="mt-2 text-[11px]" style={{ color: "var(--maxxi-muted)" }}>
+							Un’esclusione per consenso non viene mai conteggiata due volte.
+						</p>
+					</div>
 				</Card>
 			</div>
 
@@ -339,11 +379,22 @@ export default function SegmentsPage() {
 								{proposal.model ? `modello ${proposal.model}` : "nessun provider AI: testo deterministico"}
 							</span>
 						</div>
+						<p
+							className="mt-3 border-l-4 py-2 pl-3 text-[11.5px] leading-relaxed"
+							style={{ borderColor: "var(--maxxi-warning, #8a6d1f)", color: "var(--maxxi-muted)" }}
+						>
+							{proposal.mode === "llm"
+								? "Testo generato: verifica che mostre, date e benefici corrispondano al catalogo. Non aggiungere prezzi, orari o promesse di invio."
+								: "Testo deterministico basato sul catalogo verificato: controlla comunque oggetto e date prima di salvare."}
+						</p>
 						<label className="mt-3 flex flex-col gap-1.5">
 							<span className="maxxi-eyebrow">Oggetto</span>
 							<input
 								value={proposal.subject}
-								onChange={(event) => setProposal({ ...proposal, subject: event.target.value })}
+								onChange={(event) => {
+									setVerified(false);
+									setProposal({ ...proposal, subject: event.target.value });
+								}}
 								className="maxxi-input"
 								maxLength={180}
 							/>
@@ -352,26 +403,70 @@ export default function SegmentsPage() {
 							<span className="maxxi-eyebrow">Testo</span>
 							<textarea
 								value={proposal.body}
-								onChange={(event) => setProposal({ ...proposal, body: event.target.value })}
+								onChange={(event) => {
+									setVerified(false);
+									setProposal({ ...proposal, body: event.target.value });
+								}}
 								className="maxxi-input min-h-[160px]"
 								maxLength={4000}
 							/>
 						</label>
+
+						<div className="mt-3 border p-3" style={{ borderColor: "var(--maxxi-line)" }}>
+							<p className="maxxi-eyebrow">Fonti usate</p>
+							{usedSources.length === 0 ? (
+								<p className="mt-1 text-[11.5px]" style={{ color: "var(--maxxi-muted)" }}>
+									Nessuna fonte puntuale: testo basato sul catalogo demo.
+								</p>
+							) : (
+								<ul className="mt-1 space-y-1">
+									{usedSources.map((source) => (
+										<li key={source.id} className="flex flex-wrap items-baseline justify-between gap-2 text-[11.5px]">
+											<span>
+												<strong>{source.title}</strong>
+												<span className="ml-2" style={{ color: "var(--maxxi-muted)" }}>
+													{source.startDate} → {source.endDate}
+												</span>
+											</span>
+											<Badge tone={source.isPublicReal ? "ok" : "warn"}>
+												{source.isPublicReal ? "catalogo reale" : "catalogo demo"}
+											</Badge>
+										</li>
+									))}
+								</ul>
+							)}
+						</div>
+
+						<label className="mt-3 flex items-start gap-2 text-[12px] leading-relaxed">
+							<input
+								type="checkbox"
+								checked={verified}
+								onChange={(event) => setVerified(event.target.checked)}
+								className="mt-0.5"
+							/>
+							<span>
+								Ho verificato mostra, date e assenza di promesse di invio. Il salvataggio crea solo una bozza
+								dry-run.
+							</span>
+						</label>
+
 						<div className="mt-3 flex flex-wrap items-center gap-3">
 							<button
 								type="button"
 								onClick={() => void saveProposal()}
-								disabled={savingProposal || !proposal.subject.trim() || !proposal.body.trim()}
+								disabled={savingProposal || !verified || !proposal.subject.trim() || !proposal.body.trim()}
 								className="maxxi-primary-action"
 							>
 								{savingProposal ? "Salvataggio…" : "Salva come bozza"}
 							</button>
-							<button type="button" onClick={() => setProposal(null)} className="maxxi-secondary-action">
+							<button
+								type="button"
+								onClick={() => { setVerified(false); setProposal(null); }}
+								className="maxxi-secondary-action"
+							>
 								Scarta
 							</button>
-							<span className="text-[11px]" style={{ color: "var(--maxxi-muted)" }}>
-								Fonti: {proposal.sources.join(", ") || "catalogo demo"}
-							</span>
+							<span className="maxxi-status maxxi-status-ok">Nessun invio</span>
 						</div>
 					</div>
 				)}

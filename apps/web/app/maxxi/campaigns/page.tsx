@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Badge, Card, DemoNote, Empty, ErrorNote, Loading, PageHeader, SectionTitle } from "../ui";
+import { StepBrief } from "../flow";
 import { hasRole, useMe } from "../use-me";
 
 type Campaign = {
@@ -276,6 +277,13 @@ function CampaignsInner() {
 				}
 			/>
 
+			<StepBrief
+				step={3}
+				question="Cosa succede se approviamo?"
+				evidence={`${campaigns.length} bozze · ${campaigns.filter((campaign) => campaign.status === "approved_simulated").length} approvate simulate · nessun invio esterno`}
+				next={{ href: "/maxxi/sources", label: "Controlla le fonti" }}
+			/>
+
 			{error && <ErrorNote>{error}</ErrorNote>}
 
 			<Card>
@@ -300,6 +308,35 @@ function CampaignsInner() {
 					</p>
 				</Card>
 			)}
+
+			<Card>
+				<SectionTitle hint="Approvare non significa inviare: significa congelare e tracciare">
+					Governance dell’approvazione
+				</SectionTitle>
+				<ol className="grid grid-cols-1 gap-2 text-[12px] sm:grid-cols-3">
+					<li className="border-t pt-2" style={{ borderColor: "var(--maxxi-line)" }}>
+						<span className="maxxi-eyebrow">01 · Snapshot</span>
+						<p className="mt-1 leading-snug" style={{ color: "var(--maxxi-muted)" }}>
+							Destinatari, esclusioni e conteggi vengono congelati al momento dell’approvazione.
+						</p>
+					</li>
+					<li className="border-t pt-2" style={{ borderColor: "var(--maxxi-line)" }}>
+						<span className="maxxi-eyebrow">02 · Immutabile</span>
+						<p className="mt-1 leading-snug" style={{ color: "var(--maxxi-muted)" }}>
+							Una bozza approvata non è più modificabile: serve una nuova bozza.
+						</p>
+					</li>
+					<li className="border-t pt-2" style={{ borderColor: "var(--maxxi-line)" }}>
+						<span className="maxxi-eyebrow">03 · Audit</span>
+						<p className="mt-1 leading-snug" style={{ color: "var(--maxxi-muted)" }}>
+							L’azione è registrata con utente e data; nessun provider viene contattato.
+						</p>
+					</li>
+				</ol>
+				<p className="mt-3 text-[11px]" style={{ color: "var(--maxxi-muted)" }}>
+					Possono approvare i ruoli Comunicazione e Amministratore.
+				</p>
+			</Card>
 
 			<Card>
 				<SectionTitle hint="Apri una bozza per testo completo, anteprima, destinatari ed esclusioni">
@@ -449,6 +486,14 @@ function CampaignsInner() {
 									<Badge tone="warn">{detail.campaign.deliveryMode}</Badge>
 									<span className="maxxi-status maxxi-status-ok">Nessun invio esterno</span>
 								</div>
+
+								<p
+									className="border-l-4 py-2 pl-3 text-[11.5px] leading-relaxed"
+									style={{ borderColor: "var(--maxxi-ink)", color: "var(--maxxi-muted)" }}
+								>
+									Approvazione simulata: crea una snapshot immutabile dell’audience e una riga di audit.
+									Non modifica persone o consensi e non contatta alcun fornitore.
+								</p>
 
 								<dl className="grid grid-cols-1 gap-3 text-[12px] sm:grid-cols-2">
 									<div>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Badge, Card, DemoNote, Empty, ErrorNote, Kpi, Loading, PageHeader, SectionTitle } from "./ui";
-import { hasRole, useMe } from "./use-me";
+import { DemoStatusCard } from "./demo-status";
 
 type ActivityPoint = { month: string; visits: number; events: number };
 
@@ -146,9 +146,6 @@ function ActivityChart({ points }: { points: ActivityPoint[] }) {
 export default function MaxxiDashboard() {
 	const [data, setData] = useState<Overview | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const [seeding, setSeeding] = useState(false);
-	const { me } = useMe();
-	const isAdmin = hasRole(me, "admin");
 
 	const load = useCallback(async () => {
 		setError(null);
@@ -165,21 +162,6 @@ export default function MaxxiDashboard() {
 	useEffect(() => {
 		void load();
 	}, [load]);
-
-	async function seed() {
-		setSeeding(true);
-		setError(null);
-		try {
-			const res = await fetch("/api/maxxi/seed", { method: "POST" });
-			const body = (await res.json()) as { error?: string };
-			if (!res.ok) {throw new Error(body.error ?? `HTTP ${res.status}`);}
-			await load();
-		} catch (err) {
-			setError(err instanceof Error ? err.message : "Seed fallito.");
-		} finally {
-			setSeeding(false);
-		}
-	}
 
 	if (error) {return <ErrorNote>{error}</ErrorNote>;}
 	if (!data) {return <Loading label="Caricamento della panoramica…" />;}
@@ -202,20 +184,9 @@ export default function MaxxiDashboard() {
 				eyebrow="Intelligence / Panoramica"
 				title="Conoscere il pubblico. Comprendere le relazioni."
 				subtitle="Dati dimostrativi integrati da più sistemi, con fonti e qualità verificabili. Nessuna cifra è un dato reale del museo."
-				actions={
-					isAdmin ? (
-						<button
-							type="button"
-							onClick={seed}
-							disabled={seeding}
-							className="maxxi-secondary-action"
-							title="Ricostruisce il dataset demo dai fixture (idempotente)"
-						>
-							{seeding ? "Seed…" : "Ricarica dati demo"}
-						</button>
-					) : undefined
-				}
 			/>
+
+			<DemoStatusCard onSeeded={() => void load()} />
 
 			<section aria-labelledby="kpi-primary">
 				<h2 id="kpi-primary" className="sr-only">
@@ -301,9 +272,14 @@ export default function MaxxiDashboard() {
 
 			<div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
 				<Card className="lg:col-span-2">
-					<SectionTitle hint="Record non uniti automaticamente: la fusione richiede una verifica umana">
-						Revisione identità
-					</SectionTitle>
+					<div className="flex flex-wrap items-start justify-between gap-2">
+						<SectionTitle hint="Record non uniti automaticamente: la fusione richiede una verifica umana">
+							Revisione identità
+						</SectionTitle>
+						<Link href="/maxxi/sources" className="maxxi-secondary-action">
+							Apri la coda
+						</Link>
+					</div>
 					{data.reviews.length === 0 ? (
 						<Empty>Nessun candidato in revisione.</Empty>
 					) : (

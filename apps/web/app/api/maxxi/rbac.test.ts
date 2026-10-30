@@ -24,6 +24,7 @@ const chatRoute = await import("./chat/route");
 const graphRoute = await import("./graph/route");
 const graphNodeRoute = await import("./graph/node/route");
 const reviewRoute = await import("./review/route");
+const statusRoute = await import("./status/route");
 
 beforeAll(async () => {
   await seedMaxxiDemo();
@@ -67,6 +68,32 @@ describe("MAXXI RBAC", () => {
       }),
     );
     expect(res.status).toBe(401);
+  });
+
+  it("reports readiness checks and hides seed rights from non-admins", async () => {
+    expect((await statusRoute.GET(req(null))).status).toBe(401);
+
+    const relations = await statusRoute.GET(req("rel.demo"));
+    expect(relations.status).toBe(200);
+    const body = (await relations.json()) as {
+      canSeed: boolean;
+      checks: Array<{ id: string; status: string }>;
+      counts: { people: number; sources: number };
+    };
+    expect(body.canSeed).toBe(false);
+    expect(body.checks.map((check) => check.id)).toEqual([
+      "access",
+      "data",
+      "outbound",
+      "ai",
+      "governance",
+    ]);
+    expect(body.checks.find((check) => check.id === "data")?.status).toBe("ok");
+    expect(body.counts.people).toBeGreaterThan(0);
+    expect(body.counts.sources).toBeGreaterThan(0);
+
+    const admin = await statusRoute.GET(req("admin.demo"));
+    expect(((await admin.json()) as { canSeed: boolean }).canSeed).toBe(true);
   });
 
   it("protects review cases and decisions", async () => {

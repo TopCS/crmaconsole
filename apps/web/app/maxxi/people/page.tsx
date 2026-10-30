@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Badge, Card, DemoNote, Empty, ErrorNote, Loading, PageHeader, SectionTitle } from "../ui";
+import { StepBrief } from "../flow";
 
 type PersonListItem = {
 	id: string;
@@ -150,6 +151,13 @@ function PeopleInner() {
 				}
 			/>
 
+			<StepBrief
+				step={0}
+				question="Chi c'è dietro un'iscrizione?"
+				evidence={`${people.length} profili univoci nel dataset demo · ogni riga conserva le fonti di origine`}
+				next={{ href: "/maxxi/people?id=P-MARIA", label: "Apri Maria Rossi" }}
+			/>
+
 			{q && (
 				<p className="text-[12px]" role="status" style={{ color: "var(--maxxi-muted)" }}>
 					Risultati per “{q}”: {people.length}
@@ -250,6 +258,16 @@ function Profile360({ person }: { person: Person360 }) {
 						</Link>
 					</>
 				}
+			/>
+
+			<StepBrief
+				step={0}
+				question="Chi è Maria e da quali fonti lo sappiamo?"
+				evidence={`${person.identityLinks.length} fonti collegate · ${person.memberships.length} card · ${person.consents.filter((consent) => consent.status === "granted").length} consensi attivi · ${person.timeline.length} eventi attribuiti`}
+				next={{
+					href: `/maxxi/graph?focus=${encodeURIComponent(person.person.id)}&depth=2`,
+					label: "Apri il grafo",
+				}}
 			/>
 
 			<div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
