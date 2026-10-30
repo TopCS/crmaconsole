@@ -15,16 +15,18 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/* \
   && arch="$(dpkg --print-architecture)" \
   && case "$arch" in amd64) duckarch=amd64 ;; arm64) duckarch=aarch64 ;; *) echo "unsupported arch: $arch" >&2; exit 1 ;; esac \
-  && curl -fsSL "https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-${duckarch}.zip" -o /tmp/duckdb.zip \
-  && unzip -o /tmp/duckdb.zip -d /usr/local/bin \
-  && rm /tmp/duckdb.zip \
+  && curl -fsSL "https://github.com/duckdb/duckdb/releases/download/v2.0.0/duckdb-cli-linux-${duckarch}.tar.gz" -o /tmp/duckdb.tar.gz \
+  && tar -xzf /tmp/duckdb.tar.gz -C /usr/local/bin duckdb \
+  && rm /tmp/duckdb.tar.gz \
   && duckdb --version
 
 # Install dependencies first for better layer caching.
+# The store is a persistent BuildKit cache keyed independently of the source
+# layer, so a manifest change does not force a full re-download.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/web/package.json apps/web/package.json
-RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=crm-a-pnpm-store,target=/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile --store-dir=/pnpm/store --prefer-offline
 
 # Full prepack chain: seed duckdb, plugin env, plugins, CLI bundle, web build.
 COPY . .
@@ -59,10 +61,11 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/* \
   && arch="$(dpkg --print-architecture)" \
   && case "$arch" in amd64) duckarch=amd64 ;; arm64) duckarch=aarch64 ;; *) echo "unsupported arch: $arch" >&2; exit 1 ;; esac \
-  && curl -fsSL "https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-${duckarch}.zip" -o /tmp/duckdb.zip \
-  && unzip -o /tmp/duckdb.zip -d /usr/local/bin \
-  && rm /tmp/duckdb.zip \
+  && curl -fsSL "https://github.com/duckdb/duckdb/releases/download/v2.0.0/duckdb-cli-linux-${duckarch}.tar.gz" -o /tmp/duckdb.tar.gz \
+  && tar -xzf /tmp/duckdb.tar.gz -C /usr/local/bin duckdb \
+  && rm /tmp/duckdb.tar.gz \
   && duckdb --version \
+  && duckdb -c "INSTALL quack; LOAD quack;" \
   && npm install -g openclaw@2026.9.1
 
 COPY --from=build /app /app

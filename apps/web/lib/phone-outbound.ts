@@ -11,6 +11,8 @@
  *   POST <base>/outbound/telegram  → { accepted, messageId }
  */
 
+import { assertOutboundAllowed } from "./security/demo-mode";
+
 export type DialRequest = {
   phone: string;
   purpose?: string;
@@ -55,6 +57,7 @@ export class OutboundNotConfiguredError extends Error {
 }
 
 async function postOutbound(path: string, payload: unknown): Promise<OutboundAccepted> {
+  assertOutboundAllowed(`phone-provider:${path}`);
   const config = readOutboundConfig();
   if (!config) {throw new OutboundNotConfiguredError();}
   const res = await fetch(`${config.baseUrl}${path}`, {

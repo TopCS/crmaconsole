@@ -1,0 +1,267 @@
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { SESSION_COOKIE, signSessionToken } from "@/lib/security/session";
+import type { OperatorRole } from "@/lib/security/rbac";
+
+const dir = mkdtempSync(path.join(tmpdir(), "maxxi-rbac-"));
+process.env.CRM_A_MAXXI_DB_DIR = dir;
+process.env.CRM_A_MAXXI_FIXTURE = path.resolve(
+  process.cwd(),
+  "../../docs/fixtures/maxxi_demo_seed.json",
+);
+process.env.CRM_A_SESSION_SECRET = "test-session-secret-value-1234";
+
+const { seedMaxxiDemo } = await import("@/lib/maxxi/seed");
+const { loadMaxxiFixture } = await import("@/lib/maxxi/fixture");
+const seedRoute = await import("./seed/route");
+const peopleRoute = await import("./people/route");
+const segmentRoute = await import("./segment/route");
+const campaignsRoute = await import("./campaigns/route");
+const operatorsRoute = await import("./operators/route");
+const overviewRoute = await import("./overview/route");
+const chatRoute = await import("./chat/route");
+const graphRoute = await import("./graph/route");
+const graphNodeRoute = await import("./graph/node/route");
+const reviewRoute = await import("./review/route");
+const statusRoute = await import("./status/route");
+
+beforeAll(async () => {
+  await seedMaxxiDemo();
+});
+
+afterAll(() => {
+  rmSync(dir, { recursive: true, force: true });
+});
+
+function req(username: string | null, init?: RequestInit, path = "/api/maxxi/x"): Request {
+  const headers = new Headers(init?.headers);
+  if (username) {
+    const token = signSessionToken(username, rolesFor(username)) as string;
+    headers.set("cookie", `${SESSION_COOKIE}=${encodeURIComponent(token)}`);
+  }
+  return new Request(`http://localhost${path}`, { ...init, headers });
+}
+
+function rolesFor(username: string): OperatorRole[] {
+  switch (username) {
+    case "admin.demo": return ["admin"];
+    case "comm.demo": return ["communication"];
+    case "info.demo": return ["infopoint"];
+    case "rel.demo": return ["relations"];
+    default: return [];
+  }
+}
+
+describe("MAXXI RBAC", () => {
+  it("denies anonymous callers", async () => {
+    const res = await overviewRoute.GET(req(null));
+    expect(res.status).toBe(401);
+  });
+
+  it("denies anonymous chat callers", async () => {
+    const res = await chatRoute.POST(
+      req(null, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: "Quali fonti?" }),
+      }),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("reports readiness checks and hides seed rights from non-admins", async () => {
+    expect((await statusRoute.GET(req(null))).status).toBe(401);
+
+    const relations = await statusRoute.GET(req("rel.demo"));
+    expect(relations.status).toBe(200);
+    const body = (await relations.json()) as {
+      canSeed: boolean;
+      checks: Array<{ id: string; status: string }>;
+      counts: { people: number; sources: number };
+    };
+    expect(body.canSeed).toBe(false);
+    expect(body.checks.map((check) => check.id)).toEqual([
+      "access",
+      "data",
+      "outbound",
+      "ai",
+      "governance",
+    ]);
+    expect(body.checks.find((check) => check.id === "data")?.status).toBe("ok");
+    expect(body.counts.people).toBeGreaterThan(0);
+    expect(body.counts.sources).toBeGreaterThan(0);
+
+    const admin = await statusRoute.GET(req("admin.demo"));
+    expect(((await admin.json()) as { canSeed: boolean }).canSeed).toBe(true);
+  });
+
+  it("protects review cases and decisions", async () => {
+    expect((await reviewRoute.GET(req(null))).status).toBe(401);
+    expect((await reviewRoute.GET(req("rel.demo"))).status).toBe(403);
+    expect((await reviewRoute.GET(req("comm.demo"))).status).toBe(200);
+
+    const forbidden = await reviewRoute.POST(
+      req("comm.demo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ candidateId: "RC-x", decision: "keep_separate", reason: "test reason" }),
+      }),
+    );
+    expect(forbidden.status).toBe(403);
+  });
+
+  it("protects the MAXXI graph with people.read", async () => {
+    expect((await graphRoute.GET(req(null))).status).toBe(401);
+    expect((await graphRoute.GET(req("rel.demo"))).status).toBe(403);
+    expect((await graphNodeRoute.GET(req(null, undefined, "/api/maxxi/graph/node?id=P-MARIA"))).status).toBe(401);
+    expect(
+      (await graphNodeRoute.GET(req("rel.demo", undefined, "/api/maxxi/graph/node?id=P-MARIA"))).status,
+    ).toBe(403);
+  });
+
+  it("falls back to the verified engine when the provider is not configured", async () => {
+    const previous = process.env.OPENROUTER_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
+    try {
+      const res = await chatRoute.POST(
+        req("comm.demo", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ question: "Quali fonti abbiamo e quanto sono affidabili?" }),
+        }),
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        answer?: { mode?: string; grounded?: boolean; toolsUsed?: string[]; answer?: string };
+      };
+      expect(body.answer?.mode).toBe("fallback");
+      expect(body.answer?.grounded).toBe(true);
+      expect(body.answer?.toolsUsed).toEqual([]);
+      expect(body.answer?.answer).toContain("fonti");
+    } finally {
+      if (previous === undefined) {delete process.env.OPENROUTER_API_KEY;}
+      else {process.env.OPENROUTER_API_KEY = previous;}
+    }
+  });
+
+  it("lets any role read the overview", async () => {
+    const res = await overviewRoute.GET(req("rel.demo"));
+    expect(res.status).toBe(200);
+  });
+
+  it("forbids relations from reading the eligible audience", async () => {
+    const res = await segmentRoute.GET(req("rel.demo"));
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toContain("maxxi.people.eligible");
+  });
+
+  it("lets communication read the eligible audience", async () => {
+    const res = await segmentRoute.GET(req("comm.demo"));
+    expect(res.status).toBe(200);
+  });
+
+  it("masks infopoint notes for roles without feedback.viewNotes", async () => {
+    const path = "/api/maxxi/people?id=P-GIULIA";
+    const comm = await peopleRoute.GET(req("comm.demo", undefined, path));
+    const commBody = (await comm.json()) as { person: { feedback: Array<{ summary: string }> } };
+    expect(commBody.person.feedback.length).toBeGreaterThan(0);
+    expect(commBody.person.feedback.every((case_) => case_.summary === "")).toBe(true);
+
+    const info = await peopleRoute.GET(req("info.demo", undefined, path));
+    const infoBody = (await info.json()) as { person: { feedback: Array<{ summary: string }> } };
+    expect(infoBody.person.feedback.some((case_) => case_.summary.length > 0)).toBe(true);
+  });
+
+  it("returns draft detail and masks recipients for roles without people.read", async () => {
+    const created = await campaignsRoute.POST(
+      req("comm.demo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ subject: "Dettaglio test", body: "Testo completo della bozza." }),
+      }),
+    );
+    expect(created.status).toBe(200);
+    const createdBody = (await created.json()) as { draft: { campaignId: string } };
+    const id = createdBody.draft.campaignId;
+
+    const allowed = await campaignsRoute.GET(
+      req("comm.demo", undefined, `/api/maxxi/campaigns?id=${encodeURIComponent(id)}`),
+    );
+    expect(allowed.status).toBe(200);
+    const allowedBody = (await allowed.json()) as {
+      recipientsVisible: boolean;
+      campaign: { subject: string; body: string; status: string };
+      segment: { counts: { eligible: number }; eligible: Array<{ email: string }> };
+      audit: Array<{ action: string }>;
+    };
+    expect(allowedBody.recipientsVisible).toBe(true);
+    expect(allowedBody.campaign.subject).toBe("Dettaglio test");
+    expect(allowedBody.campaign.body).toContain("Testo completo");
+    const eligibleCount =
+      loadMaxxiFixture().expected_for_reference_seed.arch_renewal_45d_email_eligible_person_ids.length;
+    expect(allowedBody.segment.counts.eligible).toBe(eligibleCount);
+    expect(allowedBody.segment.eligible.length).toBe(eligibleCount);
+    expect(allowedBody.audit.some((row) => row.action === "campaign_draft_created")).toBe(true);
+
+    const masked = await campaignsRoute.GET(
+      req("rel.demo", undefined, `/api/maxxi/campaigns?id=${encodeURIComponent(id)}`),
+    );
+    expect(masked.status).toBe(200);
+    const maskedBody = (await masked.json()) as {
+      recipientsVisible: boolean;
+      segment: { counts: { eligible: number }; eligible: unknown[]; excluded: unknown[] };
+    };
+    expect(maskedBody.recipientsVisible).toBe(false);
+    expect(maskedBody.segment.counts.eligible).toBe(eligibleCount);
+    expect(maskedBody.segment.eligible).toEqual([]);
+    expect(maskedBody.segment.excluded).toEqual([]);
+  });
+
+  it("only lets communication/admin create campaign drafts", async () => {
+    const forbidden = await campaignsRoute.POST(
+      req("info.demo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ subject: "x", body: "y" }),
+      }),
+    );
+    expect(forbidden.status).toBe(403);
+
+    const allowed = await campaignsRoute.POST(
+      req("comm.demo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ subject: "Rinnovo myMAXXI", body: "Bozza demo." }),
+      }),
+    );
+    expect(allowed.status).toBe(200);
+  });
+
+  it("rejects seeding for non-admins", async () => {
+    const res = await seedRoute.POST(req("comm.demo", { method: "POST" }));
+    expect(res.status).toBe(403);
+  });
+
+  it("lets only admin reach identity management", async () => {
+    const forbidden = await operatorsRoute.GET(req("comm.demo"));
+    expect(forbidden.status).toBe(403);
+
+    // Admin passes RBAC, then the Keycloak admin client is required. Without
+    // it the endpoint fails closed instead of falling back to local accounts.
+    delete process.env.CRM_A_KEYCLOAK_ADMIN_CLIENT_SECRET;
+    const allowed = await operatorsRoute.GET(req("admin.demo"));
+    expect(allowed.status).toBe(503);
+    const body = (await allowed.json()) as { error?: string };
+    expect(body.error).toContain("Keycloak");
+  });
+
+  it("never exposes secrets in the identity response", async () => {
+    const res = await operatorsRoute.GET(req("admin.demo"));
+    const text = await res.text();
+    expect(text).not.toContain("client_secret");
+    expect(text).not.toContain("refresh_token");
+  });
+});

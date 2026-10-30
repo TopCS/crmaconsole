@@ -13,6 +13,7 @@
  */
 
 import { readNlpearlConfig } from "./nlpearl-config";
+import { assertOutboundAllowed } from "./security/demo-mode";
 
 export const NLPEARL_DEFAULT_BASE_URL = "https://api.nlpearl.ai/v2";
 
@@ -188,6 +189,10 @@ async function nlpearlRequest<T>(
   path: string,
   body?: unknown,
 ): Promise<T> {
+  // SEC-07: reads are safe; anything that mutates a remote provider is not.
+  if (method.toUpperCase() !== "GET") {
+    assertOutboundAllowed(`nlpearl:${method} ${path}`);
+  }
   const res = await fetch(`${baseUrl()}${path}`, {
     method,
     headers: {
@@ -510,6 +515,7 @@ export async function resolveVoiceId(): Promise<string | null> {
 
 /** Create a Voice Pearl (node graph); returns the new Pearl ID (plain text). */
 export async function createVoicePearl(payload: Record<string, unknown>): Promise<string> {
+  assertOutboundAllowed("nlpearl:create-pearl");
   const auth = readNlpearlAuth();
   if (!auth) {throw new Error("NLPearl is not configured.");}
   const res = await fetch(`${baseUrl()}/Pearl/Voice`, {

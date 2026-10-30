@@ -1,0 +1,222 @@
+{
+  "realm": "crm-a",
+  "enabled": true,
+  "displayName": "CRM-A Console",
+  "displayNameHtml": "<span class=\"crm-a-wordmark\">CRM-A <em>Console</em></span>",
+  "loginTheme": "crm-a",
+  "accountTheme": "keycloak.v3",
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 43200,
+  "ssoSessionMaxLifespan": 43200,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "rememberMe": false,
+  "verifyEmail": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Amministratore: tutto, seed, gestione account"
+      },
+      {
+        "name": "communication",
+        "description": "Comunicazione: segmenti, bozze, approvazioni"
+      },
+      {
+        "name": "membership",
+        "description": "Membership: profili, card, rinnovi"
+      },
+      {
+        "name": "infopoint",
+        "description": "Infopoint: profili, feedback e note"
+      },
+      {
+        "name": "relations",
+        "description": "Relazioni: organizzazioni e sostenitori"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "crm-a-console",
+      "name": "CRM-A Console",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "crm-a-demo-client-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "rootUrl": "http://localhost:3100",
+      "baseUrl": "/",
+      "redirectUris": [
+        "http://localhost:3100/api/auth/callback",
+        "http://127.0.0.1:3100/api/auth/callback",
+        "https://crma.warp.topcs.io/api/auth/callback",
+        "https://crma.warp.topcs.io"
+      ],
+      "webOrigins": [
+        "http://localhost:3100",
+        "http://127.0.0.1:3100",
+        "https://crma.warp.topcs.io"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:3100/login##http://127.0.0.1:3100/login##https://crma.warp.topcs.io/login",
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ],
+      "protocolMappers": [
+        {
+          "name": "realm roles to ID token",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "crm-a-admin",
+      "name": "CRM-A Console Admin API",
+      "description": "Confidential service account for /maxxi/operators (user management only).",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "crm-a-admin-demo-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": true
+    }
+  ],
+  "users": [
+    {
+      "username": "admin.demo",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "Demo",
+      "email": "admin.demo@example.invalid",
+      "realmRoles": [
+        "admin"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo-password-1",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "comm.demo",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Comunicazione",
+      "lastName": "Demo",
+      "email": "comm.demo@example.invalid",
+      "realmRoles": [
+        "communication"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo-password-1",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "memb.demo",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Membership",
+      "lastName": "Demo",
+      "email": "memb.demo@example.invalid",
+      "realmRoles": [
+        "membership"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo-password-1",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "info.demo",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Infopoint",
+      "lastName": "Demo",
+      "email": "info.demo@example.invalid",
+      "realmRoles": [
+        "infopoint"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo-password-1",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "rel.demo",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Relazioni",
+      "lastName": "Demo",
+      "email": "rel.demo@example.invalid",
+      "realmRoles": [
+        "relations"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo-password-1",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "service-account-crm-a-admin",
+      "enabled": true,
+      "serviceAccountClientId": "crm-a-admin",
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "query-users",
+          "manage-users",
+          "view-realm",
+          "query-groups"
+        ]
+      }
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import {
   safeQuery,
   wrapForOrderedAccess,
 } from "@/lib/crm-queries";
+import { requireOperator } from "@/lib/security/session";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,6 +25,8 @@ export const runtime = "nodejs";
  * without an `entry_id` shouldn't exist, but we skip them defensively.
  */
 export async function GET(req: Request) {
+  const auth = requireOperator(req);
+  if (!auth.ok) {return auth.response;}
   const url = new URL(req.url);
   const limitRaw = Number(url.searchParams.get("limit") ?? "12");
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(50, Math.floor(limitRaw))) : 12;

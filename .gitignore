@@ -115,3 +115,4 @@ dist/protocol.schema.json
 extensions/posthog-analytics/lib/build-env.js
 .cursor/debug-*.log
 .gstack/
+.next-prod/

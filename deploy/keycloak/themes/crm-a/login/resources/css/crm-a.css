@@ -1,0 +1,199 @@
+/* ==========================================================================
+   CRM-A Console — Keycloak login theme
+   Layered on top of the stock keycloak.v2 login theme (PatternFly 5).
+   Palette and typography mirror apps/web/app/globals.css.
+   ========================================================================== */
+
+:root {
+  --crm-a-bg: #f5f5f4;
+  --crm-a-surface: #ffffff;
+  --crm-a-text: #1c1c1a;
+  --crm-a-text-muted: #8a8a82;
+  --crm-a-border: rgba(0, 0, 0, 0.08);
+  --crm-a-border-strong: rgba(0, 0, 0, 0.14);
+  --crm-a-accent: #0065a2;
+  --crm-a-accent-hover: #004f80;
+  --crm-a-accent-soft: rgba(0, 101, 162, 0.08);
+  --crm-a-radius: 12px;
+  --crm-a-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  --crm-a-sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --crm-a-bg: #1c1c1c;
+    --crm-a-surface: #2e2e2e;
+    --crm-a-text: #f5f5f5;
+    --crm-a-text-muted: #8e8e8e;
+    --crm-a-border: rgba(255, 255, 255, 0.15);
+    --crm-a-border-strong: rgba(255, 255, 255, 0.25);
+    --crm-a-accent: #0a84ff;
+    --crm-a-accent-hover: #409cff;
+    --crm-a-accent-soft: rgba(10, 132, 255, 0.15);
+  }
+}
+
+body,
+.pf-v5-c-login {
+  background: var(--crm-a-bg) !important;
+  color: var(--crm-a-text);
+  font-family: var(--crm-a-sans);
+}
+
+/* Card */
+.pf-v5-c-login__main,
+.pf-v5-c-login__container .pf-v5-c-card,
+.card-pf {
+  background: var(--crm-a-surface) !important;
+  border: 1px solid var(--crm-a-border) !important;
+  border-radius: var(--crm-a-radius) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Wordmark (realm displayNameHtml) */
+#kc-header-wrapper,
+.pf-v5-c-login__header .pf-v5-c-brand {
+  font-family: var(--crm-a-serif) !important;
+  font-weight: 400 !important;
+  color: var(--crm-a-text) !important;
+  letter-spacing: -0.01em;
+  text-transform: none !important;
+  font-size: 30px !important;
+  line-height: 1.15 !important;
+}
+
+.crm-a-wordmark em {
+  font-style: italic;
+  color: var(--crm-a-accent);
+}
+
+/* Headings */
+h1#kc-page-title,
+.pf-v5-c-title {
+  font-family: var(--crm-a-serif) !important;
+  font-weight: 400 !important;
+  color: var(--crm-a-text) !important;
+  letter-spacing: -0.01em;
+  font-size: 22px !important;
+}
+
+/* Labels + inputs */
+.pf-v5-c-form__label-text,
+label {
+  color: var(--crm-a-text-muted) !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em;
+}
+
+.pf-v5-c-form-control,
+input[type="text"],
+input[type="password"],
+input[type="email"] {
+  background: var(--crm-a-surface) !important;
+  color: var(--crm-a-text) !important;
+  border: 1px solid var(--crm-a-border-strong) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  padding: 9px 11px !important;
+  font-size: 14px !important;
+}
+
+.pf-v5-c-form-control:focus-within,
+input:focus-visible {
+  border-color: var(--crm-a-accent) !important;
+  outline: 2px solid var(--crm-a-accent-soft) !important;
+  outline-offset: 1px;
+}
+
+/* Primary action */
+.pf-v5-c-button.pf-m-primary,
+input[type="submit"],
+button[type="submit"] {
+  background: var(--crm-a-accent) !important;
+  border: 1px solid var(--crm-a-accent) !important;
+  border-radius: 8px !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  padding: 9px 14px !important;
+  box-shadow: none !important;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.pf-v5-c-button.pf-m-primary:hover,
+input[type="submit"]:hover,
+button[type="submit"]:hover {
+  background: var(--crm-a-accent-hover) !important;
+  border-color: var(--crm-a-accent-hover) !important;
+}
+
+.pf-v5-c-button.pf-m-secondary,
+.pf-v5-c-button.pf-m-tertiary,
+.pf-v5-c-button.pf-m-link {
+  color: var(--crm-a-accent) !important;
+  border-radius: 8px !important;
+}
+
+/* Links */
+a,
+.pf-v5-c-button.pf-m-link {
+  color: var(--crm-a-accent) !important;
+}
+
+a:hover {
+  color: var(--crm-a-accent-hover) !important;
+}
+
+/* Checkbox ("remember me" is disabled in the realm, kept for completeness) */
+.pf-v5-c-check__label {
+  color: var(--crm-a-text) !important;
+  font-size: 13px !important;
+}
+
+/* Alerts: keep them neutral and readable */
+.pf-v5-c-alert.pf-m-danger {
+  border-left: 3px solid #dc2626 !important;
+  background: rgba(220, 38, 38, 0.08) !important;
+  border-radius: 8px !important;
+}
+
+.pf-v5-c-alert.pf-m-success {
+  border-left: 3px solid #22c55e !important;
+  background: rgba(34, 197, 94, 0.1) !important;
+  border-radius: 8px !important;
+}
+
+/* Footer: keep it quiet, no vendor branding emphasis */
+.pf-v5-c-login__main-footer,
+.pf-v5-c-login__main-footer-band,
+#kc-info {
+  background: transparent !important;
+  color: var(--crm-a-text-muted) !important;
+  font-size: 11.5px !important;
+}
+
+.pf-v5-c-login__main-footer a,
+#kc-info a {
+  color: var(--crm-a-text-muted) !important;
+}
+
+/* Demo disclaimer appended under the form (see theme.properties locale-free). */
+.pf-v5-c-login__main::after {
+  content: "Demo non ufficiale — dati sintetici, nessun invio esterno.";
+  display: block;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--crm-a-border);
+  color: var(--crm-a-text-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+/* Respect users who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .pf-v5-c-button.pf-m-primary,
+  input[type="submit"],
+  button[type="submit"] {
+    transition: none;
+  }
+}

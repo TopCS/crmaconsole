@@ -1,0 +1,140 @@
+/*
+ * MAXXI demo theme - design reference ONLY, not drop-in production CSS.
+ * Proposed palette; not official MAXXI brand values.
+ * Scope requires a trusted server-resolved workspace theme flag.
+ * DO NOT override :root or .dark globally.
+ */
+[data-workspace-theme="maxxi"] {
+  --maxxi-black: #080808;
+  --maxxi-ink: #111111;
+  --maxxi-paper: #ffffff;
+  --maxxi-canvas: #f6f6f4;
+  --maxxi-line: #d7d7d4;
+  --maxxi-muted: #555553;
+  --maxxi-selected: #eaeae7;
+  --maxxi-focus: #165cc4;
+  --maxxi-positive: #236545;
+  --maxxi-warning: #9b5a0c;
+  --maxxi-negative: #a53232;
+  --maxxi-radius: 4px;
+
+  /* Existing CRM-A CSS variables; validate actual consumers before merging. */
+  --color-bg: var(--maxxi-canvas);
+  --color-background: var(--maxxi-canvas);
+  --color-main-bg: var(--maxxi-paper);
+  --color-surface: var(--maxxi-paper);
+  --color-surface-raised: var(--maxxi-paper);
+  --color-surface-hover: var(--maxxi-selected);
+  --color-sidebar-bg: var(--maxxi-black);
+  --color-border: var(--maxxi-line);
+  --color-border-strong: #adada9;
+  --color-text: var(--maxxi-ink);
+  --color-text-secondary: var(--maxxi-muted);
+  --color-text-muted: var(--maxxi-muted);
+  --color-accent: var(--maxxi-ink);
+  --color-accent-hover: #333333;
+  --color-accent-light: #eeeeec;
+  --color-success: var(--maxxi-positive);
+  --color-warning: var(--maxxi-warning);
+  --color-error: var(--maxxi-negative);
+  --color-info: #225c88;
+  --shadow-sm: none;
+  --shadow-md: 0 1px 3px rgba(0,0,0,0.07);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.09);
+  --radius: 0.25rem;
+}
+
+/* Apply this dedicated class to MAXXI navigation ONLY after inspecting
+ * the actual sidebar component; a black background alone is not enough. */
+[data-workspace-theme="maxxi"] .maxxi-navigation {
+  color: #ffffff;
+  background: var(--maxxi-black);
+}
+[data-workspace-theme="maxxi"] .maxxi-navigation a,
+[data-workspace-theme="maxxi"] .maxxi-navigation button {
+  color: #f5f5f4;
+}
+[data-workspace-theme="maxxi"] .maxxi-navigation [aria-current="page"] {
+  color: #ffffff;
+  background: #292929;
+  border-left: 3px solid #ffffff;
+}
+
+/* These classes are optional examples for the demo UI components. */
+[data-workspace-theme="maxxi"] .maxxi-page-title {
+  font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+  font-size: clamp(1.75rem, 2.5vw, 2.75rem);
+  font-weight: 720;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+}
+[data-workspace-theme="maxxi"] .maxxi-eyebrow {
+  color: var(--maxxi-muted);
+  font-family: Inter, Arial, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+[data-workspace-theme="maxxi"] .maxxi-card {
+  border: 1px solid var(--maxxi-line);
+  border-radius: var(--maxxi-radius);
+  background: var(--maxxi-paper);
+  box-shadow: none;
+}
+[data-workspace-theme="maxxi"] .maxxi-kpi {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+[data-workspace-theme="maxxi"] .maxxi-primary-action {
+  color: white;
+  background: var(--maxxi-ink);
+  border: 1px solid var(--maxxi-ink);
+  border-radius: var(--maxxi-radius);
+  min-height: 44px;
+}
+[data-workspace-theme="maxxi"] .maxxi-secondary-action {
+  color: var(--maxxi-ink);
+  background: white;
+  border: 1px solid var(--maxxi-ink);
+  border-radius: var(--maxxi-radius);
+  min-height: 44px;
+}
+[data-workspace-theme="maxxi"] :focus-visible {
+  outline: 2px solid var(--maxxi-focus);
+  outline-offset: 3px;
+}
+[data-workspace-theme="maxxi"] .maxxi-demo-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border: 1px solid currentColor;
+  padding: 5px 8px;
+  text-transform: uppercase;
+}
+[data-workspace-theme="maxxi"] .maxxi-data-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.875rem;
+}
+[data-workspace-theme="maxxi"] .maxxi-data-table th,
+[data-workspace-theme="maxxi"] .maxxi-data-table td {
+  border-bottom: 1px solid var(--maxxi-line);
+  padding: 12px 14px;
+  text-align: left;
+}
+[data-workspace-theme="maxxi"] .maxxi-data-table th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.035em;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-workspace-theme="maxxi"] *,
+  [data-workspace-theme="maxxi"] *::before,
+  [data-workspace-theme="maxxi"] *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

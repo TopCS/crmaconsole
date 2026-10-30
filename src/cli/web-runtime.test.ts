@@ -2,13 +2,14 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { mkdtempSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   classifyWebPortListener,
   cleanupManagedWebRuntimeBackup,
   evaluateMajorVersionTransition,
   evaluateWebProfilesPayload,
   installManagedWebRuntime,
+  probeWebRuntime,
   readLastLogLines,
   rollbackManagedWebRuntime,
 } from "./web-runtime.js";
@@ -36,6 +37,35 @@ describe("evaluateWebProfilesPayload", () => {
     });
     expect(result.ok).toBe(false);
     expect(result.reason).toContain("active profile/workspace");
+  });
+});
+
+describe("probeWebRuntime", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("treats an auth-protected 401 as a live runtime (prevents rollback to a stale build)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
+    const result = await probeWebRuntime(3100);
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe(401);
+    expect(result.reason).toContain("auth-protected");
+  });
+
+  it("treats 403 as live as well", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 403 })));
+    expect((await probeWebRuntime(3100)).ok).toBe(true);
+  });
+
+  it("still fails on a 5xx or an invalid profiles payload", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 500 })));
+    expect((await probeWebRuntime(3100)).ok).toBe(false);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ profiles: [] })),
+    );
+    expect((await probeWebRuntime(3100)).ok).toBe(false);
   });
 });
 

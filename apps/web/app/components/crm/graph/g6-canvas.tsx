@@ -12,6 +12,13 @@ type G6CanvasProps = {
   edges: G6Edge[];
   theme: GraphTheme;
   onNodeClick?: (id: string) => void;
+  /**
+   * Compute the force layout to its final state before drawing. The MAXXI
+   * graph opts in: an animated simulation reads as "dancing" nodes on stage.
+   */
+  stableLayout?: boolean;
+  /** `grid` is used for the object-only overview (no edges to lay out). */
+  layoutMode?: "force" | "grid";
 };
 
 /**
@@ -27,7 +34,7 @@ type G6CanvasProps = {
  *    data effect drives the first render — two concurrent renders race the
  *    init and throw `getTransformInstance`.
  */
-export function G6Canvas({ nodes, edges, theme, onNodeClick }: G6CanvasProps) {
+export function G6Canvas({ nodes, edges, theme, onNodeClick, stableLayout = false, layoutMode = "force" }: G6CanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<Graph | null>(null);
   const clickRef = useRef(onNodeClick);
@@ -84,12 +91,22 @@ export function G6Canvas({ nodes, edges, theme, onNodeClick }: G6CanvasProps) {
           inactive: { opacity: 0.08 },
         },
       },
-      layout: {
-        type: "d3-force",
-        collide: { radius: 40 },
-        link: { distance: 120 },
-        manyBody: { strength: -220 },
-      },
+      layout:
+        layoutMode === "grid"
+          ? {
+              type: "grid",
+              animation: false,
+              preLayout: true,
+              cols: Math.ceil(Math.sqrt(Math.max(1, nodes.length))),
+              nodeSize: 42,
+            }
+          : {
+              type: "d3-force",
+              collide: { radius: 40 },
+              link: { distance: 120 },
+              manyBody: { strength: -220 },
+              ...(stableLayout ? { animation: false, preLayout: true, iterations: 200 } : {}),
+            },
       behaviors: ["drag-canvas", "zoom-canvas", "drag-element", "click-select", "hover-activate"],
       plugins: [
         {
@@ -132,7 +149,7 @@ export function G6Canvas({ nodes, edges, theme, onNodeClick }: G6CanvasProps) {
       graphRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [layoutMode]);
 
   useEffect(() => {
     const graph = graphRef.current;

@@ -1,0 +1,5 @@
+record_id,row_type,ticket_type,card_code,occurred_at,catalog_item_id,amount_eur,identity_available
+EV-MARIA-ENTRY,validated_entry,myMAXXI,MYMAXXI-DEMO-001,2026-09-10T12:00:00+02:00,X-ARCH-2026,,yes
+EV-MARIA-PURCHASE,purchase_only,standard,MYMAXXI-DEMO-001,2026-10-04T12:00:00+02:00,X-CALLE-2026,14,yes
+EV-ELENA-ENTRY-1,validated_entry,myMAXXI,MYMAXXI-DEMO-003,2026-08-12T12:00:00+02:00,X-ARCH-2026,,yes
+T-ANON-001,purchase_only,standard,,2026-10-08T10:00:00+02:00,,,no

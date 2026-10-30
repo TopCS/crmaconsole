@@ -27,6 +27,12 @@ const TYPE_META: Record<string, GraphTypeMeta> = {
   campaign_send: { icon: "📤", color: "#eab308", label: "Send" },
   product: { icon: "📦", color: "#06b6d4", label: "Product" },
   order: { icon: "🧾", color: "#8b5cf6", label: "Order" },
+  // MAXXI demo graph types (same canvas, different dataset).
+  person: { icon: "●", color: "#111111", label: "Persona" },
+  organization: { icon: "■", color: "#9b5a0c", label: "Organizzazione" },
+  catalog: { icon: "◆", color: "#165cc4", label: "Mostra/evento" },
+  interest: { icon: "◇", color: "#236545", label: "Interesse" },
+  source: { icon: "↗", color: "#555553", label: "Fonte" },
 };
 
 const DEFAULT_META: GraphTypeMeta = { icon: "●", color: "#94a3b8", label: "Entity" };
@@ -63,7 +69,7 @@ export type GraphTheme = {
  * Resolve the app's shadcn theme tokens (stored as HSL triplets, e.g.
  * `0 0% 3.9%`) into concrete colors for the canvas renderer.
  */
-export function resolveThemeColors(): GraphTheme {
+export function resolveThemeColors(root?: Element | null): GraphTheme {
   const fallback: GraphTheme = {
     foreground: "#1e293b",
     muted: "#94a3b8",
@@ -72,7 +78,7 @@ export function resolveThemeColors(): GraphTheme {
   };
   if (typeof window === "undefined") {return fallback;}
 
-  const cs = getComputedStyle(document.documentElement);
+  const cs = getComputedStyle(root ?? document.documentElement);
   const read = (name: string, fb: string): string => {
     const raw = cs.getPropertyValue(name).trim();
     if (!raw) {return fb;}

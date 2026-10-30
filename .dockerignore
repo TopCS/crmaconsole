@@ -8,3 +8,10 @@ dist
 *.log
 Dockerfile
 docker-compose.yml
+
+# Mounted at runtime by Keycloak/zrok; also avoids unreadable zrok state.
+deploy
+
+# Never bake local secrets into the image.
+.env
+.env.*
