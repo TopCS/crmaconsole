@@ -50,7 +50,12 @@ function GraphInner() {
 	const [data, setData] = useState<GraphData>({ nodes: [], edges: [], truncated: false });
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const [types, setTypes] = useState<string[]>([]);
+	// Type buttons are visibility toggles, not an exclusive filter. Visitors
+	// start hidden in both views so the object graph stays legible; the focus
+	// person is always kept even when the person type is hidden.
+	const [hiddenTypes, setHiddenTypes] = useState<string[]>(
+		initialFocus && !initialFocus.startsWith("P-") ? [] : ["person"],
+	);
 	const [search, setSearch] = useState("");
 	const [focus] = useState<string | null>(initialFocus);
 	const [depth] = useState<number>(Number.isFinite(initialDepth) ? initialDepth : 2);
@@ -72,7 +77,6 @@ function GraphInner() {
 		setError(null);
 		try {
 			const query = new URLSearchParams();
-			if (types.length > 0) {query.set("type", types.join(","));}
 			if (focus) {query.set("focus", focus);query.set("depth", String(depth));}
 			const qs = query.toString();
 			const res = await fetch(`/api/maxxi/graph${qs ? `?${qs}` : ""}`, { cache: "no-store" });
@@ -84,7 +88,7 @@ function GraphInner() {
 		} finally {
 			setLoading(false);
 		}
-	}, [types, focus, depth]);
+	}, [focus, depth]);
 
 	useEffect(() => {
 		void load();
@@ -112,20 +116,38 @@ function GraphInner() {
 	}, [initialNode, selectNode]);
 
 	const displayed = useMemo<GraphData>(() => {
-		const needle = search.trim().toLowerCase();
-		if (!needle) {return data;}
-		const kept = new Set(
-			data.nodes.filter((node) => node.label.toLowerCase().includes(needle)).map((node) => node.id),
+		let nodes = data.nodes.filter((node) => node.id === focus || !hiddenTypes.includes(node.type));
+		let edges = data.edges.filter(
+			(edge) => nodes.some((node) => node.id === edge.source) && nodes.some((node) => node.id === edge.target),
 		);
-		return {
-			nodes: data.nodes.filter((node) => kept.has(node.id)),
-			edges: data.edges.filter((edge) => kept.has(edge.source) && kept.has(edge.target)),
-			truncated: data.truncated,
-		};
-	}, [data, search]);
+
+		// In a visitor view, drop objects that were only reachable through
+		// another (hidden) visitor. Central views keep the object catalogue
+		// even when its nodes are not connected to each other.
+		if (focus && hiddenTypes.includes("person")) {
+			const connected = new Set<string>([focus]);
+			for (const edge of edges) {
+				connected.add(edge.source);
+				connected.add(edge.target);
+			}
+			nodes = nodes.filter((node) => connected.has(node.id));
+			edges = edges.filter((edge) => connected.has(edge.source) && connected.has(edge.target));
+		}
+
+		const needle = search.trim().toLowerCase();
+		if (needle) {
+			const matching = new Set(
+				nodes.filter((node) => node.label.toLowerCase().includes(needle)).map((node) => node.id),
+			);
+			nodes = nodes.filter((node) => matching.has(node.id));
+			edges = edges.filter((edge) => matching.has(edge.source) && matching.has(edge.target));
+		}
+
+		return { nodes, edges, truncated: data.truncated };
+	}, [data, focus, hiddenTypes, search]);
 
 	const toggleType = (type: string) => {
-		setTypes((current) =>
+		setHiddenTypes((current) =>
 			current.includes(type) ? current.filter((value) => value !== type) : [...current, type],
 		);
 	};
@@ -138,6 +160,11 @@ function GraphInner() {
 	const focusLabel = focus
 		? data.nodes.find((node) => node.id === focus)?.label ?? focus
 		: null;
+	const focusIsPerson = focus
+		? data.nodes.find((node) => node.id === focus)?.type === "person"
+		: false;
+	const peopleHidden = hiddenTypes.includes("person");
+	const filtersDirty = search.trim().length > 0 || hiddenTypes.join(",") !== "person";
 
 	const panel = selectedId ? (
 		<GraphPanel
@@ -154,7 +181,11 @@ function GraphInner() {
 			<PageHeader
 				eyebrow="Pubblico / Grafo relazioni"
 				title="Grafo delle relazioni"
-				subtitle="Persone, organizzazioni, mostre, interessi e fonti nel dataset demo. Un collegamento confermato e un possibile duplicato restano distinti."
+				subtitle={
+					focusIsPerson
+						? "Vista centrata sul visitatore: oggetti e relazioni dirette. Gli altri visitatori restano nascosti per non affollare la vista."
+						: "Vista oggetti: organizzazioni, mostre, interessi e fonti. I visitatori sono nascosti finché non attivi Persone o cerchi un nome."
+				}
 				actions={
 					focusLabel ? (
 						<>
@@ -170,14 +201,20 @@ function GraphInner() {
 			<StepBrief
 				step={1}
 				question="Quali relazioni spiegano il suo coinvolgimento?"
-				evidence={`${data.nodes.length} nodi · ${data.edges.length} relazioni · ${data.edges.filter((edge) => edge.rel === "duplicate").length} possibili duplicati (segnalazioni, non fusioni)`}
+				evidence={`${displayed.nodes.length} nodi · ${displayed.edges.length} relazioni${focusIsPerson ? " · altri visitatori nascosti" : ""} · ${displayed.edges.filter((edge) => edge.rel === "duplicate").length} possibili duplicati (segnalazioni, non fusioni)`}
 				next={{ href: "/maxxi/segments", label: "Calcola il segmento" }}
 			/>
 
 			<Card className="p-0">
 				<div className="border-b p-4" style={{ borderColor: "var(--maxxi-line)" }}>
 					<div className="flex flex-wrap items-center justify-between gap-3">
-						<SectionTitle hint="Clicca un nodo per i dettagli · trascina per spostare · scroll per zoom">
+						<SectionTitle
+							hint={
+								displayed.edges.length === 0
+									? "Clicca un oggetto per i dettagli e per esplorare le persone collegate. Il layout è statico."
+									: "Clicca un nodo per i dettagli · trascina per spostare · scroll per zoom. Il layout è statico: i nodi non si muovono da soli."
+							}
+						>
 							Esplora le connessioni
 						</SectionTitle>
 						<input
@@ -189,10 +226,17 @@ function GraphInner() {
 							className="maxxi-input max-w-xs"
 						/>
 					</div>
-					<div className="mt-3 flex flex-wrap items-center gap-2">
+					<p className="mt-3 text-[11.5px] leading-relaxed" style={{ color: "var(--maxxi-muted)" }}>
+						{peopleHidden
+							? focusIsPerson
+								? "Vista sul visitatore: sono visibili solo gli oggetti collegati. Attiva Persone per includere gli altri visitatori."
+								: "Vista oggetti: i visitatori sono nascosti. Attiva Persone o cerca un nome per esplorarli."
+							: "Vista completa: sono inclusi anche i visitatori."}
+					</p>
+					<div className="mt-2 flex flex-wrap items-center gap-2">
 						{availableTypes.map((type) => {
 							const meta = metaForType(type);
-							const active = types.includes(type);
+							const active = !hiddenTypes.includes(type);
 							return (
 								<button
 									key={type}
@@ -213,13 +257,13 @@ function GraphInner() {
 								</button>
 							);
 						})}
-						{(types.length > 0 || search) && (
+						{filtersDirty && (
 							<button
 								type="button"
-								onClick={() => { setTypes([]); setSearch(""); }}
+								onClick={() => { setHiddenTypes(["person"]); setSearch(""); }}
 								className="maxxi-secondary-action"
 							>
-								Azzera filtri
+								Reimposta vista
 							</button>
 						)}
 					</div>
@@ -237,10 +281,13 @@ function GraphInner() {
 							<Empty>Nessun nodo corrisponde ai filtri correnti.</Empty>
 						) : (
 							<G6Canvas
+								key={displayed.edges.length === 0 ? "grid" : "force"}
 								nodes={displayed.nodes}
 								edges={displayed.edges}
 								theme={theme}
 								onNodeClick={selectNode}
+								stableLayout
+								layoutMode={displayed.edges.length === 0 ? "grid" : "force"}
 							/>
 						)}
 						{!loading && !error && displayed.nodes.length > 0 && (
@@ -311,9 +358,16 @@ function GraphPanel({
 				</button>
 			</div>
 
-			{detail.type === "person" && (
+			{detail.type === "person" ? (
 				<Link href={`/maxxi/people?id=${encodeURIComponent(detail.id)}`} className="maxxi-primary-action">
 					Apri profilo 360
+				</Link>
+			) : (
+				<Link
+					href={`/maxxi/graph?focus=${encodeURIComponent(detail.id)}&depth=2`}
+					className="maxxi-primary-action"
+				>
+					Esplora le persone collegate
 				</Link>
 			)}
 

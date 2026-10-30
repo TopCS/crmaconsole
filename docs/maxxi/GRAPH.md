@@ -35,12 +35,21 @@ confermata. Non viene mai presentato come collegamento certo.
 
 ## Interazione
 
+- **Vista centrale**: parte dagli oggetti (organizzazioni, mostre, interessi,
+  fonti) in una griglia leggibile; i visitatori sono nascosti per non affollare
+  la vista. Il pulsante **Persona** li mostra su richiesta.
+- **Vista da un visitatore** (`?focus=P-…`): il visitatore è al centro e
+  restano visibili solo i suoi oggetti collegati; gli altri visitatori sono
+  nascosti. **Persona** li include, **Mostra tutto** torna alla vista oggetti.
 - clic su un nodo → dettaglio laterale (o sotto il canvas su mobile);
 - dettaglio persona → **Apri profilo 360**;
-- filtro per tipo e ricerca testuale sui label;
+- dettaglio oggetto → **Esplora le persone collegate** (focus sull’oggetto);
+- filtro per tipo (visibilità, non selezione esclusiva) e ricerca testuale;
 - focus via link: `/maxxi/graph?focus=P-MARIA&depth=2`;
 - apertura diretta del dettaglio: `/maxxi/graph?node=P-MARIA`;
-- dal profilo visitatore, **Vedi relazioni** apre il focus a due hop.
+- dal profilo visitatore, **Vedi relazioni** apre il focus sul visitatore.
+- Il layout è **statico**: viene calcolato una volta e non animato; i nodi si
+  muovono solo se trascinati.
 
 ## Permessi
 
@@ -53,9 +62,10 @@ Per il principal `service` valgono le stesse regole read-only.
 
 ## Prestazioni e cache
 
-La proiezione esegue diverse query sul DuckDB demo. Il risultato viene
-memorizzato per 10 secondi; il seed invalida la cache. La prima apertura può
-richiedere alcuni secondi, le successive sono immediate.
+La proiezione esegue diverse query sul DuckDB demo, servito dal sidecar
+Quack (vedi `PERFORMANCE.md`). Il risultato viene memorizzato per 10 secondi;
+il seed invalida la cache. La prima apertura può richiedere qualche istante,
+le successive sono immediate.
 
 ## Limiti dichiarati
 
