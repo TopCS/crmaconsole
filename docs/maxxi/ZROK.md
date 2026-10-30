@@ -7,8 +7,13 @@ Servono due share pubblici distinti:
 
 | Share | Target interno | URL predefinito |
 |---|---|---|
-| Console CRM-A | `http://crm-a-console:3100` | `https://crm-a-console.share.zrok.io` |
-| Keycloak (OIDC) | `http://keycloak:8080` | `https://crm-a-keycloak.share.zrok.io` |
+| Console CRM-A | `http://crm-a-console:3100` | `https://crma.warp.topcs.io` |
+| Keycloak (OIDC) | `http://keycloak:8080` | `https://crmakeycloak.warp.topcs.io` |
+
+Il controller zrok della demo è quello self-hosted `https://warp.topcs.io`, non
+`api.zrok.io`. I nomi `crma` e `crmakeycloak` sono già riservati sull’account e
+sono gli stessi usati dal realm versionato. Se si usano nomi diversi, aggiornare
+anche il realm (vedi sotto).
 
 ## Prerequisiti
 
@@ -20,31 +25,31 @@ Servono due share pubblici distinti:
    - `webOrigins`: `<console>`
    - `post.logout.redirect.uris`: `<console>/login`
 
-Il realm versionato contiene già gli URL predefiniti
-`crm-a-console.share.zrok.io`.
+Il realm versionato contiene già `https://crma.warp.topcs.io` come redirect URI
+e web origin. Non serve modificarlo se si mantengono i nomi predefiniti.
 
 ## Configurazione `.env`
 
 ```bash
 # zrok
 export ZROK_ENABLE_TOKEN="<token>"
-export ZROK_API_ENDPOINT="https://api.zrok.io"
+export ZROK_API_ENDPOINT="https://warp.topcs.io"
 export ZROK_ENVIRONMENT_NAME="crm-a"
-export ZROK_UNIQUE_NAME="crm-a-console"
-export ZROK_KEYCLOAK_UNIQUE_NAME="crm-a-keycloak"
+export ZROK_UNIQUE_NAME="crma"
+export ZROK_KEYCLOAK_UNIQUE_NAME="crmakeycloak"
 
 # URL pubblici
-export CRM_A_PUBLIC_URL="https://crm-a-console.share.zrok.io"
-export CRM_A_KEYCLOAK_PUBLIC_URL="https://crm-a-keycloak.share.zrok.io"
+export CRM_A_PUBLIC_URL="https://crma.warp.topcs.io"
+export CRM_A_KEYCLOAK_PUBLIC_URL="https://crmakeycloak.warp.topcs.io"
 export CRM_A_KEYCLOAK_ADMIN_URL="http://localhost:8080"
 
 # OIDC: issuer pubblico = Keycloak pubblico; chiamate server = keycloak:8080
-export CRM_A_OIDC_ISSUER="https://crm-a-keycloak.share.zrok.io/realms/crm-a"
+export CRM_A_OIDC_ISSUER="https://crmakeycloak.warp.topcs.io/realms/crm-a"
 export CRM_A_OIDC_INTERNAL_ISSUER_DOCKER="http://keycloak:8080/realms/crm-a"
 export CRM_A_OIDC_CLIENT_ID="crm-a-console"
 export CRM_A_OIDC_CLIENT_SECRET="<client secret>"
-export CRM_A_OIDC_REDIRECT_URI="https://crm-a-console.share.zrok.io/api/auth/callback"
-export CRM_A_OIDC_POST_LOGOUT_REDIRECT_URI="https://crm-a-console.share.zrok.io/login"
+export CRM_A_OIDC_REDIRECT_URI="https://crma.warp.topcs.io/api/auth/callback"
+export CRM_A_OIDC_POST_LOGOUT_REDIRECT_URI="https://crma.warp.topcs.io/login"
 ```
 
 ## Avvio
@@ -97,6 +102,26 @@ Controlli minimi:
 - la modalità demo è attiva (`CRM_A_DEMO_MODE=1`);
 - l’Admin Console è raggiungibile solo da `http://localhost:8080`.
 
+## Stato della pubblicazione (30 ottobre 2026)
+
+La catena pubblica è stata verificata il 30/10/2026: apertura di
+`https://crma.warp.topcs.io` → Keycloak pubblico → callback → `/maxxi`, login
+`admin.demo` con ruolo Amministratore, nessun errore console. L’Admin Console
+Keycloak resta su `http://localhost:8080`.
+
+L’istanza pubblicata in quel momento è la build del 29/10 (versione 4.2.0):
+non include ancora percorso guidato, versioni bozza, proposta AI e revisione
+identità. Per allinearla, sull’host che possiede le share zrok (`crm-a`):
+
+```bash
+git pull
+docker compose --profile zrok up -d --build
+```
+
+Il redirect `http://` osservato sulla build precedente è corretto dal supporto
+a `CRM_A_PUBLIC_URL` nel middleware: con `CRM_A_PUBLIC_URL=https://crma.warp.topcs.io`
+i redirect usano sempre lo schema pubblico.
+
 ## Limiti e sicurezza
 
 - zrok pubblica l’intera superficie Keycloak sul secondo host: le API OIDC
@@ -110,4 +135,5 @@ Controlli minimi:
 - La demo continua a bloccare ogni invio reale; l’esposizione non cambia questa
   regola.
 - Se si cambiano i nomi zrok, aggiornare il realm e riavviare Keycloak o
-  applicare le modifiche via Admin API.
+  applicare le modifiche via Admin API. Con nomi già riservati su un altro
+  environment, rilasciare prima la share o riusare l’environment esistente.

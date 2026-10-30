@@ -119,6 +119,17 @@ const PAGE_ROLES: Array<{ prefix: string; roles: string[] }> = [
  * send the browser to the container address (0.0.0.0) and drop cookies.
  */
 function requestOrigin(req: NextRequest): string {
+  // An explicitly configured public origin wins: reverse proxies (zrok,
+  // tunnels) may forward the Host but omit or downgrade X-Forwarded-Proto,
+  // which would send the browser to http://<public-host>/login.
+  const configured = process.env.CRM_A_PUBLIC_URL?.trim();
+  if (configured) {
+    try {
+      return new URL(configured).origin;
+    } catch {
+      // Malformed value: fall back to the forwarded/host detection below.
+    }
+  }
   const forwardedHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
   const host = forwardedHost || req.headers.get("host") || req.nextUrl.host;
   const forwardedProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();

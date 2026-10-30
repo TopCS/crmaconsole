@@ -215,7 +215,7 @@ services:
       ZROK_ENABLE_TOKEN: ${ZROK_ENABLE_TOKEN:-}
       ZROK_API_ENDPOINT: ${ZROK_API_ENDPOINT:-https://api.zrok.io}
       ZROK_TARGET: ${ZROK_TARGET:-http://crm-a-console:3100}
-      ZROK_UNIQUE_NAME: ${ZROK_UNIQUE_NAME:-crm-a-console}
+      ZROK_UNIQUE_NAME: ${ZROK_UNIQUE_NAME:-crma}
       ZROK_BACKEND_MODE: proxy
       ZROK_ENVIRONMENT_NAME: ${ZROK_ENVIRONMENT_NAME:-crm-a}
     extra_hosts:
@@ -260,7 +260,7 @@ services:
       ZROK_ENABLE_TOKEN: ${ZROK_ENABLE_TOKEN:-}
       ZROK_API_ENDPOINT: ${ZROK_API_ENDPOINT:-https://api.zrok.io}
       ZROK_TARGET: ${ZROK_KEYCLOAK_TARGET:-http://keycloak:8080}
-      ZROK_UNIQUE_NAME: ${ZROK_KEYCLOAK_UNIQUE_NAME:-crm-a-keycloak}
+      ZROK_UNIQUE_NAME: ${ZROK_KEYCLOAK_UNIQUE_NAME:-crmakeycloak}
       ZROK_BACKEND_MODE: proxy
       ZROK_ENVIRONMENT_NAME: ${ZROK_ENVIRONMENT_NAME:-crm-a}
     extra_hosts:

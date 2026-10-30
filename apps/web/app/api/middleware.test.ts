@@ -5,6 +5,7 @@ import { SESSION_COOKIE, signSessionToken } from "../../lib/security/session";
 
 const SECRET = "test-session-secret-value-1234";
 const original = process.env.CRM_A_SESSION_SECRET;
+const originalPublicUrl = process.env.CRM_A_PUBLIC_URL;
 
 beforeEach(() => {
   process.env.CRM_A_SESSION_SECRET = SECRET;
@@ -13,6 +14,8 @@ beforeEach(() => {
 afterEach(() => {
   if (original === undefined) {delete process.env.CRM_A_SESSION_SECRET;}
   else {process.env.CRM_A_SESSION_SECRET = original;}
+  if (originalPublicUrl === undefined) {delete process.env.CRM_A_PUBLIC_URL;}
+  else {process.env.CRM_A_PUBLIC_URL = originalPublicUrl;}
 });
 
 function req(pathname: string, token?: string): NextRequest {
@@ -32,6 +35,16 @@ describe("middleware default-deny", () => {
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe("http://localhost/login?next=%2Fworkspace");
     expect(res.headers.get("location")).not.toContain("0.0.0.0");
+  });
+
+  it("uses the configured public origin behind a proxy that downgrades the scheme", async () => {
+    process.env.CRM_A_PUBLIC_URL = "https://crma.warp.topcs.io";
+    const headers = new Headers();
+    headers.set("host", "crma.warp.topcs.io");
+    headers.set("x-forwarded-host", "crma.warp.topcs.io");
+    const proxied = new NextRequest("http://crm-a-console:3100/workspace", { headers });
+    const res = await middleware(proxied);
+    expect(res.headers.get("location")).toBe("https://crma.warp.topcs.io/login?next=%2Fworkspace");
   });
 
   it("allows a valid session", async () => {
