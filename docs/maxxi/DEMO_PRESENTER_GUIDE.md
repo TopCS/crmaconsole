@@ -70,10 +70,10 @@ usarlo in un ambiente condiviso o raggiungibile da persone non autorizzate.
 
 Verificare che:
 
-- la **Panoramica** mostri 8 persone identificate, 6 visite attribuite,
-  5 membership in scadenza e 1 caso da revisionare;
+- la **Panoramica** mostri 200 persone identificate, 143 visite attribuite,
+  40 membership in scadenza e 9 casi da revisionare;
 - la ricerca in **Visitatori** trovi `Maria Rossi` e `Giulia Bianchi`;
-- **Segmenti** mostri 2 persone contattabili;
+- **Segmenti** mostri 13 persone contattabili su 200 valutate;
 - **Campagne** contenga almeno una bozza apribile con **Dettaglio**;
 - **Assistente** risponda in modalità **Verificato**;
 - dal profilo di Maria, **Vedi relazioni** apra il grafo con il nodo Maria
@@ -336,7 +336,8 @@ Indicare i due numeri:
 
 Con il dataset iniziale:
 
-> «Sono state valutate otto persone; due risultano eleggibili e contattabili.
+> «Sono state valutate duecento persone; tredici risultano eleggibili e
+> contattabili.
 > Le altre sono escluse per motivi espliciti, tra cui consenso non valido,
 > identità incerta o condizioni non soddisfatte.»
 

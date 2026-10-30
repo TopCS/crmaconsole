@@ -249,7 +249,10 @@ export async function seedMaxxiDemo(): Promise<SeedSummary> {
   }
 
   // One statement batch per run keeps the write atomic enough for the demo.
-  await maxxiExec(statements.join("\n"));
+  const written = await maxxiExec(statements.join("\n"));
+  if (!written) {
+    throw new Error("Seed batch failed: the MAXXI store rejected the write batch.");
+  }
 
   return {
     ok: true,

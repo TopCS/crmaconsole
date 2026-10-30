@@ -14,6 +14,7 @@ process.env.CRM_A_MAXXI_FIXTURE = path.resolve(
 process.env.CRM_A_SESSION_SECRET = "test-session-secret-value-1234";
 
 const { seedMaxxiDemo } = await import("@/lib/maxxi/seed");
+const { loadMaxxiFixture } = await import("@/lib/maxxi/fixture");
 const seedRoute = await import("./seed/route");
 const peopleRoute = await import("./people/route");
 const segmentRoute = await import("./segment/route");
@@ -199,8 +200,10 @@ describe("MAXXI RBAC", () => {
     expect(allowedBody.recipientsVisible).toBe(true);
     expect(allowedBody.campaign.subject).toBe("Dettaglio test");
     expect(allowedBody.campaign.body).toContain("Testo completo");
-    expect(allowedBody.segment.counts.eligible).toBe(2);
-    expect(allowedBody.segment.eligible.length).toBe(2);
+    const eligibleCount =
+      loadMaxxiFixture().expected_for_reference_seed.arch_renewal_45d_email_eligible_person_ids.length;
+    expect(allowedBody.segment.counts.eligible).toBe(eligibleCount);
+    expect(allowedBody.segment.eligible.length).toBe(eligibleCount);
     expect(allowedBody.audit.some((row) => row.action === "campaign_draft_created")).toBe(true);
 
     const masked = await campaignsRoute.GET(
@@ -212,7 +215,7 @@ describe("MAXXI RBAC", () => {
       segment: { counts: { eligible: number }; eligible: unknown[]; excluded: unknown[] };
     };
     expect(maskedBody.recipientsVisible).toBe(false);
-    expect(maskedBody.segment.counts.eligible).toBe(2);
+    expect(maskedBody.segment.counts.eligible).toBe(eligibleCount);
     expect(maskedBody.segment.eligible).toEqual([]);
     expect(maskedBody.segment.excluded).toEqual([]);
   });

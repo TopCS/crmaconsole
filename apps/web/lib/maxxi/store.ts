@@ -14,16 +14,13 @@
 
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { spawn } from "node:child_process";
 import {
   duckdbExecOnFileAsync,
   duckdbQueryOnFileAsync,
   resolveDuckdbBin,
   resolveOpenClawStateDir,
 } from "../workspace";
-
-const execFileAsync = promisify(execFile);
 
 export const MAXXI_WORKSPACE_ID = "demo-maxxi-cdp-2026";
 
@@ -90,15 +87,54 @@ export function buildMaxxiQuackSql(sql: string): string {
   );
 }
 
+/**
+ * Drive the DuckDB CLI through stdin. The seed batch is hundreds of KB and
+ * would exceed the OS argument limit with `-c`; stdin has no such limit.
+ */
+function runDuckdbStdin(
+  bin: string,
+  args: string[],
+  sql: string,
+  timeoutMs: number,
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      proc.kill("SIGTERM");
+    }, timeoutMs);
+    proc.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf-8"); });
+    proc.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf-8"); });
+    proc.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    proc.on("close", (code) => {
+      clearTimeout(timer);
+      if (timedOut) {
+        reject(new Error(`duckdb timed out after ${timeoutMs}ms`));
+        return;
+      }
+      if (code !== 0) {
+        reject(Object.assign(new Error(stderr.trim() || `duckdb exited ${code}`), { stderr }));
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+    proc.stdin.on("error", () => {});
+    proc.stdin.write(sql);
+    proc.stdin.end();
+  });
+}
+
 async function maxxiQuackQuery<T>(sql: string): Promise<T[]> {
   const bin = resolveDuckdbBin();
   if (!bin) {return [];}
   try {
-    const { stdout } = await execFileAsync(bin, ["-json", "-no-stdin", "-c", buildMaxxiQuackSql(sql)], {
-      encoding: "utf-8",
-      timeout: 30_000,
-      maxBuffer: 10 * 1024 * 1024,
-    });
+    const { stdout } = await runDuckdbStdin(bin, ["-json"], buildMaxxiQuackSql(sql), 30_000);
     const trimmed = stdout.trim();
     if (!trimmed || trimmed === "[]") {return [];}
     return JSON.parse(trimmed) as T[];
@@ -112,14 +148,17 @@ async function maxxiQuackExec(sql: string): Promise<boolean> {
   const bin = resolveDuckdbBin();
   if (!bin) {return false;}
   try {
-    await execFileAsync(bin, ["-no-stdin", "-c", buildMaxxiQuackSql(sql)], {
-      encoding: "utf-8",
-      timeout: 60_000,
-      maxBuffer: 10 * 1024 * 1024,
-    });
+    await runDuckdbStdin(bin, [], buildMaxxiQuackSql(sql), 60_000);
     return true;
   } catch (err) {
-    console.error(`[maxxi] quack exec failed: ${(err as Error).message}`);
+    const stderr = (err as { stderr?: string | Buffer }).stderr;
+    const detail =
+      typeof stderr === "string"
+        ? stderr
+        : Buffer.isBuffer(stderr)
+          ? stderr.toString("utf-8")
+          : (err as Error).message;
+    console.error(`[maxxi] quack exec failed: ${detail.slice(0, 800)}`);
     return false;
   }
 }

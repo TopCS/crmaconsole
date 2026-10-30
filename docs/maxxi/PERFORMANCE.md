@@ -37,7 +37,7 @@ Stessa macchina, dataset demo, richieste autenticate a caldo.
 | `GET /api/maxxi/people?id=P-MARIA` | 0,72 s | 0,50 s |
 | `GET /api/maxxi/segment` | 0,90 s | 0,15 s |
 | `GET /api/maxxi/campaigns` | — | 0,22 s |
-| `POST /api/maxxi/seed` (reset) | — | 0,43 s |
+| `POST /api/maxxi/seed` (reset, 200 persone) | — | 2,6 s |
 
 La prima richiesta dopo un riavvio può includere il warm-up di Next.js; i
 numeri sopra sono quelli a regime.

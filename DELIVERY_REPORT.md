@@ -13,7 +13,7 @@ Pull request: https://github.com/TopCS/crmaconsole/pull/1
 | G3 demo UI | ✅ | 7 viste navigabili con tema editoriale MAXXI scoped (panoramica, profilo 360, fonti, segmenti, campagne, assistente, accessi) |
 | G4 agent | ✅ | 3 tool OpenClaw + **Chat AI ibrida** (tool read-only, citazioni, fallback deterministico); modalità Verificato sempre disponibile |
 | G5 actions | ✅ | Zero outbound: adapter bloccati lato server in demo mode + audit |
-| G6 regression | ⚠️ | Suite web: 2330 pass / 2 fail **preesistenti** (timeout in `composio-execute-direct.test.ts`). Build web OK. Build Docker bloccata da errore di rete preesistente (`npm install -g openclaw`), non dal codice |
+| G6 regression | ⚠️ | Test mirati MAXXI: 47 pass dopo l’espansione della fixture; suite completa non rieseguita su richiesta (ultima esecuzione: 2330 pass, 2 timeout preesistenti in `composio-execute-direct.test.ts`). Build web OK. Build Docker bloccata da errore di rete preesistente (`npm install -g openclaw`), non dal codice |
 | G7 visual | ✅ | Tema scoped, responsive, drawer mobile, focus/tastiera, screenshot desktop/mobile, UX-001..010 in `docs/maxxi/UI_QA.md` (UX-007 parziale: contrasto non misurato con axe) |
 
 ## 2. Test realmente eseguiti
@@ -182,8 +182,8 @@ middleware, l'intera superficie web tranne l'allowlist pubblica.
 
 ## 5. Dati demo e reset
 
-- Fixture: `docs/fixtures/maxxi_demo_seed.json` (8 persone, 6 card, 11 eventi,
-  10 fonti simulate, orologio fisso `2026-10-28T12:00+01:00`).
+- Fixture: `docs/fixtures/maxxi_demo_seed.json` (200 persone, 167 card, 399 eventi,
+  5 fonti simulate, orologio fisso `2026-10-28T12:00+01:00`).
 - Storage: `<stateDir>/maxxi-demo/maxxi.duckdb` (isolato, resettabile).
 - Reset: rieseguire il seed (`scripts/maxxi-demo.sh seed` o il bottone in Panoramica).
 

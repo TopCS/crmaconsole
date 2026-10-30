@@ -41,16 +41,21 @@ yields identical counts”*.
 
 | Entità | Conteggio |
 |---|---|
-| persone | 8 |
-| membership myMAXXI | 6 |
-| eventi | 11 |
-| record di fonte | 8 |
-| identity link creati | 7 |
-| candidati in revisione | 1 (`P-MARIA-AMBIG`) |
-| consensi | 8 |
-| casi infopoint | 1 |
-| organizzazioni | 1 |
+| persone | 200 |
+| membership myMAXXI | 167 |
+| eventi | 399 |
+| record di fonte | 444 |
+| identity link creati | 425 |
+| candidati in revisione | 9 (incluso `P-MARIA-AMBIG`) |
+| consensi | 200 |
+| casi infopoint | 42 |
+| organizzazioni | 9 |
+| relazioni organizzazione | 33 |
 | voci di catalogo | 2 |
+
+Le otto persone di riferimento (`P-MARIA`, `P-MARIA-AMBIG`, `P-GIULIA`,
+`P-ELENA`, `P-PAOLO`, `P-LUCA`, `P-SARA`, `P-GIOVANNI`) restano invariate: il
+dataset espanso aggiunge visitatori coerenti attorno a quel nucleo narrativo.
 
 ## Reset completo
 

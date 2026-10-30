@@ -17,7 +17,7 @@ Nei `source_records` JSON il campo `expected_person_id` e' **solo l'oracolo di t
 
 ## Controlli di coerenza attesi
 
-- Il seed JSON include 8 persone, 6 membership, 11 eventi e 2 mostre pubbliche nel catalogo.
+- Il seed JSON include 200 persone, 167 membership, 399 eventi e 2 mostre pubbliche nel catalogo; le otto persone di riferimento restano invariate.
 - Il segmento architettura/rinnovo con consenso email comprende `P-MARIA` e `P-ELENA` nel dataset minimo di riferimento.
 - `P-GIULIA` e `P-PAOLO` vanno esclusi dall'audience per assenza o ritiro del consenso marketing (a parita' delle altre condizioni).
 - Importare due volte le stesse sorgenti non deve creare duplicati.

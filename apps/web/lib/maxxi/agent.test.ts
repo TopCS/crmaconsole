@@ -12,6 +12,7 @@ process.env.CRM_A_MAXXI_FIXTURE = path.resolve(
 
 const { seedMaxxiDemo } = await import("./seed");
 const { askMaxxi } = await import("./agent");
+const { loadMaxxiFixture } = await import("./fixture");
 
 beforeAll(async () => {
   await seedMaxxiDemo();
@@ -28,11 +29,14 @@ describe("MAXXI grounded agent (AGT-001/AGT-002)", () => {
     );
     expect(answer.grounded).toBe(true);
     expect(answer.intent).toBe("segment_arch_renewal_45d");
-    expect(answer.counts?.eligible).toBe(2);
-    expect(answer.counts?.excludedConsent).toBe(2);
+    const expected = loadMaxxiFixture().expected_for_reference_seed;
+    const eligible = expected.arch_renewal_45d_email_eligible_person_ids.length;
+    const excludedConsent = expected.arch_renewal_45d_excluded_consent_person_ids.length;
+    expect(answer.counts?.eligible).toBe(eligible);
+    expect(answer.counts?.excludedConsent).toBe(excludedConsent);
     expect(answer.window).toEqual({ from: "2026-10-28", to: "2026-12-12" });
     expect(answer.evidence.map((item) => item.id)).toContain("P-MARIA");
-    expect(answer.answer).toContain("2 persone");
+    expect(answer.answer).toContain(`${eligible} persone`);
   });
 
   it("refuses to invent donor amounts", async () => {

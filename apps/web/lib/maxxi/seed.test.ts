@@ -35,8 +35,12 @@ describe("MAXXI seed — determinism and identity", () => {
   it("exposes a monthly activity series for the dashboard chart", async () => {
     const activity = await getActivityByMonth();
     expect(activity.map((point) => point.month)).toEqual(["2026-08", "2026-09", "2026-10"]);
-    expect(activity.reduce((sum, point) => sum + point.visits, 0)).toBe(6);
-    expect(activity.reduce((sum, point) => sum + point.events, 0)).toBe(11);
+    expect(activity.reduce((sum, point) => sum + point.visits, 0)).toBe(
+      loadMaxxiFixture().expected_for_reference_seed.attended_visits,
+    );
+    expect(activity.reduce((sum, point) => sum + point.events, 0)).toBe(
+      loadMaxxiFixture().expected_for_reference_seed.total_events,
+    );
   });
 
   it("searches visitors by name, email and ID", async () => {
@@ -62,7 +66,9 @@ describe("MAXXI seed — determinism and identity", () => {
     const detail = await getCampaignDetail(draft.campaignId);
     expect(detail?.campaign.subject).toBe("Bozza di test");
     expect(detail?.campaign.deliveryMode).toBe("dry_run");
-    expect(detail?.segment.counts.eligible).toBe(2);
+    expect(detail?.segment.counts.eligible).toBe(
+      loadMaxxiFixture().expected_for_reference_seed.arch_renewal_45d_email_eligible_person_ids.length,
+    );
     expect(detail?.audit.some((row) => row.action === "campaign_draft_created")).toBe(true);
   });
 
@@ -87,7 +93,9 @@ describe("MAXXI seed — determinism and identity", () => {
 
     await approveCampaignSimulated({ campaignId: draft.campaignId, principalId: "test" });
     const after = await getCampaignDetail(draft.campaignId);
-    expect(after?.snapshot?.recipients.length).toBe(2);
+    expect(after?.snapshot?.recipients.length).toBe(
+      loadMaxxiFixture().expected_for_reference_seed.arch_renewal_45d_email_eligible_person_ids.length,
+    );
     expect(after?.snapshot?.exclusions.length).toBeGreaterThan(0);
     expect(after?.versions.length).toBe(2);
 

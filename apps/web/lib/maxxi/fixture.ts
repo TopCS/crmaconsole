@@ -107,6 +107,10 @@ export type MaxxiFixture = {
     identified_people: number;
     memberships_mymaxxi: number;
     total_events: number;
+    attended_visits?: number;
+    anonymous_events?: number;
+    source_records?: number;
+    review_candidates?: number;
     arch_renewal_45d_email_eligible_person_ids: string[];
     arch_renewal_45d_excluded_consent_person_ids: string[];
     must_not_merge_person_ids: string[];

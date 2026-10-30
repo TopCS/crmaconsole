@@ -146,8 +146,8 @@ Dettagli e misure: [PERFORMANCE.md](PERFORMANCE.md).
    l’arco **Possibile duplicato**.
 3. Clic su un nodo (es. `X-ARCH-2026`) → dettaglio; su una persona compare
    **Apri profilo 360**.
-4. Filtri per tipo e **Mostra tutto** per la vista completa (15 nodi, 23
-   relazioni nel fixture).
+4. Filtri per tipo e **Mostra tutto** per la vista completa del dataset demo
+   (200 persone, più organizzazioni, mostre, interessi e fonti).
 
 Da dire: *“Il grafo rende visibili le connessioni, ma non trasforma un
 possibile duplicato in un’identità confermata. Legge solo il database demo e
